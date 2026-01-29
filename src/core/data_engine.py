@@ -3,6 +3,7 @@ Data Engine - Polars 기반 빅데이터 처리 엔진
 """
 
 import os
+import re
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable, Union
@@ -10,6 +11,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 import threading
 from concurrent.futures import ThreadPoolExecutor
+import subprocess
+import tempfile
 
 import polars as pl
 import pyarrow as pa
@@ -23,6 +26,20 @@ class FileType(Enum):
     PARQUET = "parquet"
     JSON = "json"
     TSV = "tsv"
+    TXT = "txt"
+    ETL = "etl"
+    CUSTOM = "custom"
+
+
+class DelimiterType(Enum):
+    """구분자 타입"""
+    COMMA = ","
+    TAB = "\t"
+    SPACE = " "
+    SEMICOLON = ";"
+    PIPE = "|"
+    REGEX = "regex"
+    AUTO = "auto"
 
 
 @dataclass
@@ -86,7 +103,11 @@ class DataSource:
     file_type: Optional[FileType] = None
     encoding: str = "utf-8"
     delimiter: str = ","
+    delimiter_type: DelimiterType = DelimiterType.COMMA
+    regex_pattern: Optional[str] = None  # regex 구분자용
     has_header: bool = True
+    skip_rows: int = 0  # 상단 스킵할 행 수
+    comment_char: Optional[str] = None  # 주석 문자 (예: #)
     sheet_name: Optional[str] = None  # Excel용
 
 
@@ -180,13 +201,45 @@ class DataEngine:
         mapping = {
             '.csv': FileType.CSV,
             '.tsv': FileType.TSV,
+            '.txt': FileType.TXT,
+            '.log': FileType.TXT,
+            '.dat': FileType.TXT,
+            '.etl': FileType.ETL,
             '.xlsx': FileType.EXCEL,
             '.xls': FileType.EXCEL,
             '.parquet': FileType.PARQUET,
             '.pq': FileType.PARQUET,
             '.json': FileType.JSON,
         }
-        return mapping.get(ext, FileType.CSV)
+        return mapping.get(ext, FileType.TXT)  # 알 수 없으면 텍스트로 시도
+    
+    def detect_delimiter(self, path: str, encoding: str = "utf-8", sample_lines: int = 10) -> str:
+        """구분자 자동 감지"""
+        delimiters = [',', '\t', ';', '|', ' ']
+        delimiter_counts = {d: 0 for d in delimiters}
+        
+        try:
+            with open(path, 'r', encoding=encoding, errors='ignore') as f:
+                for i, line in enumerate(f):
+                    if i >= sample_lines:
+                        break
+                    for d in delimiters:
+                        delimiter_counts[d] += line.count(d)
+            
+            # 가장 많이 나온 구분자 선택 (공백은 마지막 옵션)
+            best = ','
+            best_count = 0
+            for d, count in delimiter_counts.items():
+                if d == ' ':
+                    # 공백은 다른 구분자가 없을 때만
+                    if best_count == 0 and count > 0:
+                        best = d
+                elif count > best_count:
+                    best = d
+                    best_count = count
+            return best
+        except:
+            return ','
     
     def load_file(
         self,
@@ -194,7 +247,11 @@ class DataEngine:
         file_type: Optional[FileType] = None,
         encoding: str = "utf-8",
         delimiter: str = ",",
+        delimiter_type: DelimiterType = DelimiterType.AUTO,
+        regex_pattern: Optional[str] = None,
         has_header: bool = True,
+        skip_rows: int = 0,
+        comment_char: Optional[str] = None,
         sheet_name: Optional[str] = None,
         chunk_size: Optional[int] = None,
         optimize_memory: bool = True,
@@ -207,8 +264,12 @@ class DataEngine:
             path: 파일 경로
             file_type: 파일 형식 (자동 감지)
             encoding: 인코딩
-            delimiter: 구분자 (CSV)
+            delimiter: 구분자 (직접 지정)
+            delimiter_type: 구분자 타입 (COMMA, TAB, SPACE, SEMICOLON, PIPE, REGEX, AUTO)
+            regex_pattern: regex 구분자 패턴 (delimiter_type이 REGEX일 때)
             has_header: 헤더 존재 여부
+            skip_rows: 상단 스킵할 행 수
+            comment_char: 주석 문자 (예: #)
             sheet_name: 시트 이름 (Excel)
             chunk_size: 청크 크기 (행 수)
             optimize_memory: 메모리 최적화 여부
@@ -222,13 +283,25 @@ class DataEngine:
         if file_type is None:
             file_type = self.detect_file_type(path)
         
+        # 구분자 결정
+        if delimiter_type == DelimiterType.AUTO:
+            delimiter = self.detect_delimiter(path, encoding)
+        elif delimiter_type == DelimiterType.REGEX:
+            delimiter = regex_pattern or delimiter
+        elif delimiter_type != DelimiterType.REGEX:
+            delimiter = delimiter_type.value
+        
         # 소스 정보 저장
         self._source = DataSource(
             path=path,
             file_type=file_type,
             encoding=encoding,
             delimiter=delimiter,
+            delimiter_type=delimiter_type,
+            regex_pattern=regex_pattern,
             has_header=has_header,
+            skip_rows=skip_rows,
+            comment_char=comment_char,
             sheet_name=sheet_name
         )
         
@@ -245,14 +318,16 @@ class DataEngine:
             self._cancel_loading = False
             self._loading_thread = threading.Thread(
                 target=self._load_file_internal,
-                args=(path, file_type, encoding, delimiter, has_header, 
+                args=(path, file_type, encoding, delimiter, delimiter_type,
+                      regex_pattern, has_header, skip_rows, comment_char,
                       sheet_name, chunk_size, optimize_memory)
             )
             self._loading_thread.start()
             return True
         else:
             return self._load_file_internal(
-                path, file_type, encoding, delimiter, has_header,
+                path, file_type, encoding, delimiter, delimiter_type,
+                regex_pattern, has_header, skip_rows, comment_char,
                 sheet_name, chunk_size, optimize_memory
             )
     
@@ -262,7 +337,11 @@ class DataEngine:
         file_type: FileType,
         encoding: str,
         delimiter: str,
+        delimiter_type: DelimiterType,
+        regex_pattern: Optional[str],
         has_header: bool,
+        skip_rows: int,
+        comment_char: Optional[str],
         sheet_name: Optional[str],
         chunk_size: Optional[int],
         optimize_memory: bool
@@ -272,9 +351,15 @@ class DataEngine:
         
         try:
             if file_type == FileType.CSV:
-                self._df = self._load_csv(path, encoding, delimiter, has_header)
+                self._df = self._load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
             elif file_type == FileType.TSV:
-                self._df = self._load_csv(path, encoding, "\t", has_header)
+                self._df = self._load_csv(path, encoding, "\t", has_header, skip_rows, comment_char)
+            elif file_type in [FileType.TXT, FileType.CUSTOM]:
+                self._df = self._load_text(path, encoding, delimiter, delimiter_type, 
+                                           regex_pattern, has_header, skip_rows, comment_char)
+            elif file_type == FileType.ETL:
+                self._df = self._load_etl(path, encoding, delimiter, delimiter_type,
+                                          regex_pattern, has_header, skip_rows, comment_char)
             elif file_type == FileType.EXCEL:
                 self._df = self._load_excel(path, sheet_name)
             elif file_type == FileType.PARQUET:
@@ -318,7 +403,9 @@ class DataEngine:
         path: str, 
         encoding: str, 
         delimiter: str, 
-        has_header: bool
+        has_header: bool,
+        skip_rows: int = 0,
+        comment_char: Optional[str] = None
     ) -> pl.DataFrame:
         """CSV 로드"""
         return pl.read_csv(
@@ -326,9 +413,157 @@ class DataEngine:
             encoding=encoding,
             separator=delimiter,
             has_header=has_header,
+            skip_rows=skip_rows,
+            comment_prefix=comment_char,
             infer_schema_length=10000,
             ignore_errors=True
         )
+    
+    def _load_text(
+        self,
+        path: str,
+        encoding: str,
+        delimiter: str,
+        delimiter_type: DelimiterType,
+        regex_pattern: Optional[str],
+        has_header: bool,
+        skip_rows: int = 0,
+        comment_char: Optional[str] = None
+    ) -> pl.DataFrame:
+        """
+        일반 텍스트 파일 로드 (TXT, LOG, DAT 등)
+        다양한 구분자 지원 (쉼표, 탭, 공백, 세미콜론, 파이프, regex)
+        """
+        rows = []
+        with open(path, 'r', encoding=encoding, errors='ignore') as f:
+            lines = f.readlines()
+        
+        # 스킵 및 필터링
+        lines = lines[skip_rows:]
+        if comment_char:
+            lines = [l for l in lines if not l.strip().startswith(comment_char)]
+        
+        # 빈 줄 제거
+        lines = [l.strip() for l in lines if l.strip()]
+        
+        if not lines:
+            return pl.DataFrame()
+        
+        # 구분자로 파싱
+        for line in lines:
+            if delimiter_type == DelimiterType.REGEX and regex_pattern:
+                # regex 패턴으로 split
+                fields = re.split(regex_pattern, line)
+            elif delimiter_type == DelimiterType.SPACE or delimiter == ' ':
+                # 공백 (연속 공백 포함)
+                fields = line.split()
+            else:
+                # 일반 구분자
+                fields = line.split(delimiter)
+            
+            rows.append([f.strip() for f in fields])
+        
+        if not rows:
+            return pl.DataFrame()
+        
+        # 헤더 처리
+        if has_header:
+            headers = rows[0]
+            data = rows[1:]
+        else:
+            max_cols = max(len(r) for r in rows)
+            headers = [f"col_{i}" for i in range(max_cols)]
+            data = rows
+        
+        # 컬럼 수 맞추기
+        max_cols = len(headers)
+        normalized_data = []
+        for row in data:
+            if len(row) < max_cols:
+                row = row + [''] * (max_cols - len(row))
+            elif len(row) > max_cols:
+                row = row[:max_cols]
+            normalized_data.append(row)
+        
+        if not normalized_data:
+            return pl.DataFrame({h: [] for h in headers})
+        
+        # DataFrame 생성
+        df_dict = {headers[i]: [row[i] for row in normalized_data] for i in range(max_cols)}
+        df = pl.DataFrame(df_dict)
+        
+        # 숫자 타입 자동 변환 시도
+        for col in df.columns:
+            try:
+                # 정수 시도
+                df = df.with_columns(pl.col(col).cast(pl.Int64).alias(col))
+            except:
+                try:
+                    # 부동소수점 시도
+                    df = df.with_columns(pl.col(col).cast(pl.Float64).alias(col))
+                except:
+                    pass  # 문자열 유지
+        
+        return df
+    
+    def _load_etl(
+        self,
+        path: str,
+        encoding: str,
+        delimiter: str,
+        delimiter_type: DelimiterType,
+        regex_pattern: Optional[str],
+        has_header: bool,
+        skip_rows: int = 0,
+        comment_char: Optional[str] = None
+    ) -> pl.DataFrame:
+        """
+        ETL 파일 로드
+        
+        ETL (Event Trace Log)은 Windows 바이너리 형식.
+        - 텍스트로 변환된 ETL 파일은 _load_text로 처리
+        - 바이너리 ETL은 tracerpt 명령으로 변환 권고
+        """
+        # 바이너리 ETL인지 확인
+        with open(path, 'rb') as f:
+            header = f.read(4)
+        
+        # ETL 바이너리 시그니처 체크 (간단한 휴리스틱)
+        is_binary = not all(32 <= b < 127 or b in (9, 10, 13) for b in header)
+        
+        if is_binary:
+            # tracerpt로 변환 시도
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+                    tmp_path = tmp.name
+                
+                result = subprocess.run(
+                    ['tracerpt', path, '-o', tmp_path, '-of', 'CSV', '-y'],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                
+                if result.returncode == 0 and os.path.exists(tmp_path):
+                    df = self._load_csv(tmp_path, encoding, ',', True, 0, None)
+                    os.unlink(tmp_path)
+                    return df
+                else:
+                    raise ValueError(
+                        "바이너리 ETL 파일입니다. tracerpt 변환 실패.\n"
+                        "수동 변환: tracerpt yourfile.etl -o output.csv -of CSV"
+                    )
+            except subprocess.TimeoutExpired:
+                raise ValueError("ETL 변환 시간 초과. 파일이 너무 크거나 손상되었습니다.")
+            except FileNotFoundError:
+                raise ValueError(
+                    "바이너리 ETL 파일입니다. tracerpt가 설치되어 있지 않습니다.\n"
+                    "Windows에서 관리자 권한으로: tracerpt yourfile.etl -o output.csv -of CSV"
+                )
+        else:
+            # 텍스트 ETL (이미 변환됨)
+            return self._load_text(path, encoding, delimiter, delimiter_type,
+                                   regex_pattern, has_header, skip_rows, comment_char)
     
     def _load_excel(self, path: str, sheet_name: Optional[str]) -> pl.DataFrame:
         """Excel 로드"""

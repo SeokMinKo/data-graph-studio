@@ -409,8 +409,10 @@ class MainWindow(QMainWindow):
             self,
             "Open Data File",
             "",
-            "All Supported (*.csv *.tsv *.xlsx *.xls *.parquet *.json);;"
-            "CSV (*.csv *.tsv);;"
+            "All Supported (*.csv *.tsv *.txt *.log *.dat *.etl *.xlsx *.xls *.parquet *.json);;"
+            "CSV/TSV (*.csv *.tsv);;"
+            "Text Files (*.txt *.log *.dat);;"
+            "ETL Files (*.etl);;"
             "Excel (*.xlsx *.xls);;"
             "Parquet (*.parquet);;"
             "JSON (*.json);;"
