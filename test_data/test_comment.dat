@@ -1,0 +1,7 @@
+# This is a comment
+# Another comment line
+name,age,score
+Alice,25,85.5
+# Skip this too
+Bob,30,92.0
+Charlie,22,78.3
