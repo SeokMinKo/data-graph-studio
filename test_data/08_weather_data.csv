@@ -1,0 +1,17 @@
+date,city,temp_min,temp_max,temp_avg,precipitation,humidity,wind_speed,condition
+2024-01-01,Seoul,-5,2,-1.5,0,45,12,Clear
+2024-01-01,Tokyo,3,10,6.5,2.5,62,8,Cloudy
+2024-01-01,New York,-2,5,1.5,0,52,15,Clear
+2024-01-01,London,4,8,6,5.2,78,20,Rainy
+2024-01-02,Seoul,-3,4,0.5,0,42,10,Clear
+2024-01-02,Tokyo,5,12,8.5,0,55,6,Sunny
+2024-01-02,New York,0,7,3.5,1.2,58,12,Cloudy
+2024-01-02,London,5,9,7,3.8,75,18,Rainy
+2024-01-03,Seoul,-4,3,-0.5,2.1,55,8,Snowy
+2024-01-03,Tokyo,4,11,7.5,0,50,7,Sunny
+2024-01-03,New York,-1,6,2.5,0,48,14,Clear
+2024-01-03,London,3,7,5,8.5,82,25,Rainy
+2024-01-04,Seoul,-6,1,-2.5,0,40,15,Clear
+2024-01-04,Tokyo,2,9,5.5,4.2,68,10,Rainy
+2024-01-04,New York,-3,4,0.5,3.5,65,18,Snowy
+2024-01-04,London,2,6,4,6.2,80,22,Rainy

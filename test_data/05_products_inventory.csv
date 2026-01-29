@@ -1,0 +1,11 @@
+sku,product_name,category,subcategory,price,cost,stock,warehouse,last_updated
+SKU001,iPhone 15 Pro,Electronics,Smartphones,1199.00,850.00,150,NYC,2024-01-15
+SKU002,MacBook Pro 14,Electronics,Laptops,1999.00,1400.00,75,NYC,2024-01-15
+SKU003,AirPods Pro,Electronics,Audio,249.00,120.00,500,LA,2024-01-14
+SKU004,iPad Air,Electronics,Tablets,599.00,380.00,200,NYC,2024-01-15
+SKU005,Nike Air Max,Apparel,Shoes,180.00,65.00,300,Chicago,2024-01-13
+SKU006,Levi's 501 Jeans,Apparel,Pants,89.00,28.00,450,LA,2024-01-12
+SKU007,Sony WH-1000XM5,Electronics,Audio,399.00,220.00,180,NYC,2024-01-15
+SKU008,Samsung Galaxy S24,Electronics,Smartphones,999.00,650.00,220,Chicago,2024-01-14
+SKU009,Dell XPS 15,Electronics,Laptops,1799.00,1200.00,90,LA,2024-01-13
+SKU010,Bose QuietComfort,Electronics,Audio,329.00,180.00,250,NYC,2024-01-15

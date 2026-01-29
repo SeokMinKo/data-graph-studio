@@ -1,0 +1,11 @@
+order_id,customer_id,order_date,ship_date,status,subtotal,shipping,tax,total,payment_method,country
+ORD-10001,C001,2024-01-05,2024-01-07,Delivered,150.00,10.00,15.00,175.00,Credit Card,USA
+ORD-10002,C002,2024-01-05,2024-01-08,Delivered,299.99,0.00,30.00,329.99,PayPal,UK
+ORD-10003,C003,2024-01-06,2024-01-09,Delivered,89.50,5.00,9.45,103.95,Credit Card,Canada
+ORD-10004,C001,2024-01-06,,Processing,450.00,15.00,46.50,511.50,Credit Card,USA
+ORD-10005,C004,2024-01-07,2024-01-10,Delivered,125.00,8.00,13.30,146.30,Debit Card,Germany
+ORD-10006,C005,2024-01-07,,Cancelled,75.00,5.00,8.00,88.00,PayPal,France
+ORD-10007,C002,2024-01-08,2024-01-11,Delivered,560.00,0.00,56.00,616.00,Credit Card,UK
+ORD-10008,C006,2024-01-08,,Shipped,220.00,12.00,23.20,255.20,Credit Card,Australia
+ORD-10009,C007,2024-01-09,2024-01-12,Delivered,180.00,10.00,19.00,209.00,PayPal,USA
+ORD-10010,C003,2024-01-09,,Processing,340.00,0.00,34.00,374.00,Credit Card,Canada

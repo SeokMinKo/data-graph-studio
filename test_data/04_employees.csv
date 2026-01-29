@@ -1,0 +1,13 @@
+id,name,department,position,salary,hire_date,is_active
+1,John Smith,Engineering,Senior Developer,95000,2020-03-15,true
+2,Sarah Johnson,Engineering,Tech Lead,120000,2018-07-22,true
+3,Mike Brown,Marketing,Manager,85000,2019-11-01,true
+4,Emily Davis,Engineering,Developer,75000,2021-06-10,true
+5,Chris Wilson,Sales,Account Manager,70000,2020-01-20,true
+6,Lisa Anderson,HR,HR Specialist,65000,2019-04-05,true
+7,David Lee,Engineering,DevOps Engineer,90000,2020-09-12,true
+8,Jennifer Taylor,Marketing,Content Writer,55000,2022-02-28,true
+9,Robert Martinez,Sales,Sales Rep,60000,2021-08-15,true
+10,Amanda White,Engineering,QA Engineer,70000,2020-05-18,false
+11,James Garcia,Finance,Accountant,72000,2019-10-30,true
+12,Michelle Robinson,Engineering,Junior Developer,55000,2023-01-10,true

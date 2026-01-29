@@ -1,0 +1,13 @@
+respondent_id,age,gender,country,satisfaction,recommend_score,feature_quality,feature_price,feature_support,comments
+R001,28,Female,USA,4,9,5,4,4,Great product overall
+R002,35,Male,UK,5,10,5,5,5,Excellent experience
+R003,42,Female,Germany,3,7,4,3,3,Good but expensive
+R004,25,Male,USA,4,8,4,4,5,Love the support team
+R005,31,Female,Canada,5,9,5,4,4,Would buy again
+R006,29,Male,France,3,6,4,2,4,Price is too high
+R007,38,Female,USA,4,8,5,3,4,Quality is amazing
+R008,45,Male,UK,2,5,3,2,3,Not worth the price
+R009,33,Female,Australia,5,10,5,5,5,Perfect product
+R010,27,Male,Germany,4,8,4,4,4,Very satisfied
+R011,41,Female,USA,3,7,4,3,3,Room for improvement
+R012,36,Male,Canada,4,9,5,4,4,Highly recommend

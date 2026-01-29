@@ -1,0 +1,17 @@
+date,region,product,sales,quantity,price
+2024-01-01,Asia,Phone,15000,100,150
+2024-01-01,Asia,Laptop,45000,50,900
+2024-01-01,Europe,Phone,12000,80,150
+2024-01-01,Europe,Laptop,36000,40,900
+2024-01-02,Asia,Phone,16500,110,150
+2024-01-02,Asia,Laptop,49500,55,900
+2024-01-02,Europe,Phone,13500,90,150
+2024-01-02,Europe,Laptop,40500,45,900
+2024-01-03,Asia,Phone,14250,95,150
+2024-01-03,Asia,Laptop,42750,47,900
+2024-01-03,Europe,Phone,11250,75,150
+2024-01-03,Europe,Laptop,33750,37,900
+2024-01-04,America,Phone,18000,120,150
+2024-01-04,America,Laptop,54000,60,900
+2024-01-05,America,Phone,19500,130,150
+2024-01-05,America,Laptop,58500,65,900
