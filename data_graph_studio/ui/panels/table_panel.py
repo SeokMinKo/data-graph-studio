@@ -225,7 +225,7 @@ class XAxisZone(QFrame):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        # Header with float button
+        # Header (no float button for internal sections)
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
 
@@ -242,9 +242,6 @@ class XAxisZone(QFrame):
         """)
         header_layout.addWidget(header)
         header_layout.addStretch()
-
-        self.float_btn = FloatButton()
-        header_layout.addWidget(self.float_btn)
 
         layout.addLayout(header_layout)
 
@@ -414,7 +411,7 @@ class GroupZone(QFrame):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        # Header with icon and float button
+        # Header (no float button for internal sections)
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
 
@@ -431,9 +428,6 @@ class GroupZone(QFrame):
         """)
         header_layout.addWidget(header)
         header_layout.addStretch()
-
-        self.float_btn = FloatButton()
-        header_layout.addWidget(self.float_btn)
 
         layout.addLayout(header_layout)
 
@@ -562,7 +556,7 @@ class ValueZone(QFrame):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        # Header with float button
+        # Header (no float button for internal sections)
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
 
@@ -579,9 +573,6 @@ class ValueZone(QFrame):
         """)
         header_layout.addWidget(header)
         header_layout.addStretch()
-
-        self.float_btn = FloatButton()
-        header_layout.addWidget(self.float_btn)
 
         layout.addLayout(header_layout)
 
@@ -718,6 +709,150 @@ class ValueZone(QFrame):
         if event.mimeData().hasText():
             column_name = event.mimeData().text()
             self.state.add_value_column(column_name)
+            event.acceptProposedAction()
+
+
+# ==================== Hover Zone ====================
+
+class HoverZone(QFrame):
+    """Hover Zone - Columns to display on data hover"""
+
+    hover_changed = Signal()
+
+    def __init__(self, state: AppState):
+        super().__init__()
+        self.state = state
+        self.setObjectName("HoverZone")
+        self.setMinimumWidth(150)
+        self.setAcceptDrops(True)
+
+        self._setup_ui()
+        self._connect_signals()
+        self._apply_style()
+
+    def _apply_style(self):
+        self.setStyleSheet("""
+            #HoverZone {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FEF9C3, stop:1 #FEF08A);
+                border: 1px solid #FACC15;
+                border-radius: 12px;
+            }
+        """)
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        # Header (no float button)
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
+
+        icon = QLabel("💬")
+        icon.setStyleSheet("font-size: 16px; background: transparent;")
+        header_layout.addWidget(icon)
+
+        header = QLabel("Hover Data")
+        header.setStyleSheet("""
+            font-weight: 600;
+            font-size: 13px;
+            color: #854D0E;
+            background: transparent;
+        """)
+        header_layout.addWidget(header)
+        header_layout.addStretch()
+
+        layout.addLayout(header_layout)
+
+        # Help text
+        help_label = QLabel("Drag columns to show\non hover tooltip")
+        help_label.setStyleSheet("""
+            color: #A16207;
+            font-size: 10px;
+            background: transparent;
+        """)
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+
+        # List widget for hover columns
+        self.list_widget = DraggableListWidget(accept_drop=True)
+        self.list_widget.setMaximumHeight(100)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background: transparent;
+                border: none;
+                outline: none;
+            }
+            QListWidget::item {
+                background: white;
+                border: 1px solid #FACC15;
+                border-radius: 6px;
+                padding: 6px 8px;
+                margin: 2px 0;
+                color: #713F12;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QListWidget::item:hover {
+                border-color: #EAB308;
+                background: #FEFCE8;
+            }
+            QListWidget::item:selected {
+                background: #FEF08A;
+                border-color: #EAB308;
+                color: #713F12;
+            }
+        """)
+        self.list_widget.item_dropped.connect(self._on_column_dropped)
+        self.list_widget.item_removed.connect(self._on_column_removed)
+        layout.addWidget(self.list_widget, 1)
+
+        # Clear button
+        clear_btn = QPushButton("✕ Clear")
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #CA8A04;
+                border: 1px solid #FACC15;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-weight: 500;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background: #FEF9C3;
+                border-color: #EAB308;
+            }
+        """)
+        clear_btn.clicked.connect(self._clear_all)
+        layout.addWidget(clear_btn)
+
+    def _connect_signals(self):
+        self.state.hover_zone_changed.connect(self._sync_from_state)
+
+    def _on_column_dropped(self, column_name: str):
+        self.state.add_hover_column(column_name)
+
+    def _on_column_removed(self, column_name: str):
+        self.state.remove_hover_column(column_name)
+
+    def _clear_all(self):
+        self.state.clear_hover_columns()
+
+    def _sync_from_state(self):
+        self.list_widget.clear()
+        for col in self.state.hover_columns:
+            self.list_widget.add_column(col)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent):
+        if event.mimeData().hasText():
+            column_name = event.mimeData().text()
+            self._on_column_dropped(column_name)
             event.acceptProposedAction()
 
 
@@ -1175,31 +1310,26 @@ class HiddenColumnsBar(QFrame):
 class TablePanel(QWidget):
     """
     Table Panel
-    
+
     구조:
-    ┌──────────┬──────────┬─────────────────────┬────────────┐
-    │  X Zone  │  Group   │     Data Table      │   Values   │
-    │ (150px)  │  Zone    │                     │   Zone     │
-    │          │ (150px)  │                     │  (180px+)  │
-    └──────────┴──────────┴─────────────────────┴────────────┘
+    ┌──────────┬──────────┬─────────────────────┬────────────┬──────────┐
+    │  X Zone  │  Group   │     Data Table      │   Values   │  Hover   │
+    │ (150px)  │  Zone    │                     │   Zone     │  Zone    │
+    │          │ (150px)  │                     │  (180px)   │ (150px)  │
+    └──────────┴──────────┴─────────────────────┴────────────┴──────────┘
     """
-    
+
     file_dropped = Signal(str)
-    
+
     def __init__(self, state: AppState, engine: DataEngine):
         super().__init__()
         self.state = state
         self.engine = engine
 
-        # Float windows tracking
-        self._float_windows: Dict[str, FloatWindow] = {}
-        self._placeholders: Dict[str, QWidget] = {}
-
         self.setAcceptDrops(True)
 
         self._setup_ui()
         self._connect_signals()
-        self._setup_float_handlers()
     
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -1322,12 +1452,24 @@ class TablePanel(QWidget):
 
         self.splitter.addWidget(table_container)
 
-        # Value Zone (right)
+        # Right panel: Value Zone + Hover Zone
+        self.right_panel = QWidget()
+        right_layout = QHBoxLayout(self.right_panel)
+        right_layout.setContentsMargins(4, 4, 4, 4)
+        right_layout.setSpacing(6)
+
+        # Value Zone
         self.value_zone = ValueZone(self.state)
-        self.splitter.addWidget(self.value_zone)
+        right_layout.addWidget(self.value_zone)
+
+        # Hover Zone
+        self.hover_zone = HoverZone(self.state)
+        right_layout.addWidget(self.hover_zone)
+
+        self.splitter.addWidget(self.right_panel)
 
         # Splitter sizes
-        self.splitter.setSizes([310, 500, 200])
+        self.splitter.setSizes([310, 500, 360])
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setStretchFactor(2, 0)
@@ -1343,115 +1485,12 @@ class TablePanel(QWidget):
         self.state.group_zone_changed.connect(self._on_group_zone_changed)
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
         self.state.filter_changed.connect(self._on_filter_changed)
+        self.state.hover_zone_changed.connect(self._on_hover_zone_changed)
 
-    def _setup_float_handlers(self):
-        """Float 버튼 핸들러 설정"""
-        # Connect float buttons
-        self.x_zone.float_btn.clicked.connect(lambda: self._float_section("x_zone"))
-        self.group_zone.float_btn.clicked.connect(lambda: self._float_section("group_zone"))
-        self.value_zone.float_btn.clicked.connect(lambda: self._float_section("value_zone"))
+    def _on_hover_zone_changed(self):
+        """Hover zone changed - trigger refresh if needed"""
+        pass  # Hover data is managed by GraphPanel
 
-        # Create placeholders
-        for key, title in [("x_zone", "📐 X-Axis"), ("group_zone", "📁 Group By"), ("value_zone", "📊 Y-Axis Values")]:
-            placeholder = QFrame()
-            placeholder.setStyleSheet("""
-                QFrame {
-                    background: #F9FAFB;
-                    border: 2px dashed #D1D5DB;
-                    border-radius: 8px;
-                }
-            """)
-            layout = QVBoxLayout(placeholder)
-            layout.setAlignment(Qt.AlignCenter)
-            label = QLabel(f"📤 {title}\n\nFloating")
-            label.setStyleSheet("color: #9CA3AF; font-size: 10px; background: transparent;")
-            label.setAlignment(Qt.AlignCenter)
-            layout.addWidget(label)
-            placeholder.hide()
-            self._placeholders[key] = placeholder
-
-    def _float_section(self, section_key: str):
-        """섹션을 독립 창으로 분리"""
-        if section_key in self._float_windows:
-            self._float_windows[section_key].raise_()
-            self._float_windows[section_key].activateWindow()
-            return
-
-        section_map = {
-            "x_zone": (self.x_zone, "📐 X-Axis"),
-            "group_zone": (self.group_zone, "📁 Group By"),
-            "value_zone": (self.value_zone, "📊 Y-Axis Values"),
-        }
-
-        if section_key not in section_map:
-            return
-
-        widget, title = section_map[section_key]
-
-        # 메인 윈도우 찾기
-        main_window = self._find_main_window()
-
-        # Float window 생성
-        float_window = FloatWindow(title, widget, main_window)
-        float_window.dock_requested.connect(lambda: self._dock_section(section_key))
-        self._float_windows[section_key] = float_window
-
-        # 플레이스홀더 설정
-        placeholder = self._placeholders[section_key]
-
-        # X Zone과 Group Zone은 left_panel 내부에 있음
-        if section_key in ["x_zone", "group_zone"]:
-            left_layout = self.left_panel.layout()
-            idx = 0 if section_key == "x_zone" else 1
-            left_layout.replaceWidget(widget, placeholder)
-        else:  # value_zone
-            self.splitter.replaceWidget(2, placeholder)
-
-        placeholder.show()
-
-        # Float 버튼 비활성화
-        if hasattr(widget, 'float_btn'):
-            widget.float_btn.setEnabled(False)
-
-        float_window.show()
-
-    def _dock_section(self, section_key: str):
-        """섹션을 메인 창으로 복귀"""
-        if section_key not in self._float_windows:
-            return
-
-        float_window = self._float_windows[section_key]
-        widget = float_window.get_content_widget()
-        placeholder = self._placeholders[section_key]
-
-        # X Zone과 Group Zone은 left_panel 내부에 있음
-        if section_key in ["x_zone", "group_zone"]:
-            left_layout = self.left_panel.layout()
-            left_layout.replaceWidget(placeholder, widget)
-        else:  # value_zone
-            self.splitter.replaceWidget(2, widget)
-
-        placeholder.hide()
-        widget.show()
-
-        # Float 버튼 활성화
-        if hasattr(widget, 'float_btn'):
-            widget.float_btn.setEnabled(True)
-
-        # Float window 정리
-        float_window.close()
-        float_window.deleteLater()
-        del self._float_windows[section_key]
-
-    def _find_main_window(self):
-        """메인 윈도우 찾기"""
-        widget = self
-        while widget:
-            if widget.inherits("QMainWindow"):
-                return widget
-            widget = widget.parentWidget()
-        return None
-    
     def set_data(self, df: Optional[pl.DataFrame]):
         self._update_table_model(df)
     
