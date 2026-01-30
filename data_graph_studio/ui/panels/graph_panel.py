@@ -1991,7 +1991,7 @@ class MainGraph(pg.PlotWidget):
                         movable=False,
                         resizable=False
                     )
-                    self._selection_roi.setPen(pg.mkPen('#6366F1', width=2, style=Qt.DashLine))
+                    self._selection_roi.setPen(pg.mkPen((99, 102, 241), width=2, style=Qt.DashLine))
                     self.addItem(self._selection_roi)
                 else:
                     # Finish selection
@@ -2058,7 +2058,7 @@ class MainGraph(pg.PlotWidget):
                     values=[pos.x(), pos.x()],
                     orientation='vertical',
                     movable=False,
-                    brush=pg.mkBrush('#6366F1', 30)
+                    brush=pg.mkBrush(99, 102, 241, 30)  # #6366F1 with alpha
                 )
                 # Actually use RectROI for 2D selection
                 self.removeItem(self._selection_roi)
@@ -2090,7 +2090,7 @@ class MainGraph(pg.PlotWidget):
 
                 # Draw selection rectangle as a simple rect item
                 rect = pg.QtWidgets.QGraphicsRectItem(x1, y1, width, height)
-                rect.setPen(pg.mkPen('#6366F1', width=2, style=Qt.DashLine))
+                rect.setPen(pg.mkPen((99, 102, 241), width=2, style=Qt.DashLine))
                 rect.setBrush(pg.mkBrush(99, 102, 241, 30))  # #6366F1 with alpha
                 self.addItem(rect)
                 self._selection_roi = rect
