@@ -17,23 +17,12 @@ app = QApplication.instance()
 if not app:
     app = QApplication([])
 
-# Add src to path
-src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
+# Add project root to path
+project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
 
-# Import shortcuts module directly
-import importlib.util
-spec = importlib.util.spec_from_file_location(
-    "shortcuts",
-    os.path.join(src_path, 'ui', 'shortcuts.py')
-)
-shortcuts = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(shortcuts)
-
-ShortcutManager = shortcuts.ShortcutManager
-Shortcut = shortcuts.Shortcut
-ShortcutCategory = shortcuts.ShortcutCategory
+from data_graph_studio.ui.shortcuts import ShortcutManager, Shortcut, ShortcutCategory
 
 
 class TestShortcut:

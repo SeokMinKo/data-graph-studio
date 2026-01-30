@@ -8,13 +8,14 @@ import polars as pl
 from datetime import date
 
 import sys
-sys.path.insert(0, str(__file__).rsplit('tests', 1)[0] + 'src')
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from graph.charts.box_plot import BoxPlotChart
-from graph.charts.violin_plot import ViolinPlotChart
-from graph.charts.heatmap import HeatmapChart
-from graph.charts.candlestick import CandlestickChart
-from graph.charts.waterfall import WaterfallChart
+from data_graph_studio.graph.charts.box_plot import BoxPlotChart
+from data_graph_studio.graph.charts.violin_plot import ViolinPlotChart
+from data_graph_studio.graph.charts.heatmap import HeatmapChart
+from data_graph_studio.graph.charts.candlestick import CandlestickChart
+from data_graph_studio.graph.charts.waterfall import WaterfallChart
 
 
 class TestBoxPlotChart:

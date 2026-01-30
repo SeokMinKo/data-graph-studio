@@ -117,7 +117,7 @@ class DOCXReportGenerator(ReportGenerator):
 
         return buffer.getvalue()
 
-    def _hex_to_rgb(self, hex_color: str) -> RGBColor:
+    def _hex_to_rgb(self, hex_color: str) -> "RGBColor":
         """HEX를 RGBColor로 변환"""
         hex_color = hex_color.lstrip('#')
         r = int(hex_color[0:2], 16)

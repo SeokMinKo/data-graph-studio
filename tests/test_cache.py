@@ -9,9 +9,10 @@ import time
 from unittest.mock import MagicMock, patch
 
 import sys
-sys.path.insert(0, str(__file__).rsplit('tests', 1)[0] + 'src')
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.cache import CacheManager, CacheLevel, CacheEntry
+from data_graph_studio.core.cache import CacheManager, CacheLevel, CacheEntry
 
 
 class TestCacheEntry:

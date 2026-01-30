@@ -8,9 +8,10 @@ import numpy as np
 from datetime import datetime, date, timedelta
 
 import sys
-sys.path.insert(0, str(__file__).rsplit('tests', 1)[0] + 'src')
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.expression_engine import ExpressionEngine, ExpressionError
+from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
 
 
 class TestExpressionParsing:

@@ -45,11 +45,17 @@ except ImportError:
 class PPTXReportGenerator(ReportGenerator):
     """PowerPoint 프레젠테이션 생성기"""
 
-    # Slide sizes
-    SLIDE_SIZES = {
-        "16:9": (Inches(13.333), Inches(7.5)),
-        "4:3": (Inches(10), Inches(7.5)),
-    }
+    # Slide sizes (lazy loaded)
+    _SLIDE_SIZES = None
+    
+    @classmethod
+    def _get_slide_sizes(cls):
+        if cls._SLIDE_SIZES is None and PPTX_AVAILABLE:
+            cls._SLIDE_SIZES = {
+                "16:9": (Inches(13.333), Inches(7.5)),
+                "4:3": (Inches(10), Inches(7.5)),
+            }
+        return cls._SLIDE_SIZES or {}
 
     def generate(
         self,
@@ -107,7 +113,7 @@ class PPTXReportGenerator(ReportGenerator):
 
         return buffer.getvalue()
 
-    def _hex_to_rgb(self, hex_color: str) -> RGBColor:
+    def _hex_to_rgb(self, hex_color: str) -> "RGBColor":
         """HEX를 RGBColor로 변환"""
         hex_color = hex_color.lstrip('#')
         r = int(hex_color[0:2], 16)
