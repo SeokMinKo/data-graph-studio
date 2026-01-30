@@ -256,7 +256,8 @@ class DataEngine:
         chunk_size: Optional[int] = None,
         optimize_memory: bool = True,
         async_load: bool = False,
-        excluded_columns: Optional[List[str]] = None
+        excluded_columns: Optional[List[str]] = None,
+        process_filter: Optional[List[str]] = None,  # For ETL files - filter by process names
     ) -> bool:
         """
         파일 로드
@@ -321,7 +322,8 @@ class DataEngine:
                 target=self._load_file_internal,
                 args=(path, file_type, encoding, delimiter, delimiter_type,
                       regex_pattern, has_header, skip_rows, comment_char,
-                      sheet_name, chunk_size, optimize_memory, excluded_columns)
+                      sheet_name, chunk_size, optimize_memory, excluded_columns,
+                      process_filter)
             )
             self._loading_thread.start()
             return True
@@ -329,7 +331,8 @@ class DataEngine:
             return self._load_file_internal(
                 path, file_type, encoding, delimiter, delimiter_type,
                 regex_pattern, has_header, skip_rows, comment_char,
-                sheet_name, chunk_size, optimize_memory, excluded_columns
+                sheet_name, chunk_size, optimize_memory, excluded_columns,
+                process_filter
             )
     
     def _load_file_internal(
@@ -346,7 +349,8 @@ class DataEngine:
         sheet_name: Optional[str],
         chunk_size: Optional[int],
         optimize_memory: bool,
-        excluded_columns: Optional[List[str]] = None
+        excluded_columns: Optional[List[str]] = None,
+        process_filter: Optional[List[str]] = None
     ) -> bool:
         """실제 파일 로드"""
         start_time = time.time()
@@ -381,6 +385,10 @@ class DataEngine:
                 cols_to_drop = [c for c in excluded_columns if c in self._df.columns]
                 if cols_to_drop:
                     self._df = self._df.drop(cols_to_drop)
+
+            # Apply process filter (for ETL files converted to CSV)
+            if process_filter and self._df is not None:
+                self._df = self._apply_process_filter(self._df, process_filter)
 
             # 메모리 최적화
             if optimize_memory:
@@ -631,7 +639,43 @@ class DataEngine:
     def _load_json(self, path: str) -> pl.DataFrame:
         """JSON 로드"""
         return pl.read_json(path)
-    
+
+    def _apply_process_filter(self, df: pl.DataFrame, process_filter: List[str]) -> pl.DataFrame:
+        """
+        Apply process filter to DataFrame (for ETL files converted to CSV)
+
+        Looks for process-related columns and filters rows to only include
+        rows where the process name is in the filter list.
+        """
+        if not process_filter or df is None:
+            return df
+
+        # Common process column names in ETL/CSV exports
+        process_col_names = ['Process Name', 'ProcessName', 'Process', 'Image', 'Image Name']
+
+        process_col = None
+        for col_name in process_col_names:
+            if col_name in df.columns:
+                process_col = col_name
+                break
+
+        # Also check for columns containing 'process' (case-insensitive)
+        if process_col is None:
+            for col in df.columns:
+                if 'process' in col.lower():
+                    process_col = col
+                    break
+
+        if process_col is None:
+            # No process column found, return original dataframe
+            return df
+
+        # Filter to only selected processes
+        self._update_progress(status="filtering processes")
+        filtered_df = df.filter(pl.col(process_col).is_in(process_filter))
+
+        return filtered_df
+
     def _optimize_memory(self, df: pl.DataFrame) -> pl.DataFrame:
         """
         메모리 최적화

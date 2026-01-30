@@ -4,18 +4,21 @@ Parsing Preview Dialog - 파일 파싱 미리보기 및 설정
 
 import os
 import re
+import subprocess
+import tempfile
+import platform
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QComboBox, QSpinBox, QLineEdit, QCheckBox,
     QPushButton, QTableWidget, QTableWidgetItem, QGroupBox,
     QSplitter, QTextEdit, QFrame, QSizePolicy, QHeaderView,
-    QWidget, QScrollArea
+    QWidget, QScrollArea, QListWidget, QListWidgetItem, QProgressBar
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QThread
 from PySide6.QtGui import QFont, QColor
 
 from ...core.data_engine import FileType, DelimiterType
@@ -35,10 +38,74 @@ class ParsingSettings:
     comment_char: str = ""
     sheet_name: Optional[str] = None
     excluded_columns: List[str] = None  # 제외할 컬럼 목록
+    # ETL specific settings
+    etl_converted_path: Optional[str] = None  # Path to converted CSV from ETL
+    etl_selected_processes: List[str] = field(default_factory=list)  # Selected processes
 
     def __post_init__(self):
         if self.excluded_columns is None:
             self.excluded_columns = []
+        if self.etl_selected_processes is None:
+            self.etl_selected_processes = []
+
+
+class ETLConverterThread(QThread):
+    """Background thread for converting ETL files using tracerpt"""
+    finished = Signal(bool, str, str)  # success, csv_path, error_msg
+
+    def __init__(self, etl_path: str):
+        super().__init__()
+        self.etl_path = etl_path
+        self._csv_path = None
+
+    def run(self):
+        system = platform.system()
+        if system != "Windows":
+            self.finished.emit(False, "",
+                "ETL files can only be converted on Windows.\n"
+                "Please convert the file to CSV using Windows tools first.")
+            return
+
+        try:
+            # Create temp file for output
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix='.csv', prefix='etl_preview_')
+            os.close(tmp_fd)
+
+            # Run tracerpt to convert ETL to CSV
+            result = subprocess.run(
+                ['tracerpt', self.etl_path, '-o', tmp_path, '-of', 'CSV', '-y'],
+                capture_output=True,
+                text=True,
+                timeout=120  # 2 minute timeout
+            )
+
+            if result.returncode == 0 and os.path.exists(tmp_path):
+                # Check if output has content
+                if os.path.getsize(tmp_path) > 0:
+                    self._csv_path = tmp_path
+                    self.finished.emit(True, tmp_path, "")
+                else:
+                    os.unlink(tmp_path)
+                    self.finished.emit(False, "",
+                        "ETL conversion produced empty output.\n"
+                        "The file may be corrupted or unsupported.")
+            else:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+                error_msg = result.stderr if result.stderr else "Unknown error"
+                self.finished.emit(False, "",
+                    f"ETL conversion failed:\n{error_msg}")
+
+        except subprocess.TimeoutExpired:
+            self.finished.emit(False, "",
+                "ETL conversion timed out (2 minutes).\n"
+                "The file may be too large.")
+        except FileNotFoundError:
+            self.finished.emit(False, "",
+                "tracerpt command not found.\n"
+                "This command requires Windows and admin privileges.")
+        except Exception as e:
+            self.finished.emit(False, "", f"ETL conversion error: {e}")
 
 
 class ParsingPreviewDialog(QDialog):
@@ -67,10 +134,37 @@ class ParsingPreviewDialog(QDialog):
         self._excluded_columns: set = set()  # 제외할 컬럼 인덱스
         self._column_checkboxes: List[QCheckBox] = []
 
+        # ETL-specific state
+        self._is_binary_etl = False
+        self._etl_converted_path: Optional[str] = None
+        self._etl_converter_thread: Optional[ETLConverterThread] = None
+        self._etl_processes: List[str] = []  # Available processes
+        self._etl_selected_processes: set = set()  # Selected processes
+
+        # Check if it's a binary ETL file
+        ext = Path(file_path).suffix.lower()
+        if ext == '.etl':
+            self._is_binary_etl = self._check_binary_etl(file_path)
+
         self._setup_ui()
         self._load_raw_preview()
         self._detect_settings()
         self._update_preview()
+
+    def _check_binary_etl(self, path: str) -> bool:
+        """Check if the ETL file is in binary format"""
+        try:
+            with open(path, 'rb') as f:
+                header = f.read(512)
+
+            # Binary ETL detection: null bytes or high ratio of non-printable chars
+            null_count = header.count(b'\x00')
+            non_printable = sum(1 for b in header if b < 32 and b not in (9, 10, 13))
+
+            # If null bytes present or >5% non-printable, it's binary
+            return null_count > 0 or (non_printable / max(len(header), 1)) > 0.05
+        except Exception:
+            return False
     
     def _setup_ui(self):
         """UI 설정"""
@@ -298,14 +392,71 @@ class ParsingPreviewDialog(QDialog):
         structure_layout.addWidget(self.comment_edit, 2, 1)
         
         layout.addWidget(structure_group)
-        
+
+        # ETL Process Filter Group (only visible for binary ETL files)
+        self.etl_group = QGroupBox("ETL Process Filter")
+        etl_layout = QVBoxLayout(self.etl_group)
+        etl_layout.setSpacing(8)
+
+        # Status/progress for ETL conversion
+        self.etl_status_label = QLabel("Converting ETL file...")
+        self.etl_status_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        etl_layout.addWidget(self.etl_status_label)
+
+        self.etl_progress = QProgressBar()
+        self.etl_progress.setRange(0, 0)  # Indeterminate
+        self.etl_progress.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #E5E7EB;
+                border-radius: 4px;
+                height: 8px;
+                background: #F3F4F6;
+            }
+            QProgressBar::chunk {
+                background: #6366F1;
+                border-radius: 4px;
+            }
+        """)
+        etl_layout.addWidget(self.etl_progress)
+
+        # Process list
+        process_label = QLabel("Select processes to load:")
+        process_label.setStyleSheet("font-weight: 500;")
+        etl_layout.addWidget(process_label)
+
+        self.etl_process_list = QListWidget()
+        self.etl_process_list.setSelectionMode(QListWidget.MultiSelection)
+        self.etl_process_list.setMaximumHeight(150)
+        self.etl_process_list.itemSelectionChanged.connect(self._on_etl_process_selection_changed)
+        etl_layout.addWidget(self.etl_process_list)
+
+        # Select all/none buttons
+        etl_btn_layout = QHBoxLayout()
+        select_all_proc_btn = QPushButton("Select All")
+        select_all_proc_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        select_all_proc_btn.clicked.connect(self._select_all_processes)
+        etl_btn_layout.addWidget(select_all_proc_btn)
+
+        deselect_all_proc_btn = QPushButton("Deselect All")
+        deselect_all_proc_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        deselect_all_proc_btn.clicked.connect(self._deselect_all_processes)
+        etl_btn_layout.addWidget(deselect_all_proc_btn)
+
+        etl_btn_layout.addStretch()
+        etl_layout.addLayout(etl_btn_layout)
+
+        layout.addWidget(self.etl_group)
+
+        # Hide ETL group initially - will be shown for binary ETL files
+        self.etl_group.setVisible(self._is_binary_etl)
+
         # Stats
         self.stats_label = QLabel("")
         self.stats_label.setStyleSheet("color: #6B7280; font-size: 11px;")
         layout.addWidget(self.stats_label)
-        
+
         layout.addStretch()
-        
+
         return widget
     
     def _create_preview_panel(self) -> QWidget:
@@ -421,8 +572,13 @@ class ParsingPreviewDialog(QDialog):
     
     def _load_raw_preview(self):
         """원본 파일 미리보기 로드"""
+        # Handle binary ETL files specially
+        if self._is_binary_etl:
+            self._load_binary_etl_preview()
+            return
+
         encoding = self.encoding_combo.currentText() if hasattr(self, 'encoding_combo') else "utf-8"
-        
+
         try:
             with open(self.file_path, 'r', encoding=encoding, errors='replace') as f:
                 self._raw_lines = []
@@ -430,16 +586,138 @@ class ParsingPreviewDialog(QDialog):
                     if i >= self.PREVIEW_LINES:
                         break
                     self._raw_lines.append(line.rstrip('\n\r'))
-            
+
             # Update raw text display
             if hasattr(self, 'raw_text'):
                 display_lines = self._raw_lines[:20]
                 self.raw_text.setText('\n'.join(display_lines))
-                
+
         except Exception as e:
             self._raw_lines = [f"Error reading file: {e}"]
             if hasattr(self, 'raw_text'):
                 self.raw_text.setText(f"Error reading file: {e}")
+
+    def _load_binary_etl_preview(self):
+        """Load binary ETL file preview by converting first"""
+        if hasattr(self, 'raw_text'):
+            self.raw_text.setText(
+                "Binary ETL (Event Trace Log) file detected.\n\n"
+                "Converting to CSV for preview...\n"
+                "This may take a moment for large files."
+            )
+
+        # Show progress
+        if hasattr(self, 'etl_progress'):
+            self.etl_progress.setVisible(True)
+            self.etl_status_label.setText("Converting ETL file...")
+
+        # Start conversion in background
+        self._etl_converter_thread = ETLConverterThread(self.file_path)
+        self._etl_converter_thread.finished.connect(self._on_etl_conversion_finished)
+        self._etl_converter_thread.start()
+
+    def _on_etl_conversion_finished(self, success: bool, csv_path: str, error_msg: str):
+        """Handle ETL conversion completion"""
+        self.etl_progress.setVisible(False)
+
+        if success:
+            self._etl_converted_path = csv_path
+            self.etl_status_label.setText("Conversion complete!")
+            self.etl_status_label.setStyleSheet("color: #10B981; font-size: 11px;")
+
+            # Load the converted CSV
+            self._load_converted_etl_csv(csv_path)
+        else:
+            self.etl_status_label.setText("Conversion failed")
+            self.etl_status_label.setStyleSheet("color: #EF4444; font-size: 11px;")
+            if hasattr(self, 'raw_text'):
+                self.raw_text.setText(
+                    f"Failed to convert ETL file:\n\n{error_msg}\n\n"
+                    "You can manually convert the ETL file using:\n"
+                    "  tracerpt \"file.etl\" -o output.csv -of CSV\n\n"
+                    "Or use Windows Performance Analyzer (WPA) to export as CSV."
+                )
+
+    def _load_converted_etl_csv(self, csv_path: str):
+        """Load the converted ETL CSV and extract processes"""
+        try:
+            with open(csv_path, 'r', encoding='utf-8', errors='replace') as f:
+                self._raw_lines = []
+                for i, line in enumerate(f):
+                    if i >= self.PREVIEW_LINES:
+                        break
+                    self._raw_lines.append(line.rstrip('\n\r'))
+
+            # Update raw text display
+            if hasattr(self, 'raw_text'):
+                display_lines = self._raw_lines[:20]
+                self.raw_text.setText('\n'.join(display_lines))
+
+            # Extract process names from the data
+            self._extract_etl_processes()
+
+            # Update preview
+            self._schedule_update()
+
+        except Exception as e:
+            if hasattr(self, 'raw_text'):
+                self.raw_text.setText(f"Error reading converted ETL: {e}")
+
+    def _extract_etl_processes(self):
+        """Extract unique process names from ETL data"""
+        processes = set()
+
+        # Look for process column (common names: Process Name, ProcessName, Process, Image)
+        if not self._raw_lines:
+            return
+
+        # Parse header to find process column
+        header_line = self._raw_lines[0] if self._raw_lines else ""
+        delimiter = ","  # CSV default
+        headers = [h.strip().strip('"') for h in header_line.split(delimiter)]
+
+        process_col_idx = -1
+        process_col_names = ['Process Name', 'ProcessName', 'Process', 'Image', 'Image Name']
+        for i, header in enumerate(headers):
+            if header in process_col_names or 'process' in header.lower():
+                process_col_idx = i
+                break
+
+        if process_col_idx < 0:
+            self.etl_process_list.addItem("(No process column found)")
+            return
+
+        # Extract unique process names
+        for line in self._raw_lines[1:]:  # Skip header
+            fields = line.split(delimiter)
+            if len(fields) > process_col_idx:
+                process = fields[process_col_idx].strip().strip('"')
+                if process:
+                    processes.add(process)
+
+        # Update process list
+        self._etl_processes = sorted(processes)
+        self.etl_process_list.clear()
+        for proc in self._etl_processes:
+            item = QListWidgetItem(proc)
+            item.setSelected(True)  # Select all by default
+            self.etl_process_list.addItem(item)
+            self._etl_selected_processes.add(proc)
+
+    def _on_etl_process_selection_changed(self):
+        """Handle process selection change"""
+        self._etl_selected_processes.clear()
+        for item in self.etl_process_list.selectedItems():
+            self._etl_selected_processes.add(item.text())
+        self._schedule_update()
+
+    def _select_all_processes(self):
+        """Select all processes"""
+        self.etl_process_list.selectAll()
+
+    def _deselect_all_processes(self):
+        """Deselect all processes"""
+        self.etl_process_list.clearSelection()
     
     def _detect_settings(self):
         """파일 설정 자동 감지"""
@@ -697,8 +975,19 @@ class ParsingPreviewDialog(QDialog):
                 if i < len(self._column_checkboxes):
                     excluded_names.append(self._column_checkboxes[i].toolTip())
 
+        # For binary ETL, use the converted path and selected processes
+        actual_file_path = self.file_path
+        etl_selected = []
+        if self._is_binary_etl and self._etl_converted_path:
+            actual_file_path = self._etl_converted_path
+            etl_selected = list(self._etl_selected_processes)
+            # Override to CSV since we converted it
+            file_type = FileType.CSV
+            delimiter = ","
+            delimiter_type = DelimiterType.COMMA
+
         return ParsingSettings(
-            file_path=self.file_path,
+            file_path=actual_file_path,
             file_type=file_type,
             encoding=self.encoding_combo.currentText(),
             delimiter=delimiter,
@@ -708,4 +997,6 @@ class ParsingPreviewDialog(QDialog):
             skip_rows=self.skip_rows_spin.value(),
             comment_char=self.comment_edit.text().strip(),
             excluded_columns=excluded_names,
+            etl_converted_path=self._etl_converted_path,
+            etl_selected_processes=etl_selected,
         )

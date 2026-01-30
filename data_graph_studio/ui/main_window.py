@@ -3,13 +3,15 @@ Main Window - 메인 윈도우 및 레이아웃
 """
 
 import os
+import json
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog, QFrame
+    QProgressDialog, QApplication, QLabel, QDialog, QFrame, QComboBox,
+    QInputDialog
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread
 from PySide6.QtGui import QAction, QIcon, QKeySequence
@@ -56,6 +58,12 @@ class DataLoaderThreadWithSettings(QThread):
     
     def run(self):
         self.engine.set_progress_callback(self._on_progress)
+
+        # Get process filter for ETL files
+        process_filter = None
+        if hasattr(self.settings, 'etl_selected_processes') and self.settings.etl_selected_processes:
+            process_filter = self.settings.etl_selected_processes
+
         success = self.engine.load_file(
             self.file_path,
             file_type=self.settings.file_type,
@@ -67,6 +75,7 @@ class DataLoaderThreadWithSettings(QThread):
             skip_rows=self.settings.skip_rows,
             comment_char=self.settings.comment_char if self.settings.comment_char else None,
             excluded_columns=self.settings.excluded_columns if self.settings.excluded_columns else None,
+            process_filter=process_filter,
             optimize_memory=True
         )
         self.finished_loading.emit(success)
@@ -207,13 +216,44 @@ class MainWindow(QMainWindow):
         
         # View Menu
         view_menu = menubar.addMenu("&View")
-        
+
         reset_layout = QAction("Reset Layout", self)
         reset_layout.triggered.connect(self._reset_layout)
         view_menu.addAction(reset_layout)
-        
+
         view_menu.addSeparator()
-        
+
+        # Views submenu - Toggle panels visibility
+        views_submenu = view_menu.addMenu("Views")
+
+        self._view_actions = {}
+
+        # Overview panel toggle
+        overview_action = QAction("Overview", self)
+        overview_action.setCheckable(True)
+        overview_action.setChecked(True)
+        overview_action.triggered.connect(lambda checked: self._toggle_panel_visibility("summary", checked))
+        views_submenu.addAction(overview_action)
+        self._view_actions["summary"] = overview_action
+
+        # Graph panel toggle
+        graph_action = QAction("Graph", self)
+        graph_action.setCheckable(True)
+        graph_action.setChecked(True)
+        graph_action.triggered.connect(lambda checked: self._toggle_panel_visibility("graph", checked))
+        views_submenu.addAction(graph_action)
+        self._view_actions["graph"] = graph_action
+
+        # Table panel toggle
+        table_action = QAction("Table", self)
+        table_action.setCheckable(True)
+        table_action.setChecked(True)
+        table_action.triggered.connect(lambda checked: self._toggle_panel_visibility("table", checked))
+        views_submenu.addAction(table_action)
+        self._view_actions["table"] = table_action
+
+        view_menu.addSeparator()
+
         # Chart Type submenu
         chart_menu = view_menu.addMenu("Chart Type")
         for chart_type in ChartType:
@@ -333,7 +373,51 @@ class MainWindow(QMainWindow):
             action.setToolTip(tooltip)
             action.triggered.connect(lambda checked, c=ct: self.state.set_chart_type(c))
             toolbar.addAction(action)
-    
+
+        toolbar.addSeparator()
+
+        # Preset management
+        preset_label = QLabel("  Preset: ")
+        preset_label.setStyleSheet("color: #6B7280; font-size: 12px;")
+        toolbar.addWidget(preset_label)
+
+        self._preset_combo = QComboBox()
+        self._preset_combo.setMinimumWidth(120)
+        self._preset_combo.setStyleSheet("""
+            QComboBox {
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 4px 8px;
+                background: white;
+                min-height: 24px;
+            }
+            QComboBox:hover {
+                border-color: #6366F1;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+        """)
+        self._preset_combo.setToolTip("Load saved preset")
+        self._preset_combo.currentTextChanged.connect(self._on_preset_selected)
+        toolbar.addWidget(self._preset_combo)
+
+        save_preset_btn = QAction("💾", self)
+        save_preset_btn.setToolTip("Save current settings as preset")
+        save_preset_btn.triggered.connect(self._on_save_preset)
+        toolbar.addAction(save_preset_btn)
+
+        delete_preset_btn = QAction("🗑️", self)
+        delete_preset_btn.setToolTip("Delete selected preset")
+        delete_preset_btn.triggered.connect(self._on_delete_preset)
+        toolbar.addAction(delete_preset_btn)
+
+        # Initialize presets directory and load presets
+        self._presets_dir = Path.home() / ".data_graph_studio" / "presets"
+        self._presets_dir.mkdir(parents=True, exist_ok=True)
+        self._refresh_presets()
+
     def _setup_main_layout(self):
         """메인 레이아웃 설정 (3단 스플리터)"""
         central_widget = QWidget()
@@ -416,7 +500,63 @@ class MainWindow(QMainWindow):
         elif panel is self.table_panel:
             return "table"
         return None
-    
+
+    def _toggle_panel_visibility(self, panel_key: str, visible: bool):
+        """Toggle visibility of a panel"""
+        panel_map = {
+            "summary": self.summary_panel,
+            "graph": self.graph_panel,
+            "table": self.table_panel,
+        }
+
+        panel = panel_map.get(panel_key)
+        if panel is None:
+            return
+
+        # If panel is floating, handle differently
+        if panel_key in self._float_windows:
+            float_window = self._float_windows[panel_key]
+            if visible:
+                float_window.show()
+            else:
+                float_window.hide()
+            return
+
+        # Toggle visibility in splitter
+        if visible:
+            panel.show()
+        else:
+            panel.hide()
+
+        # Redistribute sizes among visible panels
+        self._redistribute_panel_sizes()
+
+    def _redistribute_panel_sizes(self):
+        """Redistribute sizes among visible panels"""
+        visible_panels = []
+        for i in range(self.main_splitter.count()):
+            widget = self.main_splitter.widget(i)
+            if widget and not widget.isHidden():
+                visible_panels.append(i)
+
+        if not visible_panels:
+            return
+
+        total_height = self.main_splitter.height()
+        if total_height == 0:
+            total_height = 800
+
+        # Distribute equally among visible panels
+        per_panel = total_height // len(visible_panels)
+        sizes = []
+        for i in range(self.main_splitter.count()):
+            if i in visible_panels:
+                sizes.append(per_panel)
+            else:
+                sizes.append(0)
+
+        self.main_splitter.setSizes(sizes)
+
     def _setup_statusbar(self):
         """Modern status bar setup"""
         self.statusbar = QStatusBar()
@@ -845,7 +985,184 @@ class MainWindow(QMainWindow):
             "<p>Big Data Visualization Tool</p>"
             "<p>© 2026 Godol</p>"
         )
-    
+
+    # ==================== Preset Management ====================
+
+    def _refresh_presets(self):
+        """Refresh preset dropdown list"""
+        self._preset_combo.blockSignals(True)
+        current_text = self._preset_combo.currentText()
+        self._preset_combo.clear()
+        self._preset_combo.addItem("(Default)")
+
+        # List preset files
+        if self._presets_dir.exists():
+            preset_files = sorted(self._presets_dir.glob("*.json"))
+            for preset_file in preset_files:
+                self._preset_combo.addItem(preset_file.stem)
+
+        # Restore selection if still exists
+        idx = self._preset_combo.findText(current_text)
+        if idx >= 0:
+            self._preset_combo.setCurrentIndex(idx)
+        else:
+            self._preset_combo.setCurrentIndex(0)
+
+        self._preset_combo.blockSignals(False)
+
+    def _on_preset_selected(self, preset_name: str):
+        """Load selected preset"""
+        if not preset_name or preset_name == "(Default)":
+            return
+
+        preset_path = self._presets_dir / f"{preset_name}.json"
+        if not preset_path.exists():
+            return
+
+        try:
+            with open(preset_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+
+            self._apply_preset_settings(settings)
+            self.statusbar.showMessage(f"Loaded preset: {preset_name}", 3000)
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Load Preset Error",
+                f"Failed to load preset: {e}"
+            )
+
+    def _on_save_preset(self):
+        """Save current settings as preset"""
+        name, ok = QInputDialog.getText(
+            self,
+            "Save Preset",
+            "Enter preset name:",
+            text=""
+        )
+
+        if not ok or not name.strip():
+            return
+
+        name = name.strip()
+        # Sanitize name for filename
+        safe_name = "".join(c for c in name if c.isalnum() or c in "._- ")
+        if not safe_name:
+            QMessageBox.warning(self, "Invalid Name", "Please enter a valid preset name.")
+            return
+
+        preset_path = self._presets_dir / f"{safe_name}.json"
+
+        # Check if exists
+        if preset_path.exists():
+            reply = QMessageBox.question(
+                self,
+                "Overwrite Preset",
+                f"Preset '{safe_name}' already exists. Overwrite?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+        try:
+            settings = self._get_current_settings()
+            with open(preset_path, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False, default=str)
+
+            self._refresh_presets()
+            self._preset_combo.setCurrentText(safe_name)
+            self.statusbar.showMessage(f"Saved preset: {safe_name}", 3000)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Save Preset Error",
+                f"Failed to save preset: {e}"
+            )
+
+    def _on_delete_preset(self):
+        """Delete selected preset"""
+        preset_name = self._preset_combo.currentText()
+        if not preset_name or preset_name == "(Default)":
+            QMessageBox.information(self, "Delete Preset", "Select a preset to delete.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Delete Preset",
+            f"Delete preset '{preset_name}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        preset_path = self._presets_dir / f"{preset_name}.json"
+        try:
+            if preset_path.exists():
+                preset_path.unlink()
+            self._refresh_presets()
+            self.statusbar.showMessage(f"Deleted preset: {preset_name}", 3000)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Delete Preset Error",
+                f"Failed to delete preset: {e}"
+            )
+
+    def _get_current_settings(self) -> Dict:
+        """Get current chart and view settings for saving"""
+        settings = {
+            'version': '1.0',
+            'chart_type': self.state.chart_type.value if self.state.chart_type else None,
+            'tool_mode': self.state.tool_mode.value if self.state.tool_mode else None,
+        }
+
+        # Get chart options from graph panel
+        if hasattr(self.graph_panel, 'get_chart_options'):
+            chart_options = self.graph_panel.get_chart_options()
+            # Convert QColor to string for JSON serialization
+            if 'bg_color' in chart_options and chart_options['bg_color']:
+                chart_options['bg_color'] = chart_options['bg_color'].name()
+            settings['chart_options'] = chart_options
+
+        # Get legend settings
+        if hasattr(self.graph_panel, 'get_legend_settings'):
+            settings['legend_settings'] = self.graph_panel.get_legend_settings()
+
+        # Get panel visibility
+        settings['panel_visibility'] = {
+            'summary': self.summary_panel.isVisible(),
+            'graph': self.graph_panel.isVisible(),
+            'table': self.table_panel.isVisible(),
+        }
+
+        return settings
+
+    def _apply_preset_settings(self, settings: Dict):
+        """Apply loaded preset settings"""
+        # Apply chart type
+        if 'chart_type' in settings and settings['chart_type']:
+            try:
+                self.state.set_chart_type(ChartType(settings['chart_type']))
+            except ValueError:
+                pass
+
+        # Apply chart options
+        if 'chart_options' in settings and hasattr(self.graph_panel, 'apply_options'):
+            self.graph_panel.apply_options(settings['chart_options'])
+
+        # Apply panel visibility
+        if 'panel_visibility' in settings:
+            vis = settings['panel_visibility']
+            for panel_key, visible in vis.items():
+                if panel_key in self._view_actions:
+                    self._view_actions[panel_key].setChecked(visible)
+                    self._toggle_panel_visibility(panel_key, visible)
+
+        # Refresh graph
+        if hasattr(self.graph_panel, 'refresh'):
+            self.graph_panel.refresh()
+
     def closeEvent(self, event):
         """창 닫기 이벤트"""
         # TODO: 저장 확인
