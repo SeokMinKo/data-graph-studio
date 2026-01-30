@@ -65,6 +65,7 @@ class DataLoaderThreadWithSettings(QThread):
             has_header=self.settings.has_header,
             skip_rows=self.settings.skip_rows,
             comment_char=self.settings.comment_char if self.settings.comment_char else None,
+            excluded_columns=self.settings.excluded_columns if self.settings.excluded_columns else None,
             optimize_memory=True
         )
         self.finished_loading.emit(success)
@@ -569,15 +570,29 @@ class MainWindow(QMainWindow):
         """프로파일에서 Summary 업데이트"""
         if not self.engine.profile:
             return
-        
+
         profile = self.engine.profile
+
+        # Count column types
+        numeric_cols = sum(1 for c in profile.columns if c.is_numeric)
+        text_cols = sum(1 for c in profile.columns if not c.is_numeric and not c.is_temporal)
+        temporal_cols = sum(1 for c in profile.columns if c.is_temporal)
+
+        # Calculate missing data percentage
+        total_cells = profile.total_rows * profile.total_columns
+        total_nulls = sum(c.null_count for c in profile.columns)
+        missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
+
         stats = {
             'total_rows': profile.total_rows,
             'total_columns': profile.total_columns,
+            'numeric_columns': numeric_cols,
+            'text_columns': text_cols + temporal_cols,
+            'missing_percent': missing_percent,
             'memory_mb': profile.memory_bytes / (1024 * 1024),
             'load_time': profile.load_time_seconds,
         }
-        
+
         # 숫자형 컬럼 통계
         for col_info in profile.columns:
             if col_info.is_numeric:
@@ -586,7 +601,7 @@ class MainWindow(QMainWindow):
                     'max': col_info.max_value,
                     'null_count': col_info.null_count,
                 }
-        
+
         self.state.update_summary(stats)
     
     def _on_tool_mode_changed(self):

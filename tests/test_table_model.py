@@ -6,7 +6,7 @@ import pytest
 import polars as pl
 from PySide6.QtCore import Qt, QModelIndex
 
-from src.ui.panels.table_panel import PolarsTableModel
+from data_graph_studio.ui.panels.table_panel import PolarsTableModel
 
 
 class TestPolarsTableModel:

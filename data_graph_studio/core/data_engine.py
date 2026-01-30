@@ -255,7 +255,8 @@ class DataEngine:
         sheet_name: Optional[str] = None,
         chunk_size: Optional[int] = None,
         optimize_memory: bool = True,
-        async_load: bool = False
+        async_load: bool = False,
+        excluded_columns: Optional[List[str]] = None
     ) -> bool:
         """
         파일 로드
@@ -304,7 +305,7 @@ class DataEngine:
             comment_char=comment_char,
             sheet_name=sheet_name
         )
-        
+
         # 파일 크기 확인
         file_size = os.path.getsize(path)
         self._update_progress(
@@ -312,7 +313,7 @@ class DataEngine:
             total_bytes=file_size,
             loaded_bytes=0
         )
-        
+
         # 비동기 로드
         if async_load:
             self._cancel_loading = False
@@ -320,7 +321,7 @@ class DataEngine:
                 target=self._load_file_internal,
                 args=(path, file_type, encoding, delimiter, delimiter_type,
                       regex_pattern, has_header, skip_rows, comment_char,
-                      sheet_name, chunk_size, optimize_memory)
+                      sheet_name, chunk_size, optimize_memory, excluded_columns)
             )
             self._loading_thread.start()
             return True
@@ -328,7 +329,7 @@ class DataEngine:
             return self._load_file_internal(
                 path, file_type, encoding, delimiter, delimiter_type,
                 regex_pattern, has_header, skip_rows, comment_char,
-                sheet_name, chunk_size, optimize_memory
+                sheet_name, chunk_size, optimize_memory, excluded_columns
             )
     
     def _load_file_internal(
@@ -344,18 +345,19 @@ class DataEngine:
         comment_char: Optional[str],
         sheet_name: Optional[str],
         chunk_size: Optional[int],
-        optimize_memory: bool
+        optimize_memory: bool,
+        excluded_columns: Optional[List[str]] = None
     ) -> bool:
         """실제 파일 로드"""
         start_time = time.time()
-        
+
         try:
             if file_type == FileType.CSV:
                 self._df = self._load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
             elif file_type == FileType.TSV:
                 self._df = self._load_csv(path, encoding, "\t", has_header, skip_rows, comment_char)
             elif file_type in [FileType.TXT, FileType.CUSTOM]:
-                self._df = self._load_text(path, encoding, delimiter, delimiter_type, 
+                self._df = self._load_text(path, encoding, delimiter, delimiter_type,
                                            regex_pattern, has_header, skip_rows, comment_char)
             elif file_type == FileType.ETL:
                 self._df = self._load_etl(path, encoding, delimiter, delimiter_type,
@@ -368,21 +370,27 @@ class DataEngine:
                 self._df = self._load_json(path)
             else:
                 raise ValueError(f"Unsupported file type: {file_type}")
-            
+
             if self._cancel_loading:
                 self._df = None
                 self._update_progress(status="cancelled")
                 return False
-            
+
+            # Remove excluded columns
+            if excluded_columns and self._df is not None:
+                cols_to_drop = [c for c in excluded_columns if c in self._df.columns]
+                if cols_to_drop:
+                    self._df = self._df.drop(cols_to_drop)
+
             # 메모리 최적화
             if optimize_memory:
                 self._update_progress(status="optimizing")
                 self._df = self._optimize_memory(self._df)
-            
+
             # 프로파일 생성
             self._update_progress(status="profiling")
             self._profile = self._create_profile(self._df, time.time() - start_time)
-            
+
             # 완료
             self._update_progress(
                 status="complete",
@@ -391,9 +399,9 @@ class DataEngine:
                 total_rows=len(self._df),
                 elapsed_seconds=time.time() - start_time
             )
-            
+
             return True
-            
+
         except Exception as e:
             self._update_progress(status="error", error_message=str(e))
             return False
@@ -519,46 +527,86 @@ class DataEngine:
     ) -> pl.DataFrame:
         """
         ETL 파일 로드
-        
+
         ETL (Event Trace Log)은 Windows 바이너리 형식.
         - 텍스트로 변환된 ETL 파일은 _load_text로 처리
         - 바이너리 ETL은 tracerpt 명령으로 변환 권고
         """
-        # 바이너리 ETL인지 확인
+        import platform
+
+        # 바이너리 ETL인지 확인 (더 많은 바이트 검사)
         with open(path, 'rb') as f:
-            header = f.read(4)
-        
-        # ETL 바이너리 시그니처 체크 (간단한 휴리스틱)
-        is_binary = not all(32 <= b < 127 or b in (9, 10, 13) for b in header)
-        
-        if is_binary:
-            # tracerpt로 변환 시도
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
-                    tmp_path = tmp.name
-                
-                result = subprocess.run(
-                    ['tracerpt', path, '-o', tmp_path, '-of', 'CSV', '-y'],
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-                
-                if result.returncode == 0 and os.path.exists(tmp_path):
-                    df = self._load_csv(tmp_path, encoding, ',', True, 0, None)
-                    os.unlink(tmp_path)
-                    return df
-                else:
-                    raise ValueError(
-                        "바이너리 ETL 파일입니다. tracerpt 변환 실패.\n"
-                        "수동 변환: tracerpt yourfile.etl -o output.csv -of CSV"
+            header = f.read(64)
+
+        # ETL 바이너리 시그니처 체크
+        is_text = all(32 <= b < 127 or b in (9, 10, 13) for b in header[:32])
+
+        if not is_text:
+            system = platform.system()
+
+            if system == 'Windows':
+                # Windows에서 tracerpt로 변환 시도
+                try:
+                    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+                        tmp_path = tmp.name
+
+                    result = subprocess.run(
+                        ['tracerpt', path, '-o', tmp_path, '-of', 'CSV', '-y'],
+                        capture_output=True,
+                        text=True,
+                        timeout=120
                     )
-            except subprocess.TimeoutExpired:
-                raise ValueError("ETL 변환 시간 초과. 파일이 너무 크거나 손상되었습니다.")
-            except FileNotFoundError:
+
+                    if result.returncode == 0 and os.path.exists(tmp_path):
+                        if os.path.getsize(tmp_path) > 0:
+                            df = self._load_csv(tmp_path, encoding, ',', True, 0, None)
+                            os.unlink(tmp_path)
+                            return df
+                        else:
+                            os.unlink(tmp_path)
+                            raise ValueError(
+                                "ETL 파일 변환 결과가 비어 있습니다.\n"
+                                "파일이 손상되었거나 지원되지 않는 형식일 수 있습니다."
+                            )
+                    else:
+                        error_msg = result.stderr if result.stderr else "알 수 없는 오류"
+                        raise ValueError(
+                            f"ETL 파일 변환 실패: {error_msg}\n\n"
+                            "수동 변환 시도:\n"
+                            "  1. 관리자 권한으로 명령 프롬프트 실행\n"
+                            f"  2. tracerpt \"{path}\" -o output.csv -of CSV\n"
+                            "  3. 생성된 output.csv 파일을 열기"
+                        )
+                except subprocess.TimeoutExpired:
+                    raise ValueError(
+                        "ETL 변환 시간 초과 (2분).\n"
+                        "파일이 너무 크거나 손상되었습니다.\n\n"
+                        "대안:\n"
+                        "  - Windows Performance Analyzer (WPA) 사용\n"
+                        "  - xperf로 변환 후 CSV 내보내기"
+                    )
+                except FileNotFoundError:
+                    raise ValueError(
+                        "tracerpt 명령을 찾을 수 없습니다.\n\n"
+                        "해결 방법:\n"
+                        "  1. 관리자 권한으로 명령 프롬프트 실행\n"
+                        f"  2. tracerpt \"{path}\" -o output.csv -of CSV\n"
+                        "  3. 생성된 output.csv 파일을 열기"
+                    )
+            else:
+                # Linux/Mac에서는 바이너리 ETL 지원 안 함
+                filename = os.path.basename(path)
                 raise ValueError(
-                    "바이너리 ETL 파일입니다. tracerpt가 설치되어 있지 않습니다.\n"
-                    "Windows에서 관리자 권한으로: tracerpt yourfile.etl -o output.csv -of CSV"
+                    f"ETL (Event Trace Log) 파일은 Windows 전용 바이너리 형식입니다.\n\n"
+                    f"현재 시스템: {system}\n\n"
+                    "해결 방법:\n"
+                    "  1. Windows에서 CSV로 변환:\n"
+                    f"     tracerpt \"{filename}\" -o output.csv -of CSV\n\n"
+                    "  2. Windows Performance Analyzer (WPA) 사용:\n"
+                    "     ETL 파일 열기 → File → Export → CSV\n\n"
+                    "  3. 변환된 CSV 파일을 이 프로그램에서 열기\n\n"
+                    "참고: 텍스트로 이미 변환된 ETL 파일은 .txt 또는 .csv로\n"
+                    "확장자를 변경하면 정상적으로 열 수 있습니다."
                 )
         else:
             # 텍스트 ETL (이미 변환됨)

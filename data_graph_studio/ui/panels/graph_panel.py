@@ -141,6 +141,76 @@ from ...core.data_engine import DataEngine
 from ...graph.sampling import DataSampler
 
 
+class FormattedAxisItem(pg.AxisItem):
+    """Custom axis item with value formatting"""
+
+    def __init__(self, orientation, format_type=None, **kwargs):
+        super().__init__(orientation, **kwargs)
+        self.format_type = format_type
+
+    def set_format(self, format_type):
+        self.format_type = format_type
+
+    def tickStrings(self, values, scale, spacing):
+        if self.format_type is None or self.format_type == 'auto':
+            return super().tickStrings(values, scale, spacing)
+
+        strings = []
+        for v in values:
+            strings.append(self._format_value(v))
+        return strings
+
+    def _format_value(self, value) -> str:
+        if value is None or (isinstance(value, float) and (value != value)):  # NaN check
+            return ""
+
+        try:
+            if self.format_type == 'number':
+                return f"{value:,.0f}"
+            elif self.format_type == 'decimal':
+                return f"{value:,.2f}"
+            elif self.format_type == 'scientific':
+                return f"{value:.2e}"
+            elif self.format_type == 'percent':
+                return f"{value:.1f}%"
+            elif self.format_type == 'k':
+                if abs(value) >= 1000:
+                    return f"{value/1000:.1f}K"
+                return f"{value:.0f}"
+            elif self.format_type == 'm':
+                if abs(value) >= 1_000_000:
+                    return f"{value/1_000_000:.1f}M"
+                elif abs(value) >= 1000:
+                    return f"{value/1000:.1f}K"
+                return f"{value:.0f}"
+            elif self.format_type == 'b':
+                if abs(value) >= 1_000_000_000:
+                    return f"{value/1_000_000_000:.1f}B"
+                elif abs(value) >= 1_000_000:
+                    return f"{value/1_000_000:.1f}M"
+                elif abs(value) >= 1000:
+                    return f"{value/1000:.1f}K"
+                return f"{value:.0f}"
+            elif self.format_type == 'bytes':
+                if abs(value) >= 1_073_741_824:  # GB
+                    return f"{value/1_073_741_824:.1f}GB"
+                elif abs(value) >= 1_048_576:  # MB
+                    return f"{value/1_048_576:.1f}MB"
+                elif abs(value) >= 1024:  # KB
+                    return f"{value/1024:.1f}KB"
+                return f"{value:.0f}B"
+            elif self.format_type == 'time':
+                if abs(value) >= 60000:  # minutes
+                    return f"{value/60000:.1f}min"
+                elif abs(value) >= 1000:  # seconds
+                    return f"{value/1000:.1f}s"
+                return f"{value:.0f}ms"
+            else:
+                return f"{value:.2f}"
+        except (ValueError, TypeError):
+            return str(value)
+
+
 # ==================== Options Panel ====================
 
 class GraphOptionsPanel(QFrame):
@@ -270,63 +340,97 @@ class GraphOptionsPanel(QFrame):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(8)
-        
+
         # X-Axis Format Group (no column selection - that's in X Zone)
         x_group = QGroupBox("X-Axis Format")
         x_layout = QGridLayout(x_group)
         x_layout.setSpacing(6)
-        
+
         x_layout.addWidget(QLabel("Title:"), 0, 0)
         self.x_title_edit = QLineEdit()
         self.x_title_edit.setPlaceholderText("Auto")
         self.x_title_edit.textChanged.connect(self._on_option_changed)
         x_layout.addWidget(self.x_title_edit, 0, 1)
-        
+
+        x_layout.addWidget(QLabel("Format:"), 1, 0)
+        self.x_format_combo = QComboBox()
+        self.x_format_combo.addItems([
+            "Auto",
+            "Number (1,234)",
+            "Decimal (1234.56)",
+            "Scientific (1.23e+4)",
+            "Percent (%)",
+            "K (thousands)",
+            "M (millions)",
+            "B (billions)",
+            "KB/MB/GB",
+            "ms/s/min"
+        ])
+        self.x_format_combo.currentIndexChanged.connect(self._on_option_changed)
+        x_layout.addWidget(self.x_format_combo, 1, 1)
+
         self.x_log_check = QCheckBox("Log Scale")
         self.x_log_check.stateChanged.connect(self._on_option_changed)
-        x_layout.addWidget(self.x_log_check, 1, 0, 1, 2)
-        
+        x_layout.addWidget(self.x_log_check, 2, 0, 1, 2)
+
         self.x_reverse_check = QCheckBox("Reverse")
         self.x_reverse_check.stateChanged.connect(self._on_option_changed)
-        x_layout.addWidget(self.x_reverse_check, 2, 0, 1, 2)
-        
+        x_layout.addWidget(self.x_reverse_check, 3, 0, 1, 2)
+
         layout.addWidget(x_group)
-        
+
         # Y-Axis Group
         y_group = QGroupBox("Y-Axis")
         y_layout = QGridLayout(y_group)
         y_layout.setSpacing(6)
-        
+
         y_layout.addWidget(QLabel("Title:"), 0, 0)
         self.y_title_edit = QLineEdit()
         self.y_title_edit.setPlaceholderText("Auto")
         self.y_title_edit.textChanged.connect(self._on_option_changed)
         y_layout.addWidget(self.y_title_edit, 0, 1)
-        
-        y_layout.addWidget(QLabel("Min:"), 1, 0)
+
+        y_layout.addWidget(QLabel("Format:"), 1, 0)
+        self.y_format_combo = QComboBox()
+        self.y_format_combo.addItems([
+            "Auto",
+            "Number (1,234)",
+            "Decimal (1234.56)",
+            "Scientific (1.23e+4)",
+            "Percent (%)",
+            "K (thousands)",
+            "M (millions)",
+            "B (billions)",
+            "KB/MB/GB",
+            "ms/s/min"
+        ])
+        self.y_format_combo.currentIndexChanged.connect(self._on_option_changed)
+        y_layout.addWidget(self.y_format_combo, 1, 1)
+
+        y_layout.addWidget(QLabel("Min:"), 2, 0)
         self.y_min_spin = QDoubleSpinBox()
         self.y_min_spin.setRange(-1e9, 1e9)
         self.y_min_spin.setSpecialValueText("Auto")
         self.y_min_spin.setValue(self.y_min_spin.minimum())
         self.y_min_spin.valueChanged.connect(self._on_option_changed)
-        y_layout.addWidget(self.y_min_spin, 1, 1)
-        
-        y_layout.addWidget(QLabel("Max:"), 2, 0)
+        y_layout.addWidget(self.y_min_spin, 2, 1)
+
+        y_layout.addWidget(QLabel("Max:"), 3, 0)
         self.y_max_spin = QDoubleSpinBox()
         self.y_max_spin.setRange(-1e9, 1e9)
         self.y_max_spin.setSpecialValueText("Auto")
         self.y_max_spin.setValue(self.y_max_spin.minimum())
         self.y_max_spin.valueChanged.connect(self._on_option_changed)
-        y_layout.addWidget(self.y_max_spin, 2, 1)
-        
+        y_layout.addWidget(self.y_max_spin, 3, 1)
+
         self.y_log_check = QCheckBox("Log Scale")
         self.y_log_check.stateChanged.connect(self._on_option_changed)
-        y_layout.addWidget(self.y_log_check, 3, 0, 1, 2)
-        
+        y_layout.addWidget(self.y_log_check, 4, 0, 1, 2)
+
         self.y_reverse_check = QCheckBox("Reverse")
         self.y_reverse_check.stateChanged.connect(self._on_option_changed)
-        y_layout.addWidget(self.y_reverse_check, 4, 0, 1, 2)
-        
+        y_layout.addWidget(self.y_reverse_check, 5, 0, 1, 2)
+
         layout.addWidget(y_group)
         
         # Grid Group
@@ -526,12 +630,28 @@ class GraphOptionsPanel(QFrame):
         """현재 차트 옵션 반환 (스타일링/포맷팅만)"""
         line_styles = [Qt.SolidLine, Qt.DashLine, Qt.DotLine, Qt.DashDotLine]
         marker_symbols = ['o', 's', 't', 'd', '+', 'x']
-        
+
+        # Format types mapping
+        format_types = [
+            None,  # Auto
+            'number',  # Number (1,234)
+            'decimal',  # Decimal (1234.56)
+            'scientific',  # Scientific (1.23e+4)
+            'percent',  # Percent (%)
+            'k',  # K (thousands)
+            'm',  # M (millions)
+            'b',  # B (billions)
+            'bytes',  # KB/MB/GB
+            'time'  # ms/s/min
+        ]
+
         return {
             'x_title': self.x_title_edit.text() or None,
+            'x_format': format_types[self.x_format_combo.currentIndex()],
             'x_log': self.x_log_check.isChecked(),
             'x_reverse': self.x_reverse_check.isChecked(),
             'y_title': self.y_title_edit.text() or None,
+            'y_format': format_types[self.y_format_combo.currentIndex()],
             'y_min': self.y_min_spin.value() if self.y_min_spin.value() > self.y_min_spin.minimum() else None,
             'y_max': self.y_max_spin.value() if self.y_max_spin.value() > self.y_max_spin.minimum() else None,
             'y_log': self.y_log_check.isChecked(),
@@ -930,25 +1050,29 @@ class StatPanel(QFrame):
 
 class MainGraph(pg.PlotWidget):
     """메인 그래프 위젯"""
-    
+
     points_selected = Signal(list)
-    
+
     def __init__(self, state: AppState):
-        super().__init__()
+        # Create custom axes
+        self._x_axis = FormattedAxisItem('bottom')
+        self._y_axis = FormattedAxisItem('left')
+
+        super().__init__(axisItems={'bottom': self._x_axis, 'left': self._y_axis})
         self.state = state
-        
+
         self.setBackground('w')
         self.showGrid(x=True, y=True, alpha=0.3)
         self.setLabel('left', '')
         self.setLabel('bottom', '')
-        
+
         self.legend = self.addLegend()
-        
+
         self._plot_items = []
         self._scatter_items = []
         self._data_x = None
         self._data_y = None
-        
+
         self.scene().sigMouseClicked.connect(self._on_mouse_clicked)
     
     def plot_data(
@@ -961,13 +1085,19 @@ class MainGraph(pg.PlotWidget):
         legend_settings: Optional[Dict] = None
     ):
         self.clear_plot()
-        
+
         self._data_x = x_data
         self._data_y = y_data
-        
+
         options = options or {}
         legend_settings = legend_settings or {'show': True, 'series': []}
-        
+
+        # Apply axis formats
+        x_format = options.get('x_format')
+        y_format = options.get('y_format')
+        self._x_axis.set_format(x_format)
+        self._y_axis.set_format(y_format)
+
         # Apply options
         x_label = options.get('x_title', 'X')
         y_label = options.get('y_title', 'Y')

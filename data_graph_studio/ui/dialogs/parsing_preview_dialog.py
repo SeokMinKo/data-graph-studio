@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget, QScrollArea
 )
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QColor
 
 from ...core.data_engine import FileType, DelimiterType
 
@@ -34,6 +34,11 @@ class ParsingSettings:
     skip_rows: int = 0
     comment_char: str = ""
     sheet_name: Optional[str] = None
+    excluded_columns: List[str] = None  # 제외할 컬럼 목록
+
+    def __post_init__(self):
+        if self.excluded_columns is None:
+            self.excluded_columns = []
 
 
 class ParsingPreviewDialog(QDialog):
@@ -59,7 +64,9 @@ class ParsingPreviewDialog(QDialog):
         self._update_timer = QTimer()
         self._update_timer.setSingleShot(True)
         self._update_timer.timeout.connect(self._do_update_preview)
-        
+        self._excluded_columns: set = set()  # 제외할 컬럼 인덱스
+        self._column_checkboxes: List[QCheckBox] = []
+
         self._setup_ui()
         self._load_raw_preview()
         self._detect_settings()
@@ -307,41 +314,110 @@ class ParsingPreviewDialog(QDialog):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        
+
         # Preview splitter (raw text above, parsed table below)
         preview_splitter = QSplitter(Qt.Vertical)
-        
+
         # Raw text preview
         raw_group = QGroupBox("Raw Data (First 20 lines)")
         raw_layout = QVBoxLayout(raw_group)
         raw_layout.setContentsMargins(8, 8, 8, 8)
-        
+
         self.raw_text = QTextEdit()
         self.raw_text.setReadOnly(True)
-        self.raw_text.setMaximumHeight(150)
+        self.raw_text.setMaximumHeight(120)
         raw_layout.addWidget(self.raw_text)
-        
+
         preview_splitter.addWidget(raw_group)
-        
+
         # Parsed table preview
         parsed_group = QGroupBox("Parsed Result")
         parsed_layout = QVBoxLayout(parsed_group)
         parsed_layout.setContentsMargins(8, 8, 8, 8)
-        
+
         self.preview_table = QTableWidget()
         self.preview_table.setAlternatingRowColors(True)
         self.preview_table.horizontalHeader().setStretchLastSection(True)
         self.preview_table.setSelectionBehavior(QTableWidget.SelectRows)
         parsed_layout.addWidget(self.preview_table)
-        
+
         preview_splitter.addWidget(parsed_group)
-        
-        # Set initial sizes (30% raw, 70% parsed)
-        preview_splitter.setSizes([150, 350])
-        
+
+        # Column selection panel (for excluding columns)
+        column_group = QGroupBox("Column Selection (Uncheck to exclude)")
+        column_group_layout = QVBoxLayout(column_group)
+        column_group_layout.setContentsMargins(8, 8, 8, 8)
+
+        # Buttons row
+        btn_row = QHBoxLayout()
+        select_all_btn = QPushButton("Select All")
+        select_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        select_all_btn.clicked.connect(self._select_all_columns)
+        btn_row.addWidget(select_all_btn)
+
+        deselect_all_btn = QPushButton("Deselect All")
+        deselect_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        deselect_all_btn.clicked.connect(self._deselect_all_columns)
+        btn_row.addWidget(deselect_all_btn)
+
+        btn_row.addStretch()
+
+        self.column_count_label = QLabel("")
+        self.column_count_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        btn_row.addWidget(self.column_count_label)
+
+        column_group_layout.addLayout(btn_row)
+
+        # Scroll area for column checkboxes
+        column_scroll = QScrollArea()
+        column_scroll.setWidgetResizable(True)
+        column_scroll.setMaximumHeight(100)
+        column_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        self.column_checkbox_container = QWidget()
+        self.column_checkbox_layout = QHBoxLayout(self.column_checkbox_container)
+        self.column_checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        self.column_checkbox_layout.setSpacing(8)
+
+        column_scroll.setWidget(self.column_checkbox_container)
+        column_group_layout.addWidget(column_scroll)
+
+        preview_splitter.addWidget(column_group)
+
+        # Set initial sizes (20% raw, 50% parsed, 30% columns)
+        preview_splitter.setSizes([100, 250, 150])
+
         layout.addWidget(preview_splitter)
-        
+
         return widget
+
+    def _select_all_columns(self):
+        """Select all columns"""
+        for cb in self._column_checkboxes:
+            cb.setChecked(True)
+        self._excluded_columns.clear()
+        self._update_column_count()
+
+    def _deselect_all_columns(self):
+        """Deselect all columns"""
+        for i, cb in enumerate(self._column_checkboxes):
+            cb.setChecked(False)
+            self._excluded_columns.add(i)
+        self._update_column_count()
+
+    def _on_column_toggled(self, index: int, checked: bool):
+        """Handle column checkbox toggle"""
+        if checked:
+            self._excluded_columns.discard(index)
+        else:
+            self._excluded_columns.add(index)
+        self._update_column_count()
+
+    def _update_column_count(self):
+        """Update the column count label"""
+        total = len(self._column_checkboxes)
+        selected = total - len(self._excluded_columns)
+        self.column_count_label.setText(f"Loading {selected} of {total} columns")
     
     def _load_raw_preview(self):
         """원본 파일 미리보기 로드"""
@@ -487,16 +563,17 @@ class ParsingPreviewDialog(QDialog):
     def _update_preview(self):
         """미리보기 테이블 업데이트"""
         parsed = self._parse_preview()
-        
+
         if not parsed:
             self.preview_table.clear()
             self.preview_table.setRowCount(0)
             self.preview_table.setColumnCount(0)
             self.stats_label.setText("No data to preview")
+            self._update_column_checkboxes([])
             return
-        
+
         has_header = self.header_checkbox.isChecked()
-        
+
         # Determine headers
         if has_header:
             headers = parsed[0]
@@ -505,38 +582,85 @@ class ParsingPreviewDialog(QDialog):
             max_cols = max(len(row) for row in parsed)
             headers = [f"Column {i+1}" for i in range(max_cols)]
             data = parsed
-        
+
         # Normalize column count
         max_cols = len(headers)
         for row in data:
             while len(row) < max_cols:
                 row.append("")
-        
+
+        # Update column checkboxes
+        self._update_column_checkboxes(headers)
+
         # Update table
         self.preview_table.setRowCount(min(len(data), 50))  # Show max 50 rows
         self.preview_table.setColumnCount(max_cols)
         self.preview_table.setHorizontalHeaderLabels(headers)
-        
+
         for i, row in enumerate(data[:50]):
             for j, val in enumerate(row[:max_cols]):
                 item = QTableWidgetItem(val)
+                # Gray out excluded columns
+                if j in self._excluded_columns:
+                    item.setBackground(QColor("#F3F4F6"))
+                    item.setForeground(QColor("#9CA3AF"))
                 self.preview_table.setItem(i, j, item)
-        
+
         # Resize columns to content
         self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        
+
         # Update stats
         total_lines = len(self._raw_lines)
         parsed_rows = len(data)
+        selected_cols = max_cols - len(self._excluded_columns)
         self.stats_label.setText(
-            f"📊 {parsed_rows:,} rows × {max_cols} columns "
+            f"📊 {parsed_rows:,} rows × {selected_cols} columns "
             f"(previewing from {total_lines:,} lines)"
         )
+
+    def _update_column_checkboxes(self, headers: List[str]):
+        """Update column checkboxes based on headers"""
+        # Clear existing checkboxes
+        for cb in self._column_checkboxes:
+            self.column_checkbox_layout.removeWidget(cb)
+            cb.deleteLater()
+        self._column_checkboxes.clear()
+
+        # Keep valid excluded columns
+        valid_excluded = {i for i in self._excluded_columns if i < len(headers)}
+        self._excluded_columns = valid_excluded
+
+        # Create new checkboxes
+        for i, header in enumerate(headers):
+            cb = QCheckBox(header[:15] + "..." if len(header) > 15 else header)
+            cb.setToolTip(header)
+            cb.setChecked(i not in self._excluded_columns)
+            cb.setStyleSheet("""
+                QCheckBox {
+                    background: white;
+                    border: 1px solid #E5E7EB;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                }
+                QCheckBox:hover {
+                    border-color: #6366F1;
+                }
+                QCheckBox::indicator {
+                    width: 14px;
+                    height: 14px;
+                }
+            """)
+            cb.stateChanged.connect(lambda state, idx=i: self._on_column_toggled(idx, state == Qt.Checked))
+            self.column_checkbox_layout.addWidget(cb)
+            self._column_checkboxes.append(cb)
+
+        self._update_column_count()
     
     def get_settings(self) -> ParsingSettings:
         """현재 설정 반환"""
         delimiter, delimiter_type = self._get_delimiter()
-        
+
         # Auto detect if needed
         if delimiter_type == DelimiterType.AUTO:
             delimiter = self._detect_delimiter_auto()
@@ -549,7 +673,7 @@ class ParsingPreviewDialog(QDialog):
                 ' ': DelimiterType.SPACE,
             }
             delimiter_type = type_map.get(delimiter, DelimiterType.COMMA)
-        
+
         # Detect file type
         ext = Path(self.file_path).suffix.lower()
         type_map = {
@@ -565,7 +689,14 @@ class ParsingPreviewDialog(QDialog):
             '.json': FileType.JSON,
         }
         file_type = type_map.get(ext, FileType.TXT)
-        
+
+        # Get excluded column names
+        excluded_names = []
+        if self._column_checkboxes:
+            for i in self._excluded_columns:
+                if i < len(self._column_checkboxes):
+                    excluded_names.append(self._column_checkboxes[i].toolTip())
+
         return ParsingSettings(
             file_path=self.file_path,
             file_type=file_type,
@@ -576,4 +707,5 @@ class ParsingPreviewDialog(QDialog):
             has_header=self.header_checkbox.isChecked(),
             skip_rows=self.skip_rows_spin.value(),
             comment_char=self.comment_edit.text().strip(),
+            excluded_columns=excluded_names,
         )

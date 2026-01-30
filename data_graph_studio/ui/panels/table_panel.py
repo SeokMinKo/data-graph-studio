@@ -1444,19 +1444,15 @@ class TablePanel(QWidget):
         df = self.engine.df
         if df is None:
             return
-        
-        # Apply all enabled filters
+
+        # Apply all enabled filters sequentially
         filtered_df = df
         for f in self.state.filters:
             if not f.enabled:
                 continue
             try:
-                filtered_df = self.engine.filter(f.column, f.operator, f.value)
-                # Update engine's working df temporarily
-                # Actually, we should filter on the already filtered data
-                import polars as pl
                 col = pl.col(f.column)
-                
+
                 if f.operator == 'eq':
                     filtered_df = filtered_df.filter(col == f.value)
                 elif f.operator == 'ne':
@@ -1474,7 +1470,9 @@ class TablePanel(QWidget):
             except Exception as e:
                 print(f"Filter error: {e}")
                 continue
-        
+
+        # Update visible rows count in state
+        self.state.set_visible_rows(len(filtered_df))
         self._update_table_model(filtered_df)
     
     def _on_show_column(self, column: str):

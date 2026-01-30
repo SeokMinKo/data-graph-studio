@@ -7,7 +7,7 @@ import tempfile
 import os
 import polars as pl
 
-from src.core.data_engine import DataEngine, FileType, LoadingProgress
+from data_graph_studio.core.data_engine import DataEngine, FileType, LoadingProgress
 
 
 class TestDataEngine:

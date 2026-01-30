@@ -5,7 +5,7 @@ Data Sampling 알고리즘 테스트
 import pytest
 import numpy as np
 
-from src.graph.sampling import DataSampler
+from data_graph_studio.graph.sampling import DataSampler
 
 
 class TestLTTB:
