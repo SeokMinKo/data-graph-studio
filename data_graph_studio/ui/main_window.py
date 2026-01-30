@@ -682,8 +682,19 @@ class MainWindow(QMainWindow):
         total_nulls = sum(c.null_count for c in profile.columns)
         missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
 
+        # Get file name from engine source
+        file_name = ""
+        if self.engine._source and self.engine._source.path:
+            file_name = Path(self.engine._source.path).name
+
+        # Calculate sampled rows (for graph - max 10000 points)
+        MAX_GRAPH_POINTS = 10000
+        sampled_rows = min(profile.total_rows, MAX_GRAPH_POINTS)
+
         stats = {
+            'file_name': file_name,
             'total_rows': profile.total_rows,
+            'sampled_rows': sampled_rows,
             'total_columns': profile.total_columns,
             'numeric_columns': numeric_cols,
             'text_columns': text_cols + temporal_cols,
