@@ -536,10 +536,17 @@ class DataEngine:
 
         # 바이너리 ETL인지 확인 (더 많은 바이트 검사)
         with open(path, 'rb') as f:
-            header = f.read(64)
+            header = f.read(512)
 
-        # ETL 바이너리 시그니처 체크
-        is_text = all(32 <= b < 127 or b in (9, 10, 13) for b in header[:32])
+        # ETL 바이너리 체크 개선:
+        # 1. null 바이트(0x00)가 있으면 바이너리 (ETL 바이너리의 특징)
+        # 2. 비인쇄 문자가 많으면 바이너리
+        null_count = header.count(b'\x00')
+        non_printable_count = sum(1 for b in header if b < 32 and b not in (9, 10, 13))
+
+        # null 바이트가 있거나 비인쇄 문자가 5% 이상이면 바이너리
+        is_text = (null_count == 0 and
+                   (non_printable_count / len(header) < 0.05 if len(header) > 0 else True))
 
         if not is_text:
             system = platform.system()
