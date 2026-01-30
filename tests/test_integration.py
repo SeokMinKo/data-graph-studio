@@ -189,7 +189,7 @@ class TestGraphRendering:
             'fill_opacity': 0.5
         }
         
-        graph.plot_data(x, y, chart_type=ChartType.LINE, settings=settings)
+        graph.plot_data(x, y, chart_type=ChartType.LINE, options=settings)
         assert len(graph._plot_items) > 0
 
 

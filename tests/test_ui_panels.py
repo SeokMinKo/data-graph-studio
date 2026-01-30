@@ -5,13 +5,15 @@ UI/UX Panels 테스트 - Spotfire 스타일 UI 컴포넌트
 import pytest
 import polars as pl
 from unittest.mock import MagicMock, patch
-
-# Mock Qt for headless testing
 import sys
-sys.modules['PySide6'] = MagicMock()
-sys.modules['PySide6.QtCore'] = MagicMock()
-sys.modules['PySide6.QtWidgets'] = MagicMock()
-sys.modules['PySide6.QtGui'] = MagicMock()
+
+# Qt imports
+from PySide6.QtWidgets import QApplication
+
+# Ensure QApplication exists
+app = QApplication.instance()
+if not app:
+    app = QApplication([])
 
 from data_graph_studio.ui.panels.filter_panel import (
     FilterWidget,

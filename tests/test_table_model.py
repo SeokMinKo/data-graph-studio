@@ -139,8 +139,8 @@ class TestPolarsTableModel:
     
     # ==================== 가상 스크롤 (청크 로딩) 테스트 ====================
     
-    def test_chunk_loading_first_chunk(self, model, sample_df):
-        """첫 번째 청크 로딩 테스트"""
+    def test_column_cache_loading_first(self, model, sample_df):
+        """첫 번째 컬럼 캐시 로딩 테스트"""
         model.set_dataframe(sample_df)
         
         # 처음 행 접근
@@ -148,22 +148,23 @@ class TestPolarsTableModel:
         value = model.data(index, Qt.DisplayRole)
         
         assert value == '0'
-        # 캐시에 청크가 로드됨
-        assert 0 in model._cache
+        # 컬럼 캐시에 로드됨
+        assert 0 in model._column_cache
     
-    def test_chunk_loading_middle_chunk(self, model, sample_df):
-        """중간 청크 로딩 테스트"""
+    def test_column_cache_loading_middle(self, model, sample_df):
+        """중간 행 데이터 접근 테스트"""
         model.set_dataframe(sample_df)
         
-        # 5000번째 행 접근 (다른 청크)
+        # 5000번째 행 접근
         index = model.index(5000, 0)
         value = model.data(index, Qt.DisplayRole)
         
         assert value == '5000'
-        assert 5000 in model._cache
+        # 같은 컬럼이므로 컬럼 0이 캐시에 있어야 함
+        assert 0 in model._column_cache
     
-    def test_chunk_loading_last_chunk(self, model, sample_df):
-        """마지막 청크 로딩 테스트"""
+    def test_column_cache_loading_last(self, model, sample_df):
+        """마지막 행 데이터 접근 테스트"""
         model.set_dataframe(sample_df)
         
         # 마지막 행 접근
@@ -179,14 +180,14 @@ class TestPolarsTableModel:
         # 캐시 채우기
         index = model.index(0, 0)
         model.data(index, Qt.DisplayRole)
-        assert len(model._cache) > 0
+        assert len(model._column_cache) > 0
         
         # 새 데이터프레임 설정
         new_df = pl.DataFrame({'x': [1, 2, 3]})
         model.set_dataframe(new_df)
         
         # 캐시가 클리어됨
-        assert len(model._cache) == 0
+        assert len(model._column_cache) == 0
     
     def test_sequential_access(self, model, sample_df):
         """순차 접근 테스트"""
@@ -210,21 +211,20 @@ class TestPolarsTableModel:
     
     # ==================== 성능 테스트 ====================
     
-    def test_cache_limit(self, model, sample_df):
-        """캐시 크기 제한 테스트"""
+    def test_column_cache_efficiency(self, model, sample_df):
+        """컬럼 캐시 효율성 테스트"""
         model.set_dataframe(sample_df)
-        model._chunk_size = 100  # 작은 청크 크기로 테스트
         
-        # 많은 청크 접근
-        for i in range(0, 10000, 100):
+        # 여러 행 접근 (같은 컬럼)
+        for i in range(0, 1000, 100):
             index = model.index(i, 0)
             model.data(index, Qt.DisplayRole)
         
-        # 캐시가 무한히 커지지 않아야 함
-        assert len(model._cache) < 10000
+        # 컬럼 캐시에는 접근한 컬럼만 존재
+        assert len(model._column_cache) == 1  # 컬럼 0만 캐시됨
     
     def test_large_dataframe(self):
-        """대용량 데이터프레임 테스트"""
+        """대용량 데이터프레임 테스트 (MAX_DISPLAY_ROWS 제한)"""
         model = PolarsTableModel()
         
         # 100만 행 데이터
@@ -235,12 +235,14 @@ class TestPolarsTableModel:
         
         model.set_dataframe(df)
         
-        assert model.rowCount() == 1_000_000
+        # MAX_DISPLAY_ROWS 제한으로 인해 100,000개만 표시
+        assert model.rowCount() == model.MAX_DISPLAY_ROWS
+        assert model.get_actual_row_count() == 1_000_000
         
-        # 중간 데이터 접근
-        index = model.index(500_000, 0)
+        # 표시 범위 내 데이터 접근
+        index = model.index(50_000, 0)
         value = model.data(index, Qt.DisplayRole)
-        assert value == '500000'
+        assert value == '50000'
 
 
 class TestPolarsTableModelEdgeCases:

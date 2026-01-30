@@ -90,7 +90,7 @@ class TestProject:
         project = Project(name="My Analysis")
         
         assert project.name == "My Analysis"
-        assert project.version == "1.0"
+        assert project.version == "1.1"
     
     def test_project_data_source(self):
         """데이터 소스 설정"""
