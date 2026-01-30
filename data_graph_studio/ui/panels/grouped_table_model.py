@@ -21,27 +21,35 @@ class GroupNode:
     aggregates: Dict[str, Any] = field(default_factory=dict)  # Column -> agg value
     expanded: bool = True
     level: int = 0
-    
+
     @property
     def is_group(self) -> bool:
         """Is this a group header (vs leaf row)?"""
-        return len(self.children) > 0 or len(self.rows) > 1
-    
+        return len(self.children) > 0 or len(self.rows) > 1 or "_count" in self.aggregates
+
     @property
     def row_count(self) -> int:
         """Total rows under this node"""
+        # Use _count aggregate if available (from optimized tree build)
+        if "_count" in self.aggregates:
+            return int(self.aggregates["_count"])
         if self.rows:
             return len(self.rows)
-        return sum(child.row_count for child in self.children)
-    
+        if self.children:
+            return sum(child.row_count for child in self.children)
+        return 0
+
     def visible_row_count(self) -> int:
         """Visible rows (considering expanded state)"""
         if not self.expanded:
             return 1  # Just the header
-        
+
         if self.children:
             return 1 + sum(child.visible_row_count() for child in self.children)
         else:
+            # If using optimized build (_count), don't show individual rows
+            if "_count" in self.aggregates and not self.rows:
+                return 1  # Just the header
             return 1 + len(self.rows)  # Header + data rows
 
 
@@ -323,16 +331,17 @@ class GroupedTableModel(QAbstractItemModel):
             if node.is_group or node.level >= 0:
                 # Add group header
                 self._flat_view.append((node, None))
-        
+
         if not node.expanded and node.level >= 0:
             return  # Collapsed - don't show children
-        
+
         # Add children
         for child in node.children:
             self._flatten_node(child, skip_root=False)
-        
-        # Add leaf rows (only if no children)
-        if not node.children:
+
+        # Add leaf rows (only if no children and rows exist)
+        # Skip if using optimized build with _count but no rows
+        if not node.children and node.rows:
             for row_idx in node.rows:
                 self._flat_view.append((node, row_idx))
     
