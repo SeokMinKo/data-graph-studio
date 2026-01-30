@@ -913,17 +913,19 @@ class LegendSettingsPanel(QFrame):
 
 class StatPanel(QFrame):
     """Statistics Panel"""
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
         self.setObjectName("StatPanel")
         self.setMinimumWidth(180)
         self.setMaximumWidth(220)
-        
+
         self._x_data: Optional[np.ndarray] = None
         self._y_data: Optional[np.ndarray] = None
-        
+        self._x_bins: int = 30
+        self._y_bins: int = 30
+
         self._setup_ui()
         self._apply_style()
     
@@ -956,17 +958,38 @@ class StatPanel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-        
+
         # Header
         header = QLabel("📈 Statistics")
         header.setStyleSheet("font-weight: 600; font-size: 13px; color: #111827; padding: 4px;")
         layout.addWidget(header)
-        
-        # X Distribution
+
+        # Bin Range Control
+        bin_group = QGroupBox("Bin Range")
+        bin_layout = QGridLayout(bin_group)
+        bin_layout.setSpacing(4)
+
+        bin_layout.addWidget(QLabel("X bins:"), 0, 0)
+        self.x_bins_spin = QSpinBox()
+        self.x_bins_spin.setRange(5, 100)
+        self.x_bins_spin.setValue(30)
+        self.x_bins_spin.valueChanged.connect(self._on_x_bins_changed)
+        bin_layout.addWidget(self.x_bins_spin, 0, 1)
+
+        bin_layout.addWidget(QLabel("Y bins:"), 1, 0)
+        self.y_bins_spin = QSpinBox()
+        self.y_bins_spin.setRange(5, 100)
+        self.y_bins_spin.setValue(30)
+        self.y_bins_spin.valueChanged.connect(self._on_y_bins_changed)
+        bin_layout.addWidget(self.y_bins_spin, 1, 1)
+
+        layout.addWidget(bin_group)
+
+        # X Distribution (vertical histogram - standard)
         x_group = QGroupBox("X Distribution")
         x_group.setToolTip("Double-click to expand")
         x_layout = QVBoxLayout(x_group)
-        
+
         self.x_hist_widget = ClickablePlotWidget()
         self.x_hist_widget.setMaximumHeight(80)
         self.x_hist_widget.setBackground('w')
@@ -974,14 +997,14 @@ class StatPanel(QFrame):
         self.x_hist_widget.hideAxis('left')
         self.x_hist_widget.setCursor(Qt.PointingHandCursor)
         x_layout.addWidget(self.x_hist_widget)
-        
+
         layout.addWidget(x_group)
-        
-        # Y Distribution
+
+        # Y Distribution (horizontal histogram)
         y_group = QGroupBox("Y Distribution")
         y_group.setToolTip("Double-click to expand")
         y_layout = QVBoxLayout(y_group)
-        
+
         self.y_hist_widget = ClickablePlotWidget()
         self.y_hist_widget.setMaximumHeight(80)
         self.y_hist_widget.setBackground('w')
@@ -989,47 +1012,84 @@ class StatPanel(QFrame):
         self.y_hist_widget.hideAxis('left')
         self.y_hist_widget.setCursor(Qt.PointingHandCursor)
         y_layout.addWidget(self.y_hist_widget)
-        
+
         layout.addWidget(y_group)
-        
+
         # Summary Stats
         stats_group = QGroupBox("Summary")
         stats_layout = QVBoxLayout(stats_group)
-        
+
         self.stats_label = QLabel("No data")
         self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 10px; color: #4B5563;")
         self.stats_label.setWordWrap(True)
         stats_layout.addWidget(self.stats_label)
-        
+
         layout.addWidget(stats_group)
-        
+
         layout.addStretch()
+
+    def _on_x_bins_changed(self, value: int):
+        self._x_bins = value
+        self._update_x_histogram()
+
+    def _on_y_bins_changed(self, value: int):
+        self._y_bins = value
+        self._update_y_histogram()
+
+    def _update_x_histogram(self):
+        self.x_hist_widget.clear()
+        if self._x_data is not None and len(self._x_data) > 0:
+            try:
+                clean_x = self._x_data[~np.isnan(self._x_data)]
+                if len(clean_x) > 0:
+                    hist, bins = np.histogram(clean_x, bins=self._x_bins)
+                    self.x_hist_widget.plot(bins, hist, stepMode=True, fillLevel=0,
+                                            brush=(100, 100, 200, 100))
+            except:
+                pass
+
+    def _update_y_histogram(self):
+        self.y_hist_widget.clear()
+        if self._y_data is not None and len(self._y_data) > 0:
+            try:
+                clean_y = self._y_data[~np.isnan(self._y_data)]
+                if len(clean_y) > 0:
+                    hist, bins = np.histogram(clean_y, bins=self._y_bins)
+                    # Horizontal histogram: swap x and y, plot rotated
+                    # bins represent Y values, hist represents frequency (horizontal extent)
+                    bin_centers = (bins[:-1] + bins[1:]) / 2
+                    self.y_hist_widget.plot(hist, bin_centers, stepMode=False, fillLevel=0,
+                                            pen=pg.mkPen((100, 200, 100, 255), width=1),
+                                            brush=(100, 200, 100, 100),
+                                            symbol=None)
+                    # Fill as horizontal bars using BarGraphItem
+                    self.y_hist_widget.clear()
+                    bar_height = (bins[1] - bins[0]) * 0.8 if len(bins) > 1 else 0.8
+                    bar_item = pg.BarGraphItem(
+                        x0=np.zeros(len(hist)),
+                        y=bin_centers,
+                        width=hist,
+                        height=bar_height,
+                        brush=(100, 200, 100, 100),
+                        pen=pg.mkPen((100, 200, 100, 255), width=1)
+                    )
+                    self.y_hist_widget.addItem(bar_item)
+            except:
+                pass
     
     def update_histograms(self, x_data: Optional[np.ndarray], y_data: Optional[np.ndarray]):
         self._x_data = x_data
         self._y_data = y_data
-        
-        self.x_hist_widget.clear()
-        if x_data is not None and len(x_data) > 0:
-            try:
-                clean_x = x_data[~np.isnan(x_data)]
-                hist, bins = np.histogram(clean_x, bins=30)
-                self.x_hist_widget.plot(bins, hist, stepMode=True, fillLevel=0, 
-                                        brush=(100, 100, 200, 100))
-                self.x_hist_widget.set_data(x_data, "X-Axis Distribution", (100, 100, 200, 150))
-            except:
-                pass
-        
-        self.y_hist_widget.clear()
-        if y_data is not None and len(y_data) > 0:
-            try:
-                clean_y = y_data[~np.isnan(y_data)]
-                hist, bins = np.histogram(clean_y, bins=30)
-                self.y_hist_widget.plot(bins, hist, stepMode=True, fillLevel=0,
-                                        brush=(100, 200, 100, 100))
-                self.y_hist_widget.set_data(y_data, "Y-Axis Distribution", (100, 200, 100, 150))
-            except:
-                pass
+
+        # Store data for double-click expansion
+        if x_data is not None:
+            self.x_hist_widget.set_data(x_data, "X-Axis Distribution", (100, 100, 200, 150))
+        if y_data is not None:
+            self.y_hist_widget.set_data(y_data, "Y-Axis Distribution", (100, 200, 100, 150))
+
+        # Update histograms using current bin settings
+        self._update_x_histogram()
+        self._update_y_histogram()
     
     def update_stats(self, stats: Dict[str, Any]):
         if not stats:

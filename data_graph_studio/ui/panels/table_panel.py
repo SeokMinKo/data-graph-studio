@@ -1300,12 +1300,19 @@ class TablePanel(QWidget):
     def _update_table_model(self, df: Optional[pl.DataFrame] = None):
         if df is None:
             df = self.engine.df if self.engine.is_loaded else None
-        
+
         if df is None:
             self.table_model.set_dataframe(None)
             self.group_info_label.setText("")
             return
-        
+
+        # Apply hidden columns filter
+        hidden_cols = self.state._hidden_columns
+        if hidden_cols:
+            visible_cols = [col for col in df.columns if col not in hidden_cols]
+            if visible_cols:
+                df = df.select(visible_cols)
+
         if self.state.group_columns:
             if self.grouped_model is None:
                 self.grouped_model = GroupedTableModel()
