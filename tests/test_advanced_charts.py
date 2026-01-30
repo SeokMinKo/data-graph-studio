@@ -383,7 +383,7 @@ class TestChartRegistry:
     
     def test_get_chart_by_type(self):
         """타입으로 차트 조회"""
-        from graph.charts import get_chart
+        from data_graph_studio.graph.charts import get_chart
         
         box = get_chart('box')
         violin = get_chart('violin')
@@ -399,7 +399,7 @@ class TestChartRegistry:
     
     def test_unknown_chart_type(self):
         """알 수 없는 차트 타입"""
-        from graph.charts import get_chart
+        from data_graph_studio.graph.charts import get_chart
         
         result = get_chart('unknown')
         assert result is None
