@@ -832,7 +832,9 @@ class MainWindow(QMainWindow):
             self.state.set_x_column(x)
         if y:
             self.state._y_columns = set(y)
-            self.state.y_columns_changed.emit(y)
+            # Signal이 있으면 emit
+            if hasattr(self.state, 'y_columns_changed'):
+                self.state.y_columns_changed.emit(y)
         return True
     
     def _ipc_load_file(self, path: str) -> dict:
