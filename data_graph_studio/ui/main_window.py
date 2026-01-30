@@ -204,13 +204,15 @@ class MainWindow(QMainWindow):
 
         open_action = QAction("&Open...", self)
         open_action.setShortcut(QKeySequence.Open)
-        open_action.setStatusTip("Open a data file (Ctrl+O)")
+        open_action.setStatusTip("Open data file - CSV, Excel, Parquet, JSON (Ctrl+O)")
+        open_action.setToolTip("Open a data file\nSupports: CSV, TSV, Excel, Parquet, JSON")
         open_action.triggered.connect(self._on_open_file)
         file_menu.addAction(open_action)
 
         open_multi_action = QAction("Open &Multiple Files...", self)
         open_multi_action.setShortcut("Ctrl+Shift+O")
-        open_multi_action.setStatusTip("Open multiple files as datasets for comparison")
+        open_multi_action.setStatusTip("Open multiple files for comparison analysis")
+        open_multi_action.setToolTip("Open multiple files as separate datasets\nUseful for A/B comparison")
         open_multi_action.triggered.connect(self._on_open_multiple_files)
         file_menu.addAction(open_multi_action)
 
@@ -426,7 +428,52 @@ class MainWindow(QMainWindow):
         # Help Menu
         help_menu = menubar.addMenu("&Help")
         
-        about_action = QAction("&About", self)
+        # Quick Start Guide
+        quick_start_action = QAction("📚 &Quick Start Guide", self)
+        quick_start_action.setShortcut("F1")
+        quick_start_action.setToolTip("Learn how to use Data Graph Studio")
+        quick_start_action.triggered.connect(self._show_quick_start)
+        help_menu.addAction(quick_start_action)
+        
+        # Keyboard Shortcuts
+        shortcuts_action = QAction("⌨️ &Keyboard Shortcuts", self)
+        shortcuts_action.setShortcut("Ctrl+/")
+        shortcuts_action.setToolTip("View all keyboard shortcuts")
+        shortcuts_action.triggered.connect(self._show_shortcuts)
+        help_menu.addAction(shortcuts_action)
+        
+        # Tips & Tricks
+        tips_action = QAction("💡 Tips && Tricks", self)
+        tips_action.setToolTip("Useful tips for power users")
+        tips_action.triggered.connect(self._show_tips)
+        help_menu.addAction(tips_action)
+        
+        help_menu.addSeparator()
+        
+        # Documentation (online)
+        docs_action = QAction("📖 Online Documentation", self)
+        docs_action.setToolTip("Open documentation in browser")
+        docs_action.triggered.connect(lambda: self._open_url("https://github.com/SeokMinKo/data-graph-studio#readme"))
+        help_menu.addAction(docs_action)
+        
+        # GitHub
+        github_action = QAction("🐙 GitHub Repository", self)
+        github_action.setToolTip("View source code and report issues")
+        github_action.triggered.connect(lambda: self._open_url("https://github.com/SeokMinKo/data-graph-studio"))
+        help_menu.addAction(github_action)
+        
+        help_menu.addSeparator()
+        
+        # What's New
+        whats_new_action = QAction("🆕 What's New in v0.2", self)
+        whats_new_action.triggered.connect(self._show_whats_new)
+        help_menu.addAction(whats_new_action)
+        
+        help_menu.addSeparator()
+        
+        # About
+        about_action = QAction("ℹ️ &About", self)
+        about_action.setToolTip("About Data Graph Studio")
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
     
@@ -524,10 +571,10 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._chart_type_label)
         
         chart_types = [
-            (ChartType.LINE, "📈", "Line Chart"),
-            (ChartType.BAR, "📊", "Bar Chart"),
-            (ChartType.SCATTER, "⚬", "Scatter Plot"),
-            (ChartType.AREA, "▤", "Area Chart"),
+            (ChartType.LINE, "📈", "<b>Line Chart</b><br>Best for: Time series, trends<br>Shortcut: 1"),
+            (ChartType.BAR, "📊", "<b>Bar Chart</b><br>Best for: Comparing categories<br>Shortcut: 2"),
+            (ChartType.SCATTER, "⚬", "<b>Scatter Plot</b><br>Best for: Correlations, distributions<br>Shortcut: 3"),
+            (ChartType.AREA, "▤", "<b>Area Chart</b><br>Best for: Cumulative values, stacked data<br>Shortcut: 5"),
         ]
         
         for ct, icon, tooltip in chart_types:
@@ -1490,11 +1537,213 @@ class MainWindow(QMainWindow):
         QMessageBox.about(
             self,
             "About Data Graph Studio",
-            "<h2>Data Graph Studio</h2>"
-            "<p>Version 0.1.0</p>"
-            "<p>Big Data Visualization Tool</p>"
-            "<p>© 2026 Godol</p>"
+            """<h2>Data Graph Studio</h2>
+            <p><b>Version 0.2.0</b></p>
+            <p>Big Data Visualization & Analysis Tool</p>
+            <hr>
+            <p>Features:</p>
+            <ul>
+                <li>📊 Multiple chart types (Line, Bar, Scatter, Pie, Area, Histogram)</li>
+                <li>📁 Support for CSV, Excel, Parquet, JSON</li>
+                <li>🔄 Drag & Drop file loading</li>
+                <li>📋 Clipboard paste from Excel/Google Sheets</li>
+                <li>💾 Profile save/load</li>
+                <li>🖥️ CLI & Python API</li>
+            </ul>
+            <hr>
+            <p>© 2026 Godol</p>
+            <p><a href='https://github.com/SeokMinKo/data-graph-studio'>GitHub</a></p>
+            """
         )
+    
+    def _show_quick_start(self):
+        """Quick Start Guide 다이얼로그"""
+        guide = """
+        <h2>🚀 Quick Start Guide</h2>
+        
+        <h3>1. Load Data</h3>
+        <ul>
+            <li><b>File > Open</b> (Ctrl+O) - Open CSV, Excel, Parquet, JSON</li>
+            <li><b>Drag & Drop</b> - Drag files directly into the window</li>
+            <li><b>Paste</b> (Ctrl+V) - Paste data from Excel or Google Sheets</li>
+        </ul>
+        
+        <h3>2. Create Chart</h3>
+        <ul>
+            <li>Select <b>X-axis column</b> from dropdown</li>
+            <li>Select <b>Y-axis column(s)</b> from dropdown</li>
+            <li>Choose <b>Chart Type</b> from toolbar</li>
+        </ul>
+        
+        <h3>3. Customize</h3>
+        <ul>
+            <li>Zoom: Mouse wheel or drag to select area</li>
+            <li>Pan: Hold right mouse button and drag</li>
+            <li>Reset: Double-click on chart</li>
+        </ul>
+        
+        <h3>4. Export</h3>
+        <ul>
+            <li><b>File > Export</b> - Save as PNG, CSV</li>
+            <li><b>Ctrl+Shift+C</b> - Copy chart to clipboard</li>
+        </ul>
+        
+        <h3>5. CLI Usage</h3>
+        <pre>dgs plot data.csv -x Time -y Value -o chart.png</pre>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Quick Start Guide")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(guide)
+        msg.setIcon(QMessageBox.Information)
+        msg.exec()
+    
+    def _show_shortcuts(self):
+        """키보드 단축키 다이얼로그"""
+        shortcuts = """
+        <h2>⌨️ Keyboard Shortcuts</h2>
+        
+        <h3>📁 File</h3>
+        <table>
+            <tr><td><b>Ctrl+O</b></td><td>Open file</td></tr>
+            <tr><td><b>Ctrl+Shift+O</b></td><td>Open multiple files</td></tr>
+            <tr><td><b>Ctrl+S</b></td><td>Save project</td></tr>
+            <tr><td><b>Ctrl+E</b></td><td>Export as CSV</td></tr>
+        </table>
+        
+        <h3>✏️ Edit</h3>
+        <table>
+            <tr><td><b>Ctrl+V</b></td><td>Paste data from clipboard</td></tr>
+            <tr><td><b>Ctrl+C</b></td><td>Copy selected cells</td></tr>
+            <tr><td><b>Ctrl+Shift+C</b></td><td>Copy chart as image</td></tr>
+            <tr><td><b>Ctrl+A</b></td><td>Select all</td></tr>
+            <tr><td><b>Escape</b></td><td>Clear selection</td></tr>
+        </table>
+        
+        <h3>📊 Chart</h3>
+        <table>
+            <tr><td><b>1</b></td><td>Line chart</td></tr>
+            <tr><td><b>2</b></td><td>Bar chart</td></tr>
+            <tr><td><b>3</b></td><td>Scatter plot</td></tr>
+            <tr><td><b>4</b></td><td>Pie chart</td></tr>
+            <tr><td><b>5</b></td><td>Area chart</td></tr>
+            <tr><td><b>6</b></td><td>Histogram</td></tr>
+        </table>
+        
+        <h3>🔍 Navigation</h3>
+        <table>
+            <tr><td><b>Mouse Wheel</b></td><td>Zoom in/out</td></tr>
+            <tr><td><b>Right Drag</b></td><td>Pan</td></tr>
+            <tr><td><b>Double Click</b></td><td>Reset zoom</td></tr>
+        </table>
+        
+        <h3>❓ Help</h3>
+        <table>
+            <tr><td><b>F1</b></td><td>Quick Start Guide</td></tr>
+            <tr><td><b>Ctrl+/</b></td><td>Keyboard Shortcuts</td></tr>
+        </table>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Keyboard Shortcuts")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(shortcuts)
+        msg.setIcon(QMessageBox.Information)
+        msg.exec()
+    
+    def _show_tips(self):
+        """Tips & Tricks 다이얼로그"""
+        tips = """
+        <h2>💡 Tips & Tricks</h2>
+        
+        <h3>🚀 Performance</h3>
+        <ul>
+            <li>Large files? Use <b>Parquet format</b> for 10x faster loading</li>
+            <li>Sampling is automatic for datasets > 100K rows</li>
+            <li>Use <b>dgs convert</b> CLI to pre-convert large files</li>
+        </ul>
+        
+        <h3>📋 Clipboard Magic</h3>
+        <ul>
+            <li>Copy data from <b>Excel</b> or <b>Google Sheets</b>, then Ctrl+V</li>
+            <li>Data types are auto-detected (numbers, dates, text)</li>
+            <li>Ctrl+Shift+C copies chart as image for pasting into docs</li>
+        </ul>
+        
+        <h3>📊 Chart Tips</h3>
+        <ul>
+            <li>Click on legend items to toggle series visibility</li>
+            <li>Select multiple Y columns for comparison charts</li>
+            <li>Use Bar chart for categorical X-axis data</li>
+        </ul>
+        
+        <h3>🔧 CLI Power</h3>
+        <ul>
+            <li><code>dgs info file.csv</code> - Quick data summary</li>
+            <li><code>dgs batch ./data/ -o ./charts/</code> - Process all files</li>
+            <li><code>dgs watch file.csv -o live.png</code> - Auto-update chart</li>
+        </ul>
+        
+        <h3>🐍 Python API</h3>
+        <pre>
+from data_graph_studio import plot
+plot("data.csv", x="Time", y="Value", output="chart.png")
+        </pre>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Tips & Tricks")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(tips)
+        msg.setIcon(QMessageBox.Information)
+        msg.exec()
+    
+    def _show_whats_new(self):
+        """What's New 다이얼로그"""
+        whats_new = """
+        <h2>🆕 What's New in v0.2</h2>
+        
+        <h3>✨ New Features</h3>
+        <ul>
+            <li><b>CLI Tool</b> - Command line interface for automation
+                <br><code>dgs plot data.csv -x Time -y Value</code></li>
+            <li><b>Python API</b> - Programmatic chart generation
+                <br><code>from data_graph_studio import plot</code></li>
+            <li><b>REST API Server</b> - HTTP endpoints for integration
+                <br><code>dgs server --port 8080</code></li>
+            <li><b>Clipboard Support</b> - Paste from Excel/Google Sheets</li>
+            <li><b>Drag & Drop</b> - Drop files to load instantly</li>
+        </ul>
+        
+        <h3>🔧 Improvements</h3>
+        <ul>
+            <li>Better performance with large datasets</li>
+            <li>Improved chart rendering</li>
+            <li>Enhanced tooltips and help documentation</li>
+        </ul>
+        
+        <h3>📁 Supported Formats</h3>
+        <ul>
+            <li>CSV, TSV, TXT</li>
+            <li>Excel (XLSX, XLS)</li>
+            <li>Parquet</li>
+            <li>JSON</li>
+        </ul>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("What's New")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(whats_new)
+        msg.setIcon(QMessageBox.Information)
+        msg.exec()
+    
+    def _open_url(self, url: str):
+        """URL 열기"""
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(url))
 
     # ==================== Preset Management ====================
 
@@ -2395,7 +2644,7 @@ class MainWindow(QMainWindow):
     # ==================== Clipboard ====================
     
     def keyPressEvent(self, event):
-        """키보드 이벤트 - 클립보드 단축키"""
+        """키보드 이벤트 - 클립보드 및 차트 단축키"""
         # Ctrl+V: 붙여넣기
         if event.key() == Qt.Key_V and event.modifiers() == Qt.ControlModifier:
             self._paste_from_clipboard()
@@ -2410,6 +2659,23 @@ class MainWindow(QMainWindow):
         if event.key() == Qt.Key_C and event.modifiers() == Qt.ControlModifier:
             if self.table_panel and self.table_panel.hasFocus():
                 self._copy_selection_to_clipboard()
+                return
+        
+        # 차트 타입 단축키 (1-6)
+        if event.modifiers() == Qt.NoModifier:
+            chart_shortcuts = {
+                Qt.Key_1: ChartType.LINE,
+                Qt.Key_2: ChartType.BAR,
+                Qt.Key_3: ChartType.SCATTER,
+                Qt.Key_4: ChartType.PIE,
+                Qt.Key_5: ChartType.AREA,
+                Qt.Key_6: ChartType.HISTOGRAM,
+            }
+            
+            if event.key() in chart_shortcuts:
+                chart_type = chart_shortcuts[event.key()]
+                self.state.set_chart_type(chart_type)
+                self.statusBar().showMessage(f"Chart: {chart_type.name}", 2000)
                 return
         
         # 기본 처리
