@@ -185,14 +185,34 @@ from ...graph.sampling import DataSampler
 
 
 class FormattedAxisItem(pg.AxisItem):
-    """Custom axis item with value formatting"""
+    """Custom axis item with value formatting including Excel-style custom formats"""
+
+    # Preset format types
+    PRESET_FORMATS = {
+        'number': '#,##0',
+        'decimal': '#,##0.00',
+        'scientific': '0.00E+00',
+        'percent': '0.0%',
+        'k': '#,##0,"K"',
+        'm': '#,##0,,"M"',
+        'b': '#,##0,,,"B"',
+        'bytes': 'bytes',
+        'time': 'time',
+    }
 
     def __init__(self, orientation, format_type=None, **kwargs):
         super().__init__(orientation, **kwargs)
         self.format_type = format_type
+        self.custom_format = None  # For Excel-style custom formats
 
     def set_format(self, format_type):
+        """Set format type - can be preset name or Excel-style format string"""
         self.format_type = format_type
+        # Check if it's a custom format string (not a preset)
+        if format_type and format_type not in self.PRESET_FORMATS and format_type != 'auto':
+            self.custom_format = format_type
+        else:
+            self.custom_format = None
 
     def tickStrings(self, values, scale, spacing):
         if self.format_type is None or self.format_type == 'auto':
@@ -208,6 +228,11 @@ class FormattedAxisItem(pg.AxisItem):
             return ""
 
         try:
+            # Check for custom Excel-style format
+            if self.custom_format:
+                return self._apply_excel_format(value, self.custom_format)
+
+            # Built-in preset formats
             if self.format_type == 'number':
                 return f"{value:,.0f}"
             elif self.format_type == 'decimal':
@@ -252,6 +277,93 @@ class FormattedAxisItem(pg.AxisItem):
                 return f"{value:.2f}"
         except (ValueError, TypeError):
             return str(value)
+
+    def _apply_excel_format(self, value, fmt: str) -> str:
+        """
+        Apply Excel-style number format string.
+        Supported patterns:
+        - #,##0 : thousands separator, no decimals
+        - #,##0.00 : thousands separator, 2 decimals
+        - 0.00 : fixed decimals
+        - 0.0% : percentage (multiplies by 100)
+        - 0.00E+00 : scientific notation
+        - #,##0,"K" : divide by 1000, append K
+        - #,##0,,"M" : divide by 1000000, append M
+        - [>1000]#,##0,"K";0 : conditional formatting
+        - "prefix"#,##0"suffix" : with prefix/suffix text
+        """
+        try:
+            # Handle percentage format
+            if fmt.endswith('%'):
+                # Count decimal places before %
+                decimal_part = fmt[:-1]
+                if '.' in decimal_part:
+                    decimals = len(decimal_part.split('.')[-1])
+                else:
+                    decimals = 0
+                return f"{value * 100:.{decimals}f}%"
+
+            # Handle scientific notation
+            if 'E' in fmt.upper():
+                # Parse precision from format
+                if '.' in fmt:
+                    decimals = len(fmt.split('.')[1].split('E')[0].split('e')[0])
+                else:
+                    decimals = 2
+                return f"{value:.{decimals}e}"
+
+            # Handle thousand/million/billion divisors (Excel uses comma)
+            divisor = 1
+            suffix = ""
+            temp_fmt = fmt
+
+            # Count trailing commas for division
+            while temp_fmt.endswith(','):
+                divisor *= 1000
+                temp_fmt = temp_fmt[:-1]
+
+            # Check for suffix in quotes after format
+            if '"' in temp_fmt:
+                import re
+                suffix_match = re.search(r'"([^"]*)"$', temp_fmt)
+                if suffix_match:
+                    suffix = suffix_match.group(1)
+                    temp_fmt = temp_fmt[:suffix_match.start()]
+
+            # Check for prefix in quotes
+            prefix = ""
+            if '"' in temp_fmt:
+                import re
+                prefix_match = re.search(r'^"([^"]*)"', temp_fmt)
+                if prefix_match:
+                    prefix = prefix_match.group(1)
+                    temp_fmt = temp_fmt[prefix_match.end():]
+
+            adjusted_value = value / divisor if divisor > 1 else value
+
+            # Determine decimal places
+            if '.' in temp_fmt:
+                # Count 0s and #s after decimal
+                decimal_part = temp_fmt.split('.')[-1]
+                # Remove any non-digit format chars
+                decimal_part = ''.join(c for c in decimal_part if c in '0#')
+                decimals = len(decimal_part)
+            else:
+                decimals = 0
+
+            # Check for thousands separator
+            use_thousands = '#,##' in temp_fmt or '0,00' in temp_fmt or ',##0' in temp_fmt
+
+            if use_thousands:
+                result = f"{adjusted_value:,.{decimals}f}"
+            else:
+                result = f"{adjusted_value:.{decimals}f}"
+
+            return f"{prefix}{result}{suffix}"
+
+        except Exception:
+            # Fallback to simple format
+            return f"{value:.2f}"
 
 
 # ==================== Options Panel ====================
@@ -408,19 +520,28 @@ class GraphOptionsPanel(QFrame):
 
         x_layout.addWidget(QLabel("Format:"), 1, 0)
         self.x_format_combo = QComboBox()
+        self.x_format_combo.setEditable(True)
         self.x_format_combo.addItems([
             "Auto",
-            "Number (1,234)",
-            "Decimal (1234.56)",
-            "Scientific (1.23e+4)",
-            "Percent (%)",
-            "K (thousands)",
-            "M (millions)",
-            "B (billions)",
+            "Number (#,##0)",
+            "Decimal (#,##0.00)",
+            "Scientific (0.00E+00)",
+            "Percent (0.0%)",
+            "K (#,##0,\"K\")",
+            "M (#,##0,,\"M\")",
+            "B (#,##0,,,\"B\")",
             "KB/MB/GB",
             "ms/s/min"
         ])
-        self.x_format_combo.currentIndexChanged.connect(self._on_option_changed)
+        self.x_format_combo.setToolTip(
+            "Select preset or type custom Excel-style format:\n"
+            "  #,##0 - thousands separator\n"
+            "  0.00 - fixed decimals\n"
+            "  0.0% - percentage\n"
+            "  #,##0,\"K\" - divide by 1000\n"
+            "  \"$\"#,##0 - with prefix"
+        )
+        self.x_format_combo.currentTextChanged.connect(self._on_option_changed)
         x_layout.addWidget(self.x_format_combo, 1, 1)
 
         self.x_log_check = QCheckBox("Log Scale")
@@ -446,19 +567,28 @@ class GraphOptionsPanel(QFrame):
 
         y_layout.addWidget(QLabel("Format:"), 1, 0)
         self.y_format_combo = QComboBox()
+        self.y_format_combo.setEditable(True)
         self.y_format_combo.addItems([
             "Auto",
-            "Number (1,234)",
-            "Decimal (1234.56)",
-            "Scientific (1.23e+4)",
-            "Percent (%)",
-            "K (thousands)",
-            "M (millions)",
-            "B (billions)",
+            "Number (#,##0)",
+            "Decimal (#,##0.00)",
+            "Scientific (0.00E+00)",
+            "Percent (0.0%)",
+            "K (#,##0,\"K\")",
+            "M (#,##0,,\"M\")",
+            "B (#,##0,,,\"B\")",
             "KB/MB/GB",
             "ms/s/min"
         ])
-        self.y_format_combo.currentIndexChanged.connect(self._on_option_changed)
+        self.y_format_combo.setToolTip(
+            "Select preset or type custom Excel-style format:\n"
+            "  #,##0 - thousands separator\n"
+            "  0.00 - fixed decimals\n"
+            "  0.0% - percentage\n"
+            "  #,##0,\"K\" - divide by 1000\n"
+            "  \"$\"#,##0 - with prefix"
+        )
+        self.y_format_combo.currentTextChanged.connect(self._on_option_changed)
         y_layout.addWidget(self.y_format_combo, 1, 1)
 
         y_layout.addWidget(QLabel("Min:"), 2, 0)
@@ -971,35 +1101,49 @@ class GraphOptionsPanel(QFrame):
         )
         self.option_changed.emit()
     
+    def _parse_format_text(self, text: str) -> Optional[str]:
+        """Parse format combo text to get format type or custom format string"""
+        if not text or text == "Auto":
+            return None
+
+        # Preset format mapping
+        preset_map = {
+            "Number (#,##0)": "number",
+            "Decimal (#,##0.00)": "decimal",
+            "Scientific (0.00E+00)": "scientific",
+            "Percent (0.0%)": "percent",
+            "K (#,##0,\"K\")": "k",
+            "M (#,##0,,\"M\")": "m",
+            "B (#,##0,,,\"B\")": "b",
+            "KB/MB/GB": "bytes",
+            "ms/s/min": "time",
+        }
+
+        if text in preset_map:
+            return preset_map[text]
+
+        # Return custom format string as-is (for Excel-style formats)
+        return text
+
     def get_chart_options(self) -> Dict[str, Any]:
         """현재 차트 옵션 반환 (스타일링/포맷팅만)"""
         line_styles = [Qt.SolidLine, Qt.DashLine, Qt.DotLine, Qt.DashDotLine]
         marker_symbols = ['o', 's', 't', 'd', '+', 'x']
 
-        # Format types mapping
-        format_types = [
-            None,  # Auto
-            'number',  # Number (1,234)
-            'decimal',  # Decimal (1234.56)
-            'scientific',  # Scientific (1.23e+4)
-            'percent',  # Percent (%)
-            'k',  # K (thousands)
-            'm',  # M (millions)
-            'b',  # B (billions)
-            'bytes',  # KB/MB/GB
-            'time'  # ms/s/min
-        ]
-
         # Sampling algorithm mapping
         sampling_algorithms = ['auto', 'lttb', 'minmax', 'random']
 
+        # Parse format from combo text (handles both presets and custom formats)
+        x_format = self._parse_format_text(self.x_format_combo.currentText())
+        y_format = self._parse_format_text(self.y_format_combo.currentText())
+
         return {
             'x_title': self.x_title_edit.text() or None,
-            'x_format': format_types[self.x_format_combo.currentIndex()],
+            'x_format': x_format,
             'x_log': self.x_log_check.isChecked(),
             'x_reverse': self.x_reverse_check.isChecked(),
             'y_title': self.y_title_edit.text() or None,
-            'y_format': format_types[self.y_format_combo.currentIndex()],
+            'y_format': y_format,
             'y_min': self.y_min_spin.value() if self.y_min_spin.value() > self.y_min_spin.minimum() else None,
             'y_max': self.y_max_spin.value() if self.y_max_spin.value() > self.y_max_spin.minimum() else None,
             'y_log': self.y_log_check.isChecked(),
@@ -2878,3 +3022,131 @@ class GraphPanel(QWidget):
         ]
         if numeric_cols:
             self.options_panel.set_series([numeric_cols[0]])
+
+    def get_chart_options(self) -> Dict[str, Any]:
+        """Get current chart options from the options panel"""
+        return self.options_panel.get_chart_options()
+
+    def get_legend_settings(self) -> Dict[str, Any]:
+        """Get current legend settings from the options panel"""
+        return self.options_panel.get_legend_settings()
+
+    def apply_options(self, options: Dict[str, Any]):
+        """Apply chart options to the options panel"""
+        if not options:
+            return
+
+        # Apply chart title
+        if 'title' in options and options['title']:
+            self.options_panel.chart_title_edit.setText(options['title'])
+        if 'subtitle' in options and options['subtitle']:
+            self.options_panel.chart_subtitle_edit.setText(options['subtitle'])
+
+        # Apply X-axis options
+        if 'x_title' in options and options['x_title']:
+            self.options_panel.x_title_edit.setText(options['x_title'])
+        if 'x_format' in options:
+            x_format = options['x_format']
+            if x_format:
+                # Find matching preset or set custom
+                format_map = {
+                    'number': "Number (#,##0)",
+                    'decimal': "Decimal (#,##0.00)",
+                    'scientific': "Scientific (0.00E+00)",
+                    'percent': "Percent (0.0%)",
+                    'k': "K (#,##0,\"K\")",
+                    'm': "M (#,##0,,\"M\")",
+                    'b': "B (#,##0,,,\"B\")",
+                    'bytes': "KB/MB/GB",
+                    'time': "ms/s/min",
+                }
+                if x_format in format_map:
+                    idx = self.options_panel.x_format_combo.findText(format_map[x_format])
+                    if idx >= 0:
+                        self.options_panel.x_format_combo.setCurrentIndex(idx)
+                else:
+                    self.options_panel.x_format_combo.setCurrentText(x_format)
+            else:
+                self.options_panel.x_format_combo.setCurrentIndex(0)  # Auto
+
+        if 'x_log' in options:
+            self.options_panel.x_log_check.setChecked(options['x_log'])
+        if 'x_reverse' in options:
+            self.options_panel.x_reverse_check.setChecked(options['x_reverse'])
+
+        # Apply Y-axis options
+        if 'y_title' in options and options['y_title']:
+            self.options_panel.y_title_edit.setText(options['y_title'])
+        if 'y_format' in options:
+            y_format = options['y_format']
+            if y_format:
+                format_map = {
+                    'number': "Number (#,##0)",
+                    'decimal': "Decimal (#,##0.00)",
+                    'scientific': "Scientific (0.00E+00)",
+                    'percent': "Percent (0.0%)",
+                    'k': "K (#,##0,\"K\")",
+                    'm': "M (#,##0,,\"M\")",
+                    'b': "B (#,##0,,,\"B\")",
+                    'bytes': "KB/MB/GB",
+                    'time': "ms/s/min",
+                }
+                if y_format in format_map:
+                    idx = self.options_panel.y_format_combo.findText(format_map[y_format])
+                    if idx >= 0:
+                        self.options_panel.y_format_combo.setCurrentIndex(idx)
+                else:
+                    self.options_panel.y_format_combo.setCurrentText(y_format)
+            else:
+                self.options_panel.y_format_combo.setCurrentIndex(0)  # Auto
+
+        if 'y_min' in options and options['y_min'] is not None:
+            self.options_panel.y_min_spin.setValue(options['y_min'])
+        if 'y_max' in options and options['y_max'] is not None:
+            self.options_panel.y_max_spin.setValue(options['y_max'])
+        if 'y_log' in options:
+            self.options_panel.y_log_check.setChecked(options['y_log'])
+        if 'y_reverse' in options:
+            self.options_panel.y_reverse_check.setChecked(options['y_reverse'])
+
+        # Apply grid options
+        if 'grid_x' in options:
+            self.options_panel.grid_x_check.setChecked(options['grid_x'])
+        if 'grid_y' in options:
+            self.options_panel.grid_y_check.setChecked(options['grid_y'])
+        if 'grid_opacity' in options:
+            self.options_panel.grid_opacity_slider.setValue(int(options['grid_opacity'] * 100))
+
+        # Apply style options
+        if 'show_labels' in options:
+            self.options_panel.show_labels_check.setChecked(options['show_labels'])
+        if 'show_points' in options:
+            self.options_panel.show_points_check.setChecked(options['show_points'])
+        if 'smooth' in options:
+            self.options_panel.smooth_check.setChecked(options['smooth'])
+        if 'line_width' in options:
+            self.options_panel.line_width_spin.setValue(options['line_width'])
+        if 'marker_size' in options:
+            self.options_panel.marker_size_spin.setValue(options['marker_size'])
+        if 'fill_opacity' in options:
+            self.options_panel.fill_opacity_spin.setValue(options['fill_opacity'])
+
+        # Apply background color
+        if 'bg_color' in options and options['bg_color']:
+            from PySide6.QtGui import QColor
+            if isinstance(options['bg_color'], str):
+                self.options_panel.bg_color_btn.set_color(QColor(options['bg_color']))
+
+        # Apply sampling options
+        if 'show_all_data' in options:
+            self.options_panel.show_all_data_check.setChecked(options['show_all_data'])
+        if 'max_points' in options:
+            self.options_panel.max_points_slider.setValue(options['max_points'] // 1000)
+
+        # Apply sliding window options
+        if 'sliding_window_enabled' in options:
+            self.options_panel.sliding_window_check.setChecked(options['sliding_window_enabled'])
+        if 'x_sliding_window' in options:
+            self.options_panel.x_sliding_window_check.setChecked(options['x_sliding_window'])
+        if 'y_sliding_window' in options:
+            self.options_panel.y_sliding_window_check.setChecked(options['y_sliding_window'])
