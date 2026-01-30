@@ -5,7 +5,7 @@ State Management 테스트
 import pytest
 from unittest.mock import MagicMock
 
-from src.core.state import (
+from data_graph_studio.core.state import (
     AppState, SelectionState, GroupColumn, ValueColumn,
     AggregationType, ChartType, ToolMode, FilterCondition, SortCondition
 )

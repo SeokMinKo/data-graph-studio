@@ -10,11 +10,11 @@ import polars as pl
 
 from PySide6.QtCore import Qt
 
-from src.core.data_engine import DataEngine
-from src.core.state import AppState, ChartType, AggregationType, ToolMode
-from src.ui.panels.table_panel import PolarsTableModel, TablePanel
-from src.ui.panels.graph_panel import MainGraph, GraphPanel
-from src.graph.sampling import DataSampler
+from data_graph_studio.core.data_engine import DataEngine
+from data_graph_studio.core.state import AppState, ChartType, AggregationType, ToolMode
+from data_graph_studio.ui.panels.table_panel import PolarsTableModel, TablePanel
+from data_graph_studio.ui.panels.graph_panel import MainGraph, GraphPanel
+from data_graph_studio.graph.sampling import DataSampler
 
 
 class TestBidirectionalSelection:

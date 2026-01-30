@@ -228,8 +228,8 @@ class SummaryPanel(QWidget):
     
     def _setup_ui(self):
         """Setup modern UI"""
-        self.setMinimumHeight(80)
-        self.setMaximumHeight(160)
+        self.setMinimumHeight(140)
+        self.setMaximumHeight(220)
         
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -281,7 +281,7 @@ class SummaryPanel(QWidget):
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setStyleSheet("background: transparent; border: none;")
-        scroll.setMaximumHeight(100)
+        scroll.setMaximumHeight(140)
         
         # Card container with smooth scrolling
         self.card_container = QWidget()
@@ -293,9 +293,11 @@ class SummaryPanel(QWidget):
         # Default stat cards with icons and colors
         self.cards = {}
         self._add_card("rows", "📋", "Total Rows", "-", color="#6366F1")
-        self._add_card("selected", "✓", "Selected", "-", color="#10B981")
         self._add_card("columns", "⊞", "Columns", "-", color="#8B5CF6")
-        self._add_card("memory", "💾", "Memory", "-", color="#F59E0B")
+        self._add_card("numeric", "🔢", "Numeric", "-", color="#10B981")
+        self._add_card("text", "📝", "Text/Category", "-", color="#EC4899")
+        self._add_card("missing", "⚠", "Missing %", "-", color="#F59E0B")
+        self._add_card("memory", "💾", "Memory", "-", color="#3B82F6")
         
         self.card_layout.addStretch()
         
@@ -322,10 +324,28 @@ class SummaryPanel(QWidget):
         # Basic stats
         if 'total_rows' in stats:
             self.cards['rows'].set_value(f"{stats['total_rows']:,}")
-        
+
         if 'total_columns' in stats:
             self.cards['columns'].set_value(f"{stats['total_columns']}")
-        
+
+        # Numeric columns count
+        if 'numeric_columns' in stats:
+            self.cards['numeric'].set_value(f"{stats['numeric_columns']}")
+
+        # Text/Category columns count
+        if 'text_columns' in stats:
+            self.cards['text'].set_value(f"{stats['text_columns']}")
+
+        # Missing data percentage
+        if 'missing_percent' in stats:
+            pct = stats['missing_percent']
+            if pct == 0:
+                self.cards['missing'].set_value("0%", "Clean!")
+            elif pct < 5:
+                self.cards['missing'].set_value(f"{pct:.1f}%", "Low")
+            else:
+                self.cards['missing'].set_value(f"{pct:.1f}%", "High")
+
         if 'memory_mb' in stats:
             mb = stats['memory_mb']
             if mb >= 1024:
@@ -334,7 +354,7 @@ class SummaryPanel(QWidget):
                 self.cards['memory'].set_value(f"{mb:.1f}", "MB")
             else:
                 self.cards['memory'].set_value(f"{mb*1024:.0f}", "KB")
-        
+
         # Dynamic value cards
         self._update_value_cards(stats)
     
@@ -345,10 +365,8 @@ class SummaryPanel(QWidget):
             count = self.state.selection.selection_count
             total = self.state.total_rows
             pct = (count / total * 100) if total > 0 else 0
-            self.cards['selected'].set_value(f"{count:,}")
-            self.cards['selected'].set_trend(pct - 100, "% of total")
-            
-            self.context_label.setText(f"Showing {count:,} of {total:,} rows")
+
+            self.context_label.setText(f"Selected: {count:,} of {total:,} rows ({pct:.1f}%)")
             self.context_label.setStyleSheet("""
                 color: #10B981;
                 font-size: 12px;
@@ -357,7 +375,6 @@ class SummaryPanel(QWidget):
                 border-radius: 12px;
             """)
         else:
-            self.cards['selected'].set_value("-")
             self.context_label.setText("")
             self.context_label.setStyleSheet("""
                 color: #6B7280;

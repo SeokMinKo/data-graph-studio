@@ -14,7 +14,7 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 from PySide6.QtCore import Qt
-from src.ui.panels.grouped_table_model import GroupedTableModel, GroupNode
+from data_graph_studio.ui.panels.grouped_table_model import GroupedTableModel, GroupNode
 
 
 class TestGroupNode:
