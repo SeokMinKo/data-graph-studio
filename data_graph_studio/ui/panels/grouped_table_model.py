@@ -103,7 +103,7 @@ class GroupedTableModel(QAbstractItemModel):
         self.endResetModel()
     
     def _build_tree(self):
-        """Build hierarchical group tree"""
+        """Build hierarchical group tree (optimized with Polars)"""
         if self._df is None or len(self._df) == 0:
             self._root = None
             self._flat_view = []
@@ -113,23 +113,95 @@ class GroupedTableModel(QAbstractItemModel):
         self._root = GroupNode(key=(), display_name="All", level=-1)
         
         if not self._group_columns:
-            # No grouping - flat list
-            self._root.rows = list(range(len(self._df)))
+            # No grouping - flat list (limit for performance)
+            max_rows = min(len(self._df), 100000)  # 테이블에 표시할 최대 행
+            self._root.rows = list(range(max_rows))
             self._rebuild_flat_view()
             return
         
-        # Build grouped structure
-        self._build_group_recursive(
-            self._root,
-            self._group_columns,
-            list(range(len(self._df))),
-            0
-        )
-        
-        # Calculate aggregates
-        self._calculate_aggregates(self._root)
+        # Polars groupby로 빠르게 그룹화 (최적화)
+        self._build_tree_optimized()
         
         self._rebuild_flat_view()
+    
+    def _build_tree_optimized(self):
+        """Polars groupby를 사용한 최적화된 트리 빌드"""
+        if self._df is None or not self._group_columns:
+            return
+        
+        # 그룹별 집계를 Polars로 한번에 계산
+        agg_exprs = [pl.count().alias("_count")]
+        
+        for col in self._value_columns:
+            if col in self._df.columns:
+                agg_func = self._aggregations.get(col, 'sum')
+                if agg_func == 'sum':
+                    agg_exprs.append(pl.col(col).sum().alias(f"_agg_{col}"))
+                elif agg_func == 'mean':
+                    agg_exprs.append(pl.col(col).mean().alias(f"_agg_{col}"))
+                elif agg_func == 'count':
+                    agg_exprs.append(pl.col(col).count().alias(f"_agg_{col}"))
+                elif agg_func == 'min':
+                    agg_exprs.append(pl.col(col).min().alias(f"_agg_{col}"))
+                elif agg_func == 'max':
+                    agg_exprs.append(pl.col(col).max().alias(f"_agg_{col}"))
+                else:
+                    agg_exprs.append(pl.col(col).sum().alias(f"_agg_{col}"))
+        
+        # Polars groupby 실행 (C 레벨에서 최적화)
+        try:
+            grouped = self._df.group_by(self._group_columns).agg(agg_exprs).sort(self._group_columns)
+        except:
+            # 실패 시 기본 방식
+            self._build_group_recursive(
+                self._root,
+                self._group_columns,
+                list(range(min(len(self._df), 10000))),
+                0
+            )
+            return
+        
+        # 그룹 개수 제한 (성능)
+        MAX_GROUPS = 1000
+        if len(grouped) > MAX_GROUPS:
+            grouped = grouped.head(MAX_GROUPS)
+        
+        # 트리 구조 빌드 (집계 결과에서)
+        for row in grouped.iter_rows(named=True):
+            parent = self._root
+            
+            for i, col in enumerate(self._group_columns):
+                value = row[col]
+                display = f"{value}" if value is not None else "(Empty)"
+                
+                # 기존 자식 찾기
+                existing = None
+                for child in parent.children:
+                    if child.display_name == display:
+                        existing = child
+                        break
+                
+                if existing:
+                    parent = existing
+                else:
+                    # 새 노드 생성
+                    child = GroupNode(
+                        key=parent.key + (value,),
+                        display_name=display,
+                        parent=parent,
+                        level=i
+                    )
+                    parent.children.append(child)
+                    parent = child
+            
+            # 마지막 노드에 집계값 저장
+            parent.aggregates["_count"] = row["_count"]
+            for col in self._value_columns:
+                agg_key = f"_agg_{col}"
+                if agg_key in row:
+                    parent.aggregates[col] = row[agg_key]
+            
+            # 행 인덱스는 저장하지 않음 (성능)
     
     def _build_group_recursive(
         self,
