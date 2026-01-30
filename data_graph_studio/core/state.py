@@ -87,6 +87,7 @@ class ValueColumn:
     color: str = "#1f77b4"
     use_secondary_axis: bool = False
     order: int = 0
+    formula: str = ""  # Y값에 적용할 수식 (예: "y*2", "y+100", "LOG(y)")
 
 
 @dataclass
@@ -338,11 +339,12 @@ class AppState(QObject):
             self.value_zone_changed.emit()
     
     def update_value_column(
-        self, 
-        index: int, 
+        self,
+        index: int,
         aggregation: Optional[AggregationType] = None,
         color: Optional[str] = None,
-        use_secondary_axis: Optional[bool] = None
+        use_secondary_axis: Optional[bool] = None,
+        formula: Optional[str] = None
     ):
         if 0 <= index < len(self._value_columns):
             if aggregation is not None:
@@ -351,6 +353,8 @@ class AppState(QObject):
                 self._value_columns[index].color = color
             if use_secondary_axis is not None:
                 self._value_columns[index].use_secondary_axis = use_secondary_axis
+            if formula is not None:
+                self._value_columns[index].formula = formula
             self.value_zone_changed.emit()
     
     def _reorder_values(self):

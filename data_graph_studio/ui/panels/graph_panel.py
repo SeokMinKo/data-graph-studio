@@ -181,11 +181,13 @@ class ClickablePlotWidget(pg.PlotWidget):
 
 from ...core.state import AppState, ChartType, ToolMode
 from ...core.data_engine import DataEngine
+from ...core.expression_engine import ExpressionEngine, ExpressionError
 from ...graph.sampling import DataSampler
+import polars as pl
 
 
 class FormattedAxisItem(pg.AxisItem):
-    """Custom axis item with value formatting including Excel-style custom formats"""
+    """Custom axis item with value formatting including Excel-style custom formats and categorical support"""
 
     # Preset format types
     PRESET_FORMATS = {
@@ -204,6 +206,8 @@ class FormattedAxisItem(pg.AxisItem):
         super().__init__(orientation, **kwargs)
         self.format_type = format_type
         self.custom_format = None  # For Excel-style custom formats
+        self._categorical_labels = None  # List of category labels
+        self._is_categorical = False
 
     def set_format(self, format_type):
         """Set format type - can be preset name or Excel-style format string"""
@@ -214,7 +218,28 @@ class FormattedAxisItem(pg.AxisItem):
         else:
             self.custom_format = None
 
+    def set_categorical(self, labels: list):
+        """Set categorical labels for this axis"""
+        self._categorical_labels = labels
+        self._is_categorical = True if labels else False
+
+    def clear_categorical(self):
+        """Clear categorical mode"""
+        self._categorical_labels = None
+        self._is_categorical = False
+
     def tickStrings(self, values, scale, spacing):
+        # Handle categorical axis
+        if self._is_categorical and self._categorical_labels:
+            strings = []
+            for v in values:
+                idx = int(round(v))
+                if 0 <= idx < len(self._categorical_labels):
+                    strings.append(str(self._categorical_labels[idx]))
+                else:
+                    strings.append("")
+            return strings
+
         if self.format_type is None or self.format_type == 'auto':
             return super().tickStrings(values, scale, spacing)
 
@@ -1783,7 +1808,9 @@ class MainGraph(pg.PlotWidget):
         groups: Optional[Dict[str, np.ndarray]] = None,
         chart_type: ChartType = ChartType.LINE,
         options: Optional[Dict] = None,
-        legend_settings: Optional[Dict] = None
+        legend_settings: Optional[Dict] = None,
+        x_categorical_labels: Optional[List[str]] = None,
+        y_categorical_labels: Optional[List[str]] = None
     ):
         self.clear_plot()
 
@@ -1798,6 +1825,17 @@ class MainGraph(pg.PlotWidget):
         y_format = options.get('y_format')
         self._x_axis.set_format(x_format)
         self._y_axis.set_format(y_format)
+
+        # Apply categorical labels if provided
+        if x_categorical_labels:
+            self._x_axis.set_categorical(x_categorical_labels)
+        else:
+            self._x_axis.clear_categorical()
+
+        if y_categorical_labels:
+            self._y_axis.set_categorical(y_categorical_labels)
+        else:
+            self._y_axis.clear_categorical()
 
         # Apply options
         x_label = options.get('x_title', 'X')
@@ -2809,17 +2847,37 @@ class GraphPanel(QWidget):
 
         # X column (from state, set by X Zone)
         x_col = self.state.x_column
+        x_categorical_labels = None
+        x_is_categorical = False
+
         if not x_col:
             x_data = np.arange(self.engine.row_count)
             options['x_title'] = options.get('x_title') or 'Index'
         else:
-            x_data = self.engine.df[x_col].to_numpy()
+            # Check if X column is categorical
+            x_is_categorical = self.engine.is_column_categorical(x_col)
+
+            if x_is_categorical:
+                # Get unique values as labels
+                x_categorical_labels = self.engine.get_unique_values(x_col, limit=500)
+                # Map values to indices
+                value_to_idx = {v: i for i, v in enumerate(x_categorical_labels)}
+                x_raw = self.engine.df[x_col].to_list()
+                x_data = np.array([value_to_idx.get(v, 0) for v in x_raw], dtype=np.float64)
+            else:
+                x_data = self.engine.df[x_col].to_numpy()
+
             options['x_title'] = options.get('x_title') or x_col
 
         # Y column
+        y_formula = ""
+        y_categorical_labels = None
+        y_is_categorical = False
+
         if self.state.value_columns:
             value_col = self.state.value_columns[0]
             y_col_name = value_col.name
+            y_formula = value_col.formula or ""
         else:
             numeric_cols = [
                 col for col in self.engine.columns
@@ -2828,10 +2886,33 @@ class GraphPanel(QWidget):
             if numeric_cols:
                 y_col_name = numeric_cols[0]
             else:
-                return
+                # If no numeric columns, try any column (might be categorical)
+                if self.engine.columns:
+                    y_col_name = self.engine.columns[0]
+                else:
+                    return
 
-        y_data = self.engine.df[y_col_name].to_numpy()
-        options['y_title'] = options.get('y_title') or y_col_name
+        # Check if Y column is categorical
+        y_is_categorical = self.engine.is_column_categorical(y_col_name)
+
+        if y_is_categorical:
+            # Get unique values as labels
+            y_categorical_labels = self.engine.get_unique_values(y_col_name, limit=500)
+            # Map values to indices
+            value_to_idx = {v: i for i, v in enumerate(y_categorical_labels)}
+            y_raw = self.engine.df[y_col_name].to_list()
+            y_data = np.array([value_to_idx.get(v, 0) for v in y_raw], dtype=np.float64)
+        else:
+            y_data = self.engine.df[y_col_name].to_numpy()
+
+        # Apply Y formula if specified
+        if y_formula and not y_is_categorical:
+            y_data = self._apply_y_formula(y_data, y_formula, y_col_name)
+            # Update title to show formula
+            if y_formula:
+                options['y_title'] = options.get('y_title') or f"{y_col_name} [{y_formula}]"
+        else:
+            options['y_title'] = options.get('y_title') or y_col_name
 
         # Groups
         groups = None
@@ -2847,65 +2928,74 @@ class GraphPanel(QWidget):
         needs_opengl = total_points > OPENGL_THRESHOLD or (show_all_data and total_points > max_points)
         self.main_graph.enable_opengl(needs_opengl)
 
-        # Sampling logic
+        # Sampling logic - skip for categorical data or small datasets
         is_sampled = False
         algorithm_used = ""
 
-        if show_all_data:
+        # Don't sample categorical data
+        if x_is_categorical or y_is_categorical:
+            x_sampled, y_sampled = x_data, y_data
+        elif show_all_data:
             # Show all data - no sampling
             x_sampled, y_sampled = x_data, y_data
         elif total_points > max_points:
             # Apply sampling
-            valid_mask = ~(np.isnan(x_data.astype(float)) | np.isnan(y_data.astype(float)))
-            x_valid = x_data[valid_mask].astype(np.float64)
-            y_valid = y_data[valid_mask].astype(np.float64)
+            try:
+                valid_mask = ~(np.isnan(x_data.astype(float)) | np.isnan(y_data.astype(float)))
+                x_valid = x_data[valid_mask].astype(np.float64)
+                y_valid = y_data[valid_mask].astype(np.float64)
 
-            if len(x_valid) > max_points:
-                is_sampled = True
+                if len(x_valid) > max_points:
+                    is_sampled = True
 
-                # Apply selected sampling algorithm
-                if sampling_algorithm == 'auto':
-                    x_sampled, y_sampled = DataSampler.auto_sample(
-                        x_valid, y_valid, max_points=max_points
-                    )
-                    # Determine which algorithm was used
-                    is_sorted = np.all(x_valid[:-1] <= x_valid[1:])
-                    algorithm_used = "LTTB" if is_sorted else "Min-Max"
-                elif sampling_algorithm == 'lttb':
-                    x_sampled, y_sampled = DataSampler.lttb(
-                        x_valid, y_valid, threshold=max_points
-                    )
-                    algorithm_used = "LTTB"
-                elif sampling_algorithm == 'minmax':
-                    x_sampled, y_sampled = DataSampler.min_max_per_bucket(
-                        x_valid, y_valid, n_buckets=max_points // 2
-                    )
-                    algorithm_used = "Min-Max"
-                elif sampling_algorithm == 'random':
-                    x_sampled, y_sampled = DataSampler.random_sample(
-                        x_valid, y_valid, n_samples=max_points
-                    )
-                    algorithm_used = "Random"
+                    # Apply selected sampling algorithm
+                    if sampling_algorithm == 'auto':
+                        x_sampled, y_sampled = DataSampler.auto_sample(
+                            x_valid, y_valid, max_points=max_points
+                        )
+                        # Determine which algorithm was used
+                        is_sorted = np.all(x_valid[:-1] <= x_valid[1:])
+                        algorithm_used = "LTTB" if is_sorted else "Min-Max"
+                    elif sampling_algorithm == 'lttb':
+                        x_sampled, y_sampled = DataSampler.lttb(
+                            x_valid, y_valid, threshold=max_points
+                        )
+                        algorithm_used = "LTTB"
+                    elif sampling_algorithm == 'minmax':
+                        x_sampled, y_sampled = DataSampler.min_max_per_bucket(
+                            x_valid, y_valid, n_buckets=max_points // 2
+                        )
+                        algorithm_used = "Min-Max"
+                    elif sampling_algorithm == 'random':
+                        x_sampled, y_sampled = DataSampler.random_sample(
+                            x_valid, y_valid, n_samples=max_points
+                        )
+                        algorithm_used = "Random"
+                    else:
+                        x_sampled, y_sampled = DataSampler.auto_sample(
+                            x_valid, y_valid, max_points=max_points
+                        )
+                        algorithm_used = "Auto"
+
+                    # Clear groups when sampling (can't maintain group structure)
+                    groups = None
                 else:
-                    x_sampled, y_sampled = DataSampler.auto_sample(
-                        x_valid, y_valid, max_points=max_points
-                    )
-                    algorithm_used = "Auto"
-
-                # Clear groups when sampling (can't maintain group structure)
-                groups = None
-            else:
-                x_sampled, y_sampled = x_valid, y_valid
+                    x_sampled, y_sampled = x_valid, y_valid
+            except (ValueError, TypeError):
+                # Fallback if sampling fails
+                x_sampled, y_sampled = x_data, y_data
         else:
             x_sampled, y_sampled = x_data, y_data
 
-        # Plot data
+        # Plot data with categorical labels
         self.main_graph.plot_data(
             x_sampled, y_sampled,
             groups=groups,
             chart_type=options.get('chart_type', ChartType.LINE),
             options=options,
-            legend_settings=legend_settings
+            legend_settings=legend_settings,
+            x_categorical_labels=x_categorical_labels,
+            y_categorical_labels=y_categorical_labels
         )
 
         # Update sampling status label
@@ -2954,10 +3044,54 @@ class GraphPanel(QWidget):
         self.y_sliding_window.setVisible(sliding_window_enabled and y_window_enabled)
 
         if sliding_window_enabled:
-            if x_window_enabled:
-                self.x_sliding_window.set_data(x_data.astype(float) if hasattr(x_data, 'astype') else np.array(x_data, dtype=float))
-            if y_window_enabled:
-                self.y_sliding_window.set_data(y_data.astype(float) if hasattr(y_data, 'astype') else np.array(y_data, dtype=float))
+            if x_window_enabled and not x_is_categorical:
+                try:
+                    self.x_sliding_window.set_data(x_data.astype(float) if hasattr(x_data, 'astype') else np.array(x_data, dtype=float))
+                except (ValueError, TypeError):
+                    pass
+            if y_window_enabled and not y_is_categorical:
+                try:
+                    self.y_sliding_window.set_data(y_data.astype(float) if hasattr(y_data, 'astype') else np.array(y_data, dtype=float))
+                except (ValueError, TypeError):
+                    pass
+
+    def _apply_y_formula(self, y_data: np.ndarray, formula: str, col_name: str) -> np.ndarray:
+        """Apply formula transformation to Y data
+
+        Args:
+            y_data: Original Y data as numpy array
+            formula: Formula string (e.g., "y*2", "LOG(y)", "y+100")
+            col_name: Original column name
+
+        Returns:
+            Transformed Y data
+        """
+        if not formula or not formula.strip():
+            return y_data
+
+        try:
+            # Create expression engine
+            expr_engine = ExpressionEngine()
+
+            # Replace 'y' in formula with column reference
+            # Support both 'y' and 'Y' as references
+            adjusted_formula = formula.replace('Y', col_name).replace('y', col_name)
+
+            # Create a temporary DataFrame with the Y data
+            temp_df = pl.DataFrame({col_name: y_data.tolist()})
+
+            # Evaluate formula
+            result_series = expr_engine.evaluate(adjusted_formula, temp_df)
+
+            # Convert back to numpy array
+            return result_series.to_numpy()
+
+        except ExpressionError as e:
+            print(f"Formula error: {e}")
+            return y_data
+        except Exception as e:
+            print(f"Error applying formula '{formula}': {e}")
+            return y_data
 
     def _on_selection_changed(self):
         pass
