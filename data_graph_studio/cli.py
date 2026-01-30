@@ -649,17 +649,43 @@ def serve(port: int, host: str):
 
 
 @cli.command()
-def gui():
-    """Launch the graphical user interface"""
+@click.argument('file', type=click.Path(exists=True), required=False)
+def gui(file: Optional[str]):
+    """Launch the graphical user interface
+
+    FILE: Optional path to data file to open immediately
+
+    Examples:
+        dgs gui                    # Open empty GUI
+        dgs gui data.csv           # Open GUI with file loaded
+        dgs gui sales.parquet      # Open GUI with Parquet file
+    """
     try:
         from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import Qt
         from ui.main_window import MainWindow
-        
+
+        # High DPI support
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
+
         app = QApplication(sys.argv)
+        app.setApplicationName("Data Graph Studio")
+        app.setApplicationVersion("0.1.0")
+        app.setStyle("Fusion")
+
         window = MainWindow()
         window.show()
+
+        # Load file if provided
+        if file:
+            file_path = os.path.abspath(file)
+            click.echo(f"Loading: {file_path}")
+            window._load_file(file_path)
+
         sys.exit(app.exec())
-        
+
     except ImportError as e:
         click.echo(click.style(f"Error: GUI dependencies not installed: {e}", fg='red'), err=True)
         sys.exit(1)
