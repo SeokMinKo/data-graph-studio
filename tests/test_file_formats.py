@@ -10,7 +10,10 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.core.data_engine import DataEngine, FileType, DelimiterType
+try:
+    from data_graph_studio.core.data_engine import DataEngine, FileType, DelimiterType
+except ImportError:
+    from src.core.data_engine import DataEngine, FileType, DelimiterType
 
 
 class TestFileTypeDetection:

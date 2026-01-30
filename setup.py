@@ -17,7 +17,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/SeokMinKo/data-graph-studio",
     packages=find_packages(),
-    py_modules=["main"],  # main.py를 모듈로 포함
+    include_package_data=True,
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -57,11 +57,11 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "dgs=src.cli:main",
-            "data-graph-studio=main:main",
+            "dgs=data_graph_studio.cli:main",
+            "data-graph-studio=data_graph_studio.__main__:main",
         ],
         "gui_scripts": [
-            "dgs-gui=main:main",
+            "dgs-gui=data_graph_studio.__main__:main",
         ],
     },
 )

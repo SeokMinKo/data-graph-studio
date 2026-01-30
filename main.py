@@ -64,7 +64,11 @@ def main():
         
         # 모듈 임포트 테스트
         logger.info("Importing application modules...")
-        from src.ui.main_window import MainWindow
+        try:
+            from data_graph_studio.ui.main_window import MainWindow
+        except ImportError:
+            # 개발 모드 (src 폴더가 있을 때)
+            from src.ui.main_window import MainWindow
         logger.info("MainWindow imported successfully")
         
         # High DPI 지원
