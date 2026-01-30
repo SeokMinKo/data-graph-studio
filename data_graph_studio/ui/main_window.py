@@ -21,6 +21,7 @@ from PySide6.QtGui import QAction, QIcon, QKeySequence
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
 from ..core.state import AppState, ToolMode, ChartType, ComparisonMode
 from ..core.comparison_report import ComparisonReport
+from ..core.ipc_server import IPCServer
 from ..utils.memory import MemoryMonitor
 
 # 에러 로깅 설정
@@ -163,6 +164,9 @@ class MainWindow(QMainWindow):
 
         # Setup memory monitoring timer
         self._setup_memory_monitor()
+
+        # Setup IPC server for external control
+        self._setup_ipc_server()
 
         # Apply initial state
         self._update_ui_state()
@@ -766,6 +770,106 @@ class MainWindow(QMainWindow):
         self._memory_timer.timeout.connect(self._update_memory_status)
         self._memory_timer.start(3000)  # 3초마다 업데이트
         self._update_memory_status()  # 초기값 설정
+
+    def _setup_ipc_server(self):
+        """IPC 서버 설정 - 외부 프로세스에서 앱 제어 가능"""
+        self._ipc_server = IPCServer(self)
+        
+        # 핸들러 등록
+        self._ipc_server.register_handler('ping', lambda: 'pong')
+        self._ipc_server.register_handler('get_state', self._ipc_get_state)
+        self._ipc_server.register_handler('get_data_info', self._ipc_get_data_info)
+        self._ipc_server.register_handler('set_chart_type', self._ipc_set_chart_type)
+        self._ipc_server.register_handler('set_columns', self._ipc_set_columns)
+        self._ipc_server.register_handler('load_file', self._ipc_load_file)
+        self._ipc_server.register_handler('get_panels', self._ipc_get_panels)
+        self._ipc_server.register_handler('execute', self._ipc_execute)
+        
+        # 서버 시작
+        self._ipc_server.start()
+    
+    def _ipc_get_state(self) -> dict:
+        """현재 앱 상태 반환"""
+        y_cols = list(self.state._y_columns) if hasattr(self.state, '_y_columns') and self.state._y_columns else []
+        return {
+            'data_loaded': self.state.is_data_loaded,
+            'row_count': self.engine.row_count if self.state.is_data_loaded else 0,
+            'columns': self.engine.columns if self.state.is_data_loaded else [],
+            'chart_type': self.state._chart_settings.chart_type.name,
+            'x_column': self.state.x_column,
+            'y_columns': y_cols,
+            'window_title': self.windowTitle(),
+            'window_size': [self.width(), self.height()],
+        }
+    
+    def _ipc_get_data_info(self) -> dict:
+        """데이터 정보 반환"""
+        if not self.state.is_data_loaded:
+            return {'loaded': False}
+        
+        return {
+            'loaded': True,
+            'row_count': self.engine.row_count,
+            'columns': self.engine.columns,
+            'dtypes': {col: str(dtype) for col, dtype in zip(
+                self.engine.columns, 
+                self.engine.df.dtypes if self.engine.df is not None else []
+            )},
+        }
+    
+    def _ipc_set_chart_type(self, chart_type: str) -> bool:
+        """차트 타입 설정"""
+        try:
+            ct = ChartType[chart_type.upper()]
+            self.state.set_chart_type(ct)
+            return True
+        except KeyError:
+            raise ValueError(f"Unknown chart type: {chart_type}")
+    
+    def _ipc_set_columns(self, x: str = None, y: list = None) -> bool:
+        """X/Y 컬럼 설정"""
+        if x:
+            self.state.set_x_column(x)
+        if y:
+            self.state._y_columns = set(y)
+            self.state.y_columns_changed.emit(y)
+        return True
+    
+    def _ipc_load_file(self, path: str) -> dict:
+        """파일 로드"""
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"File not found: {path}")
+        
+        dataset_id = self.engine.load_dataset(path)
+        if dataset_id:
+            self.state.set_data_loaded(True, self.engine.row_count)
+            self.table_panel.set_data(self.engine.df)
+            return {'success': True, 'dataset_id': dataset_id}
+        return {'success': False}
+    
+    def _ipc_get_panels(self) -> dict:
+        """패널 정보 반환"""
+        panels = {}
+        for name in ['table_panel', 'graph_panel', 'filter_panel', 'property_panel']:
+            if hasattr(self, name):
+                panel = getattr(self, name)
+                panels[name] = {
+                    'exists': panel is not None,
+                    'visible': panel.isVisible() if panel else False,
+                }
+        return panels
+    
+    def _ipc_execute(self, code: str) -> any:
+        """Python 코드 실행 (디버깅용)"""
+        # 보안 주의: 로컬 전용
+        local_vars = {
+            'window': self,
+            'state': self.state,
+            'engine': self.engine,
+            'table_panel': self.table_panel,
+            'graph_panel': self.graph_panel,
+        }
+        return eval(code, {'__builtins__': {}}, local_vars)
 
     def _update_memory_status(self):
         """상태바 메모리 사용량 업데이트"""
@@ -2182,6 +2286,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """창 닫기 이벤트"""
+        # Stop IPC server
+        if hasattr(self, '_ipc_server'):
+            self._ipc_server.stop()
+        
         # Close all floating graph windows
         if self._floating_graph_manager:
             self._floating_graph_manager.close_all()
