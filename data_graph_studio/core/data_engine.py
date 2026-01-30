@@ -866,7 +866,70 @@ class DataEngine:
             })
         
         return stats
-    
+
+    def is_column_categorical(self, column: str, max_unique_ratio: float = 0.05, max_unique_count: int = 100) -> bool:
+        """
+        컬럼이 categorical인지 판단
+
+        Args:
+            column: 컬럼 이름
+            max_unique_ratio: 유니크 값 비율 임계값 (기본 5%)
+            max_unique_count: 유니크 값 개수 임계값 (기본 100개)
+
+        Returns:
+            True if categorical, False otherwise
+        """
+        if self._df is None or column not in self._df.columns:
+            return False
+
+        series = self._df[column]
+        dtype = series.dtype
+
+        # 이미 Categorical 타입이면 True
+        if dtype == pl.Categorical:
+            return True
+
+        # 숫자형, 날짜형은 기본적으로 False (단, 유니크 값이 매우 적으면 True)
+        if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
+            unique_count = series.n_unique()
+            # 숫자여도 유니크 값이 매우 적으면 categorical로 취급 (예: 1, 2, 3 같은 등급)
+            return unique_count <= min(20, max_unique_count) and unique_count / len(series) < max_unique_ratio
+
+        if dtype in [pl.Date, pl.Datetime, pl.Time]:
+            return False
+
+        # 문자열 타입 (Utf8)
+        if dtype == pl.Utf8:
+            row_count = len(series)
+            unique_count = series.n_unique()
+
+            # 유니크 값 개수가 임계값 이하이거나, 비율이 낮으면 categorical
+            return unique_count <= max_unique_count or (row_count > 0 and unique_count / row_count < max_unique_ratio)
+
+        # Boolean은 categorical
+        if dtype == pl.Boolean:
+            return True
+
+        return False
+
+    def get_unique_values(self, column: str, limit: int = 1000) -> List[Any]:
+        """
+        컬럼의 유니크 값 목록 반환
+
+        Args:
+            column: 컬럼 이름
+            limit: 최대 반환 개수
+
+        Returns:
+            유니크 값 리스트
+        """
+        if self._df is None or column not in self._df.columns:
+            return []
+
+        series = self._df[column]
+        unique_values = series.unique().sort().head(limit).to_list()
+        return unique_values
+
     def get_all_statistics(self, value_columns: Optional[List[str]] = None) -> Dict[str, Dict[str, Any]]:
         """모든 (또는 지정된) 컬럼의 통계"""
         if self._df is None:

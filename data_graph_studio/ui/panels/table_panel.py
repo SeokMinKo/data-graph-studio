@@ -621,20 +621,20 @@ class ValueZone(QFrame):
                 border-color: {value_col.color}60;
             }}
         """)
-        
+
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(10, 8, 10, 8)
         card_layout.setSpacing(6)
-        
+
         # Header: name + remove
         header_row = QHBoxLayout()
         header_row.setSpacing(4)
-        
+
         name_label = QLabel(f"● {value_col.name[:12]}{'...' if len(value_col.name) > 12 else ''}")
         name_label.setStyleSheet(f"font-weight: 600; font-size: 11px; color: #1E293B; background: transparent;")
         name_label.setToolTip(value_col.name)
         header_row.addWidget(name_label, 1)
-        
+
         remove_btn = QPushButton("×")
         remove_btn.setFixedSize(20, 20)
         remove_btn.setStyleSheet("""
@@ -653,9 +653,9 @@ class ValueZone(QFrame):
         """)
         remove_btn.clicked.connect(lambda: self._remove_value(index))
         header_row.addWidget(remove_btn)
-        
+
         card_layout.addLayout(header_row)
-        
+
         # Aggregation selector
         agg_combo = QComboBox()
         agg_combo.setStyleSheet(f"""
@@ -683,12 +683,60 @@ class ValueZone(QFrame):
             lambda idx, i=index: self._on_agg_changed(i, agg_combo.currentData())
         )
         card_layout.addWidget(agg_combo)
-        
+
+        # Formula input field
+        formula_layout = QHBoxLayout()
+        formula_layout.setSpacing(4)
+
+        formula_label = QLabel("f(y):")
+        formula_label.setStyleSheet("font-size: 10px; color: #6B7280; background: transparent;")
+        formula_label.setToolTip("Y값에 적용할 수식 (예: y*2, y+100, LOG(y))")
+        formula_layout.addWidget(formula_label)
+
+        formula_edit = QLineEdit()
+        formula_edit.setPlaceholderText("y*2, LOG(y)...")
+        formula_edit.setText(value_col.formula or "")
+        formula_edit.setStyleSheet(f"""
+            QLineEdit {{
+                background: #F9FAFB;
+                border: 1px solid {value_col.color}30;
+                border-radius: 4px;
+                padding: 3px 6px;
+                font-size: 10px;
+                color: #374151;
+            }}
+            QLineEdit:focus {{
+                border-color: {value_col.color};
+                background: white;
+            }}
+        """)
+        formula_edit.setToolTip(
+            "Y값에 적용할 수식을 입력하세요.\n"
+            "예시:\n"
+            "  y*2      - 2배\n"
+            "  y+100    - 100 더하기\n"
+            "  y/1000   - 1000으로 나누기\n"
+            "  LOG(y)   - 로그 변환\n"
+            "  SQRT(y)  - 제곱근\n"
+            "  ABS(y)   - 절댓값\n"
+            "  y^2      - 제곱"
+        )
+        formula_edit.editingFinished.connect(
+            lambda i=index, edit=formula_edit: self._on_formula_changed(i, edit.text())
+        )
+        formula_layout.addWidget(formula_edit, 1)
+
+        card_layout.addLayout(formula_layout)
+
         self.value_layout.insertWidget(self.value_layout.count() - 1, card)
     
     def _on_agg_changed(self, index: int, agg: AggregationType):
         self.state.update_value_column(index, aggregation=agg)
-    
+
+    def _on_formula_changed(self, index: int, formula: str):
+        """Formula 변경 핸들러"""
+        self.state.update_value_column(index, formula=formula.strip())
+
     def _remove_value(self, index: int):
         self.state.remove_value_column(index)
     
