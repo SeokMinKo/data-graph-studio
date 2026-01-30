@@ -19,18 +19,22 @@ class DataSourceRef:
     delimiter: str = ","
     has_header: bool = True
     sheet_name: Optional[str] = None
-    
+    dataset_id: Optional[str] = None  # Multi-dataset support
+    name: Optional[str] = None  # Display name
+    color: Optional[str] = None  # Chart color
+    is_active: bool = False  # Active dataset flag
+
     @property
     def is_absolute(self) -> bool:
         """절대 경로 여부"""
         return os.path.isabs(self.path)
-    
+
     def resolve(self, base_dir: str) -> str:
         """상대 경로를 절대 경로로 변환"""
         if self.is_absolute:
             return self.path
         return os.path.join(base_dir, self.path)
-    
+
     def to_dict(self) -> Dict:
         return {
             'path': self.path,
@@ -39,8 +43,12 @@ class DataSourceRef:
             'delimiter': self.delimiter,
             'has_header': self.has_header,
             'sheet_name': self.sheet_name,
+            'dataset_id': self.dataset_id,
+            'name': self.name,
+            'color': self.color,
+            'is_active': self.is_active,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict) -> 'DataSourceRef':
         return cls(
@@ -50,6 +58,39 @@ class DataSourceRef:
             delimiter=data.get('delimiter', ','),
             has_header=data.get('has_header', True),
             sheet_name=data.get('sheet_name'),
+            dataset_id=data.get('dataset_id'),
+            name=data.get('name'),
+            color=data.get('color'),
+            is_active=data.get('is_active', False),
+        )
+
+
+@dataclass
+class ComparisonState:
+    """비교 상태 저장"""
+    mode: str = "single"  # single, overlay, side_by_side, difference
+    comparison_datasets: List[str] = field(default_factory=list)
+    key_column: Optional[str] = None
+    sync_scroll: bool = True
+    sync_zoom: bool = True
+
+    def to_dict(self) -> Dict:
+        return {
+            'mode': self.mode,
+            'comparison_datasets': self.comparison_datasets,
+            'key_column': self.key_column,
+            'sync_scroll': self.sync_scroll,
+            'sync_zoom': self.sync_zoom,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'ComparisonState':
+        return cls(
+            mode=data.get('mode', 'single'),
+            comparison_datasets=data.get('comparison_datasets', []),
+            key_column=data.get('key_column'),
+            sync_scroll=data.get('sync_scroll', True),
+            sync_zoom=data.get('sync_zoom', True),
         )
 
 
@@ -57,30 +98,36 @@ class DataSourceRef:
 class Project:
     """프로젝트"""
     name: str
-    version: str = "1.0"
+    version: str = "1.1"  # Version bump for multi-dataset support
     author: str = ""
     description: str = ""
     created_at: float = field(default_factory=time.time)
     modified_at: float = field(default_factory=time.time)
-    
-    # 데이터 소스
+
+    # 데이터 소스 (단일 - 호환성)
     data_source: Optional[DataSourceRef] = None
-    
+
+    # 다중 데이터 소스 (멀티 데이터셋 지원)
+    data_sources: List[DataSourceRef] = field(default_factory=list)
+
+    # 비교 상태
+    comparison_state: Optional[ComparisonState] = None
+
     # 앱 상태
     state: Dict[str, Any] = field(default_factory=dict)
-    
+
     # 대시보드
     dashboards: List[Dict] = field(default_factory=list)
-    
+
     # 계산 필드
     calculated_fields: List[Dict] = field(default_factory=list)
-    
+
     # 테마
     theme: str = "light"
-    
+
     # 저장 경로
     _path: Optional[str] = None
-    
+
     def to_dict(self) -> Dict:
         """딕셔너리로 변환"""
         return {
@@ -91,12 +138,14 @@ class Project:
             'created_at': self.created_at,
             'modified_at': self.modified_at,
             'data_source': self.data_source.to_dict() if self.data_source else None,
+            'data_sources': [ds.to_dict() for ds in self.data_sources],
+            'comparison_state': self.comparison_state.to_dict() if self.comparison_state else None,
             'state': self.state,
             'dashboards': self.dashboards,
             'calculated_fields': self.calculated_fields,
             'theme': self.theme,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict) -> 'Project':
         """딕셔너리에서 복원"""
@@ -108,16 +157,58 @@ class Project:
             created_at=data.get('created_at', time.time()),
             modified_at=data.get('modified_at', time.time()),
         )
-        
+
+        # 단일 데이터 소스 (레거시 지원)
         if data.get('data_source'):
             project.data_source = DataSourceRef.from_dict(data['data_source'])
-        
+
+        # 다중 데이터 소스
+        if data.get('data_sources'):
+            project.data_sources = [
+                DataSourceRef.from_dict(ds) for ds in data['data_sources']
+            ]
+        # 레거시 프로젝트에서 data_source를 data_sources로 마이그레이션
+        elif project.data_source and not project.data_sources:
+            project.data_sources = [project.data_source]
+
+        # 비교 상태
+        if data.get('comparison_state'):
+            project.comparison_state = ComparisonState.from_dict(data['comparison_state'])
+
         project.state = data.get('state', {})
         project.dashboards = data.get('dashboards', [])
         project.calculated_fields = data.get('calculated_fields', [])
         project.theme = data.get('theme', 'light')
-        
+
         return project
+
+    def add_data_source(self, source: DataSourceRef):
+        """데이터 소스 추가"""
+        self.data_sources.append(source)
+        # 첫 번째면 레거시 호환성을 위해 data_source에도 설정
+        if len(self.data_sources) == 1:
+            self.data_source = source
+
+    def remove_data_source(self, dataset_id: str) -> bool:
+        """데이터 소스 제거"""
+        for i, ds in enumerate(self.data_sources):
+            if ds.dataset_id == dataset_id:
+                self.data_sources.pop(i)
+                if self.data_source and self.data_source.dataset_id == dataset_id:
+                    self.data_source = self.data_sources[0] if self.data_sources else None
+                return True
+        return False
+
+    def get_data_source(self, dataset_id: str) -> Optional[DataSourceRef]:
+        """데이터 소스 가져오기"""
+        for ds in self.data_sources:
+            if ds.dataset_id == dataset_id:
+                return ds
+        return None
+
+    def get_all_data_sources(self) -> List[DataSourceRef]:
+        """모든 데이터 소스 반환"""
+        return self.data_sources.copy()
     
     def to_json(self, indent: int = 2) -> str:
         """JSON 문자열로 변환"""
@@ -155,17 +246,28 @@ class Project:
     def validate(self) -> List[str]:
         """유효성 검사"""
         errors = []
-        
-        if self.data_source:
-            # 데이터 소스 존재 확인
+
+        # 모든 데이터 소스 검증
+        for ds in self.data_sources:
+            path = ds.path
+            if self._path:
+                base_dir = os.path.dirname(self._path)
+                path = ds.resolve(base_dir)
+
+            if not os.path.exists(path):
+                name = ds.name or ds.path
+                errors.append(f"Data source file not found: {name} ({path})")
+
+        # 레거시 단일 소스 검증 (data_sources가 비어있는 경우)
+        if not self.data_sources and self.data_source:
             path = self.data_source.path
             if self._path:
                 base_dir = os.path.dirname(self._path)
                 path = self.data_source.resolve(base_dir)
-            
+
             if not os.path.exists(path):
                 errors.append(f"Data source file not found: {path}")
-        
+
         return errors
 
 

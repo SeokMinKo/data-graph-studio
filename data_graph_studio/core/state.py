@@ -1,14 +1,63 @@
 """
 State Management - 앱 상태 관리
+
+멀티 데이터셋 비교 기능 지원
 """
 
 from typing import Optional, List, Dict, Any, Set, Callable, TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
+from datetime import datetime
+import uuid
 from PySide6.QtCore import QObject, Signal
 
 if TYPE_CHECKING:
     from .profile import Profile, GraphSetting
+
+
+# ==================== Multi-Dataset Comparison ====================
+
+class ComparisonMode(Enum):
+    """데이터셋 비교 모드"""
+    SINGLE = "single"           # 단일 데이터셋 (기존 모드)
+    OVERLAY = "overlay"         # 오버레이 비교 (하나의 차트에 여러 데이터셋)
+    SIDE_BY_SIDE = "side_by_side"  # 병렬 비교 (각각 독립 패널)
+    DIFFERENCE = "difference"   # 차이 분석 (두 데이터셋 간 차이)
+
+
+@dataclass
+class DatasetMetadata:
+    """데이터셋 메타데이터"""
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    name: str = ""
+    file_path: Optional[str] = None
+    color: str = "#1f77b4"
+    created_at: datetime = field(default_factory=datetime.now)
+    row_count: int = 0
+    column_count: int = 0
+    memory_bytes: int = 0
+    is_active: bool = False
+    compare_enabled: bool = True  # 비교에 포함할지 여부
+
+
+# 기본 데이터셋 색상 팔레트
+DEFAULT_DATASET_COLORS = [
+    "#1f77b4",  # 파랑
+    "#ff7f0e",  # 주황
+    "#2ca02c",  # 초록
+    "#d62728",  # 빨강
+    "#9467bd",  # 보라
+    "#8c564b",  # 갈색
+    "#e377c2",  # 분홍
+    "#7f7f7f",  # 회색
+    "#bcbd22",  # 올리브
+    "#17becf",  # 청록
+]
+
+# 차이 모드 색상
+DIFF_POSITIVE_COLOR = "#2ca02c"  # 초록 (증가)
+DIFF_NEGATIVE_COLOR = "#d62728"  # 빨강 (감소)
+DIFF_NEUTRAL_COLOR = "#7f7f7f"   # 회색 (변화없음)
 
 
 class AggregationType(Enum):
@@ -168,6 +217,52 @@ class SelectionState:
             self.selected_rows.add(row)
 
 
+@dataclass
+class DatasetState:
+    """
+    개별 데이터셋의 상태
+
+    각 데이터셋은 독립적인 그래프 설정, 필터, 정렬 등을 가질 수 있음
+    """
+    dataset_id: str
+    x_column: Optional[str] = None
+    group_columns: List[GroupColumn] = field(default_factory=list)
+    value_columns: List[ValueColumn] = field(default_factory=list)
+    hover_columns: List[str] = field(default_factory=list)
+    filters: List[FilterCondition] = field(default_factory=list)
+    sorts: List[SortCondition] = field(default_factory=list)
+    selection: SelectionState = field(default_factory=SelectionState)
+    chart_settings: ChartSettings = field(default_factory=ChartSettings)
+
+    def clone(self) -> 'DatasetState':
+        """상태 복제"""
+        import copy
+        return copy.deepcopy(self)
+
+    def reset(self):
+        """상태 초기화"""
+        self.x_column = None
+        self.group_columns.clear()
+        self.value_columns.clear()
+        self.hover_columns.clear()
+        self.filters.clear()
+        self.sorts.clear()
+        self.selection.clear()
+        self.chart_settings = ChartSettings()
+
+
+@dataclass
+class ComparisonSettings:
+    """비교 모드 설정"""
+    mode: ComparisonMode = ComparisonMode.SINGLE
+    comparison_datasets: List[str] = field(default_factory=list)  # 비교 대상 데이터셋 ID들
+    key_column: Optional[str] = None  # 정렬/조인 기준 컬럼
+    sync_scroll: bool = True
+    sync_zoom: bool = True
+    sync_selection: bool = False
+    auto_align: bool = True  # 키 컬럼 기준 자동 정렬
+
+
 class AppState(QObject):
     """
     앱 전역 상태 관리
@@ -203,6 +298,14 @@ class AppState(QObject):
     setting_removed = Signal(str)         # setting_id
     floating_window_opened = Signal(str)  # setting_id
     floating_window_closed = Signal(str)  # window_id
+
+    # Multi-dataset comparison signals
+    dataset_added = Signal(str)           # dataset_id
+    dataset_removed = Signal(str)         # dataset_id
+    dataset_activated = Signal(str)       # dataset_id
+    dataset_updated = Signal(str)         # dataset_id
+    comparison_mode_changed = Signal(str) # mode
+    comparison_settings_changed = Signal()
     
     def __init__(self):
         super().__init__()
@@ -252,7 +355,269 @@ class AppState(QObject):
         self._current_profile: Optional['Profile'] = None
         self._current_setting_id: Optional[str] = None
         self._floating_windows: Dict[str, Any] = {}  # window_id -> FloatingGraphWindow
-    
+
+        # Multi-dataset comparison
+        self._dataset_states: Dict[str, DatasetState] = {}  # dataset_id -> DatasetState
+        self._dataset_metadata: Dict[str, DatasetMetadata] = {}  # dataset_id -> DatasetMetadata
+        self._active_dataset_id: Optional[str] = None
+        self._comparison_settings: ComparisonSettings = ComparisonSettings()
+        self._dataset_color_index: int = 0  # 다음 데이터셋에 할당할 색상 인덱스
+
+    # ==================== Multi-Dataset Comparison ====================
+
+    @property
+    def dataset_states(self) -> Dict[str, DatasetState]:
+        """모든 데이터셋 상태"""
+        return self._dataset_states
+
+    @property
+    def dataset_metadata(self) -> Dict[str, DatasetMetadata]:
+        """모든 데이터셋 메타데이터"""
+        return self._dataset_metadata
+
+    @property
+    def active_dataset_id(self) -> Optional[str]:
+        """현재 활성 데이터셋 ID"""
+        return self._active_dataset_id
+
+    @property
+    def active_dataset_state(self) -> Optional[DatasetState]:
+        """현재 활성 데이터셋의 상태"""
+        if self._active_dataset_id:
+            return self._dataset_states.get(self._active_dataset_id)
+        return None
+
+    @property
+    def comparison_settings(self) -> ComparisonSettings:
+        """비교 모드 설정"""
+        return self._comparison_settings
+
+    @property
+    def comparison_mode(self) -> ComparisonMode:
+        """현재 비교 모드"""
+        return self._comparison_settings.mode
+
+    @property
+    def dataset_count(self) -> int:
+        """로드된 데이터셋 수"""
+        return len(self._dataset_states)
+
+    @property
+    def comparison_dataset_ids(self) -> List[str]:
+        """비교 대상 데이터셋 ID 목록"""
+        return self._comparison_settings.comparison_datasets
+
+    def get_dataset_state(self, dataset_id: str) -> Optional[DatasetState]:
+        """특정 데이터셋의 상태 조회"""
+        return self._dataset_states.get(dataset_id)
+
+    def get_dataset_metadata(self, dataset_id: str) -> Optional[DatasetMetadata]:
+        """특정 데이터셋의 메타데이터 조회"""
+        return self._dataset_metadata.get(dataset_id)
+
+    def add_dataset(self, dataset_id: str, name: str = "", file_path: str = None,
+                    row_count: int = 0, column_count: int = 0, memory_bytes: int = 0) -> DatasetState:
+        """
+        새 데이터셋 추가
+
+        Returns:
+            생성된 DatasetState
+        """
+        # 색상 할당
+        color = DEFAULT_DATASET_COLORS[self._dataset_color_index % len(DEFAULT_DATASET_COLORS)]
+        self._dataset_color_index += 1
+
+        # 메타데이터 생성
+        metadata = DatasetMetadata(
+            id=dataset_id,
+            name=name or f"Dataset {len(self._dataset_metadata) + 1}",
+            file_path=file_path,
+            color=color,
+            row_count=row_count,
+            column_count=column_count,
+            memory_bytes=memory_bytes,
+            is_active=len(self._dataset_states) == 0  # 첫 번째 데이터셋이면 활성화
+        )
+        self._dataset_metadata[dataset_id] = metadata
+
+        # 상태 생성
+        state = DatasetState(dataset_id=dataset_id)
+        self._dataset_states[dataset_id] = state
+
+        # 첫 번째 데이터셋이면 활성화
+        if self._active_dataset_id is None:
+            self._active_dataset_id = dataset_id
+            metadata.is_active = True
+
+        # 비교 대상에 추가
+        if metadata.compare_enabled:
+            self._comparison_settings.comparison_datasets.append(dataset_id)
+
+        self.dataset_added.emit(dataset_id)
+        return state
+
+    def remove_dataset(self, dataset_id: str) -> bool:
+        """데이터셋 제거"""
+        if dataset_id not in self._dataset_states:
+            return False
+
+        # 상태 및 메타데이터 제거
+        del self._dataset_states[dataset_id]
+        del self._dataset_metadata[dataset_id]
+
+        # 비교 대상에서 제거
+        if dataset_id in self._comparison_settings.comparison_datasets:
+            self._comparison_settings.comparison_datasets.remove(dataset_id)
+
+        # 활성 데이터셋이었으면 다른 것으로 전환
+        if self._active_dataset_id == dataset_id:
+            if self._dataset_states:
+                self._active_dataset_id = next(iter(self._dataset_states.keys()))
+                self._dataset_metadata[self._active_dataset_id].is_active = True
+                self.dataset_activated.emit(self._active_dataset_id)
+            else:
+                self._active_dataset_id = None
+
+        self.dataset_removed.emit(dataset_id)
+        return True
+
+    def activate_dataset(self, dataset_id: str) -> bool:
+        """데이터셋 활성화"""
+        if dataset_id not in self._dataset_states:
+            return False
+
+        # 이전 활성 데이터셋 비활성화
+        if self._active_dataset_id and self._active_dataset_id in self._dataset_metadata:
+            self._dataset_metadata[self._active_dataset_id].is_active = False
+
+        # 새 데이터셋 활성화
+        self._active_dataset_id = dataset_id
+        self._dataset_metadata[dataset_id].is_active = True
+
+        # 단일 모드에서는 활성 데이터셋의 상태를 기존 속성들과 동기화
+        if self._comparison_settings.mode == ComparisonMode.SINGLE:
+            self._sync_from_dataset_state(dataset_id)
+
+        self.dataset_activated.emit(dataset_id)
+        return True
+
+    def update_dataset_metadata(self, dataset_id: str, **kwargs):
+        """데이터셋 메타데이터 업데이트"""
+        if dataset_id in self._dataset_metadata:
+            metadata = self._dataset_metadata[dataset_id]
+            for key, value in kwargs.items():
+                if hasattr(metadata, key):
+                    setattr(metadata, key, value)
+            self.dataset_updated.emit(dataset_id)
+
+    def set_comparison_mode(self, mode: ComparisonMode):
+        """비교 모드 설정"""
+        if self._comparison_settings.mode != mode:
+            self._comparison_settings.mode = mode
+            self.comparison_mode_changed.emit(mode.value)
+            self.comparison_settings_changed.emit()
+
+    def set_comparison_datasets(self, dataset_ids: List[str]):
+        """비교 대상 데이터셋 설정"""
+        # 유효한 ID만 필터링
+        valid_ids = [did for did in dataset_ids if did in self._dataset_states]
+        self._comparison_settings.comparison_datasets = valid_ids
+        self.comparison_settings_changed.emit()
+
+    def toggle_dataset_comparison(self, dataset_id: str) -> bool:
+        """데이터셋 비교 포함 여부 토글"""
+        if dataset_id not in self._dataset_metadata:
+            return False
+
+        metadata = self._dataset_metadata[dataset_id]
+        metadata.compare_enabled = not metadata.compare_enabled
+
+        if metadata.compare_enabled:
+            if dataset_id not in self._comparison_settings.comparison_datasets:
+                self._comparison_settings.comparison_datasets.append(dataset_id)
+        else:
+            if dataset_id in self._comparison_settings.comparison_datasets:
+                self._comparison_settings.comparison_datasets.remove(dataset_id)
+
+        self.comparison_settings_changed.emit()
+        return metadata.compare_enabled
+
+    def set_dataset_color(self, dataset_id: str, color: str):
+        """데이터셋 색상 설정"""
+        if dataset_id in self._dataset_metadata:
+            self._dataset_metadata[dataset_id].color = color
+            self.dataset_updated.emit(dataset_id)
+
+    def get_comparison_colors(self) -> Dict[str, str]:
+        """비교 대상 데이터셋들의 색상 매핑"""
+        return {
+            did: self._dataset_metadata[did].color
+            for did in self._comparison_settings.comparison_datasets
+            if did in self._dataset_metadata
+        }
+
+    def update_comparison_settings(self, **kwargs):
+        """비교 설정 업데이트"""
+        for key, value in kwargs.items():
+            if hasattr(self._comparison_settings, key):
+                setattr(self._comparison_settings, key, value)
+        self.comparison_settings_changed.emit()
+
+    def _sync_from_dataset_state(self, dataset_id: str):
+        """
+        데이터셋 상태를 기존 AppState 속성들로 동기화
+
+        단일 모드에서 활성 데이터셋 전환 시 호출됨
+        """
+        state = self._dataset_states.get(dataset_id)
+        if not state:
+            return
+
+        # 기존 속성들 업데이트 (하위 호환성)
+        self._x_column = state.x_column
+        self._group_columns = state.group_columns
+        self._value_columns = state.value_columns
+        self._hover_columns = state.hover_columns
+        self._filters = state.filters
+        self._sorts = state.sorts
+        self._selection = state.selection
+        self._chart_settings = state.chart_settings
+
+        # 시그널 발생
+        self.group_zone_changed.emit()
+        self.value_zone_changed.emit()
+        self.hover_zone_changed.emit()
+        self.chart_settings_changed.emit()
+        self.filter_changed.emit()
+        self.sort_changed.emit()
+
+    def _sync_to_dataset_state(self, dataset_id: str = None):
+        """
+        기존 AppState 속성들을 데이터셋 상태로 동기화
+
+        단일 모드에서 상태 변경 시 호출됨
+        """
+        target_id = dataset_id or self._active_dataset_id
+        if not target_id or target_id not in self._dataset_states:
+            return
+
+        state = self._dataset_states[target_id]
+        state.x_column = self._x_column
+        state.group_columns = self._group_columns
+        state.value_columns = self._value_columns
+        state.hover_columns = self._hover_columns
+        state.filters = self._filters
+        state.sorts = self._sorts
+        state.selection = self._selection
+        state.chart_settings = self._chart_settings
+
+    def clear_all_datasets(self):
+        """모든 데이터셋 제거"""
+        dataset_ids = list(self._dataset_states.keys())
+        for did in dataset_ids:
+            self.remove_dataset(did)
+        self._dataset_color_index = 0
+
     # ==================== Data ====================
     
     @property

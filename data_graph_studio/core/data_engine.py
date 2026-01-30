@@ -1,5 +1,7 @@
 """
 Data Engine - Polars 기반 빅데이터 처리 엔진
+
+멀티 데이터셋 비교 기능 지원
 """
 
 import gc
@@ -9,17 +11,28 @@ import time
 import logging
 import warnings
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable, Union, Set
+from typing import Optional, List, Dict, Any, Callable, Union, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
 import tempfile
+from datetime import datetime
+import uuid
 
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
+import numpy as np
+
+# scipy for statistical tests
+try:
+    from scipy import stats as scipy_stats
+    from scipy.stats import pearsonr, spearmanr, ttest_ind, mannwhitneyu, ks_2samp
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -92,7 +105,7 @@ class ColumnInfo:
     memory_bytes: int = 0
 
 
-@dataclass 
+@dataclass
 class DataProfile:
     """데이터 프로파일"""
     total_rows: int
@@ -100,6 +113,43 @@ class DataProfile:
     memory_bytes: int
     columns: List[ColumnInfo]
     load_time_seconds: float
+
+
+@dataclass
+class DatasetInfo:
+    """
+    개별 데이터셋 정보
+
+    멀티 데이터셋 비교를 위한 데이터셋 컨테이너
+    """
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    name: str = ""
+    df: Optional[pl.DataFrame] = None
+    lazy_df: Optional[pl.LazyFrame] = None
+    source: Optional['DataSource'] = None
+    profile: Optional[DataProfile] = None
+    color: str = "#1f77b4"
+    created_at: datetime = field(default_factory=datetime.now)
+
+    @property
+    def row_count(self) -> int:
+        return len(self.df) if self.df is not None else 0
+
+    @property
+    def column_count(self) -> int:
+        return len(self.df.columns) if self.df is not None else 0
+
+    @property
+    def columns(self) -> List[str]:
+        return self.df.columns if self.df is not None else []
+
+    @property
+    def memory_bytes(self) -> int:
+        return self.df.estimated_size() if self.df is not None else 0
+
+    @property
+    def is_loaded(self) -> bool:
+        return self.df is not None
 
 
 @dataclass
@@ -135,6 +185,7 @@ class DataEngine:
     - 인덱싱
     - 캐싱
     - 재시도 메커니즘
+    - 멀티 데이터셋 지원 (비교 기능)
     """
 
     # 기본 청크 크기 (행 수)
@@ -157,7 +208,18 @@ class DataEngine:
         r'scientific', r'decimal'
     ]
 
+    # 멀티 데이터셋 설정
+    MAX_DATASETS = 10  # 최대 동시 로드 가능 데이터셋 수
+    MAX_TOTAL_MEMORY = 4 * 1024 * 1024 * 1024  # 4GB 메모리 한도
+
+    # 기본 데이터셋 색상 팔레트
+    DEFAULT_COLORS = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+    ]
+
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
+        # 기존 단일 데이터셋 (하위 호환성)
         self._df: Optional[pl.DataFrame] = None
         self._lazy_df: Optional[pl.LazyFrame] = None
         self._source: Optional[DataSource] = None
@@ -170,6 +232,11 @@ class DataEngine:
         self._progress_callback: Optional[Callable[[LoadingProgress], None]] = None
         self._precision_mode: PrecisionMode = precision_mode
         self._precision_columns: Set[str] = set()  # 정밀도 유지 필요 컬럼
+
+        # 멀티 데이터셋 지원
+        self._datasets: Dict[str, DatasetInfo] = {}  # dataset_id -> DatasetInfo
+        self._active_dataset_id: Optional[str] = None
+        self._color_index: int = 0  # 다음 데이터셋에 할당할 색상 인덱스
     
     @property
     def df(self) -> Optional[pl.DataFrame]:
@@ -1286,3 +1353,868 @@ class DataEngine:
     def has_lazy(self) -> bool:
         """LazyFrame 존재 여부"""
         return self._lazy_df is not None
+
+    # ==================== Multi-Dataset Support ====================
+
+    @property
+    def datasets(self) -> Dict[str, DatasetInfo]:
+        """모든 데이터셋"""
+        return self._datasets
+
+    @property
+    def dataset_count(self) -> int:
+        """로드된 데이터셋 수"""
+        return len(self._datasets)
+
+    @property
+    def active_dataset_id(self) -> Optional[str]:
+        """현재 활성 데이터셋 ID"""
+        return self._active_dataset_id
+
+    @property
+    def active_dataset(self) -> Optional[DatasetInfo]:
+        """현재 활성 데이터셋"""
+        if self._active_dataset_id:
+            return self._datasets.get(self._active_dataset_id)
+        return None
+
+    def get_dataset(self, dataset_id: str) -> Optional[DatasetInfo]:
+        """특정 데이터셋 조회"""
+        return self._datasets.get(dataset_id)
+
+    def get_dataset_df(self, dataset_id: str) -> Optional[pl.DataFrame]:
+        """특정 데이터셋의 DataFrame 조회"""
+        dataset = self._datasets.get(dataset_id)
+        return dataset.df if dataset else None
+
+    def list_datasets(self) -> List[DatasetInfo]:
+        """
+        데이터셋 목록 반환
+
+        Returns:
+            [DatasetInfo, ...]
+        """
+        return list(self._datasets.values())
+
+    def get_total_memory_usage(self) -> int:
+        """전체 데이터셋 메모리 사용량"""
+        return sum(ds.memory_bytes for ds in self._datasets.values())
+
+    def can_load_dataset(self, estimated_size: int) -> Tuple[bool, str]:
+        """
+        데이터셋 로드 가능 여부 확인
+
+        Args:
+            estimated_size: 예상 메모리 크기 (bytes)
+
+        Returns:
+            (can_load, message)
+        """
+        if len(self._datasets) >= self.MAX_DATASETS:
+            return False, f"최대 데이터셋 수({self.MAX_DATASETS})에 도달했습니다."
+
+        current = self.get_total_memory_usage()
+        projected = current + estimated_size
+
+        if projected > self.MAX_TOTAL_MEMORY:
+            return False, (
+                f"메모리 한도 초과. 현재: {current / 1e9:.1f}GB, "
+                f"필요: {estimated_size / 1e9:.1f}GB, "
+                f"한도: {self.MAX_TOTAL_MEMORY / 1e9:.1f}GB"
+            )
+
+        if projected > self.MAX_TOTAL_MEMORY * 0.9:
+            return True, "⚠️ 메모리 사용량이 높습니다. 일부 데이터셋 제거를 권장합니다."
+
+        return True, ""
+
+    def load_dataset(
+        self,
+        path: str,
+        name: str = None,
+        dataset_id: str = None,
+        **load_kwargs
+    ) -> Optional[str]:
+        """
+        새 데이터셋 로드
+
+        Args:
+            path: 파일 경로
+            name: 데이터셋 표시 이름 (None이면 파일명 사용)
+            dataset_id: 데이터셋 ID (None이면 자동 생성)
+            **load_kwargs: load_file에 전달할 추가 인자
+
+        Returns:
+            생성된 dataset_id (실패 시 None)
+        """
+        # ID 생성
+        if dataset_id is None:
+            dataset_id = str(uuid.uuid4())[:8]
+
+        # 이름 결정
+        if name is None:
+            name = Path(path).name
+
+        # 색상 할당
+        color = self.DEFAULT_COLORS[self._color_index % len(self.DEFAULT_COLORS)]
+        self._color_index += 1
+
+        # DatasetInfo 생성
+        dataset = DatasetInfo(
+            id=dataset_id,
+            name=name,
+            color=color
+        )
+
+        # 파일 로드 (기존 메서드 활용)
+        success = self.load_file(path, **load_kwargs)
+
+        if not success:
+            return None
+
+        # 로드된 데이터를 DatasetInfo에 복사
+        dataset.df = self._df
+        dataset.lazy_df = self._lazy_df
+        dataset.source = self._source
+        dataset.profile = self._profile
+
+        # 데이터셋 저장
+        self._datasets[dataset_id] = dataset
+
+        # 첫 번째 데이터셋이면 활성화
+        if self._active_dataset_id is None:
+            self._active_dataset_id = dataset_id
+
+        logger.info(f"Dataset loaded: {dataset_id} ({name}), {dataset.row_count:,} rows")
+        return dataset_id
+
+    def remove_dataset(self, dataset_id: str) -> bool:
+        """
+        데이터셋 제거
+
+        Args:
+            dataset_id: 제거할 데이터셋 ID
+
+        Returns:
+            성공 여부
+        """
+        if dataset_id not in self._datasets:
+            return False
+
+        # 메모리 해제
+        dataset = self._datasets[dataset_id]
+        dataset.df = None
+        dataset.lazy_df = None
+
+        del self._datasets[dataset_id]
+
+        # 활성 데이터셋이었으면 다른 것으로 전환
+        if self._active_dataset_id == dataset_id:
+            if self._datasets:
+                self._active_dataset_id = next(iter(self._datasets.keys()))
+                self._sync_active_dataset()
+            else:
+                self._active_dataset_id = None
+                self._df = None
+                self._lazy_df = None
+                self._source = None
+                self._profile = None
+
+        gc.collect()
+        logger.info(f"Dataset removed: {dataset_id}")
+        return True
+
+    def activate_dataset(self, dataset_id: str) -> bool:
+        """
+        데이터셋 활성화 (기존 단일 데이터셋 API와 동기화)
+
+        Args:
+            dataset_id: 활성화할 데이터셋 ID
+
+        Returns:
+            성공 여부
+        """
+        if dataset_id not in self._datasets:
+            return False
+
+        self._active_dataset_id = dataset_id
+        self._sync_active_dataset()
+        return True
+
+    def _sync_active_dataset(self):
+        """활성 데이터셋을 기존 단일 데이터셋 속성과 동기화"""
+        dataset = self.active_dataset
+        if dataset:
+            self._df = dataset.df
+            self._lazy_df = dataset.lazy_df
+            self._source = dataset.source
+            self._profile = dataset.profile
+
+    def set_dataset_color(self, dataset_id: str, color: str):
+        """데이터셋 색상 설정"""
+        if dataset_id in self._datasets:
+            self._datasets[dataset_id].color = color
+
+    def rename_dataset(self, dataset_id: str, new_name: str):
+        """데이터셋 이름 변경"""
+        if dataset_id in self._datasets:
+            self._datasets[dataset_id].name = new_name
+
+    def clear_all_datasets(self):
+        """모든 데이터셋 제거"""
+        for dataset_id in list(self._datasets.keys()):
+            self.remove_dataset(dataset_id)
+        self._color_index = 0
+
+    # ==================== Comparison Operations ====================
+
+    def get_common_columns(self, dataset_ids: List[str] = None) -> List[str]:
+        """
+        여러 데이터셋의 공통 컬럼 반환
+
+        Args:
+            dataset_ids: 대상 데이터셋 ID 목록 (None이면 전체)
+
+        Returns:
+            공통 컬럼 이름 목록
+        """
+        if dataset_ids is None:
+            dataset_ids = list(self._datasets.keys())
+
+        if not dataset_ids:
+            return []
+
+        common = set(self._datasets[dataset_ids[0]].columns) if dataset_ids[0] in self._datasets else set()
+
+        for did in dataset_ids[1:]:
+            if did in self._datasets:
+                common &= set(self._datasets[did].columns)
+
+        return list(common)
+
+    def get_numeric_columns(self, dataset_id: str) -> List[str]:
+        """특정 데이터셋의 숫자형 컬럼 목록"""
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None or dataset.df is None:
+            return []
+
+        return [
+            col for col in dataset.df.columns
+            if dataset.df[col].dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+                                          pl.Float32, pl.Float64]
+        ]
+
+    def align_datasets(
+        self,
+        dataset_ids: List[str],
+        key_column: str,
+        fill_strategy: str = "null"
+    ) -> Dict[str, pl.DataFrame]:
+        """
+        키 컬럼 기준으로 데이터셋 정렬
+
+        Args:
+            dataset_ids: 정렬할 데이터셋 ID 목록
+            key_column: 정렬 기준 컬럼
+            fill_strategy: 누락값 처리 ("null", "forward", "backward", "interpolate")
+
+        Returns:
+            {dataset_id: aligned_df} 매핑
+        """
+        if not dataset_ids:
+            return {}
+
+        # 모든 키 값의 합집합
+        all_keys = set()
+        for did in dataset_ids:
+            if did in self._datasets and self._datasets[did].df is not None:
+                df = self._datasets[did].df
+                if key_column in df.columns:
+                    all_keys.update(df[key_column].unique().to_list())
+
+        if not all_keys:
+            return {}
+
+        # 각 데이터셋 정렬
+        aligned = {}
+        key_df = pl.DataFrame({key_column: sorted(list(all_keys))})
+
+        for did in dataset_ids:
+            if did not in self._datasets:
+                continue
+
+            df = self._datasets[did].df
+            if df is None or key_column not in df.columns:
+                continue
+
+            # 키 DataFrame과 조인
+            aligned_df = key_df.join(df, on=key_column, how="left")
+
+            # 누락값 처리
+            if fill_strategy == "forward":
+                aligned_df = aligned_df.fill_null(strategy="forward")
+            elif fill_strategy == "backward":
+                aligned_df = aligned_df.fill_null(strategy="backward")
+            elif fill_strategy == "interpolate":
+                # 숫자 컬럼만 보간
+                for col in aligned_df.columns:
+                    if aligned_df[col].dtype in [pl.Float32, pl.Float64]:
+                        aligned_df = aligned_df.with_columns(
+                            pl.col(col).interpolate()
+                        )
+
+            aligned[did] = aligned_df
+
+        return aligned
+
+    def calculate_difference(
+        self,
+        dataset_a_id: str,
+        dataset_b_id: str,
+        value_column: str,
+        key_column: str = None
+    ) -> Optional[pl.DataFrame]:
+        """
+        두 데이터셋 간 차이 계산
+
+        Args:
+            dataset_a_id: 첫 번째 데이터셋 ID
+            dataset_b_id: 두 번째 데이터셋 ID
+            value_column: 비교할 값 컬럼
+            key_column: 키 컬럼 (None이면 인덱스 기준)
+
+        Returns:
+            차이 데이터프레임 (key, value_a, value_b, diff, diff_pct)
+        """
+        ds_a = self._datasets.get(dataset_a_id)
+        ds_b = self._datasets.get(dataset_b_id)
+
+        if ds_a is None or ds_b is None or ds_a.df is None or ds_b.df is None:
+            return None
+
+        df_a = ds_a.df
+        df_b = ds_b.df
+
+        if value_column not in df_a.columns or value_column not in df_b.columns:
+            return None
+
+        if key_column:
+            # 키 컬럼 기준 조인
+            if key_column not in df_a.columns or key_column not in df_b.columns:
+                return None
+
+            merged = df_a.select([key_column, value_column]).join(
+                df_b.select([key_column, value_column]),
+                on=key_column,
+                how="outer",
+                suffix="_b"
+            )
+            value_a_col = value_column
+            value_b_col = f"{value_column}_b"
+        else:
+            # 인덱스 기준 (행 순서)
+            min_len = min(len(df_a), len(df_b))
+            merged = pl.DataFrame({
+                "index": list(range(min_len)),
+                value_column: df_a[value_column].head(min_len),
+                f"{value_column}_b": df_b[value_column].head(min_len)
+            })
+            key_column = "index"
+            value_a_col = value_column
+            value_b_col = f"{value_column}_b"
+
+        # 차이 계산
+        result = merged.with_columns([
+            (pl.col(value_a_col) - pl.col(value_b_col)).alias("diff"),
+            (
+                (pl.col(value_a_col) - pl.col(value_b_col)) /
+                pl.col(value_b_col).abs() * 100
+            ).alias("diff_pct")
+        ]).rename({
+            value_a_col: "value_a",
+            value_b_col: "value_b"
+        })
+
+        return result
+
+    def get_comparison_statistics(
+        self,
+        dataset_ids: List[str],
+        value_column: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        여러 데이터셋의 비교 통계
+
+        Args:
+            dataset_ids: 비교할 데이터셋 ID 목록
+            value_column: 통계 대상 컬럼
+
+        Returns:
+            {dataset_id: {stat_name: value, ...}, ...}
+        """
+        stats = {}
+
+        for did in dataset_ids:
+            if did not in self._datasets:
+                continue
+
+            ds = self._datasets[did]
+            if ds.df is None or value_column not in ds.df.columns:
+                continue
+
+            series = ds.df[value_column]
+            if series.dtype not in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+                                    pl.Float32, pl.Float64]:
+                continue
+
+            stats[did] = {
+                "name": ds.name,
+                "color": ds.color,
+                "count": len(series),
+                "sum": series.sum(),
+                "mean": series.mean(),
+                "median": series.median(),
+                "std": series.std(),
+                "min": series.min(),
+                "max": series.max(),
+                "q1": series.quantile(0.25),
+                "q3": series.quantile(0.75)
+            }
+
+        return stats
+
+    def merge_datasets(
+        self,
+        dataset_ids: List[str],
+        key_column: str = None,
+        how: str = "outer"
+    ) -> Optional[pl.DataFrame]:
+        """
+        여러 데이터셋 병합
+
+        Args:
+            dataset_ids: 병합할 데이터셋 ID 목록
+            key_column: 조인 키 컬럼 (None이면 수직 결합)
+            how: 조인 방식 ("inner", "outer", "left", "right")
+
+        Returns:
+            병합된 DataFrame
+        """
+        dfs = []
+        for did in dataset_ids:
+            if did in self._datasets and self._datasets[did].df is not None:
+                df = self._datasets[did].df.with_columns(
+                    pl.lit(did).alias("_dataset_id"),
+                    pl.lit(self._datasets[did].name).alias("_dataset_name")
+                )
+                dfs.append(df)
+
+        if not dfs:
+            return None
+
+        if key_column is None:
+            # 수직 결합 (concat)
+            return pl.concat(dfs, how="diagonal")
+        else:
+            # 수평 결합 (join)
+            result = dfs[0]
+            for i, df in enumerate(dfs[1:], 2):
+                result = result.join(df, on=key_column, how=how, suffix=f"_{i}")
+            return result
+
+    # ==================== Statistical Testing ====================
+
+    def perform_statistical_test(
+        self,
+        dataset_a_id: str,
+        dataset_b_id: str,
+        value_column: str,
+        test_type: str = "auto"
+    ) -> Optional[Dict[str, Any]]:
+        """
+        두 데이터셋 간 통계 검정 수행
+
+        Args:
+            dataset_a_id: 첫 번째 데이터셋 ID
+            dataset_b_id: 두 번째 데이터셋 ID
+            value_column: 검정 대상 컬럼
+            test_type: 검정 유형 ("auto", "ttest", "mannwhitney", "ks")
+                - auto: 정규성에 따라 자동 선택
+                - ttest: Independent t-test (정규분포 가정)
+                - mannwhitney: Mann-Whitney U test (비모수)
+                - ks: Kolmogorov-Smirnov test (분포 비교)
+
+        Returns:
+            {
+                "test_name": str,
+                "statistic": float,
+                "p_value": float,
+                "is_significant": bool,  # p < 0.05
+                "effect_size": float,  # Cohen's d
+                "interpretation": str,
+                "error": str (optional)
+            }
+        """
+        if not HAS_SCIPY:
+            return {
+                "error": "scipy is not installed. Install with: pip install scipy",
+                "test_name": "none",
+                "statistic": None,
+                "p_value": None,
+                "is_significant": None,
+                "effect_size": None,
+                "interpretation": "Statistical testing requires scipy"
+            }
+
+        ds_a = self._datasets.get(dataset_a_id)
+        ds_b = self._datasets.get(dataset_b_id)
+
+        if ds_a is None or ds_b is None or ds_a.df is None or ds_b.df is None:
+            return {"error": "Dataset not found"}
+
+        if value_column not in ds_a.df.columns or value_column not in ds_b.df.columns:
+            return {"error": f"Column '{value_column}' not found in both datasets"}
+
+        # 데이터 추출 (null 제거)
+        data_a = ds_a.df[value_column].drop_nulls().to_numpy()
+        data_b = ds_b.df[value_column].drop_nulls().to_numpy()
+
+        if len(data_a) < 2 or len(data_b) < 2:
+            return {"error": "Not enough data points for statistical testing"}
+
+        # 검정 유형 자동 선택
+        if test_type == "auto":
+            test_type = self._select_test_type(data_a, data_b)
+
+        result = {
+            "test_name": test_type,
+            "statistic": None,
+            "p_value": None,
+            "is_significant": None,
+            "effect_size": None,
+            "interpretation": ""
+        }
+
+        try:
+            if test_type == "ttest":
+                stat, p_val = ttest_ind(data_a, data_b, equal_var=False)  # Welch's t-test
+                result["test_name"] = "Welch's t-test"
+            elif test_type == "mannwhitney":
+                stat, p_val = mannwhitneyu(data_a, data_b, alternative='two-sided')
+                result["test_name"] = "Mann-Whitney U test"
+            elif test_type == "ks":
+                stat, p_val = ks_2samp(data_a, data_b)
+                result["test_name"] = "Kolmogorov-Smirnov test"
+            else:
+                return {"error": f"Unknown test type: {test_type}"}
+
+            # Effect size (Cohen's d)
+            pooled_std = np.sqrt((np.var(data_a, ddof=1) + np.var(data_b, ddof=1)) / 2)
+            if pooled_std > 0:
+                effect_size = (np.mean(data_a) - np.mean(data_b)) / pooled_std
+            else:
+                effect_size = 0.0
+
+            result["statistic"] = float(stat)
+            result["p_value"] = float(p_val)
+            result["is_significant"] = p_val < 0.05
+            result["effect_size"] = float(effect_size)
+
+            # 해석 생성
+            result["interpretation"] = self._interpret_test_result(
+                result["test_name"], p_val, effect_size, ds_a.name, ds_b.name
+            )
+
+        except Exception as e:
+            result["error"] = str(e)
+            logger.error(f"Statistical test failed: {e}")
+
+        return result
+
+    def _select_test_type(self, data_a: np.ndarray, data_b: np.ndarray) -> str:
+        """정규성에 따라 적절한 검정 방법 선택"""
+        if not HAS_SCIPY:
+            return "ttest"
+
+        # 샘플 크기가 충분히 크면 (중심극한정리) t-test 사용
+        if len(data_a) >= 30 and len(data_b) >= 30:
+            return "ttest"
+
+        # Shapiro-Wilk 정규성 검정 (작은 샘플)
+        try:
+            # 최대 5000개만 검정 (계산 효율)
+            sample_a = data_a[:5000] if len(data_a) > 5000 else data_a
+            sample_b = data_b[:5000] if len(data_b) > 5000 else data_b
+
+            _, p_a = scipy_stats.shapiro(sample_a) if len(sample_a) >= 3 else (0, 1)
+            _, p_b = scipy_stats.shapiro(sample_b) if len(sample_b) >= 3 else (0, 1)
+
+            # 둘 다 정규분포이면 t-test
+            if p_a >= 0.05 and p_b >= 0.05:
+                return "ttest"
+            else:
+                return "mannwhitney"
+        except:
+            return "ttest"
+
+    def _interpret_test_result(
+        self,
+        test_name: str,
+        p_value: float,
+        effect_size: float,
+        name_a: str,
+        name_b: str
+    ) -> str:
+        """검정 결과 해석 생성"""
+        # 유의성
+        if p_value < 0.001:
+            sig_text = "highly significant (p < 0.001)"
+        elif p_value < 0.01:
+            sig_text = "very significant (p < 0.01)"
+        elif p_value < 0.05:
+            sig_text = "significant (p < 0.05)"
+        else:
+            sig_text = "not significant (p ≥ 0.05)"
+
+        # 효과 크기 해석 (Cohen's d)
+        abs_effect = abs(effect_size)
+        if abs_effect < 0.2:
+            effect_text = "negligible"
+        elif abs_effect < 0.5:
+            effect_text = "small"
+        elif abs_effect < 0.8:
+            effect_text = "medium"
+        else:
+            effect_text = "large"
+
+        # 방향
+        if effect_size > 0:
+            direction = f"{name_a} > {name_b}"
+        elif effect_size < 0:
+            direction = f"{name_a} < {name_b}"
+        else:
+            direction = f"{name_a} ≈ {name_b}"
+
+        interpretation = (
+            f"The difference between datasets is {sig_text}. "
+            f"Effect size is {effect_text} (d={effect_size:.3f}). "
+            f"Direction: {direction}"
+        )
+
+        return interpretation
+
+    def calculate_correlation(
+        self,
+        dataset_a_id: str,
+        dataset_b_id: str,
+        column_a: str,
+        column_b: str = None,
+        method: str = "pearson"
+    ) -> Optional[Dict[str, Any]]:
+        """
+        두 데이터셋/컬럼 간 상관관계 계산
+
+        Args:
+            dataset_a_id: 첫 번째 데이터셋 ID
+            dataset_b_id: 두 번째 데이터셋 ID
+            column_a: 첫 번째 컬럼
+            column_b: 두 번째 컬럼 (None이면 column_a와 동일)
+            method: 상관계수 유형 ("pearson", "spearman")
+
+        Returns:
+            {
+                "method": str,
+                "correlation": float,
+                "p_value": float,
+                "is_significant": bool,
+                "strength": str,
+                "interpretation": str
+            }
+        """
+        if not HAS_SCIPY:
+            return {
+                "error": "scipy is not installed",
+                "method": method,
+                "correlation": None,
+                "p_value": None,
+                "is_significant": None,
+                "strength": None,
+                "interpretation": "Correlation calculation requires scipy"
+            }
+
+        if column_b is None:
+            column_b = column_a
+
+        ds_a = self._datasets.get(dataset_a_id)
+        ds_b = self._datasets.get(dataset_b_id)
+
+        if ds_a is None or ds_b is None or ds_a.df is None or ds_b.df is None:
+            return {"error": "Dataset not found"}
+
+        if column_a not in ds_a.df.columns:
+            return {"error": f"Column '{column_a}' not found in dataset A"}
+        if column_b not in ds_b.df.columns:
+            return {"error": f"Column '{column_b}' not found in dataset B"}
+
+        # 데이터 추출
+        data_a = ds_a.df[column_a].drop_nulls().to_numpy()
+        data_b = ds_b.df[column_b].drop_nulls().to_numpy()
+
+        # 길이 맞추기 (최소 길이로)
+        min_len = min(len(data_a), len(data_b))
+        if min_len < 3:
+            return {"error": "Not enough data points for correlation"}
+
+        data_a = data_a[:min_len]
+        data_b = data_b[:min_len]
+
+        result = {
+            "method": method,
+            "correlation": None,
+            "p_value": None,
+            "is_significant": None,
+            "strength": None,
+            "interpretation": ""
+        }
+
+        try:
+            if method == "pearson":
+                corr, p_val = pearsonr(data_a, data_b)
+                result["method"] = "Pearson"
+            elif method == "spearman":
+                corr, p_val = spearmanr(data_a, data_b)
+                result["method"] = "Spearman"
+            else:
+                return {"error": f"Unknown method: {method}"}
+
+            result["correlation"] = float(corr)
+            result["p_value"] = float(p_val)
+            result["is_significant"] = p_val < 0.05
+
+            # 상관 강도
+            abs_corr = abs(corr)
+            if abs_corr < 0.1:
+                result["strength"] = "negligible"
+            elif abs_corr < 0.3:
+                result["strength"] = "weak"
+            elif abs_corr < 0.5:
+                result["strength"] = "moderate"
+            elif abs_corr < 0.7:
+                result["strength"] = "strong"
+            else:
+                result["strength"] = "very strong"
+
+            # 해석
+            direction = "positive" if corr > 0 else "negative"
+            sig_text = "significant" if result["is_significant"] else "not significant"
+
+            result["interpretation"] = (
+                f"{result['strength'].title()} {direction} correlation (r = {corr:.3f}), "
+                f"{sig_text} (p = {p_val:.4f})"
+            )
+
+        except Exception as e:
+            result["error"] = str(e)
+            logger.error(f"Correlation calculation failed: {e}")
+
+        return result
+
+    def calculate_descriptive_comparison(
+        self,
+        dataset_ids: List[str],
+        value_column: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        여러 데이터셋의 기술통계 비교 (확장)
+
+        Args:
+            dataset_ids: 비교할 데이터셋 ID 목록
+            value_column: 통계 대상 컬럼
+
+        Returns:
+            {dataset_id: {stat_name: value, ...}, ...}
+        """
+        result = self.get_comparison_statistics(dataset_ids, value_column)
+
+        # 추가 통계량 계산
+        for did in dataset_ids:
+            if did not in self._datasets:
+                continue
+
+            ds = self._datasets[did]
+            if ds.df is None or value_column not in ds.df.columns:
+                continue
+
+            series = ds.df[value_column].drop_nulls()
+            if len(series) == 0:
+                continue
+
+            data = series.to_numpy()
+
+            if did not in result:
+                result[did] = {}
+
+            # 추가 통계량
+            result[did]["skewness"] = float(scipy_stats.skew(data)) if HAS_SCIPY else None
+            result[did]["kurtosis"] = float(scipy_stats.kurtosis(data)) if HAS_SCIPY else None
+            result[did]["iqr"] = float(np.percentile(data, 75) - np.percentile(data, 25))
+            result[did]["range"] = float(np.max(data) - np.min(data))
+            result[did]["cv"] = float(np.std(data, ddof=1) / np.mean(data) * 100) if np.mean(data) != 0 else None  # 변동계수
+
+        return result
+
+    def get_normality_test(self, dataset_id: str, value_column: str) -> Optional[Dict[str, Any]]:
+        """
+        정규성 검정 수행
+
+        Args:
+            dataset_id: 데이터셋 ID
+            value_column: 검정 대상 컬럼
+
+        Returns:
+            {
+                "test_name": str,
+                "statistic": float,
+                "p_value": float,
+                "is_normal": bool,
+                "interpretation": str
+            }
+        """
+        if not HAS_SCIPY:
+            return {"error": "scipy is not installed"}
+
+        ds = self._datasets.get(dataset_id)
+        if ds is None or ds.df is None or value_column not in ds.df.columns:
+            return {"error": "Dataset or column not found"}
+
+        data = ds.df[value_column].drop_nulls().to_numpy()
+
+        if len(data) < 3:
+            return {"error": "Not enough data points"}
+
+        try:
+            # Shapiro-Wilk for small samples, D'Agostino for large
+            if len(data) <= 5000:
+                stat, p_val = scipy_stats.shapiro(data[:5000])
+                test_name = "Shapiro-Wilk"
+            else:
+                stat, p_val = scipy_stats.normaltest(data)
+                test_name = "D'Agostino-Pearson"
+
+            is_normal = p_val >= 0.05
+
+            interpretation = (
+                f"Data appears to be normally distributed (p = {p_val:.4f})"
+                if is_normal else
+                f"Data is not normally distributed (p = {p_val:.4f})"
+            )
+
+            return {
+                "test_name": test_name,
+                "statistic": float(stat),
+                "p_value": float(p_val),
+                "is_normal": is_normal,
+                "interpretation": interpretation
+            }
+        except Exception as e:
+            return {"error": str(e)}

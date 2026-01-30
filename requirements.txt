@@ -22,6 +22,7 @@ fastparquet>=2023.0  # Parquet support
 numpy>=1.24.0
 psutil>=5.9.0        # Memory monitoring
 click>=8.0.0         # CLI framework
+scipy>=1.11.0        # Statistical testing
 
 # Optional: Headless graph generation
 matplotlib>=3.7.0

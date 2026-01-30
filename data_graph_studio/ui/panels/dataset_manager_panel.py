@@ -1,0 +1,549 @@
+"""
+Dataset Manager Panel - 멀티 데이터셋 관리 패널
+
+데이터셋 추가, 제거, 전환, 비교 설정 UI
+"""
+
+from typing import Optional, List, Dict, Any
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QListWidget, QListWidgetItem, QFrame, QComboBox,
+    QCheckBox, QMenu, QColorDialog, QInputDialog,
+    QMessageBox, QSizePolicy, QScrollArea, QGroupBox,
+    QSplitter, QToolButton, QFileDialog
+)
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QBrush, QAction
+
+from ...core.data_engine import DataEngine, DatasetInfo
+from ...core.state import (
+    AppState, ComparisonMode, DatasetMetadata,
+    DEFAULT_DATASET_COLORS
+)
+
+
+class DatasetItemWidget(QFrame):
+    """개별 데이터셋 아이템 위젯"""
+
+    activated = Signal(str)  # dataset_id
+    removed = Signal(str)  # dataset_id
+    color_changed = Signal(str, str)  # dataset_id, color
+    compare_toggled = Signal(str, bool)  # dataset_id, enabled
+
+    def __init__(
+        self,
+        dataset_id: str,
+        metadata: DatasetMetadata,
+        dataset_info: DatasetInfo,
+        parent=None
+    ):
+        super().__init__(parent)
+        self.dataset_id = dataset_id
+        self.metadata = metadata
+        self.dataset_info = dataset_info
+
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        self.setLineWidth(1)
+        self._setup_ui()
+        self._update_style()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(4)
+
+        # 상단: 색상 + 이름 + 버튼들
+        top_layout = QHBoxLayout()
+        top_layout.setSpacing(6)
+
+        # 색상 버튼
+        self.color_btn = QToolButton()
+        self.color_btn.setFixedSize(20, 20)
+        self._update_color_button()
+        self.color_btn.clicked.connect(self._on_color_click)
+        top_layout.addWidget(self.color_btn)
+
+        # 이름
+        self.name_label = QLabel(self.metadata.name)
+        self.name_label.setStyleSheet("font-weight: bold;")
+        self.name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        top_layout.addWidget(self.name_label)
+
+        # 활성 표시
+        self.active_label = QLabel("●")
+        self.active_label.setStyleSheet("color: #2ca02c; font-size: 12px;")
+        self.active_label.setVisible(self.metadata.is_active)
+        top_layout.addWidget(self.active_label)
+
+        # 비교 체크박스
+        self.compare_cb = QCheckBox()
+        self.compare_cb.setChecked(self.metadata.compare_enabled)
+        self.compare_cb.setToolTip("비교에 포함")
+        self.compare_cb.stateChanged.connect(self._on_compare_changed)
+        top_layout.addWidget(self.compare_cb)
+
+        # 삭제 버튼
+        self.remove_btn = QToolButton()
+        self.remove_btn.setText("×")
+        self.remove_btn.setFixedSize(20, 20)
+        self.remove_btn.setStyleSheet("color: #d62728;")
+        self.remove_btn.clicked.connect(self._on_remove_click)
+        top_layout.addWidget(self.remove_btn)
+
+        layout.addLayout(top_layout)
+
+        # 하단: 정보
+        info_layout = QHBoxLayout()
+        info_layout.setSpacing(10)
+
+        # 행 수
+        rows_text = f"{self.dataset_info.row_count:,}" if self.dataset_info else "0"
+        self.rows_label = QLabel(f"📊 {rows_text} rows")
+        self.rows_label.setStyleSheet("color: #666; font-size: 11px;")
+        info_layout.addWidget(self.rows_label)
+
+        # 컬럼 수
+        cols_text = f"{self.dataset_info.column_count}" if self.dataset_info else "0"
+        self.cols_label = QLabel(f"× {cols_text} cols")
+        self.cols_label.setStyleSheet("color: #666; font-size: 11px;")
+        info_layout.addWidget(self.cols_label)
+
+        # 메모리
+        memory_mb = self.metadata.memory_bytes / (1024 * 1024)
+        self.memory_label = QLabel(f"💾 {memory_mb:.1f} MB")
+        self.memory_label.setStyleSheet("color: #666; font-size: 11px;")
+        info_layout.addWidget(self.memory_label)
+
+        info_layout.addStretch()
+        layout.addLayout(info_layout)
+
+    def _update_color_button(self):
+        """색상 버튼 업데이트"""
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(QColor(self.metadata.color))
+        self.color_btn.setIcon(QIcon(pixmap))
+
+    def _update_style(self):
+        """선택 상태에 따른 스타일 업데이트"""
+        if self.metadata.is_active:
+            self.setStyleSheet("""
+                DatasetItemWidget {
+                    background-color: #e3f2fd;
+                    border: 2px solid #1976d2;
+                    border-radius: 4px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                DatasetItemWidget {
+                    background-color: #f5f5f5;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                }
+                DatasetItemWidget:hover {
+                    background-color: #eeeeee;
+                    border-color: #999;
+                }
+            """)
+
+    def set_active(self, active: bool):
+        """활성 상태 설정"""
+        self.metadata.is_active = active
+        self.active_label.setVisible(active)
+        self._update_style()
+
+    def update_info(self, metadata: DatasetMetadata, dataset_info: DatasetInfo):
+        """정보 업데이트"""
+        self.metadata = metadata
+        self.dataset_info = dataset_info
+
+        self.name_label.setText(metadata.name)
+        self._update_color_button()
+        self.compare_cb.setChecked(metadata.compare_enabled)
+
+        rows_text = f"{dataset_info.row_count:,}" if dataset_info else "0"
+        self.rows_label.setText(f"📊 {rows_text} rows")
+
+        cols_text = f"{dataset_info.column_count}" if dataset_info else "0"
+        self.cols_label.setText(f"× {cols_text} cols")
+
+        memory_mb = metadata.memory_bytes / (1024 * 1024)
+        self.memory_label.setText(f"💾 {memory_mb:.1f} MB")
+
+        self._update_style()
+
+    def _on_color_click(self):
+        """색상 선택"""
+        color = QColorDialog.getColor(
+            QColor(self.metadata.color),
+            self,
+            "데이터셋 색상 선택"
+        )
+        if color.isValid():
+            self.color_changed.emit(self.dataset_id, color.name())
+
+    def _on_remove_click(self):
+        """삭제 버튼 클릭"""
+        self.removed.emit(self.dataset_id)
+
+    def _on_compare_changed(self, state):
+        """비교 체크박스 변경"""
+        self.compare_toggled.emit(self.dataset_id, state == Qt.Checked)
+
+    def mousePressEvent(self, event):
+        """클릭 시 활성화"""
+        if event.button() == Qt.LeftButton:
+            self.activated.emit(self.dataset_id)
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        """더블클릭 시 이름 변경"""
+        if event.button() == Qt.LeftButton:
+            new_name, ok = QInputDialog.getText(
+                self, "데이터셋 이름 변경",
+                "새 이름:", text=self.metadata.name
+            )
+            if ok and new_name:
+                self.name_label.setText(new_name)
+
+
+class DatasetManagerPanel(QWidget):
+    """
+    데이터셋 관리 패널
+
+    Features:
+    - 로드된 데이터셋 목록 표시
+    - 데이터셋 추가/제거
+    - 활성 데이터셋 전환
+    - 비교 모드 선택
+    - 비교 대상 데이터셋 선택
+    """
+
+    # Signals
+    dataset_activated = Signal(str)  # dataset_id
+    dataset_removed = Signal(str)  # dataset_id
+    add_dataset_requested = Signal()
+    comparison_mode_changed = Signal(str)  # mode
+    comparison_started = Signal(list)  # [dataset_ids]
+
+    def __init__(self, engine: DataEngine, state: AppState, parent=None):
+        super().__init__(parent)
+        self.engine = engine
+        self.state = state
+
+        self._dataset_widgets: Dict[str, DatasetItemWidget] = {}
+
+        self._setup_ui()
+        self._connect_signals()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        # 헤더
+        header_layout = QHBoxLayout()
+
+        title = QLabel("📂 Datasets")
+        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        header_layout.addWidget(title)
+
+        header_layout.addStretch()
+
+        # 데이터셋 수 표시
+        self.count_label = QLabel("0 / 10")
+        self.count_label.setStyleSheet("color: #666;")
+        header_layout.addWidget(self.count_label)
+
+        layout.addLayout(header_layout)
+
+        # 데이터셋 목록 (스크롤 영역)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        self.list_widget = QWidget()
+        self.list_layout = QVBoxLayout(self.list_widget)
+        self.list_layout.setContentsMargins(0, 0, 0, 0)
+        self.list_layout.setSpacing(6)
+        self.list_layout.addStretch()
+
+        scroll.setWidget(self.list_widget)
+        layout.addWidget(scroll, 1)
+
+        # 추가 버튼
+        self.add_btn = QPushButton("+ 데이터셋 추가")
+        self.add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        self.add_btn.clicked.connect(self._on_add_click)
+        layout.addWidget(self.add_btn)
+
+        # 구분선
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("color: #ddd;")
+        layout.addWidget(line)
+
+        # 비교 모드 설정
+        compare_group = QGroupBox("비교 모드")
+        compare_layout = QVBoxLayout(compare_group)
+        compare_layout.setSpacing(6)
+
+        # 모드 선택 콤보박스
+        mode_layout = QHBoxLayout()
+        mode_layout.addWidget(QLabel("모드:"))
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem("단일", ComparisonMode.SINGLE.value)
+        self.mode_combo.addItem("오버레이", ComparisonMode.OVERLAY.value)
+        self.mode_combo.addItem("병렬", ComparisonMode.SIDE_BY_SIDE.value)
+        self.mode_combo.addItem("차이 분석", ComparisonMode.DIFFERENCE.value)
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        mode_layout.addWidget(self.mode_combo, 1)
+
+        compare_layout.addLayout(mode_layout)
+
+        # 키 컬럼 설정
+        key_layout = QHBoxLayout()
+        key_layout.addWidget(QLabel("키 컬럼:"))
+
+        self.key_combo = QComboBox()
+        self.key_combo.setEnabled(False)
+        self.key_combo.currentTextChanged.connect(self._on_key_column_changed)
+        key_layout.addWidget(self.key_combo, 1)
+
+        compare_layout.addLayout(key_layout)
+
+        # 동기화 옵션
+        sync_layout = QHBoxLayout()
+        self.sync_scroll_cb = QCheckBox("스크롤")
+        self.sync_scroll_cb.setChecked(True)
+        self.sync_scroll_cb.stateChanged.connect(self._on_sync_changed)
+        sync_layout.addWidget(self.sync_scroll_cb)
+
+        self.sync_zoom_cb = QCheckBox("줌")
+        self.sync_zoom_cb.setChecked(True)
+        self.sync_zoom_cb.stateChanged.connect(self._on_sync_changed)
+        sync_layout.addWidget(self.sync_zoom_cb)
+
+        self.sync_select_cb = QCheckBox("선택")
+        self.sync_select_cb.stateChanged.connect(self._on_sync_changed)
+        sync_layout.addWidget(self.sync_select_cb)
+
+        compare_layout.addLayout(sync_layout)
+
+        # 비교 시작 버튼
+        self.compare_btn = QPushButton("비교 시작")
+        self.compare_btn.setEnabled(False)
+        self.compare_btn.clicked.connect(self._on_compare_click)
+        compare_layout.addWidget(self.compare_btn)
+
+        layout.addWidget(compare_group)
+
+        # 메모리 사용량
+        self.memory_label = QLabel("💾 메모리: 0 MB / 4 GB")
+        self.memory_label.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(self.memory_label)
+
+    def _connect_signals(self):
+        """시그널 연결"""
+        # State 시그널
+        self.state.dataset_added.connect(self._on_dataset_added)
+        self.state.dataset_removed.connect(self._on_dataset_removed)
+        self.state.dataset_activated.connect(self._on_dataset_activated)
+        self.state.dataset_updated.connect(self._on_dataset_updated)
+        self.state.comparison_settings_changed.connect(self._on_comparison_settings_changed)
+
+    def _on_add_click(self):
+        """데이터셋 추가 버튼 클릭"""
+        self.add_dataset_requested.emit()
+
+    def _on_mode_changed(self, index):
+        """비교 모드 변경"""
+        mode_value = self.mode_combo.itemData(index)
+        self.comparison_mode_changed.emit(mode_value)
+
+        # 모드에 따라 UI 업데이트
+        is_comparison = mode_value != ComparisonMode.SINGLE.value
+        self.key_combo.setEnabled(is_comparison)
+        self._update_compare_button()
+        self._update_key_column_combo()
+
+    def _on_key_column_changed(self, column: str):
+        """키 컬럼 변경"""
+        if column:
+            self.state.update_comparison_settings(key_column=column)
+
+    def _on_sync_changed(self):
+        """동기화 옵션 변경"""
+        self.state.update_comparison_settings(
+            sync_scroll=self.sync_scroll_cb.isChecked(),
+            sync_zoom=self.sync_zoom_cb.isChecked(),
+            sync_selection=self.sync_select_cb.isChecked()
+        )
+
+    def _on_compare_click(self):
+        """비교 시작 버튼 클릭"""
+        compare_ids = self._get_comparison_dataset_ids()
+        if len(compare_ids) >= 2:
+            self.comparison_started.emit(compare_ids)
+
+    def _on_dataset_added(self, dataset_id: str):
+        """데이터셋 추가됨"""
+        self._add_dataset_widget(dataset_id)
+        self._update_count_label()
+        self._update_memory_label()
+        self._update_compare_button()
+        self._update_key_column_combo()
+
+    def _on_dataset_removed(self, dataset_id: str):
+        """데이터셋 제거됨"""
+        self._remove_dataset_widget(dataset_id)
+        self._update_count_label()
+        self._update_memory_label()
+        self._update_compare_button()
+        self._update_key_column_combo()
+
+    def _on_dataset_activated(self, dataset_id: str):
+        """데이터셋 활성화됨"""
+        for did, widget in self._dataset_widgets.items():
+            widget.set_active(did == dataset_id)
+
+    def _on_dataset_updated(self, dataset_id: str):
+        """데이터셋 업데이트됨"""
+        if dataset_id in self._dataset_widgets:
+            metadata = self.state.get_dataset_metadata(dataset_id)
+            dataset_info = self.engine.get_dataset(dataset_id)
+            if metadata and dataset_info:
+                self._dataset_widgets[dataset_id].update_info(metadata, dataset_info)
+
+    def _on_comparison_settings_changed(self):
+        """비교 설정 변경됨"""
+        settings = self.state.comparison_settings
+        self.mode_combo.setCurrentIndex(
+            self.mode_combo.findData(settings.mode.value)
+        )
+        self.sync_scroll_cb.setChecked(settings.sync_scroll)
+        self.sync_zoom_cb.setChecked(settings.sync_zoom)
+        self.sync_select_cb.setChecked(settings.sync_selection)
+        self._update_compare_button()
+
+    def _add_dataset_widget(self, dataset_id: str):
+        """데이터셋 위젯 추가"""
+        metadata = self.state.get_dataset_metadata(dataset_id)
+        dataset_info = self.engine.get_dataset(dataset_id)
+
+        if not metadata or not dataset_info:
+            return
+
+        widget = DatasetItemWidget(dataset_id, metadata, dataset_info)
+        widget.activated.connect(self._on_widget_activated)
+        widget.removed.connect(self._on_widget_removed)
+        widget.color_changed.connect(self._on_widget_color_changed)
+        widget.compare_toggled.connect(self._on_widget_compare_toggled)
+
+        # 스트레치 앞에 삽입
+        self.list_layout.insertWidget(self.list_layout.count() - 1, widget)
+        self._dataset_widgets[dataset_id] = widget
+
+    def _remove_dataset_widget(self, dataset_id: str):
+        """데이터셋 위젯 제거"""
+        if dataset_id in self._dataset_widgets:
+            widget = self._dataset_widgets[dataset_id]
+            self.list_layout.removeWidget(widget)
+            widget.deleteLater()
+            del self._dataset_widgets[dataset_id]
+
+    def _on_widget_activated(self, dataset_id: str):
+        """위젯 활성화 요청"""
+        self.dataset_activated.emit(dataset_id)
+
+    def _on_widget_removed(self, dataset_id: str):
+        """위젯 제거 요청"""
+        reply = QMessageBox.question(
+            self, "데이터셋 제거",
+            f"데이터셋을 제거하시겠습니까?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.dataset_removed.emit(dataset_id)
+
+    def _on_widget_color_changed(self, dataset_id: str, color: str):
+        """위젯 색상 변경"""
+        self.state.set_dataset_color(dataset_id, color)
+        self.engine.set_dataset_color(dataset_id, color)
+
+    def _on_widget_compare_toggled(self, dataset_id: str, enabled: bool):
+        """위젯 비교 토글"""
+        self.state.toggle_dataset_comparison(dataset_id)
+        self._update_compare_button()
+
+    def _update_count_label(self):
+        """데이터셋 수 레이블 업데이트"""
+        count = len(self._dataset_widgets)
+        max_count = self.engine.MAX_DATASETS
+        self.count_label.setText(f"{count} / {max_count}")
+
+    def _update_memory_label(self):
+        """메모리 사용량 레이블 업데이트"""
+        used = self.engine.get_total_memory_usage()
+        max_mem = self.engine.MAX_TOTAL_MEMORY
+        used_mb = used / (1024 * 1024)
+        max_gb = max_mem / (1024 * 1024 * 1024)
+        self.memory_label.setText(f"💾 메모리: {used_mb:.0f} MB / {max_gb:.0f} GB")
+
+    def _update_compare_button(self):
+        """비교 버튼 상태 업데이트"""
+        compare_ids = self._get_comparison_dataset_ids()
+        mode = self.mode_combo.currentData()
+        is_comparison = mode != ComparisonMode.SINGLE.value
+        can_compare = is_comparison and len(compare_ids) >= 2
+        self.compare_btn.setEnabled(can_compare)
+
+    def _update_key_column_combo(self):
+        """키 컬럼 콤보박스 업데이트"""
+        compare_ids = self._get_comparison_dataset_ids()
+
+        self.key_combo.clear()
+        self.key_combo.addItem("(선택 안함)", "")
+
+        if len(compare_ids) >= 2:
+            # 공통 컬럼 찾기
+            common_columns = self.engine.get_common_columns(compare_ids)
+            for col in common_columns:
+                self.key_combo.addItem(col, col)
+
+    def _get_comparison_dataset_ids(self) -> List[str]:
+        """비교 활성화된 데이터셋 ID 목록"""
+        return [
+            did for did, widget in self._dataset_widgets.items()
+            if widget.compare_cb.isChecked()
+        ]
+
+    def refresh(self):
+        """전체 새로고침"""
+        # 기존 위젯 모두 제거
+        for widget in self._dataset_widgets.values():
+            self.list_layout.removeWidget(widget)
+            widget.deleteLater()
+        self._dataset_widgets.clear()
+
+        # 새로 추가
+        for dataset_id in self.state.dataset_metadata.keys():
+            self._add_dataset_widget(dataset_id)
+
+        self._update_count_label()
+        self._update_memory_label()
+        self._update_compare_button()
+        self._update_key_column_combo()

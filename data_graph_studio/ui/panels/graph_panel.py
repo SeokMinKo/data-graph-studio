@@ -179,7 +179,7 @@ class ClickablePlotWidget(pg.PlotWidget):
         dialog.exec()
 
 
-from ...core.state import AppState, ChartType, ToolMode
+from ...core.state import AppState, ChartType, ToolMode, ComparisonMode
 from ...core.data_engine import DataEngine
 from ...core.expression_engine import ExpressionEngine, ExpressionError
 from ...graph.sampling import DataSampler
@@ -2001,7 +2001,138 @@ class MainGraph(pg.PlotWidget):
         self._data_x = None
         self._data_y = None
         self.legend.clear()
-    
+
+    def plot_multi_series(
+        self,
+        series_data: List[Dict],
+        chart_type: ChartType = ChartType.LINE,
+        options: Dict = None,
+        legend_settings: Dict = None
+    ):
+        """
+        Plot multiple data series on the same chart.
+
+        Args:
+            series_data: List of dicts with keys:
+                - 'x': np.ndarray, X data
+                - 'y': np.ndarray, Y data
+                - 'name': str, Series name
+                - 'color': str, Hex color code
+                - 'dataset_id': str (optional)
+            chart_type: Chart type to use
+            options: Chart options
+            legend_settings: Legend settings
+        """
+        options = options or {}
+        legend_settings = legend_settings or {}
+
+        # Clear existing plot
+        self.clear_plot()
+
+        # Apply axis settings
+        x_title = options.get('x_title', '')
+        y_title = options.get('y_title', '')
+        if x_title:
+            self.setLabel('bottom', x_title)
+        if y_title:
+            self.setLabel('left', y_title)
+
+        # Set log scale if specified
+        x_log = options.get('x_log', False)
+        y_log = options.get('y_log', False)
+        self.setLogMode(x=x_log, y=y_log)
+
+        # Get style options
+        line_width = options.get('line_width', 2)
+        marker_size = options.get('marker_size', 6)
+        fill_opacity = options.get('fill_opacity', 0.3)
+
+        # Plot each series
+        for i, series in enumerate(series_data):
+            x = series['x']
+            y = series['y']
+            name = series.get('name', f'Series {i+1}')
+            color_hex = series.get('color', '#1f77b4')
+
+            # Convert hex color to QColor
+            color = QColor(color_hex)
+            r, g, b = color.red(), color.green(), color.blue()
+
+            # Create pen
+            pen = pg.mkPen(color=color_hex, width=line_width)
+
+            if chart_type == ChartType.LINE:
+                item = self.plot(x, y, pen=pen, name=name)
+                self._plot_items.append(item)
+
+            elif chart_type == ChartType.SCATTER:
+                scatter = pg.ScatterPlotItem(
+                    x=x, y=y,
+                    pen=None,
+                    brush=pg.mkBrush(r, g, b, 180),
+                    size=marker_size,
+                    name=name
+                )
+                self.addItem(scatter)
+                self._scatter_items.append(scatter)
+
+            elif chart_type == ChartType.BAR:
+                # For bar chart, offset each series
+                bar_width = 0.8 / len(series_data)
+                offset = (i - len(series_data) / 2 + 0.5) * bar_width
+
+                x_offset = x.astype(float) + offset
+                bar_item = pg.BarGraphItem(
+                    x=x_offset, height=y, width=bar_width * 0.9,
+                    brush=pg.mkBrush(r, g, b, 200),
+                    pen=pg.mkPen(color_hex),
+                    name=name
+                )
+                self.addItem(bar_item)
+                self._plot_items.append(bar_item)
+
+            elif chart_type == ChartType.AREA:
+                # Fill area under line
+                curve = self.plot(x, y, pen=pen, name=name, fillLevel=0,
+                                  brush=pg.mkBrush(r, g, b, int(255 * fill_opacity)))
+                self._plot_items.append(curve)
+
+            else:
+                # Default to line
+                item = self.plot(x, y, pen=pen, name=name)
+                self._plot_items.append(item)
+
+        # Store first series data for selection
+        if series_data:
+            self._data_x = series_data[0]['x']
+            self._data_y = series_data[0]['y']
+
+        # Update legend settings
+        if legend_settings:
+            self._update_legend_settings(legend_settings)
+
+        # Auto-range to fit all data
+        self.autoRange()
+
+    def _update_legend_settings(self, settings: Dict):
+        """Update legend based on settings"""
+        show = settings.get('show', True)
+        position = settings.get('position', 'top-right')
+
+        if show:
+            self.legend.show()
+            # Map position string to anchor
+            pos_map = {
+                'top-left': (0, 0),
+                'top-right': (1, 0),
+                'bottom-left': (0, 1),
+                'bottom-right': (1, 1),
+            }
+            anchor = pos_map.get(position, (1, 0))
+            self.legend.anchor(anchor, anchor)
+        else:
+            self.legend.hide()
+
     def reset_view(self):
         self.autoRange()
         self.setLogMode(x=False, y=False)
@@ -2836,6 +2967,12 @@ class GraphPanel(QWidget):
         if not self.engine.is_loaded:
             return
 
+        # Check if we're in overlay comparison mode
+        if (self.state.comparison_mode == ComparisonMode.OVERLAY and
+                len(self.state.comparison_dataset_ids) >= 2):
+            self._refresh_overlay_comparison()
+            return
+
         # Get options including legend settings
         options = self.options_panel.get_chart_options()
         legend_settings = self.options_panel.get_legend_settings()
@@ -3092,6 +3229,119 @@ class GraphPanel(QWidget):
         except Exception as e:
             print(f"Error applying formula '{formula}': {e}")
             return y_data
+
+    def _refresh_overlay_comparison(self):
+        """
+        Overlay comparison mode - render multiple datasets on the same chart.
+
+        각 데이터셋을 고유한 색상으로 같은 차트에 오버레이하여 표시
+        """
+        options = self.options_panel.get_chart_options()
+        legend_settings = self.options_panel.get_legend_settings()
+        max_points = options.get('max_points', 10000)
+
+        # Clear existing plot
+        self.main_graph.clear_plot()
+
+        # Get comparison datasets
+        dataset_ids = self.state.comparison_dataset_ids
+        colors = self.state.get_comparison_colors()
+
+        # X column
+        x_col = self.state.x_column
+
+        all_series_data = []
+        total_points = 0
+
+        for dataset_id in dataset_ids:
+            dataset = self.engine.get_dataset(dataset_id)
+            if not dataset or not dataset.df:
+                continue
+
+            metadata = self.state.get_dataset_metadata(dataset_id)
+            color = metadata.color if metadata else colors.get(dataset_id, '#1f77b4')
+            name = metadata.name if metadata else dataset_id
+
+            df = dataset.df
+
+            # Get X data
+            if not x_col or x_col not in df.columns:
+                x_data = np.arange(len(df))
+            else:
+                x_data = df[x_col].to_numpy()
+
+            # Get Y data - use first value column or first numeric column
+            y_col_name = None
+            if self.state.value_columns:
+                y_col_name = self.state.value_columns[0].name
+                if y_col_name not in df.columns:
+                    y_col_name = None
+
+            if not y_col_name:
+                # Find first numeric column
+                for col in df.columns:
+                    dtype = str(df[col].dtype)
+                    if dtype.startswith(('Int', 'Float', 'UInt')):
+                        y_col_name = col
+                        break
+
+            if not y_col_name:
+                continue
+
+            y_data = df[y_col_name].to_numpy()
+
+            # Apply sampling if needed
+            if len(x_data) > max_points:
+                try:
+                    valid_mask = ~(np.isnan(x_data.astype(float)) | np.isnan(y_data.astype(float)))
+                    x_valid = x_data[valid_mask].astype(np.float64)
+                    y_valid = y_data[valid_mask].astype(np.float64)
+
+                    if len(x_valid) > max_points:
+                        x_sampled, y_sampled = DataSampler.auto_sample(
+                            x_valid, y_valid, max_points=max_points
+                        )
+                    else:
+                        x_sampled, y_sampled = x_valid, y_valid
+                except (ValueError, TypeError):
+                    x_sampled, y_sampled = x_data, y_data
+            else:
+                x_sampled, y_sampled = x_data, y_data
+
+            total_points += len(x_sampled)
+
+            all_series_data.append({
+                'x': x_sampled,
+                'y': y_sampled,
+                'name': name,
+                'color': color,
+                'dataset_id': dataset_id
+            })
+
+        # Plot all series
+        if all_series_data:
+            self.main_graph.plot_multi_series(
+                all_series_data,
+                chart_type=options.get('chart_type', ChartType.LINE),
+                options=options,
+                legend_settings=legend_settings
+            )
+
+            # Update sampling status
+            self.main_graph.update_sampling_status(
+                displayed_points=total_points,
+                total_points=sum(len(self.engine.get_dataset(did).df)
+                               for did in dataset_ids
+                               if self.engine.get_dataset(did) and self.engine.get_dataset(did).df is not None),
+                is_sampled=total_points < sum(len(self.engine.get_dataset(did).df)
+                                            for did in dataset_ids
+                                            if self.engine.get_dataset(did) and self.engine.get_dataset(did).df is not None),
+                algorithm="Multi-Dataset"
+            )
+
+            # Update options panel with series names
+            series_names = [s['name'] for s in all_series_data]
+            self.options_panel.set_series(series_names)
 
     def _on_selection_changed(self):
         pass
