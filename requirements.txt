@@ -27,6 +27,14 @@ scipy>=1.11.0        # Statistical testing
 # Optional: Headless graph generation
 matplotlib>=3.7.0
 
+# Report Generation
+Jinja2>=3.1.0           # HTML templating
+python-docx>=1.1.0      # Word document generation
+python-pptx>=0.6.23     # PowerPoint generation
+# weasyprint>=60.0      # PDF generation (requires system deps: cairo, pango)
+fpdf2>=2.7.0            # PDF generation (pure Python alternative)
+kaleido>=0.2.1          # Plotly static image export
+
 # Development
 pytest>=7.4.0
 pytest-qt>=4.2.0
