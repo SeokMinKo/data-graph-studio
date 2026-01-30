@@ -15,8 +15,9 @@ setup(
     description="Big Data Visualization Tool",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="",
+    url="https://github.com/SeokMinKo/data-graph-studio",
     packages=find_packages(),
+    py_modules=["main"],  # main.py를 모듈로 포함
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
