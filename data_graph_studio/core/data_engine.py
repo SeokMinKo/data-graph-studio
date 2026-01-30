@@ -1,5 +1,7 @@
 """
 Data Engine - Polars 기반 빅데이터 처리 엔진
+
+멀티 데이터셋 비교 기능 지원
 """
 
 import gc
@@ -9,17 +11,20 @@ import time
 import logging
 import warnings
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable, Union, Set
+from typing import Optional, List, Dict, Any, Callable, Union, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
 import tempfile
+from datetime import datetime
+import uuid
 
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
+import numpy as np
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -92,7 +97,7 @@ class ColumnInfo:
     memory_bytes: int = 0
 
 
-@dataclass 
+@dataclass
 class DataProfile:
     """데이터 프로파일"""
     total_rows: int
@@ -100,6 +105,43 @@ class DataProfile:
     memory_bytes: int
     columns: List[ColumnInfo]
     load_time_seconds: float
+
+
+@dataclass
+class DatasetInfo:
+    """
+    개별 데이터셋 정보
+
+    멀티 데이터셋 비교를 위한 데이터셋 컨테이너
+    """
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    name: str = ""
+    df: Optional[pl.DataFrame] = None
+    lazy_df: Optional[pl.LazyFrame] = None
+    source: Optional['DataSource'] = None
+    profile: Optional[DataProfile] = None
+    color: str = "#1f77b4"
+    created_at: datetime = field(default_factory=datetime.now)
+
+    @property
+    def row_count(self) -> int:
+        return len(self.df) if self.df is not None else 0
+
+    @property
+    def column_count(self) -> int:
+        return len(self.df.columns) if self.df is not None else 0
+
+    @property
+    def columns(self) -> List[str]:
+        return self.df.columns if self.df is not None else []
+
+    @property
+    def memory_bytes(self) -> int:
+        return self.df.estimated_size() if self.df is not None else 0
+
+    @property
+    def is_loaded(self) -> bool:
+        return self.df is not None
 
 
 @dataclass
@@ -135,6 +177,7 @@ class DataEngine:
     - 인덱싱
     - 캐싱
     - 재시도 메커니즘
+    - 멀티 데이터셋 지원 (비교 기능)
     """
 
     # 기본 청크 크기 (행 수)
@@ -157,7 +200,18 @@ class DataEngine:
         r'scientific', r'decimal'
     ]
 
+    # 멀티 데이터셋 설정
+    MAX_DATASETS = 10  # 최대 동시 로드 가능 데이터셋 수
+    MAX_TOTAL_MEMORY = 4 * 1024 * 1024 * 1024  # 4GB 메모리 한도
+
+    # 기본 데이터셋 색상 팔레트
+    DEFAULT_COLORS = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+    ]
+
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
+        # 기존 단일 데이터셋 (하위 호환성)
         self._df: Optional[pl.DataFrame] = None
         self._lazy_df: Optional[pl.LazyFrame] = None
         self._source: Optional[DataSource] = None
@@ -170,6 +224,11 @@ class DataEngine:
         self._progress_callback: Optional[Callable[[LoadingProgress], None]] = None
         self._precision_mode: PrecisionMode = precision_mode
         self._precision_columns: Set[str] = set()  # 정밀도 유지 필요 컬럼
+
+        # 멀티 데이터셋 지원
+        self._datasets: Dict[str, DatasetInfo] = {}  # dataset_id -> DatasetInfo
+        self._active_dataset_id: Optional[str] = None
+        self._color_index: int = 0  # 다음 데이터셋에 할당할 색상 인덱스
     
     @property
     def df(self) -> Optional[pl.DataFrame]:
@@ -1286,3 +1345,471 @@ class DataEngine:
     def has_lazy(self) -> bool:
         """LazyFrame 존재 여부"""
         return self._lazy_df is not None
+
+    # ==================== Multi-Dataset Support ====================
+
+    @property
+    def datasets(self) -> Dict[str, DatasetInfo]:
+        """모든 데이터셋"""
+        return self._datasets
+
+    @property
+    def dataset_count(self) -> int:
+        """로드된 데이터셋 수"""
+        return len(self._datasets)
+
+    @property
+    def active_dataset_id(self) -> Optional[str]:
+        """현재 활성 데이터셋 ID"""
+        return self._active_dataset_id
+
+    @property
+    def active_dataset(self) -> Optional[DatasetInfo]:
+        """현재 활성 데이터셋"""
+        if self._active_dataset_id:
+            return self._datasets.get(self._active_dataset_id)
+        return None
+
+    def get_dataset(self, dataset_id: str) -> Optional[DatasetInfo]:
+        """특정 데이터셋 조회"""
+        return self._datasets.get(dataset_id)
+
+    def get_dataset_df(self, dataset_id: str) -> Optional[pl.DataFrame]:
+        """특정 데이터셋의 DataFrame 조회"""
+        dataset = self._datasets.get(dataset_id)
+        return dataset.df if dataset else None
+
+    def list_datasets(self) -> List[DatasetInfo]:
+        """
+        데이터셋 목록 반환
+
+        Returns:
+            [DatasetInfo, ...]
+        """
+        return list(self._datasets.values())
+
+    def get_total_memory_usage(self) -> int:
+        """전체 데이터셋 메모리 사용량"""
+        return sum(ds.memory_bytes for ds in self._datasets.values())
+
+    def can_load_dataset(self, estimated_size: int) -> Tuple[bool, str]:
+        """
+        데이터셋 로드 가능 여부 확인
+
+        Args:
+            estimated_size: 예상 메모리 크기 (bytes)
+
+        Returns:
+            (can_load, message)
+        """
+        if len(self._datasets) >= self.MAX_DATASETS:
+            return False, f"최대 데이터셋 수({self.MAX_DATASETS})에 도달했습니다."
+
+        current = self.get_total_memory_usage()
+        projected = current + estimated_size
+
+        if projected > self.MAX_TOTAL_MEMORY:
+            return False, (
+                f"메모리 한도 초과. 현재: {current / 1e9:.1f}GB, "
+                f"필요: {estimated_size / 1e9:.1f}GB, "
+                f"한도: {self.MAX_TOTAL_MEMORY / 1e9:.1f}GB"
+            )
+
+        if projected > self.MAX_TOTAL_MEMORY * 0.9:
+            return True, "⚠️ 메모리 사용량이 높습니다. 일부 데이터셋 제거를 권장합니다."
+
+        return True, ""
+
+    def load_dataset(
+        self,
+        path: str,
+        name: str = None,
+        dataset_id: str = None,
+        **load_kwargs
+    ) -> Optional[str]:
+        """
+        새 데이터셋 로드
+
+        Args:
+            path: 파일 경로
+            name: 데이터셋 표시 이름 (None이면 파일명 사용)
+            dataset_id: 데이터셋 ID (None이면 자동 생성)
+            **load_kwargs: load_file에 전달할 추가 인자
+
+        Returns:
+            생성된 dataset_id (실패 시 None)
+        """
+        # ID 생성
+        if dataset_id is None:
+            dataset_id = str(uuid.uuid4())[:8]
+
+        # 이름 결정
+        if name is None:
+            name = Path(path).name
+
+        # 색상 할당
+        color = self.DEFAULT_COLORS[self._color_index % len(self.DEFAULT_COLORS)]
+        self._color_index += 1
+
+        # DatasetInfo 생성
+        dataset = DatasetInfo(
+            id=dataset_id,
+            name=name,
+            color=color
+        )
+
+        # 파일 로드 (기존 메서드 활용)
+        success = self.load_file(path, **load_kwargs)
+
+        if not success:
+            return None
+
+        # 로드된 데이터를 DatasetInfo에 복사
+        dataset.df = self._df
+        dataset.lazy_df = self._lazy_df
+        dataset.source = self._source
+        dataset.profile = self._profile
+
+        # 데이터셋 저장
+        self._datasets[dataset_id] = dataset
+
+        # 첫 번째 데이터셋이면 활성화
+        if self._active_dataset_id is None:
+            self._active_dataset_id = dataset_id
+
+        logger.info(f"Dataset loaded: {dataset_id} ({name}), {dataset.row_count:,} rows")
+        return dataset_id
+
+    def remove_dataset(self, dataset_id: str) -> bool:
+        """
+        데이터셋 제거
+
+        Args:
+            dataset_id: 제거할 데이터셋 ID
+
+        Returns:
+            성공 여부
+        """
+        if dataset_id not in self._datasets:
+            return False
+
+        # 메모리 해제
+        dataset = self._datasets[dataset_id]
+        dataset.df = None
+        dataset.lazy_df = None
+
+        del self._datasets[dataset_id]
+
+        # 활성 데이터셋이었으면 다른 것으로 전환
+        if self._active_dataset_id == dataset_id:
+            if self._datasets:
+                self._active_dataset_id = next(iter(self._datasets.keys()))
+                self._sync_active_dataset()
+            else:
+                self._active_dataset_id = None
+                self._df = None
+                self._lazy_df = None
+                self._source = None
+                self._profile = None
+
+        gc.collect()
+        logger.info(f"Dataset removed: {dataset_id}")
+        return True
+
+    def activate_dataset(self, dataset_id: str) -> bool:
+        """
+        데이터셋 활성화 (기존 단일 데이터셋 API와 동기화)
+
+        Args:
+            dataset_id: 활성화할 데이터셋 ID
+
+        Returns:
+            성공 여부
+        """
+        if dataset_id not in self._datasets:
+            return False
+
+        self._active_dataset_id = dataset_id
+        self._sync_active_dataset()
+        return True
+
+    def _sync_active_dataset(self):
+        """활성 데이터셋을 기존 단일 데이터셋 속성과 동기화"""
+        dataset = self.active_dataset
+        if dataset:
+            self._df = dataset.df
+            self._lazy_df = dataset.lazy_df
+            self._source = dataset.source
+            self._profile = dataset.profile
+
+    def set_dataset_color(self, dataset_id: str, color: str):
+        """데이터셋 색상 설정"""
+        if dataset_id in self._datasets:
+            self._datasets[dataset_id].color = color
+
+    def rename_dataset(self, dataset_id: str, new_name: str):
+        """데이터셋 이름 변경"""
+        if dataset_id in self._datasets:
+            self._datasets[dataset_id].name = new_name
+
+    def clear_all_datasets(self):
+        """모든 데이터셋 제거"""
+        for dataset_id in list(self._datasets.keys()):
+            self.remove_dataset(dataset_id)
+        self._color_index = 0
+
+    # ==================== Comparison Operations ====================
+
+    def get_common_columns(self, dataset_ids: List[str] = None) -> List[str]:
+        """
+        여러 데이터셋의 공통 컬럼 반환
+
+        Args:
+            dataset_ids: 대상 데이터셋 ID 목록 (None이면 전체)
+
+        Returns:
+            공통 컬럼 이름 목록
+        """
+        if dataset_ids is None:
+            dataset_ids = list(self._datasets.keys())
+
+        if not dataset_ids:
+            return []
+
+        common = set(self._datasets[dataset_ids[0]].columns) if dataset_ids[0] in self._datasets else set()
+
+        for did in dataset_ids[1:]:
+            if did in self._datasets:
+                common &= set(self._datasets[did].columns)
+
+        return list(common)
+
+    def get_numeric_columns(self, dataset_id: str) -> List[str]:
+        """특정 데이터셋의 숫자형 컬럼 목록"""
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None or dataset.df is None:
+            return []
+
+        return [
+            col for col in dataset.df.columns
+            if dataset.df[col].dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+                                          pl.Float32, pl.Float64]
+        ]
+
+    def align_datasets(
+        self,
+        dataset_ids: List[str],
+        key_column: str,
+        fill_strategy: str = "null"
+    ) -> Dict[str, pl.DataFrame]:
+        """
+        키 컬럼 기준으로 데이터셋 정렬
+
+        Args:
+            dataset_ids: 정렬할 데이터셋 ID 목록
+            key_column: 정렬 기준 컬럼
+            fill_strategy: 누락값 처리 ("null", "forward", "backward", "interpolate")
+
+        Returns:
+            {dataset_id: aligned_df} 매핑
+        """
+        if not dataset_ids:
+            return {}
+
+        # 모든 키 값의 합집합
+        all_keys = set()
+        for did in dataset_ids:
+            if did in self._datasets and self._datasets[did].df is not None:
+                df = self._datasets[did].df
+                if key_column in df.columns:
+                    all_keys.update(df[key_column].unique().to_list())
+
+        if not all_keys:
+            return {}
+
+        # 각 데이터셋 정렬
+        aligned = {}
+        key_df = pl.DataFrame({key_column: sorted(list(all_keys))})
+
+        for did in dataset_ids:
+            if did not in self._datasets:
+                continue
+
+            df = self._datasets[did].df
+            if df is None or key_column not in df.columns:
+                continue
+
+            # 키 DataFrame과 조인
+            aligned_df = key_df.join(df, on=key_column, how="left")
+
+            # 누락값 처리
+            if fill_strategy == "forward":
+                aligned_df = aligned_df.fill_null(strategy="forward")
+            elif fill_strategy == "backward":
+                aligned_df = aligned_df.fill_null(strategy="backward")
+            elif fill_strategy == "interpolate":
+                # 숫자 컬럼만 보간
+                for col in aligned_df.columns:
+                    if aligned_df[col].dtype in [pl.Float32, pl.Float64]:
+                        aligned_df = aligned_df.with_columns(
+                            pl.col(col).interpolate()
+                        )
+
+            aligned[did] = aligned_df
+
+        return aligned
+
+    def calculate_difference(
+        self,
+        dataset_a_id: str,
+        dataset_b_id: str,
+        value_column: str,
+        key_column: str = None
+    ) -> Optional[pl.DataFrame]:
+        """
+        두 데이터셋 간 차이 계산
+
+        Args:
+            dataset_a_id: 첫 번째 데이터셋 ID
+            dataset_b_id: 두 번째 데이터셋 ID
+            value_column: 비교할 값 컬럼
+            key_column: 키 컬럼 (None이면 인덱스 기준)
+
+        Returns:
+            차이 데이터프레임 (key, value_a, value_b, diff, diff_pct)
+        """
+        ds_a = self._datasets.get(dataset_a_id)
+        ds_b = self._datasets.get(dataset_b_id)
+
+        if ds_a is None or ds_b is None or ds_a.df is None or ds_b.df is None:
+            return None
+
+        df_a = ds_a.df
+        df_b = ds_b.df
+
+        if value_column not in df_a.columns or value_column not in df_b.columns:
+            return None
+
+        if key_column:
+            # 키 컬럼 기준 조인
+            if key_column not in df_a.columns or key_column not in df_b.columns:
+                return None
+
+            merged = df_a.select([key_column, value_column]).join(
+                df_b.select([key_column, value_column]),
+                on=key_column,
+                how="outer",
+                suffix="_b"
+            )
+            value_a_col = value_column
+            value_b_col = f"{value_column}_b"
+        else:
+            # 인덱스 기준 (행 순서)
+            min_len = min(len(df_a), len(df_b))
+            merged = pl.DataFrame({
+                "index": list(range(min_len)),
+                value_column: df_a[value_column].head(min_len),
+                f"{value_column}_b": df_b[value_column].head(min_len)
+            })
+            key_column = "index"
+            value_a_col = value_column
+            value_b_col = f"{value_column}_b"
+
+        # 차이 계산
+        result = merged.with_columns([
+            (pl.col(value_a_col) - pl.col(value_b_col)).alias("diff"),
+            (
+                (pl.col(value_a_col) - pl.col(value_b_col)) /
+                pl.col(value_b_col).abs() * 100
+            ).alias("diff_pct")
+        ]).rename({
+            value_a_col: "value_a",
+            value_b_col: "value_b"
+        })
+
+        return result
+
+    def get_comparison_statistics(
+        self,
+        dataset_ids: List[str],
+        value_column: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        여러 데이터셋의 비교 통계
+
+        Args:
+            dataset_ids: 비교할 데이터셋 ID 목록
+            value_column: 통계 대상 컬럼
+
+        Returns:
+            {dataset_id: {stat_name: value, ...}, ...}
+        """
+        stats = {}
+
+        for did in dataset_ids:
+            if did not in self._datasets:
+                continue
+
+            ds = self._datasets[did]
+            if ds.df is None or value_column not in ds.df.columns:
+                continue
+
+            series = ds.df[value_column]
+            if series.dtype not in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+                                    pl.Float32, pl.Float64]:
+                continue
+
+            stats[did] = {
+                "name": ds.name,
+                "color": ds.color,
+                "count": len(series),
+                "sum": series.sum(),
+                "mean": series.mean(),
+                "median": series.median(),
+                "std": series.std(),
+                "min": series.min(),
+                "max": series.max(),
+                "q1": series.quantile(0.25),
+                "q3": series.quantile(0.75)
+            }
+
+        return stats
+
+    def merge_datasets(
+        self,
+        dataset_ids: List[str],
+        key_column: str = None,
+        how: str = "outer"
+    ) -> Optional[pl.DataFrame]:
+        """
+        여러 데이터셋 병합
+
+        Args:
+            dataset_ids: 병합할 데이터셋 ID 목록
+            key_column: 조인 키 컬럼 (None이면 수직 결합)
+            how: 조인 방식 ("inner", "outer", "left", "right")
+
+        Returns:
+            병합된 DataFrame
+        """
+        dfs = []
+        for did in dataset_ids:
+            if did in self._datasets and self._datasets[did].df is not None:
+                df = self._datasets[did].df.with_columns(
+                    pl.lit(did).alias("_dataset_id"),
+                    pl.lit(self._datasets[did].name).alias("_dataset_name")
+                )
+                dfs.append(df)
+
+        if not dfs:
+            return None
+
+        if key_column is None:
+            # 수직 결합 (concat)
+            return pl.concat(dfs, how="diagonal")
+        else:
+            # 수평 결합 (join)
+            result = dfs[0]
+            for i, df in enumerate(dfs[1:], 2):
+                result = result.join(df, on=key_column, how=how, suffix=f"_{i}")
+            return result

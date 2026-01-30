@@ -19,7 +19,7 @@ from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
-from ..core.state import AppState, ToolMode, ChartType
+from ..core.state import AppState, ToolMode, ChartType, ComparisonMode
 from ..utils.memory import MemoryMonitor
 
 # 에러 로깅 설정
@@ -29,6 +29,9 @@ from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
 from .panels.table_panel import TablePanel
 from .panels.profile_bar import ProfileBar
+from .panels.dataset_manager_panel import DatasetManagerPanel
+from .panels.side_by_side_layout import SideBySideLayout
+from .panels.comparison_stats_panel import ComparisonStatsPanel
 from .dialogs.parsing_preview_dialog import ParsingPreviewDialog, ParsingSettings
 from .dialogs.save_setting_dialog import SaveSettingDialog
 from .dialogs.profile_manager_dialog import ProfileManagerDialog
@@ -132,6 +135,11 @@ class MainWindow(QMainWindow):
         # Float windows tracking
         self._float_windows: Dict[str, FloatWindow] = {}
         self._placeholders: Dict[str, QWidget] = {}
+
+        # Comparison view panels
+        self._side_by_side_layout: Optional[SideBySideLayout] = None
+        self._comparison_stats_panel: Optional[ComparisonStatsPanel] = None
+        self._current_comparison_view: Optional[QWidget] = None
 
         # Floating graph manager
         self._floating_graph_manager: Optional[FloatingGraphManager] = None
@@ -481,13 +489,27 @@ class MainWindow(QMainWindow):
         self._refresh_presets()
 
     def _setup_main_layout(self):
-        """메인 레이아웃 설정 (3단 스플리터)"""
+        """메인 레이아웃 설정 (사이드바 + 3단 스플리터)"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        layout = QVBoxLayout(central_widget)
+        layout = QHBoxLayout(central_widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+
+        # 최상위 수평 스플리터 (사이드바 | 메인 영역)
+        self.root_splitter = QSplitter(Qt.Horizontal)
+
+        # 좌측 사이드바 - DatasetManagerPanel
+        self.dataset_manager = DatasetManagerPanel(self.engine, self.state)
+        self.dataset_manager.setMinimumWidth(200)
+        self.dataset_manager.setMaximumWidth(400)
+        self.dataset_manager.dataset_activated.connect(self._on_dataset_activated)
+        self.dataset_manager.dataset_removed.connect(self._on_dataset_remove_requested)
+        self.dataset_manager.add_dataset_requested.connect(self._on_add_dataset)
+        self.dataset_manager.comparison_mode_changed.connect(self._on_comparison_mode_changed)
+        self.dataset_manager.comparison_started.connect(self._on_comparison_started)
+        self.root_splitter.addWidget(self.dataset_manager)
 
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
@@ -518,10 +540,16 @@ class MainWindow(QMainWindow):
         self.table_panel = TablePanel(self.state, self.engine)
         self.main_splitter.addWidget(self.table_panel)
 
+        # 메인 스플리터를 root_splitter에 추가
+        self.root_splitter.addWidget(self.main_splitter)
+
+        # root_splitter 비율 설정 (사이드바: 메인 = 250 : 나머지)
+        self.root_splitter.setSizes([250, 1000])
+
         # 초기 비율 설정
         self._reset_layout()
 
-        layout.addWidget(self.main_splitter)
+        layout.addWidget(self.root_splitter)
 
         # Initialize floating graph manager
         self._floating_graph_manager = FloatingGraphManager(self.state, self.engine)
@@ -1507,6 +1535,394 @@ class MainWindow(QMainWindow):
         """프로파일 관리자 다이얼로그 표시"""
         dialog = ProfileManagerDialog(self.profile_bar.profile_manager, self)
         dialog.exec()
+
+    # ==================== Multi-Dataset Operations ====================
+
+    def _on_add_dataset(self):
+        """새 데이터셋 추가"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Add Dataset",
+            "",
+            "All Supported (*.csv *.tsv *.txt *.log *.dat *.etl *.xlsx *.xls *.parquet *.json);;"
+            "CSV/TSV (*.csv *.tsv);;"
+            "Text Files (*.txt *.log *.dat);;"
+            "ETL Files (*.etl);;"
+            "Excel (*.xlsx *.xls);;"
+            "Parquet (*.parquet);;"
+            "JSON (*.json);;"
+            "All Files (*.*)"
+        )
+
+        if file_path:
+            self._add_dataset_from_file(file_path)
+
+    def _add_dataset_from_file(self, file_path: str):
+        """파일에서 데이터셋 추가"""
+        # 메모리 체크
+        try:
+            file_size = os.path.getsize(file_path)
+            can_load, message = self.engine.can_load_dataset(file_size * 2)  # 예상 메모리는 파일 크기의 2배
+            if not can_load:
+                QMessageBox.warning(self, "Memory Limit", message)
+                return
+            elif message:
+                # 경고 메시지가 있으면 표시
+                self.statusbar.showMessage(message, 5000)
+        except OSError:
+            pass
+
+        # 대용량 파일 경고
+        if not self._check_large_file_warning(file_path):
+            return
+
+        ext = Path(file_path).suffix.lower()
+
+        # 바이너리 포맷은 바로 로드
+        if ext in ['.parquet', '.xlsx', '.xls', '.json']:
+            self._load_dataset(file_path)
+            return
+
+        # 텍스트 파일은 파싱 미리보기 표시
+        dialog = ParsingPreviewDialog(file_path, self)
+        if dialog.exec() == QDialog.Accepted:
+            settings = dialog.get_settings()
+            self._load_dataset_with_settings(file_path, settings)
+
+    def _load_dataset(self, file_path: str, settings: Optional[ParsingSettings] = None):
+        """데이터셋 로드 (새 데이터셋으로 추가)"""
+        import uuid
+        from pathlib import Path
+
+        dataset_id = str(uuid.uuid4())[:8]
+        name = Path(file_path).name
+
+        # 로딩 다이얼로그 표시
+        self._progress_dialog = QProgressDialog(
+            f"Loading {name}...",
+            "Cancel",
+            0, 100,
+            self
+        )
+        self._progress_dialog.setWindowModality(Qt.WindowModal)
+        self._progress_dialog.setMinimumDuration(500)
+        self._progress_dialog.canceled.connect(self._cancel_loading)
+        self._progress_dialog.show()
+
+        # 데이터셋 ID 저장 (콜백에서 사용)
+        self._pending_dataset_id = dataset_id
+        self._pending_dataset_name = name
+        self._pending_dataset_path = file_path
+
+        # 스레드로 로드
+        self._cleanup_loader_thread()
+        self._loader_thread = DataLoaderThread(self.engine, file_path)
+        self._loader_thread.progress_updated.connect(self._on_loading_progress)
+        self._loader_thread.finished_loading.connect(self._on_dataset_loading_finished)
+        self._loader_thread.start()
+
+    def _load_dataset_with_settings(self, file_path: str, settings: ParsingSettings):
+        """설정을 적용하여 데이터셋 로드"""
+        import uuid
+        from pathlib import Path
+
+        dataset_id = str(uuid.uuid4())[:8]
+        name = Path(file_path).name
+
+        # 로딩 다이얼로그 표시
+        self._progress_dialog = QProgressDialog(
+            f"Loading {name}...",
+            "Cancel",
+            0, 100,
+            self
+        )
+        self._progress_dialog.setWindowModality(Qt.WindowModal)
+        self._progress_dialog.setMinimumDuration(500)
+        self._progress_dialog.canceled.connect(self._cancel_loading)
+        self._progress_dialog.show()
+
+        # 데이터셋 ID 저장
+        self._pending_dataset_id = dataset_id
+        self._pending_dataset_name = name
+        self._pending_dataset_path = file_path
+
+        # 스레드로 로드
+        self._cleanup_loader_thread()
+        self._loader_thread = DataLoaderThreadWithSettings(self.engine, file_path, settings)
+        self._loader_thread.progress_updated.connect(self._on_loading_progress)
+        self._loader_thread.finished_loading.connect(self._on_dataset_loading_finished)
+        self._loader_thread.start()
+
+    def _on_dataset_loading_finished(self, success: bool):
+        """데이터셋 로딩 완료"""
+        if self._progress_dialog:
+            self._progress_dialog.close()
+
+        if success:
+            # State에 데이터셋 추가
+            dataset_id = getattr(self, '_pending_dataset_id', None)
+            name = getattr(self, '_pending_dataset_name', 'Dataset')
+            file_path = getattr(self, '_pending_dataset_path', None)
+
+            if dataset_id:
+                # 기존 df를 DatasetInfo로 저장
+                dataset_info = self.engine._datasets.get(self.engine.active_dataset_id)
+                if dataset_info is None:
+                    # 새 DatasetInfo 생성
+                    from ..core.data_engine import DatasetInfo
+                    dataset_info = DatasetInfo(
+                        id=dataset_id,
+                        name=name,
+                        df=self.engine.df,
+                        lazy_df=self.engine._lazy_df,
+                        source=self.engine._source,
+                        profile=self.engine.profile
+                    )
+                    self.engine._datasets[dataset_id] = dataset_info
+                    self.engine._active_dataset_id = dataset_id
+
+                # State에도 추가
+                memory_bytes = self.engine.df.estimated_size() if self.engine.df is not None else 0
+                self.state.add_dataset(
+                    dataset_id=dataset_id,
+                    name=name,
+                    file_path=file_path,
+                    row_count=self.engine.row_count,
+                    column_count=self.engine.column_count,
+                    memory_bytes=memory_bytes
+                )
+
+                # 기존 로직도 실행 (하위 호환성)
+                self.state.set_data_loaded(True, self.engine.row_count)
+                self.state.set_column_order(self.engine.columns)
+
+                if self.engine.profile:
+                    self._update_summary_from_profile()
+
+                gc.collect()
+                logger.info(f"Dataset added: {dataset_id} ({name}), {self.engine.row_count:,} rows")
+
+            # pending 상태 정리
+            self._pending_dataset_id = None
+            self._pending_dataset_name = None
+            self._pending_dataset_path = None
+        else:
+            error_msg = self.engine.progress.error_message or "Unknown error"
+            logger.error(f"Failed to load dataset: {error_msg}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to load dataset:\n{error_msg}"
+            )
+
+    def _on_dataset_activated(self, dataset_id: str):
+        """데이터셋 활성화 요청"""
+        if self.engine.activate_dataset(dataset_id):
+            self.state.activate_dataset(dataset_id)
+
+            # UI 업데이트
+            self.state.set_data_loaded(True, self.engine.row_count)
+            self.state.set_column_order(self.engine.columns)
+
+            # 패널 업데이트
+            self.table_panel.set_data(self.engine.df)
+            self.graph_panel.set_columns(self.engine.columns)
+            self.graph_panel.refresh()
+            self.summary_panel.refresh()
+
+            # 프로파일 업데이트
+            if self.engine.profile:
+                self._update_summary_from_profile()
+
+            # 상태바 메시지
+            metadata = self.state.get_dataset_metadata(dataset_id)
+            if metadata:
+                self.statusbar.showMessage(
+                    f"Activated: {metadata.name} ({self.engine.row_count:,} rows)",
+                    3000
+                )
+
+    def _on_dataset_remove_requested(self, dataset_id: str):
+        """데이터셋 제거 요청"""
+        metadata = self.state.get_dataset_metadata(dataset_id)
+        name = metadata.name if metadata else dataset_id
+
+        if self.engine.remove_dataset(dataset_id):
+            self.state.remove_dataset(dataset_id)
+
+            # 남은 데이터셋이 있으면 UI 업데이트
+            if self.engine.dataset_count > 0:
+                self._on_dataset_activated(self.engine.active_dataset_id)
+            else:
+                # 모든 데이터셋 제거됨
+                self.state.set_data_loaded(False, 0)
+                self._on_data_cleared()
+
+            self.statusbar.showMessage(f"Removed: {name}", 3000)
+
+    def _on_comparison_mode_changed(self, mode_value: str):
+        """비교 모드 변경"""
+        try:
+            mode = ComparisonMode(mode_value)
+            self.state.set_comparison_mode(mode)
+
+            if mode == ComparisonMode.SINGLE:
+                self.statusbar.showMessage("Single dataset mode", 2000)
+                # Restore single view
+                self._restore_single_view()
+            elif mode == ComparisonMode.OVERLAY:
+                self.statusbar.showMessage("Overlay comparison mode", 2000)
+                # Restore graph panel for overlay mode
+                self._remove_comparison_view()
+                self.graph_panel.refresh()
+            elif mode == ComparisonMode.SIDE_BY_SIDE:
+                self.statusbar.showMessage("Side-by-side comparison mode", 2000)
+            elif mode == ComparisonMode.DIFFERENCE:
+                self.statusbar.showMessage("Difference analysis mode", 2000)
+        except ValueError:
+            pass
+
+    def _on_comparison_started(self, dataset_ids: List[str]):
+        """비교 시작"""
+        mode = self.state.comparison_mode
+
+        if len(dataset_ids) < 2:
+            QMessageBox.warning(
+                self,
+                "Comparison",
+                "Please select at least 2 datasets for comparison."
+            )
+            return
+
+        # 비교 대상 설정
+        self.state.set_comparison_datasets(dataset_ids)
+
+        # 모드별 처리
+        if mode == ComparisonMode.OVERLAY:
+            self._start_overlay_comparison(dataset_ids)
+        elif mode == ComparisonMode.SIDE_BY_SIDE:
+            self._start_side_by_side_comparison(dataset_ids)
+        elif mode == ComparisonMode.DIFFERENCE:
+            self._start_difference_analysis(dataset_ids)
+
+    def _start_overlay_comparison(self, dataset_ids: List[str]):
+        """오버레이 비교 시작"""
+        self.statusbar.showMessage(
+            f"Overlay comparison: {len(dataset_ids)} datasets",
+            3000
+        )
+        # GraphPanel에서 오버레이 렌더링 (Phase 3에서 구현)
+        self.graph_panel.refresh()
+
+    def _start_side_by_side_comparison(self, dataset_ids: List[str]):
+        """병렬 비교 시작"""
+        self.statusbar.showMessage(
+            f"Side-by-side comparison: {len(dataset_ids)} datasets",
+            3000
+        )
+
+        # Remove any existing comparison view
+        self._remove_comparison_view()
+
+        # Create SideBySideLayout if not exists
+        if self._side_by_side_layout is None:
+            self._side_by_side_layout = SideBySideLayout(self.engine, self.state)
+            self._side_by_side_layout.dataset_activated.connect(self._on_dataset_activated)
+
+        # Replace graph panel with side-by-side layout
+        self._show_comparison_view(self._side_by_side_layout)
+
+        # Refresh to show comparison datasets
+        self._side_by_side_layout.refresh()
+
+    def _start_difference_analysis(self, dataset_ids: List[str]):
+        """차이 분석 시작"""
+        if len(dataset_ids) != 2:
+            QMessageBox.warning(
+                self,
+                "Difference Analysis",
+                "Please select exactly 2 datasets for difference analysis."
+            )
+            return
+
+        self.statusbar.showMessage(
+            f"Difference analysis: comparing 2 datasets",
+            3000
+        )
+
+        # Remove any existing comparison view
+        self._remove_comparison_view()
+
+        # Create ComparisonStatsPanel if not exists
+        if self._comparison_stats_panel is None:
+            self._comparison_stats_panel = ComparisonStatsPanel(self.engine, self.state)
+
+        # Replace graph panel with comparison stats panel
+        self._show_comparison_view(self._comparison_stats_panel)
+
+        # Refresh to show comparison statistics
+        self._comparison_stats_panel.refresh()
+
+    def _show_comparison_view(self, view_widget: QWidget):
+        """비교 뷰를 그래프 패널 위치에 표시"""
+        # Find graph panel index in splitter
+        graph_index = -1
+        for i in range(self.main_splitter.count()):
+            if self.main_splitter.widget(i) is self.graph_panel:
+                graph_index = i
+                break
+
+        if graph_index < 0:
+            return
+
+        # Save current sizes
+        current_sizes = self.main_splitter.sizes()
+
+        # Hide graph panel and show comparison view
+        self.graph_panel.hide()
+        self.main_splitter.replaceWidget(graph_index, view_widget)
+        view_widget.show()
+
+        # Restore sizes
+        self.main_splitter.setSizes(current_sizes)
+
+        # Track current comparison view
+        self._current_comparison_view = view_widget
+
+    def _remove_comparison_view(self):
+        """비교 뷰를 제거하고 그래프 패널 복원"""
+        if self._current_comparison_view is None:
+            return
+
+        # Find current comparison view index
+        view_index = -1
+        for i in range(self.main_splitter.count()):
+            if self.main_splitter.widget(i) is self._current_comparison_view:
+                view_index = i
+                break
+
+        if view_index < 0:
+            return
+
+        # Save current sizes
+        current_sizes = self.main_splitter.sizes()
+
+        # Hide comparison view and restore graph panel
+        self._current_comparison_view.hide()
+        self._current_comparison_view.setParent(None)
+        self.main_splitter.insertWidget(view_index, self.graph_panel)
+        self.graph_panel.show()
+
+        # Restore sizes
+        self.main_splitter.setSizes(current_sizes)
+
+        # Clear tracking
+        self._current_comparison_view = None
+
+    def _restore_single_view(self):
+        """단일 뷰 모드로 복귀"""
+        self._remove_comparison_view()
+        self.graph_panel.refresh()
 
     def closeEvent(self, event):
         """창 닫기 이벤트"""
