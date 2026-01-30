@@ -6,6 +6,7 @@ from .table_panel import TablePanel
 from .dataset_manager_panel import DatasetManagerPanel
 from .side_by_side_layout import SideBySideLayout
 from .comparison_stats_panel import ComparisonStatsPanel
+from .overlay_stats_widget import OverlayStatsWidget
 
 __all__ = [
     "SummaryPanel",
@@ -13,5 +14,6 @@ __all__ = [
     "TablePanel",
     "DatasetManagerPanel",
     "SideBySideLayout",
-    "ComparisonStatsPanel"
+    "ComparisonStatsPanel",
+    "OverlayStatsWidget"
 ]

@@ -627,3 +627,228 @@ class TestComparisonIntegration:
         finally:
             os.unlink(csv1.name)
             os.unlink(csv2.name)
+
+
+class TestStatisticalTesting:
+    """통계 검정 기능 테스트"""
+
+    @pytest.fixture
+    def engine(self):
+        return DataEngine()
+
+    @pytest.fixture
+    def statistical_data(self, engine):
+        """통계 검정용 데이터 생성 (서로 다른 평균을 가진 두 데이터셋)"""
+        import numpy as np
+        np.random.seed(42)
+
+        # Dataset 1: 평균 100, 표준편차 10
+        csv1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv1.write("id,value\n")
+        values1 = np.random.normal(100, 10, 50)
+        for i, v in enumerate(values1):
+            csv1.write(f"{i},{v:.2f}\n")
+        csv1.close()
+
+        # Dataset 2: 평균 120, 표준편차 10 (유의미한 차이)
+        csv2 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv2.write("id,value\n")
+        values2 = np.random.normal(120, 10, 50)
+        for i, v in enumerate(values2):
+            csv2.write(f"{i},{v:.2f}\n")
+        csv2.close()
+
+        engine.load_dataset(csv1.name, name="Dataset 1", dataset_id="ds_001")
+        engine.load_dataset(csv2.name, name="Dataset 2", dataset_id="ds_002")
+
+        yield engine
+
+        os.unlink(csv1.name)
+        os.unlink(csv2.name)
+
+    @pytest.fixture
+    def correlated_data(self, engine):
+        """상관관계 테스트용 데이터 (강한 양의 상관)"""
+        import numpy as np
+        np.random.seed(42)
+
+        csv1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv1.write("id,value\n")
+        for i in range(50):
+            csv1.write(f"{i},{i * 2 + np.random.normal(0, 1):.2f}\n")
+        csv1.close()
+
+        csv2 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv2.write("id,value\n")
+        for i in range(50):
+            csv2.write(f"{i},{i * 2.5 + np.random.normal(0, 1):.2f}\n")  # 같은 트렌드
+        csv2.close()
+
+        engine.load_dataset(csv1.name, name="Dataset 1", dataset_id="ds_001")
+        engine.load_dataset(csv2.name, name="Dataset 2", dataset_id="ds_002")
+
+        yield engine
+
+        os.unlink(csv1.name)
+        os.unlink(csv2.name)
+
+    def test_perform_statistical_test_ttest(self, statistical_data):
+        """t-test 검정 테스트"""
+        engine = statistical_data
+
+        result = engine.perform_statistical_test(
+            "ds_001", "ds_002", "value", test_type="ttest"
+        )
+
+        assert result is not None
+        assert "error" not in result or result.get("statistic") is not None
+
+        # 통계량 확인
+        assert result.get("test_name") is not None
+        assert result.get("statistic") is not None
+        assert result.get("p_value") is not None
+        assert result.get("is_significant") is not None
+        assert result.get("effect_size") is not None
+        assert result.get("interpretation") is not None
+
+        # 유의미한 차이가 있어야 함 (평균 100 vs 120)
+        assert result.get("is_significant") == True
+        assert result.get("p_value") < 0.05
+
+    def test_perform_statistical_test_auto(self, statistical_data):
+        """자동 검정 방법 선택 테스트"""
+        engine = statistical_data
+
+        result = engine.perform_statistical_test(
+            "ds_001", "ds_002", "value", test_type="auto"
+        )
+
+        assert result is not None
+        assert "error" not in result or result.get("statistic") is not None
+        # 자동으로 적절한 검정 방법이 선택되어야 함
+        assert result.get("test_name") in ["Welch's t-test", "Mann-Whitney U test", "Kolmogorov-Smirnov test"]
+
+    def test_perform_statistical_test_mannwhitney(self, statistical_data):
+        """Mann-Whitney U 검정 테스트"""
+        engine = statistical_data
+
+        result = engine.perform_statistical_test(
+            "ds_001", "ds_002", "value", test_type="mannwhitney"
+        )
+
+        assert result is not None
+        assert result.get("test_name") == "Mann-Whitney U test"
+        assert result.get("p_value") is not None
+
+    def test_perform_statistical_test_ks(self, statistical_data):
+        """Kolmogorov-Smirnov 검정 테스트"""
+        engine = statistical_data
+
+        result = engine.perform_statistical_test(
+            "ds_001", "ds_002", "value", test_type="ks"
+        )
+
+        assert result is not None
+        assert result.get("test_name") == "Kolmogorov-Smirnov test"
+        assert result.get("p_value") is not None
+
+    def test_calculate_correlation_pearson(self, correlated_data):
+        """Pearson 상관계수 테스트"""
+        engine = correlated_data
+
+        result = engine.calculate_correlation(
+            "ds_001", "ds_002", "value", "value", method="pearson"
+        )
+
+        assert result is not None
+        assert "error" not in result or result.get("correlation") is not None
+
+        # 강한 양의 상관
+        assert result.get("correlation") is not None
+        assert result.get("correlation") > 0.9  # 거의 완벽한 상관
+        assert result.get("is_significant") == True
+        assert result.get("strength") in ["strong", "very strong"]
+
+    def test_calculate_correlation_spearman(self, correlated_data):
+        """Spearman 상관계수 테스트"""
+        engine = correlated_data
+
+        result = engine.calculate_correlation(
+            "ds_001", "ds_002", "value", "value", method="spearman"
+        )
+
+        assert result is not None
+        assert result.get("method") == "Spearman"
+        assert result.get("correlation") is not None
+        assert result.get("correlation") > 0.9  # 강한 상관
+
+    def test_normality_test(self, statistical_data):
+        """정규성 검정 테스트"""
+        engine = statistical_data
+
+        result = engine.get_normality_test("ds_001", "value")
+
+        assert result is not None
+        assert "error" not in result or result.get("p_value") is not None
+
+        # 정규분포로 생성된 데이터이므로 정규성 검정 통과해야 함
+        assert result.get("test_name") is not None
+        assert result.get("p_value") is not None
+        assert result.get("is_normal") == True  # np.random.normal로 생성
+
+    def test_descriptive_comparison(self, statistical_data):
+        """기술통계 비교 테스트"""
+        engine = statistical_data
+
+        result = engine.calculate_descriptive_comparison(
+            ["ds_001", "ds_002"], "value"
+        )
+
+        assert len(result) == 2
+        assert "ds_001" in result
+        assert "ds_002" in result
+
+        # 확장된 통계량 확인
+        for ds_id in ["ds_001", "ds_002"]:
+            stats = result[ds_id]
+            assert "mean" in stats
+            assert "std" in stats
+            assert "skewness" in stats
+            assert "kurtosis" in stats
+            assert "iqr" in stats
+            assert "range" in stats
+
+    def test_statistical_test_invalid_dataset(self, engine):
+        """유효하지 않은 데이터셋으로 검정 테스트"""
+        result = engine.perform_statistical_test(
+            "nonexistent_1", "nonexistent_2", "value"
+        )
+
+        assert result is not None
+        assert "error" in result
+
+    def test_statistical_test_invalid_column(self, statistical_data):
+        """유효하지 않은 컬럼으로 검정 테스트"""
+        engine = statistical_data
+
+        result = engine.perform_statistical_test(
+            "ds_001", "ds_002", "nonexistent_column"
+        )
+
+        assert result is not None
+        assert "error" in result
+
+    def test_effect_size_interpretation(self, statistical_data):
+        """효과 크기 해석 테스트"""
+        engine = statistical_data
+
+        result = engine.perform_statistical_test(
+            "ds_001", "ds_002", "value", test_type="ttest"
+        )
+
+        assert result is not None
+        interpretation = result.get("interpretation", "")
+
+        # 해석에 필수 정보가 포함되어야 함
+        assert "significant" in interpretation.lower()
+        assert "effect" in interpretation.lower() or "d=" in interpretation

@@ -2,15 +2,16 @@
 Side-by-Side Layout - 병렬 비교 레이아웃
 
 여러 데이터셋을 독립된 패널에 병렬로 표시
+스크롤/줌 동기화 지원
 """
 
 from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QSplitter, QScrollArea, QGroupBox, QCheckBox,
-    QSizePolicy
+    QSizePolicy, QPushButton
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 
 from ...core.data_engine import DataEngine
 from ...core.state import AppState, ComparisonMode
@@ -20,12 +21,15 @@ class MiniGraphWidget(QWidget):
     """미니 그래프 위젯 (병렬 비교용)"""
 
     activated = Signal(str)  # dataset_id
+    view_range_changed = Signal(str, list, list)  # dataset_id, x_range, y_range
 
     def __init__(self, dataset_id: str, engine: DataEngine, state: AppState, parent=None):
         super().__init__(parent)
         self.dataset_id = dataset_id
         self.engine = engine
         self.state = state
+        self.plot_widget = None
+        self._is_syncing = False  # 동기화 중인지 추적 (무한 루프 방지)
 
         self._setup_ui()
 
@@ -68,6 +72,9 @@ class MiniGraphWidget(QWidget):
             self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
             self.plot_widget.setMinimumHeight(150)
             layout.addWidget(self.plot_widget, 1)
+
+            # ViewBox 범위 변경 시그널 연결
+            self.plot_widget.getViewBox().sigRangeChanged.connect(self._on_view_range_changed)
 
             # 간단한 데이터 플롯
             self._plot_data(color)
@@ -154,6 +161,45 @@ class MiniGraphWidget(QWidget):
         """새로고침"""
         self._setup_ui()
 
+    def _on_view_range_changed(self, viewbox, ranges):
+        """ViewBox 범위 변경 처리"""
+        if self._is_syncing:
+            return  # 동기화 중이면 무시 (무한 루프 방지)
+
+        x_range = list(ranges[0])
+        y_range = list(ranges[1])
+        self.view_range_changed.emit(self.dataset_id, x_range, y_range)
+
+    def set_view_range(self, x_range: list, y_range: list, sync_x: bool = True, sync_y: bool = True):
+        """외부에서 뷰 범위 설정 (동기화용)"""
+        if self.plot_widget is None:
+            return
+
+        self._is_syncing = True
+        try:
+            viewbox = self.plot_widget.getViewBox()
+            if sync_x and sync_y:
+                viewbox.setRange(xRange=x_range, yRange=y_range, padding=0)
+            elif sync_x:
+                viewbox.setRange(xRange=x_range, padding=0)
+            elif sync_y:
+                viewbox.setRange(yRange=y_range, padding=0)
+        finally:
+            # QTimer로 동기화 플래그 리셋 (이벤트 루프 후에)
+            QTimer.singleShot(50, self._reset_sync_flag)
+
+    def _reset_sync_flag(self):
+        """동기화 플래그 리셋"""
+        self._is_syncing = False
+
+    def get_view_range(self) -> tuple:
+        """현재 뷰 범위 반환"""
+        if self.plot_widget is None:
+            return (None, None)
+        viewbox = self.plot_widget.getViewBox()
+        rect = viewbox.viewRange()
+        return (list(rect[0]), list(rect[1]))
+
     def mousePressEvent(self, event):
         """클릭 시 활성화"""
         if event.button() == Qt.LeftButton:
@@ -180,6 +226,7 @@ class SideBySideLayout(QWidget):
         self._panels: Dict[str, MiniGraphWidget] = {}
         self._sync_scroll = True
         self._sync_zoom = True
+        self._is_syncing = False  # 동기화 중 플래그
 
         self._setup_ui()
         self._connect_signals()
@@ -208,6 +255,13 @@ class SideBySideLayout(QWidget):
         options_layout.addWidget(self.sync_zoom_cb)
 
         options_layout.addStretch()
+
+        # 리셋 버튼
+        self.reset_btn = QPushButton("Reset Views")
+        self.reset_btn.setFixedWidth(80)
+        self.reset_btn.clicked.connect(self.reset_all_views)
+        options_layout.addWidget(self.reset_btn)
+
         layout.addWidget(options_frame)
 
         # 패널 스플리터
@@ -259,6 +313,7 @@ class SideBySideLayout(QWidget):
         for dataset_id in dataset_ids:
             panel = MiniGraphWidget(dataset_id, self.engine, self.state)
             panel.activated.connect(self._on_panel_activated)
+            panel.view_range_changed.connect(self._on_panel_view_changed)
             self._panels[dataset_id] = panel
             self.splitter.addWidget(panel)
 
@@ -266,6 +321,65 @@ class SideBySideLayout(QWidget):
         if self.splitter.count() > 0:
             sizes = [self.splitter.width() // self.splitter.count()] * self.splitter.count()
             self.splitter.setSizes(sizes)
+
+    def _on_panel_view_changed(self, source_id: str, x_range: list, y_range: list):
+        """
+        패널의 뷰 범위가 변경되었을 때 호출
+
+        동기화 옵션에 따라 다른 패널들의 뷰 범위를 업데이트
+        """
+        if self._is_syncing:
+            return
+
+        # 동기화가 꺼져 있으면 무시
+        if not self._sync_scroll and not self._sync_zoom:
+            return
+
+        self._is_syncing = True
+        try:
+            # 다른 모든 패널에 동기화
+            for panel_id, panel in self._panels.items():
+                if panel_id == source_id:
+                    continue  # 소스 패널은 제외
+
+                # 동기화 옵션에 따라 범위 설정
+                # _sync_scroll: X축 범위 동기화 (스크롤)
+                # _sync_zoom: Y축 범위 동기화 (줌)
+                panel.set_view_range(
+                    x_range, y_range,
+                    sync_x=self._sync_scroll,
+                    sync_y=self._sync_zoom
+                )
+        finally:
+            QTimer.singleShot(100, self._reset_sync_flag)
+
+    def _reset_sync_flag(self):
+        """동기화 플래그 리셋"""
+        self._is_syncing = False
+
+    def sync_all_panels_to(self, source_id: str):
+        """특정 패널의 뷰 범위로 모든 패널 동기화"""
+        if source_id not in self._panels:
+            return
+
+        source_panel = self._panels[source_id]
+        x_range, y_range = source_panel.get_view_range()
+
+        if x_range is None or y_range is None:
+            return
+
+        for panel_id, panel in self._panels.items():
+            if panel_id == source_id:
+                continue
+            panel.set_view_range(x_range, y_range,
+                                 sync_x=self._sync_scroll,
+                                 sync_y=self._sync_zoom)
+
+    def reset_all_views(self):
+        """모든 패널의 뷰를 자동 범위로 리셋"""
+        for panel in self._panels.values():
+            if panel.plot_widget is not None:
+                panel.plot_widget.getViewBox().autoRange()
 
     def _on_panel_activated(self, dataset_id: str):
         """패널 활성화"""

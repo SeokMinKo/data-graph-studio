@@ -2,6 +2,7 @@
 Comparison Statistics Panel - 비교 통계 패널
 
 여러 데이터셋 간의 비교 통계 및 차이 분석 표시
+통계 검정 (t-test, correlation, p-value) 포함
 """
 
 from typing import Optional, List, Dict, Any
@@ -9,10 +10,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
     QComboBox, QPushButton, QSizePolicy, QScrollArea,
-    QTabWidget
+    QTabWidget, QTextEdit, QProgressBar
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont
 
 from ...core.data_engine import DataEngine
 from ...core.state import (
@@ -53,7 +54,10 @@ class ComparisonStatsPanel(QWidget):
         # 탭 1: 기본 통계 비교
         self._setup_stats_tab()
 
-        # 탭 2: 차이 분석
+        # 탭 2: 통계 검정
+        self._setup_test_tab()
+
+        # 탭 3: 차이 분석
         self._setup_diff_tab()
 
     def _setup_stats_tab(self):
@@ -80,6 +84,111 @@ class ComparisonStatsPanel(QWidget):
         layout.addWidget(self.stats_table)
 
         self.tab_widget.addTab(tab, "Statistics")
+
+    def _setup_test_tab(self):
+        """통계 검정 탭"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(8)
+
+        # 데이터셋 선택
+        ds_group = QGroupBox("Datasets")
+        ds_layout = QHBoxLayout(ds_group)
+
+        ds_layout.addWidget(QLabel("Dataset A:"))
+        self.test_dataset_a = QComboBox()
+        ds_layout.addWidget(self.test_dataset_a, 1)
+
+        ds_layout.addWidget(QLabel("Dataset B:"))
+        self.test_dataset_b = QComboBox()
+        ds_layout.addWidget(self.test_dataset_b, 1)
+
+        layout.addWidget(ds_group)
+
+        # 컬럼 및 검정 유형 선택
+        options_group = QGroupBox("Options")
+        options_layout = QVBoxLayout(options_group)
+
+        col_layout = QHBoxLayout()
+        col_layout.addWidget(QLabel("Value Column:"))
+        self.test_column_combo = QComboBox()
+        col_layout.addWidget(self.test_column_combo, 1)
+        options_layout.addLayout(col_layout)
+
+        test_layout = QHBoxLayout()
+        test_layout.addWidget(QLabel("Test Type:"))
+        self.test_type_combo = QComboBox()
+        self.test_type_combo.addItem("Auto (recommended)", "auto")
+        self.test_type_combo.addItem("t-test (parametric)", "ttest")
+        self.test_type_combo.addItem("Mann-Whitney U (non-parametric)", "mannwhitney")
+        self.test_type_combo.addItem("Kolmogorov-Smirnov", "ks")
+        test_layout.addWidget(self.test_type_combo, 1)
+        options_layout.addLayout(test_layout)
+
+        corr_layout = QHBoxLayout()
+        corr_layout.addWidget(QLabel("Correlation:"))
+        self.corr_method_combo = QComboBox()
+        self.corr_method_combo.addItem("Pearson", "pearson")
+        self.corr_method_combo.addItem("Spearman", "spearman")
+        corr_layout.addWidget(self.corr_method_combo, 1)
+        options_layout.addLayout(corr_layout)
+
+        layout.addWidget(options_group)
+
+        # 분석 버튼
+        btn_layout = QHBoxLayout()
+        self.run_test_btn = QPushButton("Run Statistical Test")
+        self.run_test_btn.clicked.connect(self._run_statistical_test)
+        btn_layout.addWidget(self.run_test_btn)
+
+        self.run_corr_btn = QPushButton("Calculate Correlation")
+        self.run_corr_btn.clicked.connect(self._run_correlation)
+        btn_layout.addWidget(self.run_corr_btn)
+
+        layout.addLayout(btn_layout)
+
+        # 결과 표시
+        results_group = QGroupBox("Results")
+        results_layout = QVBoxLayout(results_group)
+
+        self.test_results = QTextEdit()
+        self.test_results.setReadOnly(True)
+        self.test_results.setMinimumHeight(150)
+        font = QFont("Consolas", 10)
+        font.setStyleHint(QFont.Monospace)
+        self.test_results.setFont(font)
+        results_layout.addWidget(self.test_results)
+
+        layout.addWidget(results_group)
+
+        # 해석 가이드
+        guide_group = QGroupBox("Interpretation Guide")
+        guide_layout = QVBoxLayout(guide_group)
+        guide_text = QLabel(
+            "<b>Significance (p-value):</b><br>"
+            "• p < 0.001: Highly significant ***<br>"
+            "• p < 0.01: Very significant **<br>"
+            "• p < 0.05: Significant *<br>"
+            "• p ≥ 0.05: Not significant<br><br>"
+            "<b>Effect Size (Cohen's d):</b><br>"
+            "• |d| < 0.2: Negligible<br>"
+            "• |d| < 0.5: Small<br>"
+            "• |d| < 0.8: Medium<br>"
+            "• |d| ≥ 0.8: Large<br><br>"
+            "<b>Correlation Strength:</b><br>"
+            "• |r| < 0.3: Weak<br>"
+            "• |r| < 0.7: Moderate<br>"
+            "• |r| ≥ 0.7: Strong"
+        )
+        guide_text.setWordWrap(True)
+        guide_text.setStyleSheet("padding: 4px; background: #f8f9fa; border-radius: 4px;")
+        guide_layout.addWidget(guide_text)
+        layout.addWidget(guide_group)
+
+        layout.addStretch()
+
+        self.tab_widget.addTab(tab, "Statistical Tests")
 
     def _setup_diff_tab(self):
         """차이 분석 탭"""
@@ -144,6 +253,7 @@ class ComparisonStatsPanel(QWidget):
         """패널 새로고침"""
         self._update_column_combos()
         self._update_dataset_combos()
+        self._update_test_combos()
         self._update_stats_table()
 
     def _update_column_combos(self):
@@ -371,3 +481,227 @@ class ComparisonStatsPanel(QWidget):
                         item.setBackground(QColor(DIFF_NEGATIVE_COLOR).lighter(170))
 
                 self.diff_table.setItem(row, col, item)
+
+    def _run_statistical_test(self):
+        """통계 검정 실행"""
+        dataset_a_id = self.test_dataset_a.currentData()
+        dataset_b_id = self.test_dataset_b.currentData()
+        value_column = self.test_column_combo.currentText()
+        test_type = self.test_type_combo.currentData()
+
+        if not dataset_a_id or not dataset_b_id or not value_column:
+            self.test_results.setHtml("<span style='color: red;'>Please select datasets and column.</span>")
+            return
+
+        if dataset_a_id == dataset_b_id:
+            self.test_results.setHtml("<span style='color: red;'>Please select different datasets.</span>")
+            return
+
+        # 통계 검정 수행
+        result = self.engine.perform_statistical_test(
+            dataset_a_id, dataset_b_id, value_column, test_type
+        )
+
+        if not result:
+            self.test_results.setHtml("<span style='color: red;'>Failed to perform statistical test.</span>")
+            return
+
+        if "error" in result and result.get("statistic") is None:
+            self.test_results.setHtml(f"<span style='color: red;'>Error: {result['error']}</span>")
+            return
+
+        # 데이터셋 이름 가져오기
+        meta_a = self.state.get_dataset_metadata(dataset_a_id)
+        meta_b = self.state.get_dataset_metadata(dataset_b_id)
+        name_a = meta_a.name if meta_a else dataset_a_id
+        name_b = meta_b.name if meta_b else dataset_b_id
+
+        # 유의성 표시
+        p_value = result.get("p_value")
+        if p_value is not None:
+            if p_value < 0.001:
+                sig_stars = "***"
+                sig_color = "#d32f2f"
+            elif p_value < 0.01:
+                sig_stars = "**"
+                sig_color = "#f57c00"
+            elif p_value < 0.05:
+                sig_stars = "*"
+                sig_color = "#388e3c"
+            else:
+                sig_stars = ""
+                sig_color = "#757575"
+        else:
+            sig_stars = ""
+            sig_color = "#757575"
+
+        # 결과 HTML 생성
+        html = f"""
+        <h3 style='margin: 0; color: #1976d2;'>Statistical Test Results</h3>
+        <hr>
+        <table style='width: 100%; font-size: 11pt;'>
+            <tr><td><b>Comparison:</b></td><td>{name_a} vs {name_b}</td></tr>
+            <tr><td><b>Column:</b></td><td>{value_column}</td></tr>
+            <tr><td><b>Test:</b></td><td>{result.get('test_name', 'N/A')}</td></tr>
+        </table>
+        <br>
+        <table style='width: 100%; font-size: 11pt; background: #f5f5f5; padding: 8px;'>
+            <tr>
+                <td><b>Statistic:</b></td>
+                <td style='text-align: right;'>{result.get('statistic', 'N/A'):.4f if result.get('statistic') else 'N/A'}</td>
+            </tr>
+            <tr>
+                <td><b>p-value:</b></td>
+                <td style='text-align: right; color: {sig_color}; font-weight: bold;'>
+                    {p_value:.6f if p_value else 'N/A'} {sig_stars}
+                </td>
+            </tr>
+            <tr>
+                <td><b>Effect Size (d):</b></td>
+                <td style='text-align: right;'>{result.get('effect_size', 'N/A'):.4f if result.get('effect_size') else 'N/A'}</td>
+            </tr>
+            <tr>
+                <td><b>Significant:</b></td>
+                <td style='text-align: right;'>
+                    {'<span style="color: green;">Yes</span>' if result.get('is_significant') else '<span style="color: gray;">No</span>'}
+                </td>
+            </tr>
+        </table>
+        <br>
+        <div style='background: #e3f2fd; padding: 8px; border-radius: 4px;'>
+            <b>Interpretation:</b><br>
+            {result.get('interpretation', '')}
+        </div>
+        """
+
+        self.test_results.setHtml(html)
+
+    def _run_correlation(self):
+        """상관관계 분석 실행"""
+        dataset_a_id = self.test_dataset_a.currentData()
+        dataset_b_id = self.test_dataset_b.currentData()
+        value_column = self.test_column_combo.currentText()
+        method = self.corr_method_combo.currentData()
+
+        if not dataset_a_id or not dataset_b_id or not value_column:
+            self.test_results.setHtml("<span style='color: red;'>Please select datasets and column.</span>")
+            return
+
+        # 상관관계 계산
+        result = self.engine.calculate_correlation(
+            dataset_a_id, dataset_b_id, value_column, value_column, method
+        )
+
+        if not result:
+            self.test_results.setHtml("<span style='color: red;'>Failed to calculate correlation.</span>")
+            return
+
+        if "error" in result and result.get("correlation") is None:
+            self.test_results.setHtml(f"<span style='color: red;'>Error: {result['error']}</span>")
+            return
+
+        # 데이터셋 이름
+        meta_a = self.state.get_dataset_metadata(dataset_a_id)
+        meta_b = self.state.get_dataset_metadata(dataset_b_id)
+        name_a = meta_a.name if meta_a else dataset_a_id
+        name_b = meta_b.name if meta_b else dataset_b_id
+
+        # 상관계수 색상
+        corr = result.get("correlation", 0)
+        if corr is not None:
+            if corr > 0.5:
+                corr_color = "#388e3c"  # 녹색 (강한 양의 상관)
+            elif corr > 0:
+                corr_color = "#7cb342"  # 연녹색
+            elif corr > -0.5:
+                corr_color = "#f57c00"  # 주황색
+            else:
+                corr_color = "#d32f2f"  # 빨간색 (강한 음의 상관)
+        else:
+            corr_color = "#757575"
+
+        # 결과 HTML
+        html = f"""
+        <h3 style='margin: 0; color: #1976d2;'>Correlation Analysis Results</h3>
+        <hr>
+        <table style='width: 100%; font-size: 11pt;'>
+            <tr><td><b>Comparison:</b></td><td>{name_a} vs {name_b}</td></tr>
+            <tr><td><b>Column:</b></td><td>{value_column}</td></tr>
+            <tr><td><b>Method:</b></td><td>{result.get('method', method.title())}</td></tr>
+        </table>
+        <br>
+        <table style='width: 100%; font-size: 11pt; background: #f5f5f5; padding: 8px;'>
+            <tr>
+                <td><b>Correlation (r):</b></td>
+                <td style='text-align: right; color: {corr_color}; font-weight: bold; font-size: 14pt;'>
+                    {corr:.4f if corr is not None else 'N/A'}
+                </td>
+            </tr>
+            <tr>
+                <td><b>p-value:</b></td>
+                <td style='text-align: right;'>{result.get('p_value', 'N/A'):.6f if result.get('p_value') else 'N/A'}</td>
+            </tr>
+            <tr>
+                <td><b>Strength:</b></td>
+                <td style='text-align: right;'>{result.get('strength', 'N/A').title() if result.get('strength') else 'N/A'}</td>
+            </tr>
+            <tr>
+                <td><b>Significant:</b></td>
+                <td style='text-align: right;'>
+                    {'<span style="color: green;">Yes</span>' if result.get('is_significant') else '<span style="color: gray;">No</span>'}
+                </td>
+            </tr>
+        </table>
+        <br>
+        <div style='background: #e3f2fd; padding: 8px; border-radius: 4px;'>
+            <b>Interpretation:</b><br>
+            {result.get('interpretation', '')}
+        </div>
+        """
+
+        self.test_results.setHtml(html)
+
+    def _update_test_combos(self, _=None):
+        """통계 검정 탭의 콤보박스 업데이트"""
+        dataset_ids = list(self.state.dataset_metadata.keys())
+
+        # Test Dataset A
+        current_a = self.test_dataset_a.currentData()
+        self.test_dataset_a.clear()
+        for did in dataset_ids:
+            metadata = self.state.get_dataset_metadata(did)
+            name = metadata.name if metadata else did
+            self.test_dataset_a.addItem(name, did)
+        if current_a in dataset_ids:
+            idx = dataset_ids.index(current_a)
+            self.test_dataset_a.setCurrentIndex(idx)
+
+        # Test Dataset B
+        current_b = self.test_dataset_b.currentData()
+        self.test_dataset_b.clear()
+        for did in dataset_ids:
+            metadata = self.state.get_dataset_metadata(did)
+            name = metadata.name if metadata else did
+            self.test_dataset_b.addItem(name, did)
+        if current_b in dataset_ids:
+            idx = dataset_ids.index(current_b)
+            self.test_dataset_b.setCurrentIndex(idx)
+        elif len(dataset_ids) >= 2:
+            self.test_dataset_b.setCurrentIndex(1)
+
+        # Test Column Combo
+        if dataset_ids:
+            common_cols = self.engine.get_common_columns(dataset_ids)
+            numeric_cols = []
+            for col in common_cols:
+                ds = self.engine.get_dataset(dataset_ids[0])
+                if ds and ds.df is not None and col in ds.df.columns:
+                    dtype = str(ds.df[col].dtype)
+                    if dtype.startswith(('Int', 'Float', 'UInt')):
+                        numeric_cols.append(col)
+
+            current_col = self.test_column_combo.currentText()
+            self.test_column_combo.clear()
+            self.test_column_combo.addItems(numeric_cols)
+            if current_col in numeric_cols:
+                self.test_column_combo.setCurrentText(current_col)

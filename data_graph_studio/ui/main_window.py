@@ -20,6 +20,7 @@ from PySide6.QtGui import QAction, QIcon, QKeySequence
 
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
 from ..core.state import AppState, ToolMode, ChartType, ComparisonMode
+from ..core.comparison_report import ComparisonReport
 from ..utils.memory import MemoryMonitor
 
 # 에러 로깅 설정
@@ -32,9 +33,11 @@ from .panels.profile_bar import ProfileBar
 from .panels.dataset_manager_panel import DatasetManagerPanel
 from .panels.side_by_side_layout import SideBySideLayout
 from .panels.comparison_stats_panel import ComparisonStatsPanel
+from .panels.overlay_stats_widget import OverlayStatsWidget
 from .dialogs.parsing_preview_dialog import ParsingPreviewDialog, ParsingSettings
 from .dialogs.save_setting_dialog import SaveSettingDialog
 from .dialogs.profile_manager_dialog import ProfileManagerDialog
+from .dialogs.multi_file_dialog import open_multi_file_dialog
 from .floatable import FloatWindow
 from .floating_graph import FloatingGraphWindow, FloatingGraphManager
 from ..core.profile import Profile, GraphSetting, ProfileManager
@@ -140,6 +143,7 @@ class MainWindow(QMainWindow):
         self._side_by_side_layout: Optional[SideBySideLayout] = None
         self._comparison_stats_panel: Optional[ComparisonStatsPanel] = None
         self._current_comparison_view: Optional[QWidget] = None
+        self._overlay_stats_widget: Optional[OverlayStatsWidget] = None
 
         # Floating graph manager
         self._floating_graph_manager: Optional[FloatingGraphManager] = None
@@ -195,6 +199,12 @@ class MainWindow(QMainWindow):
         open_action.setStatusTip("Open a data file (Ctrl+O)")
         open_action.triggered.connect(self._on_open_file)
         file_menu.addAction(open_action)
+
+        open_multi_action = QAction("Open &Multiple Files...", self)
+        open_multi_action.setShortcut("Ctrl+Shift+O")
+        open_multi_action.setStatusTip("Open multiple files as datasets for comparison")
+        open_multi_action.triggered.connect(self._on_open_multiple_files)
+        file_menu.addAction(open_multi_action)
 
         file_menu.addSeparator()
 
@@ -330,7 +340,60 @@ class MainWindow(QMainWindow):
             action = QAction(chart_type.value.title(), self)
             action.triggered.connect(lambda checked, ct=chart_type: self.state.set_chart_type(ct))
             chart_menu.addAction(action)
-        
+
+        view_menu.addSeparator()
+
+        # Comparison Mode submenu
+        compare_menu = view_menu.addMenu("Comparison Mode")
+
+        self._comparison_mode_actions = {}
+
+        single_action = QAction("Single Dataset", self)
+        single_action.setShortcut("Ctrl+1")
+        single_action.setStatusTip("Show single dataset (Ctrl+1)")
+        single_action.setCheckable(True)
+        single_action.setChecked(True)
+        single_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.SINGLE))
+        compare_menu.addAction(single_action)
+        self._comparison_mode_actions[ComparisonMode.SINGLE] = single_action
+
+        overlay_action = QAction("Overlay", self)
+        overlay_action.setShortcut("Ctrl+2")
+        overlay_action.setStatusTip("Overlay datasets on same graph (Ctrl+2)")
+        overlay_action.setCheckable(True)
+        overlay_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.OVERLAY))
+        compare_menu.addAction(overlay_action)
+        self._comparison_mode_actions[ComparisonMode.OVERLAY] = overlay_action
+
+        side_by_side_action = QAction("Side by Side", self)
+        side_by_side_action.setShortcut("Ctrl+3")
+        side_by_side_action.setStatusTip("Show datasets side by side (Ctrl+3)")
+        side_by_side_action.setCheckable(True)
+        side_by_side_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.SIDE_BY_SIDE))
+        compare_menu.addAction(side_by_side_action)
+        self._comparison_mode_actions[ComparisonMode.SIDE_BY_SIDE] = side_by_side_action
+
+        difference_action = QAction("Difference Analysis", self)
+        difference_action.setShortcut("Ctrl+4")
+        difference_action.setStatusTip("Show difference analysis (Ctrl+4)")
+        difference_action.setCheckable(True)
+        difference_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.DIFFERENCE))
+        compare_menu.addAction(difference_action)
+        self._comparison_mode_actions[ComparisonMode.DIFFERENCE] = difference_action
+
+        compare_menu.addSeparator()
+
+        compare_stats_action = QAction("Comparison Statistics...", self)
+        compare_stats_action.setShortcut("Ctrl+Shift+C")
+        compare_stats_action.setStatusTip("Show comparison statistics panel (Ctrl+Shift+C)")
+        compare_stats_action.triggered.connect(self._show_comparison_stats_panel)
+        compare_menu.addAction(compare_stats_action)
+
+        export_report_action = QAction("Export Comparison Report...", self)
+        export_report_action.setStatusTip("Export comparison report as HTML, JSON, or CSV")
+        export_report_action.triggered.connect(self._on_export_comparison_report)
+        compare_menu.addAction(export_report_action)
+
         # Help Menu
         help_menu = menubar.addMenu("&Help")
         
@@ -916,7 +979,83 @@ class MainWindow(QMainWindow):
         
         if file_path:
             self._show_parsing_preview(file_path)
-    
+
+    def _on_open_multiple_files(self):
+        """다중 파일 열기 다이얼로그"""
+        result = open_multi_file_dialog(self, self.engine)
+
+        if result is None:
+            return
+
+        file_paths, naming_option, auto_compare = result
+
+        if not file_paths:
+            return
+
+        # Progress dialog for loading multiple files
+        progress = QProgressDialog(
+            "Loading files...", "Cancel", 0, len(file_paths), self
+        )
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+
+        loaded_ids = []
+
+        for i, file_path in enumerate(file_paths):
+            if progress.wasCanceled():
+                break
+
+            progress.setValue(i)
+            progress.setLabelText(f"Loading: {Path(file_path).name}")
+            QApplication.processEvents()
+
+            # Generate dataset name
+            if naming_option == "filename":
+                name = Path(file_path).name
+            elif naming_option == "filename_no_ext":
+                name = Path(file_path).stem
+            elif naming_option == "sequential":
+                name = f"Data {len(self.engine.datasets) + 1}"
+            else:
+                name = Path(file_path).name
+
+            # Load dataset
+            dataset_id = self.engine.load_dataset(file_path, name=name)
+
+            if dataset_id:
+                loaded_ids.append(dataset_id)
+
+                # Register in state
+                dataset = self.engine.get_dataset(dataset_id)
+                if dataset:
+                    self.state.add_dataset(
+                        dataset_id=dataset_id,
+                        name=name,
+                        row_count=dataset.row_count,
+                        column_count=dataset.column_count,
+                        memory_bytes=dataset.memory_bytes
+                    )
+
+        progress.setValue(len(file_paths))
+        progress.close()
+
+        if loaded_ids:
+            self.statusbar.showMessage(
+                f"Loaded {len(loaded_ids)} datasets successfully", 3000
+            )
+
+            # Update UI with first dataset
+            if loaded_ids:
+                self.engine.activate_dataset(loaded_ids[0])
+                self._on_data_loaded()
+
+            # Auto-start comparison if enabled
+            if auto_compare and len(loaded_ids) >= 2:
+                self.state.set_comparison_datasets(loaded_ids[:4])  # Max 4
+                self.state.set_comparison_mode(ComparisonMode.OVERLAY)
+                self._on_comparison_started(loaded_ids[:4])
+
     def _show_parsing_preview(self, file_path: str):
         """파싱 미리보기 다이얼로그 표시"""
         # 대용량 파일 경고 체크
@@ -1760,11 +1899,32 @@ class MainWindow(QMainWindow):
 
             self.statusbar.showMessage(f"Removed: {name}", 3000)
 
+    def _set_comparison_mode(self, mode: ComparisonMode):
+        """비교 모드 설정 (메뉴에서 호출)"""
+        self.state.set_comparison_mode(mode)
+        self._on_comparison_mode_changed(mode.value)
+        self._update_comparison_mode_actions(mode)
+
+    def _update_comparison_mode_actions(self, mode: ComparisonMode):
+        """비교 모드 메뉴 액션 상태 업데이트"""
+        if not hasattr(self, '_comparison_mode_actions'):
+            return
+
+        for action_mode, action in self._comparison_mode_actions.items():
+            action.setChecked(action_mode == mode)
+
     def _on_comparison_mode_changed(self, mode_value: str):
         """비교 모드 변경"""
         try:
             mode = ComparisonMode(mode_value)
             self.state.set_comparison_mode(mode)
+
+            # Update menu action states
+            self._update_comparison_mode_actions(mode)
+
+            # Hide overlay stats widget when not in overlay mode
+            if mode != ComparisonMode.OVERLAY:
+                self._hide_overlay_stats_widget()
 
             if mode == ComparisonMode.SINGLE:
                 self.statusbar.showMessage("Single dataset mode", 2000)
@@ -1811,8 +1971,104 @@ class MainWindow(QMainWindow):
             f"Overlay comparison: {len(dataset_ids)} datasets",
             3000
         )
-        # GraphPanel에서 오버레이 렌더링 (Phase 3에서 구현)
+        # GraphPanel에서 오버레이 렌더링
         self.graph_panel.refresh()
+
+        # Create and show overlay stats widget
+        self._show_overlay_stats_widget()
+
+    def _show_overlay_stats_widget(self):
+        """오버레이 통계 위젯 표시"""
+        # Create if not exists
+        if self._overlay_stats_widget is None:
+            self._overlay_stats_widget = OverlayStatsWidget(
+                self.engine, self.state, self.graph_panel
+            )
+            self._overlay_stats_widget.close_requested.connect(self._hide_overlay_stats_widget)
+            self._overlay_stats_widget.expand_requested.connect(self._show_comparison_stats_panel)
+
+        # Position and show
+        self._overlay_stats_widget.set_position("top-right")
+        self._overlay_stats_widget.show_animated()
+
+    def _hide_overlay_stats_widget(self):
+        """오버레이 통계 위젯 숨기기"""
+        if self._overlay_stats_widget:
+            self._overlay_stats_widget.hide_animated()
+
+    def _show_comparison_stats_panel(self):
+        """전체 비교 통계 패널 표시 (다이얼로그)"""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+        if self._comparison_stats_panel is None:
+            self._comparison_stats_panel = ComparisonStatsPanel(
+                self.engine, self.state
+            )
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Comparison Statistics")
+        dialog.setMinimumSize(600, 500)
+
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(self._comparison_stats_panel)
+
+        self._comparison_stats_panel.refresh()
+        dialog.exec()
+
+    def _on_export_comparison_report(self):
+        """비교 리포트 내보내기"""
+        dataset_ids = self.state.comparison_dataset_ids
+
+        if len(dataset_ids) < 2:
+            QMessageBox.information(
+                self,
+                "Export Report",
+                "Please select at least 2 datasets for comparison first."
+            )
+            return
+
+        # 파일 저장 다이얼로그
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export Comparison Report",
+            "comparison_report",
+            "HTML Report (*.html);;JSON Report (*.json);;CSV Report (*.csv)"
+        )
+
+        if not file_path:
+            return
+
+        # 확장자 확인 및 추가
+        if selected_filter.startswith("HTML") and not file_path.endswith('.html'):
+            file_path += '.html'
+        elif selected_filter.startswith("JSON") and not file_path.endswith('.json'):
+            file_path += '.json'
+        elif selected_filter.startswith("CSV") and not file_path.endswith('.csv'):
+            file_path += '.csv'
+
+        # 리포트 생성 및 저장
+        report_gen = ComparisonReport(self.engine, self.state)
+
+        success = False
+        if file_path.endswith('.html'):
+            success = report_gen.export_html(file_path, dataset_ids)
+        elif file_path.endswith('.json'):
+            success = report_gen.export_json(file_path, dataset_ids)
+        elif file_path.endswith('.csv'):
+            success = report_gen.export_csv(file_path, dataset_ids)
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Export Report",
+                f"Report exported successfully:\n{file_path}"
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Export Report",
+                "Failed to export report. Please check the file path and try again."
+            )
 
     def _start_side_by_side_comparison(self, dataset_ids: List[str]):
         """병렬 비교 시작"""
