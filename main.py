@@ -12,6 +12,11 @@ import traceback
 import logging
 from datetime import datetime
 
+# DirectWrite 폰트 오류 방지 (Windows)
+# Qt 초기화 전에 설정해야 함
+if sys.platform == 'win32':
+    os.environ.setdefault('QT_QPA_PLATFORM', 'windows:fontengine=freetype')
+
 # 로깅 설정
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 os.makedirs(log_dir, exist_ok=True)
