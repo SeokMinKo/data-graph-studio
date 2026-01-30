@@ -5,26 +5,7 @@ Tests for Theme (Dark/Light Mode)
 import pytest
 from unittest.mock import MagicMock, patch
 
-import sys
-import os
-
-# Add src to path
-src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-# Import theme module directly
-import importlib.util
-spec = importlib.util.spec_from_file_location(
-    "theme", 
-    os.path.join(src_path, 'ui', 'theme.py')
-)
-theme = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(theme)
-
-ThemeManager = theme.ThemeManager
-Theme = theme.Theme
-ColorPalette = theme.ColorPalette
+from data_graph_studio.ui.theme import ThemeManager, Theme, ColorPalette
 
 
 class TestTheme:

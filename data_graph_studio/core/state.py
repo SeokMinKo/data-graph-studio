@@ -516,12 +516,18 @@ class AppState(QObject):
             # 비율 조정 (합이 1이 되도록)
             old_ratio = self._layout_ratios[section]
             diff = ratio - old_ratio
-            
+
             other_sections = [k for k in self._layout_ratios if k != section]
             for other in other_sections:
                 self._layout_ratios[other] -= diff / len(other_sections)
-            
+
             self._layout_ratios[section] = ratio
+
+            # 부동소수점 오차 보정 - 합이 정확히 1이 되도록
+            total = sum(self._layout_ratios.values())
+            if abs(total - 1.0) > 0.001:
+                for key in self._layout_ratios:
+                    self._layout_ratios[key] /= total
     
     # ==================== Column Order ====================
     

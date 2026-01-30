@@ -5,30 +5,11 @@ Tests for Dashboard Mode
 import pytest
 from unittest.mock import MagicMock, patch
 
-import sys
-import os
-
-# Add src to path
-src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-from core.state import ChartType
-
-# Import dashboard module directly
-import importlib.util
-spec = importlib.util.spec_from_file_location(
-    "dashboard", 
-    os.path.join(src_path, 'ui', 'dashboard.py')
+from data_graph_studio.core.state import ChartType
+from data_graph_studio.ui.dashboard import (
+    DashboardWidget, DashboardLayout, DashboardItem,
+    DashboardManager, GridPosition
 )
-dashboard = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(dashboard)
-
-DashboardWidget = dashboard.DashboardWidget
-DashboardLayout = dashboard.DashboardLayout
-DashboardItem = dashboard.DashboardItem
-DashboardManager = dashboard.DashboardManager
-GridPosition = dashboard.GridPosition
 
 
 class TestGridPosition:

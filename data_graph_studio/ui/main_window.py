@@ -788,6 +788,12 @@ class MainWindow(QMainWindow):
     
     def _load_file(self, file_path: str, settings: Optional[ParsingSettings] = None):
         """파일 로드 (설정 없이 - 바이너리 포맷용)"""
+        # 이전 스레드가 실행 중이면 취소하고 대기
+        if hasattr(self, '_loader_thread') and self._loader_thread is not None:
+            if self._loader_thread.isRunning():
+                self.engine.cancel_loading()
+                self._loader_thread.wait(5000)  # 최대 5초 대기
+
         # 프로그레스 다이얼로그
         self._progress_dialog = QProgressDialog(
             f"Loading {Path(file_path).name}...",
@@ -798,7 +804,7 @@ class MainWindow(QMainWindow):
         self._progress_dialog.setWindowModality(Qt.WindowModal)
         self._progress_dialog.setAutoClose(True)
         self._progress_dialog.canceled.connect(self._cancel_loading)
-        
+
         # 로더 스레드 시작
         self._loader_thread = DataLoaderThread(self.engine, file_path)
         self._loader_thread.progress_updated.connect(self._on_loading_progress)
@@ -809,6 +815,12 @@ class MainWindow(QMainWindow):
     
     def _load_file_with_settings(self, file_path: str, settings: ParsingSettings):
         """파일 로드 (파싱 설정 적용)"""
+        # 이전 스레드가 실행 중이면 취소하고 대기
+        if hasattr(self, '_loader_thread') and self._loader_thread is not None:
+            if self._loader_thread.isRunning():
+                self.engine.cancel_loading()
+                self._loader_thread.wait(5000)  # 최대 5초 대기
+
         # 프로그레스 다이얼로그
         self._progress_dialog = QProgressDialog(
             f"Loading {Path(file_path).name}...",
@@ -819,7 +831,7 @@ class MainWindow(QMainWindow):
         self._progress_dialog.setWindowModality(Qt.WindowModal)
         self._progress_dialog.setAutoClose(True)
         self._progress_dialog.canceled.connect(self._cancel_loading)
-        
+
         # 로더 스레드 시작 (설정 적용)
         self._loader_thread = DataLoaderThreadWithSettings(self.engine, file_path, settings)
         self._loader_thread.progress_updated.connect(self._on_loading_progress)
@@ -1113,7 +1125,7 @@ class MainWindow(QMainWindow):
         """Get current chart and view settings for saving"""
         settings = {
             'version': '1.0',
-            'chart_type': self.state.chart_type.value if self.state.chart_type else None,
+            'chart_type': self.state.chart_settings.chart_type.value if self.state.chart_settings.chart_type else None,
             'tool_mode': self.state.tool_mode.value if self.state.tool_mode else None,
         }
 

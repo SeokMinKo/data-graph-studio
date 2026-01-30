@@ -8,10 +8,7 @@ import numpy as np
 import time
 from unittest.mock import MagicMock, patch
 
-import sys
-sys.path.insert(0, str(__file__).rsplit('tests', 1)[0] + 'src')
-
-from core.cache import CacheManager, CacheLevel, CacheEntry
+from data_graph_studio.core.cache import CacheManager, CacheLevel, CacheEntry
 
 
 class TestCacheEntry:

@@ -5,13 +5,6 @@ Tests for Grouped Table Model
 import pytest
 import polars as pl
 import numpy as np
-import os
-import sys
-
-# Add src to path
-src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
 
 from PySide6.QtCore import Qt
 from data_graph_studio.ui.panels.grouped_table_model import GroupedTableModel, GroupNode

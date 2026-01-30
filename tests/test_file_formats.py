@@ -7,13 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-try:
-    from data_graph_studio.core.data_engine import DataEngine, FileType, DelimiterType
-except ImportError:
-    from data_graph_studio.core.data_engine import DataEngine, FileType, DelimiterType
+from data_graph_studio.core.data_engine import DataEngine, FileType, DelimiterType
 
 
 class TestFileTypeDetection:

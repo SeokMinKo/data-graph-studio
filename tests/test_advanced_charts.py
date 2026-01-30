@@ -7,14 +7,11 @@ import numpy as np
 import polars as pl
 from datetime import date
 
-import sys
-sys.path.insert(0, str(__file__).rsplit('tests', 1)[0] + 'src')
-
-from graph.charts.box_plot import BoxPlotChart
-from graph.charts.violin_plot import ViolinPlotChart
-from graph.charts.heatmap import HeatmapChart
-from graph.charts.candlestick import CandlestickChart
-from graph.charts.waterfall import WaterfallChart
+from data_graph_studio.graph.charts.box_plot import BoxPlotChart
+from data_graph_studio.graph.charts.violin_plot import ViolinPlotChart
+from data_graph_studio.graph.charts.heatmap import HeatmapChart
+from data_graph_studio.graph.charts.candlestick import CandlestickChart
+from data_graph_studio.graph.charts.waterfall import WaterfallChart
 
 
 class TestBoxPlotChart:
@@ -382,7 +379,7 @@ class TestChartRegistry:
     
     def test_get_chart_by_type(self):
         """타입으로 차트 조회"""
-        from graph.charts import get_chart
+        from data_graph_studio.graph.charts import get_chart
         
         box = get_chart('box')
         violin = get_chart('violin')
@@ -398,7 +395,7 @@ class TestChartRegistry:
     
     def test_unknown_chart_type(self):
         """알 수 없는 차트 타입"""
-        from graph.charts import get_chart
+        from data_graph_studio.graph.charts import get_chart
         
         result = get_chart('unknown')
         assert result is None

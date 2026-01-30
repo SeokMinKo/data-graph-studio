@@ -827,7 +827,7 @@ class ParsingPreviewDialog(QDialog):
             if delimiter_type == DelimiterType.REGEX and delimiter:
                 try:
                     fields = re.split(delimiter, line)
-                except:
+                except re.error:
                     fields = [line]
             elif delimiter_type == DelimiterType.SPACE or delimiter == " ":
                 fields = line.split()

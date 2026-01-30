@@ -1591,7 +1591,7 @@ class StatPanel(QFrame):
                     hist, bins = np.histogram(clean_x, bins=self._x_bins)
                     self.x_hist_widget.plot(bins, hist, stepMode=True, fillLevel=0,
                                             brush=(100, 100, 200, 100))
-            except:
+            except (ValueError, TypeError):
                 pass
 
     def _update_y_histogram(self):
@@ -1620,7 +1620,7 @@ class StatPanel(QFrame):
                         pen=pg.mkPen((100, 200, 100, 255), width=1)
                     )
                     self.y_hist_widget.addItem(bar_item)
-            except:
+            except (ValueError, TypeError):
                 pass
     
     def update_histograms(self, x_data: Optional[np.ndarray], y_data: Optional[np.ndarray]):

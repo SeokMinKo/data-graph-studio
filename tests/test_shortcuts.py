@@ -9,31 +9,12 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 
-import sys
-import os
-
 # Create QApplication if not exists (required for Qt operations)
 app = QApplication.instance()
 if not app:
     app = QApplication([])
 
-# Add src to path
-src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-# Import shortcuts module directly
-import importlib.util
-spec = importlib.util.spec_from_file_location(
-    "shortcuts",
-    os.path.join(src_path, 'ui', 'shortcuts.py')
-)
-shortcuts = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(shortcuts)
-
-ShortcutManager = shortcuts.ShortcutManager
-Shortcut = shortcuts.Shortcut
-ShortcutCategory = shortcuts.ShortcutCategory
+from data_graph_studio.ui.shortcuts import ShortcutManager, Shortcut, ShortcutCategory
 
 
 class TestShortcut:

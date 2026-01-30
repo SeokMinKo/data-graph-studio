@@ -310,7 +310,10 @@ class ExpressionParser:
             cum_count = data.select(
                 pl.col(value_col).cum_count().over(partition_col).alias('count')
             )['count']
-            return cum_sum / cum_count
+            # 0으로 나누기 방지
+            cum_count = cum_count.fill_null(1)
+            safe_count = pl.when(cum_count == 0).then(1).otherwise(cum_count)
+            return cum_sum / safe_count
 
         return pl.Series([None] * len(data))
 

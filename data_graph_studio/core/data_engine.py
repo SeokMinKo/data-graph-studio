@@ -238,7 +238,7 @@ class DataEngine:
                     best = d
                     best_count = count
             return best
-        except:
+        except Exception:
             return ','
     
     def load_file(
@@ -512,12 +512,12 @@ class DataEngine:
         for col in df.columns:
             try:
                 # 정수 시도
-                df = df.with_columns(pl.col(col).cast(pl.Int64).alias(col))
-            except:
+                df = df.with_columns(pl.col(col).cast(pl.Int64))
+            except (pl.exceptions.ComputeError, pl.exceptions.InvalidOperationError):
                 try:
                     # 부동소수점 시도
-                    df = df.with_columns(pl.col(col).cast(pl.Float64).alias(col))
-                except:
+                    df = df.with_columns(pl.col(col).cast(pl.Float64))
+                except (pl.exceptions.ComputeError, pl.exceptions.InvalidOperationError):
                     pass  # 문자열 유지
         
         return df
@@ -561,6 +561,7 @@ class DataEngine:
 
             if system == 'Windows':
                 # Windows에서 tracerpt로 변환 시도
+                tmp_path = None
                 try:
                     with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
                         tmp_path = tmp.name
@@ -575,10 +576,8 @@ class DataEngine:
                     if result.returncode == 0 and os.path.exists(tmp_path):
                         if os.path.getsize(tmp_path) > 0:
                             df = self._load_csv(tmp_path, encoding, ',', True, 0, None)
-                            os.unlink(tmp_path)
                             return df
                         else:
-                            os.unlink(tmp_path)
                             raise ValueError(
                                 "ETL 파일 변환 결과가 비어 있습니다.\n"
                                 "파일이 손상되었거나 지원되지 않는 형식일 수 있습니다."
@@ -608,6 +607,10 @@ class DataEngine:
                         f"  2. tracerpt \"{path}\" -o output.csv -of CSV\n"
                         "  3. 생성된 output.csv 파일을 열기"
                     )
+                finally:
+                    # 임시 파일 정리
+                    if tmp_path and os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
             else:
                 # Linux/Mac에서는 바이너리 ETL 지원 안 함
                 filename = os.path.basename(path)
@@ -713,8 +716,9 @@ class DataEngine:
                     series = series.cast(pl.Categorical)
             
             optimized_cols.append(series)
-        
-        return pl.DataFrame(optimized_cols)
+
+        # 컬럼명과 함께 DataFrame 생성
+        return pl.DataFrame({col: series for col, series in zip(df.columns, optimized_cols)})
     
     def _create_profile(self, df: pl.DataFrame, load_time: float) -> DataProfile:
         """데이터 프로파일 생성"""
@@ -768,7 +772,7 @@ class DataEngine:
         column: str,
         operator: str,
         value: Any
-    ) -> pl.DataFrame:
+    ) -> Optional[pl.DataFrame]:
         """
         필터링
         
@@ -798,7 +802,7 @@ class DataEngine:
         
         return self._df.filter(ops[operator])
     
-    def sort(self, columns: List[str], descending: Union[bool, List[bool]] = False) -> pl.DataFrame:
+    def sort(self, columns: List[str], descending: Union[bool, List[bool]] = False) -> Optional[pl.DataFrame]:
         """정렬"""
         if self._df is None:
             return None
@@ -809,7 +813,7 @@ class DataEngine:
         group_columns: List[str],
         value_columns: List[str],
         agg_funcs: List[str]
-    ) -> pl.DataFrame:
+    ) -> Optional[pl.DataFrame]:
         """
         그룹별 집계
         
@@ -945,7 +949,7 @@ class DataEngine:
         
         return {col: self.get_statistics(col) for col in value_columns}
     
-    def sample(self, n: int = 10000, seed: int = 42) -> pl.DataFrame:
+    def sample(self, n: int = 10000, seed: int = 42) -> Optional[pl.DataFrame]:
         """샘플링"""
         if self._df is None:
             return None
@@ -953,13 +957,13 @@ class DataEngine:
             return self._df
         return self._df.sample(n=n, seed=seed)
     
-    def get_slice(self, start: int, end: int) -> pl.DataFrame:
+    def get_slice(self, start: int, end: int) -> Optional[pl.DataFrame]:
         """슬라이스 (가상 스크롤용)"""
         if self._df is None:
             return None
         return self._df.slice(start, end - start)
     
-    def search(self, query: str, columns: Optional[List[str]] = None) -> pl.DataFrame:
+    def search(self, query: str, columns: Optional[List[str]] = None) -> Optional[pl.DataFrame]:
         """텍스트 검색"""
         if self._df is None:
             return None

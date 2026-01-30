@@ -159,7 +159,7 @@ class GroupedTableModel(QAbstractItemModel):
         # Polars groupby 실행 (C 레벨에서 최적화)
         try:
             grouped = self._df.group_by(self._group_columns).agg(agg_exprs).sort(self._group_columns)
-        except:
+        except Exception:
             # 실패 시 기본 방식
             self._build_group_recursive(
                 self._root,
@@ -297,7 +297,7 @@ class GroupedTableModel(QAbstractItemModel):
                     node.aggregates[col] = subset[col].max()
                 else:
                     node.aggregates[col] = subset[col].sum()
-            except:
+            except Exception:
                 node.aggregates[col] = None
     
     def _get_all_rows(self, node: GroupNode) -> List[int]:
