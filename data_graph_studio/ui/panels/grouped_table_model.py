@@ -462,32 +462,92 @@ class GroupedTableModel(QAbstractItemModel):
         """Toggle expand state for a group row"""
         if row < 0 or row >= len(self._flat_view):
             return
-        
+
         node, row_idx = self._flat_view[row]
-        
+
         if row_idx is not None:
             return  # Not a group header
-        
-        if not node.children and len(node.rows) <= 1:
+
+        # If expanding and node has _count but no rows, load rows dynamically
+        if not node.expanded and "_count" in node.aggregates and not node.rows and not node.children:
+            self._load_node_rows(node)
+
+        if not node.children and len(node.rows) <= 1 and "_count" not in node.aggregates:
             return  # Nothing to expand
-        
+
         # Toggle
         node.expanded = not node.expanded
-        
+
         # Rebuild flat view
         self.beginResetModel()
         self._rebuild_flat_view()
         self.endResetModel()
-        
+
         self.expand_changed.emit()
+
+    def _load_node_rows(self, node: GroupNode):
+        """Dynamically load row indices for a node from the original dataframe"""
+        if self._df is None or not self._group_columns:
+            return
+
+        # Build filter for this group
+        # The node.key contains the values for each group column in order
+        if len(node.key) != len(self._group_columns):
+            return
+
+        try:
+            # Create mask for rows matching this group
+            mask = None
+            for col, val in zip(self._group_columns, node.key):
+                if val is None:
+                    col_mask = self._df[col].is_null()
+                else:
+                    col_mask = self._df[col] == val
+
+                if mask is None:
+                    mask = col_mask
+                else:
+                    mask = mask & col_mask
+
+            if mask is not None:
+                # Get row indices where mask is True
+                # Limit to prevent memory issues with very large groups
+                MAX_ROWS_PER_GROUP = 1000
+                row_indices = []
+                mask_list = mask.to_list()
+                for i, m in enumerate(mask_list):
+                    if m:
+                        row_indices.append(i)
+                        if len(row_indices) >= MAX_ROWS_PER_GROUP:
+                            break
+
+                node.rows = row_indices
+        except Exception as e:
+            print(f"Error loading node rows: {e}")
+            node.rows = []
     
     def expand_all(self):
         """Expand all groups"""
+        # First load rows for all leaf nodes that need it
+        self._load_all_leaf_rows(self._root)
         self._set_expand_all(self._root, True)
         self.beginResetModel()
         self._rebuild_flat_view()
         self.endResetModel()
         self.expand_changed.emit()
+
+    def _load_all_leaf_rows(self, node: GroupNode):
+        """Load rows for all leaf nodes that have _count but no rows"""
+        if node is None:
+            return
+
+        if node.children:
+            for child in node.children:
+                self._load_all_leaf_rows(child)
+        else:
+            # Leaf node - load rows if needed
+            if "_count" in node.aggregates and not node.rows:
+                self._load_node_rows(node)
     
     def collapse_all(self):
         """Collapse all groups"""
