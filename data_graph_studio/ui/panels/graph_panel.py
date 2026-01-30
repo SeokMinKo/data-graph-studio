@@ -469,13 +469,19 @@ class MainGraph(pg.PlotWidget):
         y_data: np.ndarray,
         groups: Optional[Dict[str, np.ndarray]] = None,
         chart_type: ChartType = ChartType.LINE,
-        settings: Optional[Dict] = None
+        settings: Optional[Dict] = None,
+        x_label: str = "",
+        y_label: str = ""
     ):
         """데이터 플롯"""
         self.clear_plot()
         
         self._data_x = x_data
         self._data_y = y_data
+        
+        # 축 제목 설정
+        self.setLabel('bottom', x_label)
+        self.setLabel('left', y_label)
         
         settings = settings or {}
         line_width = settings.get('line_width', 2)
@@ -667,11 +673,17 @@ class GraphPanel(QWidget):
         if self.state.group_columns:
             groups = self._build_group_masks()
         
+        # X축, Y축 컬럼 이름 결정
+        x_label = x_col if x_col else "Index"
+        y_label = y_col_name
+        
         self.main_graph.plot_data(
             x_data, y_data,
             groups=groups,
             chart_type=self.state.chart_settings.chart_type,
-            settings=settings
+            settings=settings,
+            x_label=x_label,
+            y_label=y_label
         )
         
         # 히스토그램 업데이트
