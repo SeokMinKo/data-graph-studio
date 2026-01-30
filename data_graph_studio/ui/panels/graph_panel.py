@@ -318,7 +318,7 @@ class GraphOptionsPanel(QFrame):
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(8)
 
-        # Header with float button
+        # Header (no float button for internal sections)
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(4)
@@ -329,22 +329,22 @@ class GraphOptionsPanel(QFrame):
 
         header_layout.addStretch()
 
-        self.float_btn = FloatButton()
-        header_layout.addWidget(self.float_btn)
-
         main_layout.addLayout(header_layout)
 
         # Tabs
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
-        
-        # Tab 1: Axes
-        self.tabs.addTab(self._create_axes_tab(), "Axes")
-        
-        # Tab 2: Chart
+
+        # Tab 1: Chart (includes chart type)
         self.tabs.addTab(self._create_chart_tab(), "Chart")
-        
-        # Tab 3: Style
+
+        # Tab 2: Legend (moved here as tab)
+        self.tabs.addTab(self._create_legend_tab(), "Legend")
+
+        # Tab 3: Axes
+        self.tabs.addTab(self._create_axes_tab(), "Axes")
+
+        # Tab 4: Style
         self.tabs.addTab(self._create_style_tab(), "Style")
     
     def _create_axes_tab(self) -> QWidget:
@@ -621,7 +621,165 @@ class GraphOptionsPanel(QFrame):
         
         layout.addStretch()
         return widget
-    
+
+    def _create_legend_tab(self) -> QWidget:
+        """범례 설정 탭"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(8)
+
+        # Legend Options Group
+        options_group = QGroupBox("Options")
+        options_layout = QVBoxLayout(options_group)
+
+        self.show_legend_check = QCheckBox("Show Legend")
+        self.show_legend_check.setChecked(True)
+        self.show_legend_check.stateChanged.connect(self._on_option_changed)
+        options_layout.addWidget(self.show_legend_check)
+
+        pos_layout = QHBoxLayout()
+        pos_layout.addWidget(QLabel("Position:"))
+        self.legend_pos_combo = QComboBox()
+        self.legend_pos_combo.addItems([
+            "Top Right", "Top Left", "Bottom Right", "Bottom Left",
+            "Top Center", "Bottom Center", "Right", "Left"
+        ])
+        self.legend_pos_combo.currentIndexChanged.connect(self._on_option_changed)
+        pos_layout.addWidget(self.legend_pos_combo)
+        options_layout.addLayout(pos_layout)
+
+        layout.addWidget(options_group)
+
+        # Series List Group
+        series_group = QGroupBox("Series")
+        series_layout = QVBoxLayout(series_group)
+
+        # Scroll area for series list
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setMinimumHeight(150)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        self.series_container = QWidget()
+        self.series_list_layout = QVBoxLayout(self.series_container)
+        self.series_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.series_list_layout.setSpacing(4)
+        self.series_list_layout.addStretch()
+
+        scroll.setWidget(self.series_container)
+        series_layout.addWidget(scroll)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+
+        show_all_btn = QPushButton("Show All")
+        show_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        show_all_btn.clicked.connect(self._show_all_series)
+        btn_layout.addWidget(show_all_btn)
+
+        hide_all_btn = QPushButton("Hide All")
+        hide_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        hide_all_btn.clicked.connect(self._hide_all_series)
+        btn_layout.addWidget(hide_all_btn)
+
+        series_layout.addLayout(btn_layout)
+
+        layout.addWidget(series_group)
+
+        layout.addStretch()
+
+        # Initialize series items list
+        self._series_items: List[Dict] = []
+        self._legend_colors = [
+            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+            "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        ]
+
+        return widget
+
+    def _show_all_series(self):
+        for item in self._series_items:
+            item['visible_check'].setChecked(True)
+
+    def _hide_all_series(self):
+        for item in self._series_items:
+            item['visible_check'].setChecked(False)
+
+    def set_series(self, series_names: List[str]):
+        """시리즈 목록 설정"""
+        # Clear existing
+        for item in self._series_items:
+            item['widget'].deleteLater()
+        self._series_items.clear()
+
+        # Add new series
+        for i, name in enumerate(series_names):
+            color = QColor(self._legend_colors[i % len(self._legend_colors)])
+            self._add_series_item(name, color, i)
+
+    def _add_series_item(self, name: str, color: QColor, index: int):
+        """시리즈 아이템 추가"""
+        item_widget = QWidget()
+        item_layout = QHBoxLayout(item_widget)
+        item_layout.setContentsMargins(4, 2, 4, 2)
+        item_layout.setSpacing(6)
+
+        # Visibility checkbox
+        visible_check = QCheckBox()
+        visible_check.setChecked(True)
+        visible_check.stateChanged.connect(self._on_option_changed)
+        item_layout.addWidget(visible_check)
+
+        # Color button
+        color_btn = ColorButton(color)
+        color_btn.color_changed.connect(self._on_option_changed)
+        item_layout.addWidget(color_btn)
+
+        # Name label
+        name_label = QLabel(name)
+        name_label.setStyleSheet("font-size: 11px; color: #374151;")
+        item_layout.addWidget(name_label, 1)
+
+        # Insert before stretch
+        self.series_list_layout.insertWidget(len(self._series_items), item_widget)
+
+        self._series_items.append({
+            'name': name,
+            'widget': item_widget,
+            'visible_check': visible_check,
+            'color_btn': color_btn,
+            'index': index
+        })
+
+    def get_legend_settings(self) -> Dict[str, Any]:
+        """범례 설정 반환"""
+        position_map = {
+            0: (1, 1),   # Top Right
+            1: (1, 0),   # Top Left
+            2: (0, 1),   # Bottom Right
+            3: (0, 0),   # Bottom Left
+            4: (1, 0.5), # Top Center
+            5: (0, 0.5), # Bottom Center
+            6: (0.5, 1), # Right
+            7: (0.5, 0), # Left
+        }
+
+        series_settings = []
+        for item in self._series_items:
+            series_settings.append({
+                'name': item['name'],
+                'visible': item['visible_check'].isChecked(),
+                'color': item['color_btn'].color().name(),
+            })
+
+        return {
+            'show': self.show_legend_check.isChecked(),
+            'position': position_map.get(self.legend_pos_combo.currentIndex(), (1, 1)),
+            'series': series_settings
+        }
+
     def _on_chart_type_changed(self, index: int):
         chart_type = self.chart_type_combo.currentData()
         if chart_type:
@@ -983,7 +1141,7 @@ class StatPanel(QFrame):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        # Header with float button
+        # Header (no float button for internal sections)
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(4)
@@ -993,9 +1151,6 @@ class StatPanel(QFrame):
         header_layout.addWidget(header)
 
         header_layout.addStretch()
-
-        self.float_btn = FloatButton()
-        header_layout.addWidget(self.float_btn)
 
         layout.addLayout(header_layout)
 
@@ -1144,7 +1299,7 @@ class StatPanel(QFrame):
 # ==================== Main Graph ====================
 
 class MainGraph(pg.PlotWidget):
-    """메인 그래프 위젯"""
+    """메인 그래프 위젯 with hover tooltip support"""
 
     points_selected = Signal(list)
 
@@ -1162,13 +1317,23 @@ class MainGraph(pg.PlotWidget):
         self.setLabel('bottom', '')
 
         self.legend = self.addLegend()
+        self._legend_visible = True
+        self._legend_position = (1, 1)  # Default: top right
 
         self._plot_items = []
         self._scatter_items = []
         self._data_x = None
         self._data_y = None
 
+        # Hover data columns
+        self._hover_columns: List[str] = []
+        self._hover_data: Optional[Dict[str, list]] = None
+        self._tooltip_item = None
+
+        # Enable mouse tracking for hover
+        self.setMouseTracking(True)
         self.scene().sigMouseClicked.connect(self._on_mouse_clicked)
+        self.scene().sigMouseMoved.connect(self._on_mouse_moved)
     
     def plot_data(
         self,
@@ -1226,9 +1391,36 @@ class MainGraph(pg.PlotWidget):
         if options.get('y_log'):
             self.setLogMode(x=self.getPlotItem().getAxis('bottom').logMode, y=True)
         
-        # Legend visibility
+        # Legend visibility and position
         if legend_settings.get('show', True):
             self.legend.show()
+            # Apply legend position
+            position = legend_settings.get('position', (1, 1))  # Default top right
+            # Position format: (vertical, horizontal) where:
+            # vertical: 0=bottom, 1=top, 0.5=middle
+            # horizontal: 0=left, 1=right, 0.5=center
+            v, h = position
+
+            # Map position to anchor points
+            # For legend.anchor(itemPos, parentPos):
+            # itemPos: point on the legend item (0,0 = top-left, 1,1 = bottom-right)
+            # parentPos: point on the parent viewbox (0,0 = top-left, 1,1 = bottom-right)
+            if v == 1 and h == 1:  # Top Right
+                self.legend.anchor((1, 0), (1, 0), offset=(-10, 10))
+            elif v == 1 and h == 0:  # Top Left
+                self.legend.anchor((0, 0), (0, 0), offset=(10, 10))
+            elif v == 0 and h == 1:  # Bottom Right
+                self.legend.anchor((1, 1), (1, 1), offset=(-10, -10))
+            elif v == 0 and h == 0:  # Bottom Left
+                self.legend.anchor((0, 1), (0, 1), offset=(10, -10))
+            elif v == 1 and h == 0.5:  # Top Center
+                self.legend.anchor((0.5, 0), (0.5, 0), offset=(0, 10))
+            elif v == 0 and h == 0.5:  # Bottom Center
+                self.legend.anchor((0.5, 1), (0.5, 1), offset=(0, -10))
+            elif v == 0.5 and h == 1:  # Right
+                self.legend.anchor((1, 0.5), (1, 0.5), offset=(-10, 0))
+            elif v == 0.5 and h == 0:  # Left
+                self.legend.anchor((0, 0.5), (0, 0.5), offset=(10, 0))
         else:
             self.legend.hide()
         
@@ -1342,6 +1534,90 @@ class MainGraph(pg.PlotWidget):
             # TODO: Selection logic
             pass
 
+    def _on_mouse_moved(self, pos):
+        """Handle mouse move for hover tooltip"""
+        if self._data_x is None or self._data_y is None:
+            self._hide_tooltip()
+            return
+
+        if not self._hover_columns or not self._hover_data:
+            self._hide_tooltip()
+            return
+
+        # Convert scene position to view coordinates
+        mouse_point = self.plotItem.vb.mapSceneToView(pos)
+        mx, my = mouse_point.x(), mouse_point.y()
+
+        # Find nearest point
+        if len(self._data_x) == 0:
+            self._hide_tooltip()
+            return
+
+        # Calculate distance to each point (normalized)
+        view_range = self.viewRange()
+        x_range = view_range[0][1] - view_range[0][0]
+        y_range = view_range[1][1] - view_range[1][0]
+
+        if x_range == 0 or y_range == 0:
+            self._hide_tooltip()
+            return
+
+        # Normalized distance
+        dx = (self._data_x - mx) / x_range
+        dy = (self._data_y - my) / y_range
+        distances = np.sqrt(dx**2 + dy**2)
+
+        nearest_idx = np.argmin(distances)
+        min_dist = distances[nearest_idx]
+
+        # Only show tooltip if close enough (within 5% of view range)
+        if min_dist < 0.05:
+            self._show_tooltip(nearest_idx, self._data_x[nearest_idx], self._data_y[nearest_idx])
+        else:
+            self._hide_tooltip()
+
+    def _show_tooltip(self, idx: int, x_val: float, y_val: float):
+        """Show tooltip at data point"""
+        if self._tooltip_item is None:
+            self._tooltip_item = pg.TextItem(anchor=(0, 1), fill='w', border='k')
+            self._tooltip_item.setZValue(1000)
+            self.addItem(self._tooltip_item)
+
+        # Build tooltip text
+        lines = [f"X: {self._format_value(x_val)}", f"Y: {self._format_value(y_val)}"]
+
+        for col in self._hover_columns:
+            if col in self._hover_data and idx < len(self._hover_data[col]):
+                val = self._hover_data[col][idx]
+                lines.append(f"{col}: {self._format_value(val)}")
+
+        self._tooltip_item.setText("\n".join(lines))
+        self._tooltip_item.setPos(x_val, y_val)
+        self._tooltip_item.show()
+
+    def _hide_tooltip(self):
+        """Hide tooltip"""
+        if self._tooltip_item is not None:
+            self._tooltip_item.hide()
+
+    def _format_value(self, val) -> str:
+        """Format value for display"""
+        if val is None:
+            return "N/A"
+        if isinstance(val, float):
+            if abs(val) >= 1000000:
+                return f"{val:.2e}"
+            elif abs(val) >= 100:
+                return f"{val:.1f}"
+            else:
+                return f"{val:.3f}"
+        return str(val)
+
+    def set_hover_data(self, hover_columns: List[str], hover_data: Dict[str, list]):
+        """Set hover data columns and values"""
+        self._hover_columns = hover_columns or []
+        self._hover_data = hover_data or {}
+
 
 # ==================== Graph Panel ====================
 
@@ -1349,21 +1625,20 @@ class GraphPanel(QWidget):
     """
     Graph Panel - Main container
 
-    Layout (reordered):
-    ┌──────────┬──────────┬───────────────────────────┬──────────┐
-    │ Options  │  Legend  │       Main Graph          │  Stats   │
-    │ (240px)  │ (200px)  │                           │ (180px)  │
-    └──────────┴──────────┴───────────────────────────┴──────────┘
+    Layout:
+    ┌──────────────┬───────────────────────────┬──────────┐
+    │   Options    │       Main Graph          │  Stats   │
+    │ (280px)      │                           │ (180px)  │
+    │ (Chart/      │                           │          │
+    │  Legend/     │                           │          │
+    │  Axes/Style) │                           │          │
+    └──────────────┴───────────────────────────┴──────────┘
     """
 
     def __init__(self, state: AppState, engine: DataEngine):
         super().__init__()
         self.state = state
         self.engine = engine
-
-        # Float windows tracking
-        self._float_windows: Dict[str, FloatWindow] = {}
-        self._placeholders: Dict[str, QWidget] = {}
 
         self._setup_ui()
         self._connect_signals()
@@ -1375,180 +1650,56 @@ class GraphPanel(QWidget):
 
         self.splitter = QSplitter(Qt.Horizontal)
 
-        # Options Panel (left)
+        # Options Panel (left) - now includes Legend as a tab
         self.options_panel = GraphOptionsPanel(self.state)
         self.splitter.addWidget(self.options_panel)
-
-        # Legend Panel (second - moved here)
-        self.legend_panel = LegendSettingsPanel(self.state)
-        self.splitter.addWidget(self.legend_panel)
 
         # Main Graph (center - main content)
         self.main_graph = MainGraph(self.state)
         self.splitter.addWidget(self.main_graph)
 
-        # Stat Panel (far right)
+        # Stat Panel (right) - no float button
         self.stat_panel = StatPanel(self.state)
         self.splitter.addWidget(self.stat_panel)
 
-        # Splitter sizes: Options(240) + Legend(200) + Graph(stretch) + Stats(180)
-        self.splitter.setSizes([240, 200, 500, 180])
+        # Splitter sizes: Options(280) + Graph(stretch) + Stats(180)
+        self.splitter.setSizes([280, 500, 180])
         self.splitter.setStretchFactor(0, 0)  # Options: fixed
-        self.splitter.setStretchFactor(1, 0)  # Legend: fixed
-        self.splitter.setStretchFactor(2, 1)  # Graph: stretch
-        self.splitter.setStretchFactor(3, 0)  # Stats: fixed
+        self.splitter.setStretchFactor(1, 1)  # Graph: stretch
+        self.splitter.setStretchFactor(2, 0)  # Stats: fixed
 
         layout.addWidget(self.splitter)
-
-        # Create placeholders for floating sections
-        self._create_placeholders()
-
-        # Connect float buttons
-        self._connect_float_buttons()
     
     def _connect_signals(self):
         self.state.chart_settings_changed.connect(self.refresh)
         self.state.group_zone_changed.connect(self._on_group_changed)
         self.state.value_zone_changed.connect(self.refresh)
+        self.state.hover_zone_changed.connect(self.refresh)
         self.state.selection_changed.connect(self._on_selection_changed)
         self.options_panel.option_changed.connect(self.refresh)
-        self.legend_panel.settings_changed.connect(self.refresh)
 
-    def _create_placeholders(self):
-        """플로팅 시 보여줄 플레이스홀더 생성"""
-        sections = [
-            ("options", "⚙️ Chart Options"),
-            ("legend", "📊 Legend"),
-            ("graph", "📈 Graph"),
-            ("stats", "📈 Statistics")
-        ]
-
-        for key, title in sections:
-            placeholder = QFrame()
-            placeholder.setStyleSheet("""
-                QFrame {
-                    background: #F9FAFB;
-                    border: 2px dashed #D1D5DB;
-                    border-radius: 8px;
-                }
-            """)
-            layout = QVBoxLayout(placeholder)
-            layout.setAlignment(Qt.AlignCenter)
-            label = QLabel(f"📤 {title}\n\nFloating as separate window")
-            label.setStyleSheet("color: #9CA3AF; font-size: 11px; background: transparent;")
-            label.setAlignment(Qt.AlignCenter)
-            layout.addWidget(label)
-            placeholder.hide()
-            self._placeholders[key] = placeholder
-
-    def _connect_float_buttons(self):
-        """Float 버튼들 연결"""
-        self.options_panel.float_btn.clicked.connect(lambda: self._float_section("options"))
-        self.legend_panel.float_btn.clicked.connect(lambda: self._float_section("legend"))
-        self.stat_panel.float_btn.clicked.connect(lambda: self._float_section("stats"))
-
-    def _float_section(self, section_key: str):
-        """섹션을 독립 창으로 분리"""
-        if section_key in self._float_windows:
-            # 이미 플로팅 중
-            self._float_windows[section_key].raise_()
-            self._float_windows[section_key].activateWindow()
-            return
-
-        # 섹션별 위젯과 타이틀 매핑
-        section_map = {
-            "options": (self.options_panel, "⚙️ Chart Options", 0),
-            "legend": (self.legend_panel, "📊 Legend", 1),
-            "stats": (self.stat_panel, "📈 Statistics", 3),
-        }
-
-        if section_key not in section_map:
-            return
-
-        widget, title, splitter_index = section_map[section_key]
-
-        # 메인 윈도우 찾기
-        main_window = self._find_main_window()
-
-        # Float window 생성
-        float_window = FloatWindow(title, widget, main_window)
-        float_window.dock_requested.connect(lambda: self._dock_section(section_key))
-        self._float_windows[section_key] = float_window
-
-        # 플레이스홀더로 교체
-        placeholder = self._placeholders[section_key]
-        self.splitter.replaceWidget(splitter_index, placeholder)
-        placeholder.show()
-
-        # Float 버튼 비활성화
-        if hasattr(widget, 'float_btn'):
-            widget.float_btn.setEnabled(False)
-
-        float_window.show()
-
-    def _dock_section(self, section_key: str):
-        """섹션을 메인 창으로 복귀"""
-        if section_key not in self._float_windows:
-            return
-
-        float_window = self._float_windows[section_key]
-        widget = float_window.get_content_widget()
-
-        # 섹션별 인덱스 매핑
-        index_map = {
-            "options": 0,
-            "legend": 1,
-            "stats": 3,
-        }
-
-        splitter_index = index_map.get(section_key, 0)
-
-        # 플레이스홀더를 원래 위젯으로 교체
-        placeholder = self._placeholders[section_key]
-        self.splitter.replaceWidget(splitter_index, widget)
-        placeholder.hide()
-        widget.show()
-
-        # Float 버튼 활성화
-        if hasattr(widget, 'float_btn'):
-            widget.float_btn.setEnabled(True)
-
-        # Float window 정리
-        float_window.close()
-        float_window.deleteLater()
-        del self._float_windows[section_key]
-
-    def _find_main_window(self):
-        """메인 윈도우 찾기"""
-        widget = self
-        while widget:
-            if widget.inherits("QMainWindow"):
-                return widget
-            widget = widget.parentWidget()
-        return None
-    
     def _on_group_changed(self):
         """그룹 변경 시 범례 업데이트"""
         if self.state.group_columns:
             groups = self._build_group_masks()
             if groups:
-                self.legend_panel.set_series(list(groups.keys()))
+                self.options_panel.set_series(list(groups.keys()))
         else:
             # Single series
             if self.state.value_columns:
-                self.legend_panel.set_series([self.state.value_columns[0].name])
+                self.options_panel.set_series([self.state.value_columns[0].name])
             else:
-                self.legend_panel.set_series(["Data"])
+                self.options_panel.set_series(["Data"])
         self.refresh()
-    
+
     def refresh(self):
         """Refresh graph"""
         if not self.engine.is_loaded:
             return
-        
-        # Get options
+
+        # Get options including legend settings
         options = self.options_panel.get_chart_options()
-        legend_settings = self.legend_panel.get_legend_settings()
+        legend_settings = self.options_panel.get_legend_settings()
         
         # X column (from state, set by X Zone)
         x_col = self.state.x_column
@@ -1605,7 +1756,24 @@ class GraphPanel(QWidget):
             options=options,
             legend_settings=legend_settings
         )
-        
+
+        # Set hover data
+        hover_columns = self.state.hover_columns
+        if hover_columns:
+            hover_data = {}
+            for col in hover_columns:
+                if col in self.engine.df.columns:
+                    col_data = self.engine.df[col].to_list()
+                    # Apply same sampling if needed
+                    if len(col_data) > MAX_POINTS and len(x_sampled) < len(col_data):
+                        # Simple downsampling for hover data
+                        step = len(col_data) // len(x_sampled)
+                        col_data = col_data[::step][:len(x_sampled)]
+                    hover_data[col] = col_data
+            self.main_graph.set_hover_data(hover_columns, hover_data)
+        else:
+            self.main_graph.set_hover_data([], {})
+
         # Update stats
         self.stat_panel.update_histograms(x_sampled, y_sampled)
         if self.state.value_columns:
@@ -1674,4 +1842,4 @@ class GraphPanel(QWidget):
             if self.engine.dtypes.get(col, '').startswith(('Int', 'Float'))
         ]
         if numeric_cols:
-            self.legend_panel.set_series([numeric_cols[0]])
+            self.options_panel.set_series([numeric_cols[0]])

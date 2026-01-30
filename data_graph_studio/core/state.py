@@ -174,18 +174,19 @@ class AppState(QObject):
     # Signals
     data_loaded = Signal()
     data_cleared = Signal()
-    
+
     group_zone_changed = Signal()
     value_zone_changed = Signal()
-    
+    hover_zone_changed = Signal()  # New signal for hover columns
+
     filter_changed = Signal()
     sort_changed = Signal()
-    
+
     selection_changed = Signal()
-    
+
     chart_settings_changed = Signal()
     tool_mode_changed = Signal()
-    
+
     # Summary 업데이트
     summary_updated = Signal(dict)  # 통계 데이터
     
@@ -196,13 +197,16 @@ class AppState(QObject):
         self._data_loaded: bool = False
         self._total_rows: int = 0
         self._visible_rows: int = 0
-        
+
         # Group Zone
         self._group_columns: List[GroupColumn] = []
-        
+
         # Value Zone
         self._value_columns: List[ValueColumn] = []
-        
+
+        # Hover Zone - columns to show on hover
+        self._hover_columns: List[str] = []
+
         # X축 컬럼
         self._x_column: Optional[str] = None
         
@@ -368,7 +372,30 @@ class AppState(QObject):
     def has_secondary_axis(self) -> bool:
         """Secondary 축 존재 여부"""
         return any(v.use_secondary_axis for v in self._value_columns)
-    
+
+    # ==================== Hover Zone ====================
+
+    @property
+    def hover_columns(self) -> List[str]:
+        return self._hover_columns
+
+    def add_hover_column(self, name: str):
+        """Add column to hover display"""
+        if name not in self._hover_columns:
+            self._hover_columns.append(name)
+            self.hover_zone_changed.emit()
+
+    def remove_hover_column(self, name: str):
+        """Remove column from hover display"""
+        if name in self._hover_columns:
+            self._hover_columns.remove(name)
+            self.hover_zone_changed.emit()
+
+    def clear_hover_columns(self):
+        """Clear all hover columns"""
+        self._hover_columns.clear()
+        self.hover_zone_changed.emit()
+
     # ==================== X Column ====================
     
     @property
@@ -524,6 +551,7 @@ class AppState(QObject):
         self._visible_rows = 0
         self._group_columns.clear()
         self._value_columns.clear()
+        self._hover_columns.clear()
         self._x_column = None
         self._filters.clear()
         self._sorts.clear()
@@ -532,5 +560,5 @@ class AppState(QObject):
         self._tool_mode = ToolMode.PAN
         self._column_order.clear()
         self._hidden_columns.clear()
-        
+
         self.data_cleared.emit()
