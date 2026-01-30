@@ -2,11 +2,14 @@
 Data Engine - Polars 기반 빅데이터 처리 엔진
 """
 
+import gc
 import os
 import re
 import time
+import logging
+import warnings
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable, Union
+from typing import Optional, List, Dict, Any, Callable, Union, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
@@ -17,6 +20,9 @@ import tempfile
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+# 로깅 설정
+logger = logging.getLogger(__name__)
 
 
 class FileType(Enum):
@@ -111,35 +117,59 @@ class DataSource:
     sheet_name: Optional[str] = None  # Excel용
 
 
+class PrecisionMode(Enum):
+    """부동소수점 정밀도 모드"""
+    AUTO = "auto"  # 자동 다운캐스팅 (기본값, Float32)
+    HIGH = "high"  # 높은 정밀도 유지 (Float64)
+    SCIENTIFIC = "scientific"  # 과학 데이터용 (Float64 + 특수 컬럼 감지)
+
+
 class DataEngine:
     """
     빅데이터 처리 엔진
-    
+
     Features:
     - 청크 기반 로딩
     - 메모리 최적화 (타입 다운캐스팅)
     - 지연 평가 (Lazy evaluation)
     - 인덱싱
     - 캐싱
+    - 재시도 메커니즘
     """
-    
+
     # 기본 청크 크기 (행 수)
     DEFAULT_CHUNK_SIZE = 100_000
-    
+
     # 대용량 파일 임계값 (bytes)
     LARGE_FILE_THRESHOLD = 100 * 1024 * 1024  # 100MB
-    
-    def __init__(self):
+
+    # LazyFrame 사용 임계값 (1GB)
+    LAZY_EVAL_THRESHOLD = 1024 * 1024 * 1024
+
+    # 파일 접근 재시도 설정
+    MAX_RETRIES = 3
+    RETRY_DELAY_SECONDS = 0.5
+
+    # 과학/금융 컬럼 패턴 (정밀도 유지 필요)
+    PRECISION_SENSITIVE_PATTERNS = [
+        r'price', r'amount', r'rate', r'ratio', r'percent',
+        r'lat', r'lon', r'coord', r'precision', r'accuracy',
+        r'scientific', r'decimal'
+    ]
+
+    def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
         self._df: Optional[pl.DataFrame] = None
         self._lazy_df: Optional[pl.LazyFrame] = None
         self._source: Optional[DataSource] = None
         self._profile: Optional[DataProfile] = None
         self._progress: LoadingProgress = LoadingProgress()
-        self._indexes: Dict[str, Dict] = {}  # column_name -> index
+        self._indexes: Dict[str, Dict] = {}  # column_name -> index (deprecated)
         self._cache: Dict[str, Any] = {}
         self._loading_thread: Optional[threading.Thread] = None
         self._cancel_loading = False
         self._progress_callback: Optional[Callable[[LoadingProgress], None]] = None
+        self._precision_mode: PrecisionMode = precision_mode
+        self._precision_columns: Set[str] = set()  # 정밀도 유지 필요 컬럼
     
     @property
     def df(self) -> Optional[pl.DataFrame]:
@@ -241,6 +271,28 @@ class DataEngine:
         except:
             return ','
     
+    def set_precision_mode(self, mode: PrecisionMode):
+        """정밀도 모드 설정"""
+        self._precision_mode = mode
+
+    def add_precision_column(self, column: str):
+        """정밀도 유지가 필요한 컬럼 추가"""
+        self._precision_columns.add(column)
+
+    def _retry_file_access(self, path: str) -> bool:
+        """파일 접근 재시도 (네트워크 드라이브 등을 위한)"""
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                if os.path.exists(path) and os.access(path, os.R_OK):
+                    return True
+            except OSError as e:
+                logger.warning(f"File access attempt {attempt + 1} failed: {e}")
+
+            if attempt < self.MAX_RETRIES - 1:
+                time.sleep(self.RETRY_DELAY_SECONDS * (attempt + 1))  # 지수 백오프
+
+        return False
+
     def load_file(
         self,
         path: str,
@@ -258,10 +310,11 @@ class DataEngine:
         async_load: bool = False,
         excluded_columns: Optional[List[str]] = None,
         process_filter: Optional[List[str]] = None,  # For ETL files - filter by process names
+        precision_mode: Optional[PrecisionMode] = None,  # 정밀도 모드 오버라이드
     ) -> bool:
         """
         파일 로드
-        
+
         Args:
             path: 파일 경로
             file_type: 파일 형식 (자동 감지)
@@ -276,9 +329,15 @@ class DataEngine:
             chunk_size: 청크 크기 (행 수)
             optimize_memory: 메모리 최적화 여부
             async_load: 비동기 로드 여부
+            precision_mode: 정밀도 모드 (None이면 엔진 기본값 사용)
         """
-        if not os.path.exists(path):
-            self._update_progress(status="error", error_message=f"File not found: {path}")
+        # 정밀도 모드 설정
+        if precision_mode is not None:
+            self._precision_mode = precision_mode
+
+        # 파일 접근 재시도
+        if not self._retry_file_access(path):
+            self._update_progress(status="error", error_message=f"File not found or not accessible: {path}")
             return False
         
         # 파일 형식 감지
@@ -408,10 +467,16 @@ class DataEngine:
                 elapsed_seconds=time.time() - start_time
             )
 
+            # 로딩 완료 후 메모리 정리
+            gc.collect()
+            logger.info(f"File loaded successfully: {len(self._df):,} rows, {len(self._df.columns)} columns")
+
             return True
 
         except Exception as e:
+            logger.error(f"Failed to load file: {e}", exc_info=True)
             self._update_progress(status="error", error_message=str(e))
+            gc.collect()  # 실패 시에도 메모리 정리
             return False
     
     def _load_csv(
@@ -676,24 +741,38 @@ class DataEngine:
 
         return filtered_df
 
+    def _is_precision_sensitive_column(self, col_name: str) -> bool:
+        """컬럼이 정밀도 유지가 필요한지 확인"""
+        # 명시적으로 지정된 컬럼
+        if col_name in self._precision_columns:
+            return True
+
+        # 패턴 매칭
+        col_lower = col_name.lower()
+        for pattern in self.PRECISION_SENSITIVE_PATTERNS:
+            if re.search(pattern, col_lower):
+                return True
+
+        return False
+
     def _optimize_memory(self, df: pl.DataFrame) -> pl.DataFrame:
         """
         메모리 최적화
         - 정수 다운캐스팅
-        - 부동소수점 다운캐스팅
+        - 부동소수점 다운캐스팅 (정밀도 모드에 따라)
         - 문자열 → Categorical 변환
         """
         optimized_cols = []
-        
+
         for col in df.columns:
             dtype = df[col].dtype
             series = df[col]
-            
+
             if dtype in [pl.Int64, pl.Int32]:
                 # 정수 다운캐스팅
                 min_val = series.min()
                 max_val = series.max()
-                
+
                 if min_val is not None and max_val is not None:
                     if min_val >= -128 and max_val <= 127:
                         series = series.cast(pl.Int8)
@@ -701,19 +780,28 @@ class DataEngine:
                         series = series.cast(pl.Int16)
                     elif min_val >= -2147483648 and max_val <= 2147483647:
                         series = series.cast(pl.Int32)
-                        
+
             elif dtype == pl.Float64:
-                # Float64 → Float32
-                series = series.cast(pl.Float32)
-                
+                # 정밀도 모드에 따른 Float 다운캐스팅
+                should_keep_precision = (
+                    self._precision_mode == PrecisionMode.HIGH or
+                    self._precision_mode == PrecisionMode.SCIENTIFIC or
+                    self._is_precision_sensitive_column(col)
+                )
+
+                if not should_keep_precision:
+                    # Float64 → Float32 (AUTO 모드이고 민감 컬럼이 아닌 경우)
+                    series = series.cast(pl.Float32)
+                # else: Float64 유지
+
             elif dtype == pl.Utf8:
                 # 유니크 값이 적으면 Categorical로
                 unique_ratio = series.n_unique() / len(series) if len(series) > 0 else 1
                 if unique_ratio < 0.5:  # 50% 미만이면 카테고리
                     series = series.cast(pl.Categorical)
-            
+
             optimized_cols.append(series)
-        
+
         return pl.DataFrame(optimized_cols)
     
     def _create_profile(self, df: pl.DataFrame, load_time: float) -> DataProfile:
@@ -959,39 +1047,89 @@ class DataEngine:
             return None
         return self._df.slice(start, end - start)
     
-    def search(self, query: str, columns: Optional[List[str]] = None) -> pl.DataFrame:
-        """텍스트 검색"""
+    def search(
+        self,
+        query: str,
+        columns: Optional[List[str]] = None,
+        case_sensitive: bool = False,
+        max_columns: int = 20
+    ) -> pl.DataFrame:
+        """
+        텍스트 검색 (최적화된 버전)
+
+        Args:
+            query: 검색어
+            columns: 검색할 컬럼 목록 (None이면 문자열 컬럼만)
+            case_sensitive: 대소문자 구분 여부
+            max_columns: 검색할 최대 컬럼 수 (성능 보장)
+        """
         if self._df is None:
             return None
-        
+
         if columns is None:
-            # 문자열 컬럼만
+            # 문자열 컬럼만 (최대 max_columns개)
             columns = [
                 col for col in self._df.columns
                 if self._df[col].dtype in [pl.Utf8, pl.Categorical]
-            ]
-        
+            ][:max_columns]
+
         if not columns:
             return self._df.head(0)  # 빈 결과
-        
-        # OR 조건으로 검색
-        condition = pl.lit(False)
+
+        # 대소문자 구분 없이 검색 (기본)
+        if not case_sensitive:
+            query = f"(?i){re.escape(query)}"
+            literal = False
+        else:
+            literal = True
+
+        # OR 조건으로 검색 (병렬 처리 활용)
+        conditions = []
         for col in columns:
-            condition = condition | pl.col(col).cast(pl.Utf8).str.contains(query, literal=True)
-        
-        return self._df.filter(condition)
+            try:
+                if literal:
+                    cond = pl.col(col).cast(pl.Utf8).str.contains(query, literal=True)
+                else:
+                    cond = pl.col(col).cast(pl.Utf8).str.contains(query, literal=False)
+                conditions.append(cond)
+            except Exception:
+                continue
+
+        if not conditions:
+            return self._df.head(0)
+
+        # 조건 합치기
+        combined = conditions[0]
+        for cond in conditions[1:]:
+            combined = combined | cond
+
+        return self._df.filter(combined)
     
     def create_index(self, column: str):
-        """인덱스 생성 (빠른 필터링용)"""
+        """
+        인덱스 생성 (빠른 필터링용)
+
+        [DEPRECATED] 이 메서드는 메모리 효율성 문제로 권장되지 않습니다.
+        Polars의 내장 필터링을 사용하세요.
+        """
+        warnings.warn(
+            "create_index is deprecated and will be removed in a future version. "
+            "Use Polars native filtering instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         if self._df is None or column not in self._df.columns:
             return
-        
-        # 값 → 행 인덱스 매핑
+
+        # 값 → 행 인덱스 매핑 (비효율적 - deprecated)
+        logger.warning(f"Creating index for column '{column}' - this is memory intensive")
         self._indexes[column] = {}
-        for idx, val in enumerate(self._df[column].to_list()):
-            if val not in self._indexes[column]:
-                self._indexes[column][val] = []
-            self._indexes[column][val].append(idx)
+        # 메모리 효율적인 방식으로 변경
+        unique_vals = self._df[column].unique().to_list()
+        for val in unique_vals:
+            mask = self._df[column] == val
+            indices = self._df.with_row_index().filter(mask)["index"].to_list()
+            self._indexes[column][val] = indices
     
     def clear(self):
         """데이터 클리어"""
@@ -1001,7 +1139,11 @@ class DataEngine:
         self._profile = None
         self._indexes.clear()
         self._cache.clear()
+        self._precision_columns.clear()
         self._progress = LoadingProgress()
+        # 메모리 정리
+        gc.collect()
+        logger.debug("Data engine cleared and memory collected")
     
     def export_csv(self, path: str, selected_rows: Optional[List[int]] = None):
         """CSV 내보내기"""
@@ -1029,9 +1171,118 @@ class DataEngine:
         """Parquet 내보내기"""
         if self._df is None:
             return
-        
+
         df = self._df
         if selected_rows is not None:
             df = self._df[selected_rows]
-        
+
         df.write_parquet(path)
+
+    # ==================== LazyFrame 지원 ====================
+
+    def load_lazy(self, path: str, **kwargs) -> bool:
+        """
+        LazyFrame으로 파일 로드 (대용량 파일용)
+
+        LazyFrame은 실제 연산을 수행하기 전까지 데이터를 메모리에 로드하지 않습니다.
+        대용량 파일의 필터링, 집계 등에 효율적입니다.
+
+        Args:
+            path: 파일 경로
+            **kwargs: scan 함수에 전달할 추가 인자
+
+        Returns:
+            성공 여부
+        """
+        if not self._retry_file_access(path):
+            self._update_progress(status="error", error_message=f"File not found: {path}")
+            return False
+
+        file_type = self.detect_file_type(path)
+
+        try:
+            if file_type == FileType.CSV:
+                self._lazy_df = pl.scan_csv(path, **kwargs)
+            elif file_type == FileType.PARQUET:
+                self._lazy_df = pl.scan_parquet(path, **kwargs)
+            elif file_type == FileType.JSON:
+                # JSON은 scan 지원 안함 - 일반 로드 후 lazy로 변환
+                self._df = pl.read_json(path)
+                self._lazy_df = self._df.lazy()
+            else:
+                # 다른 형식은 일반 로드 후 lazy로 변환
+                success = self.load_file(path, file_type=file_type, **kwargs)
+                if success and self._df is not None:
+                    self._lazy_df = self._df.lazy()
+                return success
+
+            logger.info(f"LazyFrame created for: {path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to create LazyFrame: {e}")
+            self._update_progress(status="error", error_message=str(e))
+            return False
+
+    def collect_lazy(
+        self,
+        limit: Optional[int] = None,
+        optimize_memory: bool = True
+    ) -> bool:
+        """
+        LazyFrame을 DataFrame으로 수집
+
+        Args:
+            limit: 수집할 최대 행 수 (None이면 전체)
+            optimize_memory: 메모리 최적화 적용 여부
+
+        Returns:
+            성공 여부
+        """
+        if self._lazy_df is None:
+            logger.warning("No LazyFrame to collect")
+            return False
+
+        try:
+            self._update_progress(status="collecting")
+
+            if limit is not None:
+                self._df = self._lazy_df.head(limit).collect()
+            else:
+                self._df = self._lazy_df.collect()
+
+            if optimize_memory:
+                self._update_progress(status="optimizing")
+                self._df = self._optimize_memory(self._df)
+
+            # 프로파일 생성
+            self._update_progress(status="profiling")
+            self._profile = self._create_profile(self._df, 0)
+
+            gc.collect()
+            logger.info(f"LazyFrame collected: {len(self._df):,} rows")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to collect LazyFrame: {e}")
+            return False
+
+    def query_lazy(self, expr: pl.Expr) -> Optional[pl.LazyFrame]:
+        """
+        LazyFrame에 표현식 적용
+
+        Args:
+            expr: Polars 표현식
+
+        Returns:
+            필터링된 LazyFrame
+        """
+        if self._lazy_df is None:
+            return None
+
+        return self._lazy_df.filter(expr)
+
+    @property
+    def has_lazy(self) -> bool:
+        """LazyFrame 존재 여부"""
+        return self._lazy_df is not None

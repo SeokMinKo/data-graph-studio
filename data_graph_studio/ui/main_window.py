@@ -3,7 +3,9 @@ Main Window - 메인 윈도우 및 레이아웃
 """
 
 import os
+import gc
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Optional, List
 
@@ -13,11 +15,15 @@ from PySide6.QtWidgets import (
     QProgressDialog, QApplication, QLabel, QDialog, QFrame, QComboBox,
     QInputDialog
 )
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread
+from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
 from ..core.state import AppState, ToolMode, ChartType
+from ..utils.memory import MemoryMonitor
+
+# 에러 로깅 설정
+logger = logging.getLogger(__name__)
 
 from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
@@ -104,6 +110,10 @@ class MainWindow(QMainWindow):
     └─────────────────────────────────┘
     """
     
+    # 대용량 파일 경고 임계값
+    LARGE_FILE_WARNING_MB = 500  # 500MB 이상 파일 경고
+    HUGE_FILE_WARNING_MB = 2000  # 2GB 이상 파일 강력 경고
+
     def __init__(self):
         super().__init__()
 
@@ -131,6 +141,9 @@ class MainWindow(QMainWindow):
         # Setup float handlers for main panels
         self._setup_float_handlers()
 
+        # Setup memory monitoring timer
+        self._setup_memory_monitor()
+
         # Apply initial state
         self._update_ui_state()
     
@@ -138,56 +151,68 @@ class MainWindow(QMainWindow):
         """윈도우 기본 설정"""
         self.setWindowTitle("Data Graph Studio")
         self.setMinimumSize(1200, 800)
-        
+
         # 화면 크기의 80%로 시작
         screen = QApplication.primaryScreen().geometry()
         self.resize(int(screen.width() * 0.8), int(screen.height() * 0.8))
-        
+
         # 중앙 정렬
         self.move(
             (screen.width() - self.width()) // 2,
             (screen.height() - self.height()) // 2
         )
+
+    @staticmethod
+    def _format_tooltip(action_name: str, shortcut: str) -> str:
+        """툴팁에 단축키를 보기 좋게 포맷팅"""
+        return f"<b>{action_name}</b><br><span style='color: #6B7280;'>Shortcut: {shortcut}</span>"
     
     def _setup_menubar(self):
         """메뉴바 설정"""
         menubar = self.menuBar()
-        
+
         # File Menu
         file_menu = menubar.addMenu("&File")
-        
+
         open_action = QAction("&Open...", self)
         open_action.setShortcut(QKeySequence.Open)
+        open_action.setStatusTip("Open a data file (Ctrl+O)")
         open_action.triggered.connect(self._on_open_file)
         file_menu.addAction(open_action)
-        
+
         file_menu.addSeparator()
-        
+
         save_project_action = QAction("&Save Project...", self)
         save_project_action.setShortcut(QKeySequence.Save)
+        save_project_action.setStatusTip("Save current project (Ctrl+S)")
         save_project_action.triggered.connect(self._on_save_project)
         file_menu.addAction(save_project_action)
-        
+
         file_menu.addSeparator()
-        
+
         export_menu = file_menu.addMenu("&Export")
-        
+
         export_csv = QAction("Export as CSV...", self)
+        export_csv.setShortcut("Ctrl+E")
+        export_csv.setStatusTip("Export data as CSV file")
         export_csv.triggered.connect(lambda: self._on_export("csv"))
         export_menu.addAction(export_csv)
-        
+
         export_excel = QAction("Export as Excel...", self)
+        export_excel.setStatusTip("Export data as Excel file")
         export_excel.triggered.connect(lambda: self._on_export("excel"))
         export_menu.addAction(export_excel)
-        
+
         export_image = QAction("Export Graph as PNG...", self)
+        export_image.setStatusTip("Export current graph as PNG image")
         export_image.triggered.connect(lambda: self._on_export("png"))
         export_menu.addAction(export_image)
-        
+
         file_menu.addSeparator()
-        
+
         exit_action = QAction("E&xit", self)
         exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.setStatusTip("Exit application (Ctrl+Q)")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
@@ -309,25 +334,25 @@ class MainWindow(QMainWindow):
         
         # Open file button with modern style
         open_btn = QAction("📂  Open", self)
-        open_btn.setToolTip("Open file (Ctrl+O)")
+        open_btn.setToolTip(self._format_tooltip("Open File", "Ctrl+O"))
         open_btn.triggered.connect(self._on_open_file)
         toolbar.addAction(open_btn)
-        
+
         toolbar.addSeparator()
-        
+
         # Graph tools with modern icons
         self._tool_actions = {}
-        
+
         tools = [
-            (ToolMode.ZOOM, "🔍", "Zoom Mode (Z)"),
-            (ToolMode.PAN, "✋", "Pan Mode (H)"),
-            (ToolMode.RECT_SELECT, "⬚", "Rectangle Select (R)"),
-            (ToolMode.LASSO_SELECT, "✏️", "Lasso Select (L)"),
+            (ToolMode.ZOOM, "🔍", "Zoom Mode", "Z"),
+            (ToolMode.PAN, "✋", "Pan Mode", "H"),
+            (ToolMode.RECT_SELECT, "⬚", "Rectangle Select", "R"),
+            (ToolMode.LASSO_SELECT, "✏️", "Lasso Select", "L"),
         ]
-        
-        for mode, icon, tooltip in tools:
+
+        for mode, icon, name, shortcut in tools:
             action = QAction(f"{icon}", self)
-            action.setToolTip(tooltip)
+            action.setToolTip(self._format_tooltip(name, shortcut))
             action.setCheckable(True)
             action.triggered.connect(lambda checked, m=mode: self.state.set_tool_mode(m))
             toolbar.addAction(action)
@@ -335,22 +360,22 @@ class MainWindow(QMainWindow):
         
         # Default to Pan
         self._tool_actions[ToolMode.PAN].setChecked(True)
-        
+
         toolbar.addSeparator()
-        
+
         # Action buttons
         deselect_btn = QAction("✕  Clear", self)
-        deselect_btn.setToolTip("Clear Selection (Esc)")
+        deselect_btn.setToolTip(self._format_tooltip("Clear Selection", "Esc"))
         deselect_btn.triggered.connect(self.state.clear_selection)
         toolbar.addAction(deselect_btn)
-        
+
         reset_btn = QAction("↺  Reset", self)
-        reset_btn.setToolTip("Reset View (Home)")
+        reset_btn.setToolTip(self._format_tooltip("Reset View", "Home"))
         reset_btn.triggered.connect(self._reset_graph_view)
         toolbar.addAction(reset_btn)
-        
+
         autofit_btn = QAction("⊡  Fit", self)
-        autofit_btn.setToolTip("Auto Fit (F)")
+        autofit_btn.setToolTip(self._format_tooltip("Auto Fit to Data", "F"))
         autofit_btn.triggered.connect(self._autofit_graph)
         toolbar.addAction(autofit_btn)
         
@@ -576,17 +601,55 @@ class MainWindow(QMainWindow):
             }
         """)
         self.setStatusBar(self.statusbar)
-        
+
         # Status labels with icons
         self._status_data_label = QLabel("📋 No data loaded")
         self._status_data_label.setStyleSheet("color: #9CA3AF;")
-        
+
         self._status_selection_label = QLabel("")
-        self._status_memory_label = QLabel("")
-        
+        self._status_memory_label = QLabel("💾 --")
+        self._status_memory_label.setToolTip("Memory Usage (Process / System)")
+
         self.statusbar.addWidget(self._status_data_label)
         self.statusbar.addWidget(self._status_selection_label, 1)
         self.statusbar.addPermanentWidget(self._status_memory_label)
+
+    def _setup_memory_monitor(self):
+        """메모리 모니터링 타이머 설정"""
+        self._memory_timer = QTimer(self)
+        self._memory_timer.timeout.connect(self._update_memory_status)
+        self._memory_timer.start(3000)  # 3초마다 업데이트
+        self._update_memory_status()  # 초기값 설정
+
+    def _update_memory_status(self):
+        """상태바 메모리 사용량 업데이트"""
+        try:
+            proc_mem = MemoryMonitor.get_process_memory()
+            sys_mem = MemoryMonitor.get_system_memory()
+
+            proc_str = MemoryMonitor.format_memory(proc_mem['rss_mb'])
+            sys_pct = sys_mem['percent']
+
+            # 색상 결정 (메모리 사용량에 따라)
+            if sys_pct > 85:
+                color = "#EF4444"  # 빨강 - 위험
+                emoji = "🔴"
+            elif sys_pct > 70:
+                color = "#F59E0B"  # 노랑 - 경고
+                emoji = "🟡"
+            else:
+                color = "#10B981"  # 녹색 - 정상
+                emoji = "🟢"
+
+            self._status_memory_label.setText(f"{emoji} {proc_str} ({sys_pct:.0f}%)")
+            self._status_memory_label.setStyleSheet(f"color: {color}; font-weight: 500;")
+            self._status_memory_label.setToolTip(
+                f"Process Memory: {proc_str}\n"
+                f"System Memory: {sys_pct:.1f}% used\n"
+                f"Available: {sys_mem['available_gb']:.1f} GB"
+            )
+        except Exception as e:
+            logger.debug(f"Memory status update failed: {e}")
     
     def _connect_signals(self):
         """시그널 연결"""
@@ -773,21 +836,83 @@ class MainWindow(QMainWindow):
     
     def _show_parsing_preview(self, file_path: str):
         """파싱 미리보기 다이얼로그 표시"""
+        # 대용량 파일 경고 체크
+        if not self._check_large_file_warning(file_path):
+            return
+
         ext = Path(file_path).suffix.lower()
-        
+
         # Binary formats don't need parsing preview
         if ext in ['.parquet', '.xlsx', '.xls', '.json']:
             self._load_file(file_path)
             return
-        
+
         # Show parsing preview dialog
         dialog = ParsingPreviewDialog(file_path, self)
         if dialog.exec() == QDialog.Accepted:
             settings = dialog.get_settings()
             self._load_file_with_settings(file_path, settings)
+
+    def _check_large_file_warning(self, file_path: str) -> bool:
+        """대용량 파일 경고 다이얼로그 표시. 계속 진행하면 True 반환"""
+        try:
+            file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        except OSError:
+            return True  # 파일 크기 확인 실패 시 계속 진행
+
+        if file_size_mb >= self.HUGE_FILE_WARNING_MB:
+            # 2GB 이상 - 강력 경고
+            sys_mem = MemoryMonitor.get_system_memory()
+            reply = QMessageBox.warning(
+                self,
+                "Very Large File Warning",
+                f"⚠️ This file is very large ({file_size_mb:.0f} MB).\n\n"
+                f"Loading may:\n"
+                f"  • Take a long time\n"
+                f"  • Use significant memory (estimated {file_size_mb * 2:.0f}+ MB)\n"
+                f"  • Cause system slowdown\n\n"
+                f"Current available memory: {sys_mem['available_gb']:.1f} GB\n\n"
+                f"Do you want to continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return False
+        elif file_size_mb >= self.LARGE_FILE_WARNING_MB:
+            # 500MB 이상 - 일반 경고
+            reply = QMessageBox.question(
+                self,
+                "Large File",
+                f"This file is {file_size_mb:.0f} MB.\n"
+                f"Loading may take some time.\n\n"
+                f"Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply != QMessageBox.Yes:
+                return False
+
+        return True
+
+    def _cleanup_loader_thread(self):
+        """기존 로더 스레드 정리"""
+        if self._loader_thread is not None:
+            if self._loader_thread.isRunning():
+                logger.debug("Waiting for previous loader thread to finish...")
+                self.engine.cancel_loading()
+                # 최대 2초 대기
+                if not self._loader_thread.wait(2000):
+                    logger.warning("Loader thread did not finish in time, terminating...")
+                    self._loader_thread.terminate()
+                    self._loader_thread.wait(1000)
+            self._loader_thread = None
+            gc.collect()  # 메모리 정리
     
     def _load_file(self, file_path: str, settings: Optional[ParsingSettings] = None):
         """파일 로드 (설정 없이 - 바이너리 포맷용)"""
+        # 기존 스레드 정리
+        self._cleanup_loader_thread()
+
         # 프로그레스 다이얼로그
         self._progress_dialog = QProgressDialog(
             f"Loading {Path(file_path).name}...",
@@ -797,18 +922,22 @@ class MainWindow(QMainWindow):
         )
         self._progress_dialog.setWindowModality(Qt.WindowModal)
         self._progress_dialog.setAutoClose(True)
+        self._progress_dialog.setMinimumWidth(400)
         self._progress_dialog.canceled.connect(self._cancel_loading)
-        
+
         # 로더 스레드 시작
         self._loader_thread = DataLoaderThread(self.engine, file_path)
         self._loader_thread.progress_updated.connect(self._on_loading_progress)
         self._loader_thread.finished_loading.connect(self._on_loading_finished)
         self._loader_thread.start()
-        
+
         self._progress_dialog.show()
     
     def _load_file_with_settings(self, file_path: str, settings: ParsingSettings):
         """파일 로드 (파싱 설정 적용)"""
+        # 기존 스레드 정리
+        self._cleanup_loader_thread()
+
         # 프로그레스 다이얼로그
         self._progress_dialog = QProgressDialog(
             f"Loading {Path(file_path).name}...",
@@ -818,49 +947,77 @@ class MainWindow(QMainWindow):
         )
         self._progress_dialog.setWindowModality(Qt.WindowModal)
         self._progress_dialog.setAutoClose(True)
+        self._progress_dialog.setMinimumWidth(400)
         self._progress_dialog.canceled.connect(self._cancel_loading)
-        
+
         # 로더 스레드 시작 (설정 적용)
         self._loader_thread = DataLoaderThreadWithSettings(self.engine, file_path, settings)
         self._loader_thread.progress_updated.connect(self._on_loading_progress)
         self._loader_thread.finished_loading.connect(self._on_loading_finished)
         self._loader_thread.start()
-        
+
         self._progress_dialog.show()
     
     def _on_loading_progress(self, progress: LoadingProgress):
         """로딩 진행률 업데이트"""
         if self._progress_dialog:
             self._progress_dialog.setValue(int(progress.progress_percent))
+
+            # 메모리 사용량 가져오기
+            try:
+                proc_mem = MemoryMonitor.get_process_memory()
+                mem_str = MemoryMonitor.format_memory(proc_mem['rss_mb'])
+            except Exception:
+                mem_str = "--"
+
+            # ETA 계산
+            eta_str = ""
+            if progress.eta_seconds > 0:
+                eta_str = f"\nETA: {progress.eta_seconds:.0f}s"
+
             self._progress_dialog.setLabelText(
                 f"Loading... {progress.status}\n"
-                f"{progress.loaded_rows:,} rows loaded"
+                f"{progress.loaded_rows:,} rows loaded\n"
+                f"Memory: {mem_str}{eta_str}"
             )
     
     def _on_loading_finished(self, success: bool):
         """로딩 완료"""
         if self._progress_dialog:
             self._progress_dialog.close()
-        
+
         if success:
             # 상태 업데이트
             self.state.set_data_loaded(True, self.engine.row_count)
             self.state.set_column_order(self.engine.columns)
-            
+
             # 프로파일 기반 Summary 업데이트
             if self.engine.profile:
                 self._update_summary_from_profile()
+
+            # 로딩 완료 후 메모리 정리
+            gc.collect()
+            logger.info(f"Data loaded: {self.engine.row_count:,} rows, {self.engine.column_count} columns")
         else:
+            error_msg = self.engine.progress.error_message or "Unknown error"
+            logger.error(f"Failed to load file: {error_msg}")
             QMessageBox.critical(
                 self,
                 "Error",
-                f"Failed to load file:\n{self.engine.progress.error_message}"
+                f"Failed to load file:\n{error_msg}"
             )
     
     def _cancel_loading(self):
         """로딩 취소"""
         if self._loader_thread and self._loader_thread.isRunning():
+            logger.info("Loading cancelled by user")
             self.engine.cancel_loading()
+            # 스레드 종료 대기 및 정리
+            self._loader_thread.wait(2000)
+            self._loader_thread = None
+            # 메모리 정리
+            gc.collect()
+            self.statusbar.showMessage("Loading cancelled", 3000)
     
     def _on_data_loaded(self):
         """데이터 로드 완료"""
