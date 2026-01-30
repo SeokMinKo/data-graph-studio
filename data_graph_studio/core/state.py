@@ -24,15 +24,43 @@ class AggregationType(Enum):
 
 class ChartType(Enum):
     """차트 타입"""
+    # 기본 차트
     LINE = "line"
     BAR = "bar"
     SCATTER = "scatter"
     AREA = "area"
     PIE = "pie"
+    HISTOGRAM = "histogram"
+
+    # 통계 차트
     HEATMAP = "heatmap"
     BOX = "box"
     VIOLIN = "violin"
-    HISTOGRAM = "histogram"
+
+    # Phase 2: 기본 확장 차트
+    HORIZONTAL_BAR = "horizontal_bar"
+    STACKED_BAR = "stacked_bar"
+    STACKED_BAR_100 = "stacked_bar_100"
+    BUBBLE = "bubble"
+    COMBINATION = "combination"
+    DONUT = "donut"
+
+    # Phase 3: 고급 확장 차트
+    TREEMAP = "treemap"
+    SUNBURST = "sunburst"
+    SANKEY = "sankey"
+    FUNNEL = "funnel"
+    RADAR = "radar"
+    GAUGE = "gauge"
+    GANTT = "gantt"
+    PARALLEL_COORDINATES = "parallel_coordinates"
+    NETWORK = "network"
+
+    # Spotfire 특화 차트
+    CROSS_TABLE = "cross_table"
+    GRAPHICAL_TABLE = "graphical_table"
+    SUMMARY_TABLE = "summary_table"
+    KPI = "kpi"
 
 
 class ToolMode(Enum):
