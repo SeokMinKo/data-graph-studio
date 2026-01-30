@@ -1540,6 +1540,10 @@ class TablePanel(QWidget):
         pass  # Hover data is managed by GraphPanel
 
     def set_data(self, df: Optional[pl.DataFrame]):
+        # 기존 캐시 클리어
+        self.table_model._column_cache.clear()
+        if self.grouped_model:
+            self.grouped_model._row_cache = []
         self._update_table_model(df)
     
     def _update_table_model(self, df: Optional[pl.DataFrame] = None):
