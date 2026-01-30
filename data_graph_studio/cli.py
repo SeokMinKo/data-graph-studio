@@ -1,676 +1,489 @@
-#!/usr/bin/env python3
 """
-Data Graph Studio - Command Line Interface
+Data Graph Studio CLI
+커맨드 라인에서 그래프 생성
 
 Usage:
-    dgs <command> [options]
-
-Commands:
-    info        Show file information and statistics
-    stats       Calculate statistics for columns
-    filter      Filter data and export
-    export      Export data to different formats
-    graph       Generate graph image (headless)
-    query       Run Polars SQL query
-    serve       Start API server for integration
-
-Examples:
+    dgs plot data.csv -x Time -y Value -o output.png
+    dgs plot data.csv --chart bar -x Category -y Sales
     dgs info data.csv
-    dgs stats data.csv --columns Sales,Quantity
-    dgs filter data.csv --where "Sales > 100" --output filtered.csv
-    dgs graph data.csv --x Date --y Sales --type line --output chart.png
-    dgs export data.csv --format parquet --output data.parquet
+    dgs convert data.csv -o data.parquet
+    dgs server --port 8080
 """
-
+import argparse
 import sys
 import os
 import json
 from pathlib import Path
 from typing import Optional, List
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-import click
-import polars as pl
-
-# Add src to path for imports
-src_path = Path(__file__).parent
-if str(src_path) not in sys.path:
-    sys.path.insert(0, str(src_path))
-
-from core.data_engine import DataEngine, FileType
-from core.expression_engine import ExpressionEngine
-
-
-# ==================== Helpers ====================
-
-def get_engine() -> DataEngine:
-    """Get a DataEngine instance"""
-    return DataEngine()
-
-
-def load_file(engine: DataEngine, path: str, **kwargs) -> bool:
-    """Load a file into the engine"""
-    if not os.path.exists(path):
-        click.echo(click.style(f"Error: File not found: {path}", fg='red'), err=True)
-        return False
+def create_parser():
+    """CLI 파서 생성"""
+    parser = argparse.ArgumentParser(
+        prog='dgs',
+        description='Data Graph Studio - Command Line Interface',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  dgs plot data.csv -x Time -y Value -o chart.png
+  dgs plot data.csv --chart bar -x Category -y "Sales,Profit"
+  dgs plot data.csv --profile my_profile -o report.png
+  dgs info data.csv
+  dgs convert data.xlsx -o data.csv
+  dgs batch ./data/ -o ./output/ --chart line
+  dgs server --port 8080
+        """
+    )
     
-    success = engine.load_file(path, **kwargs)
-    if not success:
-        click.echo(click.style(f"Error: Failed to load file: {engine.progress.error_message}", fg='red'), err=True)
-        return False
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
     
-    return True
-
-
-def format_bytes(size: int) -> str:
-    """Format bytes to human readable"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size < 1024:
-            return f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} TB"
-
-
-def format_number(num) -> str:
-    """Format number with commas"""
-    if num is None:
-        return "N/A"
-    if isinstance(num, float):
-        return f"{num:,.2f}"
-    return f"{num:,}"
-
-
-# ==================== CLI Commands ====================
-
-@click.group()
-@click.version_option(version='0.1.0', prog_name='Data Graph Studio')
-def cli():
-    """Data Graph Studio - Big Data Visualization Tool
+    # ===== plot command =====
+    plot_parser = subparsers.add_parser('plot', help='Create a chart from data')
+    plot_parser.add_argument('input', help='Input data file (CSV, Excel, Parquet, JSON)')
+    plot_parser.add_argument('-x', '--x-column', help='X-axis column name')
+    plot_parser.add_argument('-y', '--y-columns', help='Y-axis column names (comma-separated)')
+    plot_parser.add_argument('-c', '--chart', default='line',
+                            choices=['line', 'bar', 'scatter', 'pie', 'area', 'histogram'],
+                            help='Chart type (default: line)')
+    plot_parser.add_argument('-o', '--output', help='Output file (png, jpg, svg, pdf)')
+    plot_parser.add_argument('--width', type=int, default=1920, help='Image width (default: 1920)')
+    plot_parser.add_argument('--height', type=int, default=1080, help='Image height (default: 1080)')
+    plot_parser.add_argument('--title', help='Chart title')
+    plot_parser.add_argument('--profile', help='Apply saved profile')
+    plot_parser.add_argument('--config', help='JSON config file')
+    plot_parser.add_argument('--headless', action='store_true', help='Run without GUI')
+    plot_parser.add_argument('--dpi', type=int, default=100, help='DPI for output (default: 100)')
     
-    A powerful CLI for data analysis and visualization.
-    """
-    pass
-
-
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-@click.option('--format', '-f', 'output_format', type=click.Choice(['text', 'json']), default='text',
-              help='Output format')
-def info(file: str, output_format: str):
-    """Show file information and basic statistics
+    # ===== info command =====
+    info_parser = subparsers.add_parser('info', help='Show data file information')
+    info_parser.add_argument('input', help='Input data file')
+    info_parser.add_argument('--json', action='store_true', help='Output as JSON')
     
-    FILE: Path to data file (CSV, Excel, Parquet, JSON)
-    """
-    engine = get_engine()
+    # ===== convert command =====
+    convert_parser = subparsers.add_parser('convert', help='Convert data file format')
+    convert_parser.add_argument('input', help='Input file')
+    convert_parser.add_argument('-o', '--output', required=True, help='Output file')
+    convert_parser.add_argument('--sheet', help='Sheet name (for Excel files)')
     
-    if not load_file(engine, file):
-        sys.exit(1)
+    # ===== batch command =====
+    batch_parser = subparsers.add_parser('batch', help='Process multiple files')
+    batch_parser.add_argument('input_dir', help='Input directory')
+    batch_parser.add_argument('-o', '--output-dir', required=True, help='Output directory')
+    batch_parser.add_argument('--config', help='JSON config file')
+    batch_parser.add_argument('-c', '--chart', default='line', help='Chart type')
+    batch_parser.add_argument('-x', '--x-column', help='X-axis column')
+    batch_parser.add_argument('-y', '--y-columns', help='Y-axis columns')
+    batch_parser.add_argument('--format', default='png', choices=['png', 'jpg', 'svg', 'pdf'],
+                             help='Output format (default: png)')
     
-    profile = engine.profile
+    # ===== server command =====
+    server_parser = subparsers.add_parser('server', help='Start REST API server')
+    server_parser.add_argument('--port', type=int, default=8080, help='Server port (default: 8080)')
+    server_parser.add_argument('--host', default='127.0.0.1', help='Server host (default: 127.0.0.1)')
     
-    if output_format == 'json':
-        result = {
-            'file': file,
-            'rows': profile.total_rows,
-            'columns': profile.total_columns,
-            'memory_bytes': profile.memory_bytes,
-            'load_time_seconds': profile.load_time_seconds,
-            'column_info': [
-                {
-                    'name': col.name,
-                    'dtype': col.dtype,
-                    'null_count': col.null_count,
-                    'unique_count': col.unique_count,
-                    'is_numeric': col.is_numeric,
-                }
-                for col in profile.columns
-            ]
-        }
-        click.echo(json.dumps(result, indent=2, default=str))
-    else:
-        # Text format
-        click.echo(click.style(f"\n📊 File: {file}", fg='cyan', bold=True))
-        click.echo(f"   Rows: {profile.total_rows:,}")
-        click.echo(f"   Columns: {profile.total_columns}")
-        click.echo(f"   Memory: {format_bytes(profile.memory_bytes)}")
-        click.echo(f"   Load time: {profile.load_time_seconds:.2f}s")
-        
-        click.echo(click.style("\n📋 Columns:", fg='yellow'))
-        for col in profile.columns:
-            icon = "🔢" if col.is_numeric else "📝" if col.dtype == 'Utf8' else "📅" if col.is_temporal else "📦"
-            null_info = f" ({col.null_count} nulls)" if col.null_count > 0 else ""
-            click.echo(f"   {icon} {col.name}: {col.dtype}{null_info}")
+    # ===== watch command =====
+    watch_parser = subparsers.add_parser('watch', help='Watch file and auto-update chart')
+    watch_parser.add_argument('input', help='Input file to watch')
+    watch_parser.add_argument('-o', '--output', required=True, help='Output image file')
+    watch_parser.add_argument('--interval', type=float, default=5, help='Check interval in seconds')
+    watch_parser.add_argument('-x', '--x-column', help='X-axis column')
+    watch_parser.add_argument('-y', '--y-columns', help='Y-axis columns')
+    watch_parser.add_argument('-c', '--chart', default='line', help='Chart type')
+    
+    return parser
 
 
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-@click.option('--columns', '-c', help='Comma-separated column names (default: all numeric)')
-@click.option('--format', '-f', 'output_format', type=click.Choice(['text', 'json', 'csv']), default='text')
-def stats(file: str, columns: Optional[str], output_format: str):
-    """Calculate statistics for columns
+def cmd_plot(args):
+    """plot 명령 실행"""
+    import polars as pl
     
-    FILE: Path to data file
-    """
-    engine = get_engine()
+    # 입력 파일 확인
+    if not os.path.exists(args.input):
+        print(f"Error: File not found: {args.input}", file=sys.stderr)
+        return 1
     
-    if not load_file(engine, file):
-        sys.exit(1)
+    # 설정 파일 로드
+    config = {}
+    if args.config:
+        with open(args.config, 'r', encoding='utf-8') as f:
+            config = json.load(f)
     
-    # Determine columns
-    if columns:
-        col_list = [c.strip() for c in columns.split(',')]
-    else:
-        col_list = None  # Will use all numeric
-    
-    all_stats = engine.get_all_statistics(col_list)
-    
-    if output_format == 'json':
-        click.echo(json.dumps(all_stats, indent=2, default=str))
-    elif output_format == 'csv':
-        # CSV header
-        click.echo("column,count,mean,std,min,q1,median,q3,max,null_count")
-        for col, st in all_stats.items():
-            click.echo(f"{col},{st.get('count','')},{st.get('mean','')},{st.get('std','')},{st.get('min','')},{st.get('q1','')},{st.get('median','')},{st.get('q3','')},{st.get('max','')},{st.get('null_count','')}")
-    else:
-        click.echo(click.style(f"\n📈 Statistics for {file}", fg='cyan', bold=True))
-        
-        for col, st in all_stats.items():
-            click.echo(click.style(f"\n  {col}:", fg='yellow'))
-            click.echo(f"    Count:  {format_number(st.get('count'))}")
-            click.echo(f"    Mean:   {format_number(st.get('mean'))}")
-            click.echo(f"    Std:    {format_number(st.get('std'))}")
-            click.echo(f"    Min:    {format_number(st.get('min'))}")
-            click.echo(f"    25%:    {format_number(st.get('q1'))}")
-            click.echo(f"    50%:    {format_number(st.get('median'))}")
-            click.echo(f"    75%:    {format_number(st.get('q3'))}")
-            click.echo(f"    Max:    {format_number(st.get('max'))}")
-
-
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-@click.option('--where', '-w', 'condition', help='Filter condition (e.g., "Sales > 100")')
-@click.option('--columns', '-c', help='Columns to select (comma-separated)')
-@click.option('--limit', '-n', type=int, help='Limit number of rows')
-@click.option('--output', '-o', type=click.Path(), help='Output file path')
-@click.option('--format', '-f', 'output_format', type=click.Choice(['csv', 'json', 'parquet']), default='csv')
-def filter(file: str, condition: Optional[str], columns: Optional[str], 
-           limit: Optional[int], output: Optional[str], output_format: str):
-    """Filter and export data
-    
-    FILE: Path to data file
-    
-    Examples:
-        dgs filter data.csv --where "Sales > 100" --output high_sales.csv
-        dgs filter data.csv -c "Name,Sales" -n 10
-    """
-    engine = get_engine()
-    
-    if not load_file(engine, file):
-        sys.exit(1)
-    
-    df = engine.df
-    
-    # Apply filter condition using Polars SQL
-    if condition:
-        try:
-            # Use Polars SQL context
-            ctx = pl.SQLContext(data=df)
-            query = f"SELECT * FROM data WHERE {condition}"
-            df = ctx.execute(query).collect()
-        except Exception as e:
-            click.echo(click.style(f"Error in filter condition: {e}", fg='red'), err=True)
-            sys.exit(1)
-    
-    # Select columns
-    if columns:
-        col_list = [c.strip() for c in columns.split(',')]
-        try:
-            df = df.select(col_list)
-        except Exception as e:
-            click.echo(click.style(f"Error selecting columns: {e}", fg='red'), err=True)
-            sys.exit(1)
-    
-    # Limit
-    if limit:
-        df = df.head(limit)
-    
-    # Output
-    if output:
-        if output_format == 'csv':
-            df.write_csv(output)
-        elif output_format == 'json':
-            df.write_json(output)
-        elif output_format == 'parquet':
-            df.write_parquet(output)
-        
-        click.echo(click.style(f"✓ Exported {len(df):,} rows to {output}", fg='green'))
-    else:
-        # Print to stdout
-        click.echo(df)
-
-
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-@click.option('--output', '-o', required=True, type=click.Path(), help='Output file path')
-@click.option('--format', '-f', 'output_format', type=click.Choice(['csv', 'excel', 'parquet', 'json']), 
-              help='Output format (auto-detected from extension)')
-def export(file: str, output: str, output_format: Optional[str]):
-    """Export data to different formats
-    
-    FILE: Path to input data file
-    """
-    engine = get_engine()
-    
-    if not load_file(engine, file):
-        sys.exit(1)
-    
-    # Auto-detect format from extension
-    if not output_format:
-        ext = Path(output).suffix.lower()
-        format_map = {
-            '.csv': 'csv',
-            '.xlsx': 'excel',
-            '.xls': 'excel',
-            '.parquet': 'parquet',
-            '.pq': 'parquet',
-            '.json': 'json',
-        }
-        output_format = format_map.get(ext, 'csv')
-    
+    # 데이터 로드
+    ext = Path(args.input).suffix.lower()
     try:
-        if output_format == 'csv':
-            engine.export_csv(output)
-        elif output_format == 'excel':
-            engine.export_excel(output)
-        elif output_format == 'parquet':
-            engine.export_parquet(output)
-        elif output_format == 'json':
-            engine.df.write_json(output)
-        
-        click.echo(click.style(f"✓ Exported to {output}", fg='green'))
-    except Exception as e:
-        click.echo(click.style(f"Error exporting: {e}", fg='red'), err=True)
-        sys.exit(1)
-
-
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-@click.option('--x', '-x', 'x_col', help='X-axis column')
-@click.option('--y', '-y', 'y_col', required=True, help='Y-axis column')
-@click.option('--group', '-g', 'group_col', help='Group by column')
-@click.option('--type', '-t', 'chart_type', type=click.Choice(['line', 'bar', 'scatter', 'area']), default='line')
-@click.option('--output', '-o', required=True, type=click.Path(), help='Output image path (PNG)')
-@click.option('--width', type=int, default=800, help='Image width')
-@click.option('--height', type=int, default=600, help='Image height')
-@click.option('--title', help='Chart title')
-@click.option('--sample', type=int, help='Sample N rows for large datasets')
-def graph(file: str, x_col: Optional[str], y_col: str, group_col: Optional[str],
-          chart_type: str, output: str, width: int, height: int, 
-          title: Optional[str], sample: Optional[int]):
-    """Generate graph image (headless mode)
-    
-    FILE: Path to data file
-    
-    Examples:
-        dgs graph data.csv --y Sales --output sales.png
-        dgs graph data.csv --x Date --y Sales --type line --output trend.png
-        dgs graph data.csv --x Category --y Sales --group Region --output grouped.png
-    """
-    engine = get_engine()
-    
-    if not load_file(engine, file):
-        sys.exit(1)
-    
-    df = engine.df
-    
-    # Sample if needed
-    if sample and len(df) > sample:
-        df = df.sample(n=sample, seed=42)
-    
-    # Get data
-    if x_col:
-        x_data = df[x_col].to_numpy()
-    else:
-        x_data = list(range(len(df)))
-    
-    y_data = df[y_col].to_numpy()
-    
-    # Generate plot using matplotlib (headless)
-    try:
-        import matplotlib
-        matplotlib.use('Agg')  # Headless backend
-        import matplotlib.pyplot as plt
-        import numpy as np
-        
-        fig, ax = plt.subplots(figsize=(width/100, height/100), dpi=100)
-        
-        colors = ['#6366F1', '#EC4899', '#10B981', '#F59E0B', '#3B82F6',
-                  '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316']
-        
-        if group_col:
-            # Grouped plot
-            groups = df[group_col].unique().sort().to_list()
-            
-            for i, group in enumerate(groups):
-                mask = (df[group_col] == group).to_numpy()
-                color = colors[i % len(colors)]
-                
-                if chart_type == 'line':
-                    ax.plot(np.array(x_data)[mask], y_data[mask], label=str(group), color=color, linewidth=2)
-                elif chart_type == 'scatter':
-                    ax.scatter(np.array(x_data)[mask], y_data[mask], label=str(group), color=color, alpha=0.7)
-                elif chart_type == 'bar':
-                    # For bar charts with groups, need different approach
-                    ax.bar(np.array(x_data)[mask], y_data[mask], label=str(group), color=color, alpha=0.8)
-                elif chart_type == 'area':
-                    ax.fill_between(np.array(x_data)[mask], y_data[mask], label=str(group), color=color, alpha=0.3)
-                    ax.plot(np.array(x_data)[mask], y_data[mask], color=color, linewidth=1)
-            
-            ax.legend()
+        if ext == '.csv':
+            df = pl.read_csv(args.input, infer_schema_length=10000)
+        elif ext == '.tsv':
+            df = pl.read_csv(args.input, separator='\t', infer_schema_length=10000)
+        elif ext in ['.xlsx', '.xls']:
+            df = pl.read_excel(args.input)
+        elif ext == '.parquet':
+            df = pl.read_parquet(args.input)
+        elif ext == '.json':
+            df = pl.read_json(args.input)
         else:
-            # Single series
-            color = colors[0]
-            
-            if chart_type == 'line':
-                ax.plot(x_data, y_data, color=color, linewidth=2)
-            elif chart_type == 'scatter':
-                ax.scatter(x_data, y_data, color=color, alpha=0.7)
-            elif chart_type == 'bar':
-                ax.bar(x_data, y_data, color=color, alpha=0.8)
-            elif chart_type == 'area':
-                ax.fill_between(range(len(y_data)), y_data, color=color, alpha=0.3)
-                ax.plot(y_data, color=color, linewidth=1)
+            print(f"Error: Unsupported format: {ext}", file=sys.stderr)
+            return 1
+    except Exception as e:
+        print(f"Error loading file: {e}", file=sys.stderr)
+        return 1
+    
+    print(f"Loaded: {len(df)} rows, {len(df.columns)} columns")
+    
+    # 컬럼 설정
+    x_col = args.x_column or config.get('x') or df.columns[0]
+    y_cols_str = args.y_columns or config.get('y')
+    
+    if y_cols_str:
+        y_cols = [c.strip() for c in y_cols_str.split(',')]
+    else:
+        # 숫자 컬럼 자동 선택
+        numeric_cols = [c for c in df.columns if df[c].dtype in [pl.Float64, pl.Float32, pl.Int64, pl.Int32, pl.Int16, pl.Int8]]
+        y_cols = numeric_cols[:3] if numeric_cols else [df.columns[1] if len(df.columns) > 1 else df.columns[0]]
+    
+    chart_type = args.chart or config.get('chart', 'line')
+    title = args.title or config.get('title', '')
+    
+    print(f"Chart: {chart_type}, X: {x_col}, Y: {y_cols}")
+    
+    # 출력 파일
+    output_file = args.output or config.get('output')
+    if not output_file:
+        output_file = Path(args.input).stem + '_chart.png'
+    
+    # Headless 렌더링
+    try:
+        from .headless_renderer import HeadlessRenderer
         
-        # Styling
-        ax.set_xlabel(x_col or 'Index')
-        ax.set_ylabel(y_col)
-        ax.set_title(title or f'{y_col} by {x_col or "Index"}')
-        ax.grid(True, alpha=0.3)
-        
-        # Save
-        plt.tight_layout()
-        plt.savefig(output, dpi=100, bbox_inches='tight')
-        plt.close()
-        
-        click.echo(click.style(f"✓ Graph saved to {output}", fg='green'))
+        renderer = HeadlessRenderer(width=args.width, height=args.height, dpi=args.dpi)
+        renderer.render(
+            df=df,
+            x_column=x_col,
+            y_columns=y_cols,
+            chart_type=chart_type,
+            title=title,
+            output_path=output_file
+        )
+        print(f"Saved: {output_file}")
+        return 0
         
     except ImportError:
-        click.echo(click.style("Error: matplotlib required for graph generation. Install with: pip install matplotlib", fg='red'), err=True)
-        sys.exit(1)
+        # Fallback: matplotlib 사용
+        return _plot_with_matplotlib(df, x_col, y_cols, chart_type, title, output_file, args)
+
+
+def _plot_with_matplotlib(df, x_col, y_cols, chart_type, title, output_file, args):
+    """Matplotlib로 플롯 (fallback)"""
+    try:
+        import matplotlib
+        matplotlib.use('Agg')  # Headless
+        import matplotlib.pyplot as plt
+        
+        fig, ax = plt.subplots(figsize=(args.width/100, args.height/100), dpi=args.dpi)
+        
+        x_data = df[x_col].to_list()
+        
+        for y_col in y_cols:
+            y_data = df[y_col].to_list()
+            
+            if chart_type == 'line':
+                ax.plot(x_data, y_data, label=y_col, marker='o', markersize=3)
+            elif chart_type == 'bar':
+                ax.bar(x_data, y_data, label=y_col, alpha=0.7)
+            elif chart_type == 'scatter':
+                ax.scatter(x_data, y_data, label=y_col, alpha=0.7)
+            elif chart_type == 'area':
+                ax.fill_between(range(len(x_data)), y_data, alpha=0.5, label=y_col)
+                ax.plot(range(len(x_data)), y_data)
+            elif chart_type == 'histogram':
+                ax.hist(y_data, bins=30, alpha=0.7, label=y_col)
+        
+        ax.set_xlabel(x_col)
+        ax.set_ylabel(', '.join(y_cols))
+        if title:
+            ax.set_title(title)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # X축 라벨 회전 (많을 경우)
+        if len(x_data) > 10:
+            plt.xticks(rotation=45, ha='right')
+        
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=args.dpi, bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved: {output_file}")
+        return 0
+        
     except Exception as e:
-        click.echo(click.style(f"Error generating graph: {e}", fg='red'), err=True)
-        sys.exit(1)
+        print(f"Error creating chart: {e}", file=sys.stderr)
+        return 1
 
 
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-@click.argument('sql')
-@click.option('--output', '-o', type=click.Path(), help='Output file path')
-@click.option('--format', '-f', 'output_format', type=click.Choice(['table', 'csv', 'json']), default='table')
-def query(file: str, sql: str, output: Optional[str], output_format: str):
-    """Run SQL query on data
+def cmd_info(args):
+    """info 명령 실행"""
+    import polars as pl
     
-    FILE: Path to data file
-    SQL: SQL query (table name is 'data')
+    if not os.path.exists(args.input):
+        print(f"Error: File not found: {args.input}", file=sys.stderr)
+        return 1
     
-    Examples:
-        dgs query data.csv "SELECT Category, SUM(Sales) FROM data GROUP BY Category"
-        dgs query data.csv "SELECT * FROM data WHERE Sales > 100 LIMIT 10"
-    """
-    engine = get_engine()
-    
-    if not load_file(engine, file):
-        sys.exit(1)
+    ext = Path(args.input).suffix.lower()
     
     try:
-        ctx = pl.SQLContext(data=engine.df)
-        result = ctx.execute(sql).collect()
-        
-        if output:
-            if output_format == 'csv' or output.endswith('.csv'):
-                result.write_csv(output)
-            elif output_format == 'json' or output.endswith('.json'):
-                result.write_json(output)
-            else:
-                result.write_csv(output)
-            
-            click.echo(click.style(f"✓ Query result saved to {output}", fg='green'))
+        if ext == '.csv':
+            df = pl.read_csv(args.input, infer_schema_length=10000)
+        elif ext == '.tsv':
+            df = pl.read_csv(args.input, separator='\t')
+        elif ext in ['.xlsx', '.xls']:
+            df = pl.read_excel(args.input)
+        elif ext == '.parquet':
+            df = pl.read_parquet(args.input)
+        elif ext == '.json':
+            df = pl.read_json(args.input)
         else:
-            if output_format == 'json':
-                click.echo(result.write_json())
-            elif output_format == 'csv':
-                click.echo(result.write_csv())
-            else:
-                click.echo(result)
-                
+            print(f"Error: Unsupported format: {ext}", file=sys.stderr)
+            return 1
     except Exception as e:
-        click.echo(click.style(f"SQL Error: {e}", fg='red'), err=True)
-        sys.exit(1)
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    
+    info = {
+        'file': args.input,
+        'rows': len(df),
+        'columns': len(df.columns),
+        'column_info': [
+            {
+                'name': col,
+                'dtype': str(df[col].dtype),
+                'null_count': df[col].null_count(),
+                'unique_count': df[col].n_unique(),
+            }
+            for col in df.columns
+        ],
+        'memory_bytes': df.estimated_size(),
+    }
+    
+    if args.json:
+        print(json.dumps(info, indent=2, ensure_ascii=False))
+    else:
+        print(f"File: {info['file']}")
+        print(f"Rows: {info['rows']:,}")
+        print(f"Columns: {info['columns']}")
+        print(f"Memory: {info['memory_bytes'] / 1024 / 1024:.2f} MB")
+        print("\nColumns:")
+        for col_info in info['column_info']:
+            print(f"  {col_info['name']}: {col_info['dtype']} "
+                  f"(nulls: {col_info['null_count']}, unique: {col_info['unique_count']})")
+    
+    return 0
 
 
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-@click.argument('expression')
-@click.option('--name', '-n', required=True, help='Name for the new column')
-@click.option('--output', '-o', type=click.Path(), help='Output file path')
-def calc(file: str, expression: str, name: str, output: Optional[str]):
-    """Add calculated column
+def cmd_convert(args):
+    """convert 명령 실행"""
+    import polars as pl
     
-    FILE: Path to data file
-    EXPRESSION: Calculation expression (e.g., "Price * Quantity")
+    if not os.path.exists(args.input):
+        print(f"Error: File not found: {args.input}", file=sys.stderr)
+        return 1
     
-    Examples:
-        dgs calc data.csv "Price * Quantity" --name Total --output with_total.csv
-        dgs calc data.csv "ROUND(Sales / 1000, 2)" --name Sales_K
-    """
-    engine = get_engine()
-    expr_engine = ExpressionEngine()
+    in_ext = Path(args.input).suffix.lower()
+    out_ext = Path(args.output).suffix.lower()
     
-    if not load_file(engine, file):
-        sys.exit(1)
-    
+    # 로드
     try:
-        df = expr_engine.add_column(engine.df, name, expression)
-        
-        if output:
-            df.write_csv(output)
-            click.echo(click.style(f"✓ Added column '{name}' and saved to {output}", fg='green'))
+        if in_ext == '.csv':
+            df = pl.read_csv(args.input)
+        elif in_ext == '.tsv':
+            df = pl.read_csv(args.input, separator='\t')
+        elif in_ext in ['.xlsx', '.xls']:
+            df = pl.read_excel(args.input, sheet_name=args.sheet)
+        elif in_ext == '.parquet':
+            df = pl.read_parquet(args.input)
+        elif in_ext == '.json':
+            df = pl.read_json(args.input)
         else:
-            click.echo(df)
-            
+            print(f"Error: Unsupported input format: {in_ext}", file=sys.stderr)
+            return 1
     except Exception as e:
-        click.echo(click.style(f"Error: {e}", fg='red'), err=True)
-        sys.exit(1)
-
-
-@cli.command()
-@click.option('--port', '-p', type=int, default=8080, help='Server port')
-@click.option('--host', '-h', 'host', default='127.0.0.1', help='Server host')
-def serve(port: int, host: str):
-    """Start HTTP API server for integration
+        print(f"Error loading: {e}", file=sys.stderr)
+        return 1
     
-    Endpoints:
-        POST /load          Load a file
-        GET  /info          Get current data info
-        GET  /stats         Get statistics
-        POST /query         Run SQL query
-        POST /filter        Filter data
-        GET  /export        Export data
-    """
+    # 저장
     try:
-        from http.server import HTTPServer, BaseHTTPRequestHandler
-        import json
-        import urllib.parse
+        if out_ext == '.csv':
+            df.write_csv(args.output)
+        elif out_ext == '.tsv':
+            df.write_csv(args.output, separator='\t')
+        elif out_ext == '.parquet':
+            df.write_parquet(args.output)
+        elif out_ext == '.json':
+            df.write_json(args.output)
+        elif out_ext in ['.xlsx', '.xls']:
+            df.write_excel(args.output)
+        else:
+            print(f"Error: Unsupported output format: {out_ext}", file=sys.stderr)
+            return 1
+    except Exception as e:
+        print(f"Error saving: {e}", file=sys.stderr)
+        return 1
+    
+    print(f"Converted: {args.input} -> {args.output}")
+    print(f"Rows: {len(df):,}")
+    return 0
+
+
+def cmd_batch(args):
+    """batch 명령 실행"""
+    import polars as pl
+    from pathlib import Path
+    
+    input_dir = Path(args.input_dir)
+    output_dir = Path(args.output_dir)
+    
+    if not input_dir.exists():
+        print(f"Error: Directory not found: {input_dir}", file=sys.stderr)
+        return 1
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 설정 로드
+    config = {}
+    if args.config:
+        with open(args.config, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    
+    # 지원 파일 찾기
+    patterns = ['*.csv', '*.tsv', '*.xlsx', '*.parquet', '*.json']
+    files = []
+    for pattern in patterns:
+        files.extend(input_dir.glob(pattern))
+    
+    if not files:
+        print(f"No data files found in {input_dir}")
+        return 1
+    
+    print(f"Processing {len(files)} files...")
+    
+    success = 0
+    failed = 0
+    
+    for file_path in files:
+        output_file = output_dir / f"{file_path.stem}.{args.format}"
         
-        engine = DataEngine()
+        # plot 인자 생성
+        plot_args = argparse.Namespace(
+            input=str(file_path),
+            x_column=args.x_column or config.get('x'),
+            y_columns=args.y_columns or config.get('y'),
+            chart=args.chart or config.get('chart', 'line'),
+            output=str(output_file),
+            width=config.get('width', 1920),
+            height=config.get('height', 1080),
+            title=config.get('title', file_path.stem),
+            profile=None,
+            config=None,
+            headless=True,
+            dpi=config.get('dpi', 100),
+        )
         
-        class APIHandler(BaseHTTPRequestHandler):
-            def _send_json(self, data, status=200):
-                self.send_response(status)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps(data, default=str).encode())
+        result = cmd_plot(plot_args)
+        if result == 0:
+            success += 1
+        else:
+            failed += 1
+    
+    print(f"\nDone: {success} success, {failed} failed")
+    return 0 if failed == 0 else 1
+
+
+def cmd_watch(args):
+    """watch 명령 실행"""
+    import time
+    
+    if not os.path.exists(args.input):
+        print(f"Error: File not found: {args.input}", file=sys.stderr)
+        return 1
+    
+    print(f"Watching: {args.input}")
+    print(f"Output: {args.output}")
+    print(f"Interval: {args.interval}s")
+    print("Press Ctrl+C to stop\n")
+    
+    last_mtime = 0
+    
+    try:
+        while True:
+            mtime = os.path.getmtime(args.input)
             
-            def _get_body(self):
-                length = int(self.headers.get('Content-Length', 0))
-                return json.loads(self.rfile.read(length)) if length else {}
+            if mtime > last_mtime:
+                last_mtime = mtime
+                print(f"[{time.strftime('%H:%M:%S')}] File changed, updating...")
+                
+                plot_args = argparse.Namespace(
+                    input=args.input,
+                    x_column=args.x_column,
+                    y_columns=args.y_columns,
+                    chart=args.chart,
+                    output=args.output,
+                    width=1920,
+                    height=1080,
+                    title=None,
+                    profile=None,
+                    config=None,
+                    headless=True,
+                    dpi=100,
+                )
+                
+                cmd_plot(plot_args)
             
-            def do_OPTIONS(self):
-                self.send_response(200)
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-                self.end_headers()
+            time.sleep(args.interval)
             
-            def do_GET(self):
-                path = urllib.parse.urlparse(self.path).path
-                
-                if path == '/info':
-                    if not engine.is_loaded:
-                        self._send_json({'error': 'No data loaded'}, 400)
-                        return
-                    
-                    self._send_json({
-                        'rows': engine.row_count,
-                        'columns': engine.columns,
-                        'dtypes': engine.dtypes,
-                    })
-                
-                elif path == '/stats':
-                    if not engine.is_loaded:
-                        self._send_json({'error': 'No data loaded'}, 400)
-                        return
-                    
-                    self._send_json(engine.get_all_statistics())
-                
-                elif path == '/health':
-                    self._send_json({'status': 'ok', 'loaded': engine.is_loaded})
-                
-                else:
-                    self._send_json({'error': 'Not found'}, 404)
-            
-            def do_POST(self):
-                path = urllib.parse.urlparse(self.path).path
-                body = self._get_body()
-                
-                if path == '/load':
-                    file_path = body.get('path')
-                    if not file_path:
-                        self._send_json({'error': 'path required'}, 400)
-                        return
-                    
-                    success = engine.load_file(file_path)
-                    if success:
-                        self._send_json({
-                            'success': True,
-                            'rows': engine.row_count,
-                            'columns': engine.columns,
-                        })
-                    else:
-                        self._send_json({'error': engine.progress.error_message}, 400)
-                
-                elif path == '/query':
-                    sql = body.get('sql')
-                    if not sql or not engine.is_loaded:
-                        self._send_json({'error': 'sql required and data must be loaded'}, 400)
-                        return
-                    
-                    try:
-                        ctx = pl.SQLContext(data=engine.df)
-                        result = ctx.execute(sql).collect()
-                        self._send_json({
-                            'columns': result.columns,
-                            'data': result.to_dicts(),
-                        })
-                    except Exception as e:
-                        self._send_json({'error': str(e)}, 400)
-                
-                elif path == '/filter':
-                    condition = body.get('where')
-                    columns = body.get('columns')
-                    limit = body.get('limit')
-                    
-                    if not engine.is_loaded:
-                        self._send_json({'error': 'No data loaded'}, 400)
-                        return
-                    
-                    df = engine.df
-                    
-                    if condition:
-                        try:
-                            ctx = pl.SQLContext(data=df)
-                            df = ctx.execute(f"SELECT * FROM data WHERE {condition}").collect()
-                        except Exception as e:
-                            self._send_json({'error': str(e)}, 400)
-                            return
-                    
-                    if columns:
-                        df = df.select(columns)
-                    
-                    if limit:
-                        df = df.head(limit)
-                    
-                    self._send_json({
-                        'columns': df.columns,
-                        'data': df.to_dicts(),
-                        'rows': len(df),
-                    })
-                
-                else:
-                    self._send_json({'error': 'Not found'}, 404)
-            
-            def log_message(self, format, *args):
-                click.echo(f"[API] {args[0]}")
-        
-        click.echo(click.style(f"\n🚀 Data Graph Studio API Server", fg='cyan', bold=True))
-        click.echo(f"   Running on http://{host}:{port}")
-        click.echo(f"   Press Ctrl+C to stop\n")
-        click.echo("   Endpoints:")
-        click.echo("     POST /load     - Load file (body: {path: '...'})")
-        click.echo("     GET  /info     - Get data info")
-        click.echo("     GET  /stats    - Get statistics")
-        click.echo("     POST /query    - SQL query (body: {sql: '...'})")
-        click.echo("     POST /filter   - Filter data")
-        click.echo("     GET  /health   - Health check\n")
-        
-        server = HTTPServer((host, port), APIHandler)
-        server.serve_forever()
-        
     except KeyboardInterrupt:
-        click.echo("\n👋 Server stopped")
-    except Exception as e:
-        click.echo(click.style(f"Error: {e}", fg='red'), err=True)
-        sys.exit(1)
+        print("\nStopped.")
+        return 0
 
 
-@cli.command()
-def gui():
-    """Launch the graphical user interface"""
+def cmd_server(args):
+    """server 명령 실행"""
     try:
-        from PySide6.QtWidgets import QApplication
-        from ui.main_window import MainWindow
-        
-        app = QApplication(sys.argv)
-        window = MainWindow()
-        window.show()
-        sys.exit(app.exec())
-        
-    except ImportError as e:
-        click.echo(click.style(f"Error: GUI dependencies not installed: {e}", fg='red'), err=True)
-        sys.exit(1)
+        from .api_server import run_server
+        print(f"Starting API server on {args.host}:{args.port}")
+        run_server(host=args.host, port=args.port)
+    except ImportError:
+        print("API server module not found. Install with: pip install fastapi uvicorn")
+        return 1
+    except Exception as e:
+        print(f"Server error: {e}", file=sys.stderr)
+        return 1
 
-
-# ==================== Entry Point ====================
 
 def main():
-    """Main entry point"""
-    cli()
+    """메인 진입점"""
+    parser = create_parser()
+    args = parser.parse_args()
+    
+    if args.command is None:
+        parser.print_help()
+        return 0
+    
+    commands = {
+        'plot': cmd_plot,
+        'info': cmd_info,
+        'convert': cmd_convert,
+        'batch': cmd_batch,
+        'watch': cmd_watch,
+        'server': cmd_server,
+    }
+    
+    cmd_func = commands.get(args.command)
+    if cmd_func:
+        return cmd_func(args)
+    else:
+        parser.print_help()
+        return 1
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

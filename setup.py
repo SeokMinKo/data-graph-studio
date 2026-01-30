@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="data-graph-studio",
-    version="0.1.0",
+    version="0.2.0",
     author="Godol",
     author_email="",
     description="Big Data Visualization Tool",
@@ -53,6 +53,17 @@ setup(
         ],
         "graph": [
             "matplotlib>=3.7.0",  # For headless graph generation
+        ],
+        "api": [
+            "fastapi>=0.104.0",
+            "uvicorn>=0.24.0",
+            "python-multipart>=0.0.6",
+        ],
+        "all": [
+            "matplotlib>=3.7.0",
+            "fastapi>=0.104.0",
+            "uvicorn>=0.24.0",
+            "python-multipart>=0.0.6",
         ],
     },
     entry_points={
