@@ -364,17 +364,58 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.main_splitter)
     
     def _reset_layout(self):
-        """레이아웃 비율 초기화"""
+        """레이아웃 비율 초기화 및 모든 Float 창 Dock"""
+        # First, dock all floating panels back to main window
+        float_keys = list(self._float_windows.keys())
+        for panel_key in float_keys:
+            self._dock_main_panel(panel_key)
+
+        # Ensure all panels are visible and in correct order
+        panel_widgets = [self.summary_panel, self.graph_panel, self.table_panel]
+
+        # Verify all panels are in splitter, rebuild if necessary
+        current_widgets = [self.main_splitter.widget(i) for i in range(self.main_splitter.count())]
+
+        # Check if any panel is missing from the splitter
+        needs_rebuild = False
+        for panel in panel_widgets:
+            if panel not in current_widgets and self._placeholders.get(
+                self._get_panel_key(panel), panel) not in current_widgets:
+                needs_rebuild = True
+                break
+
+        if needs_rebuild:
+            # Remove all widgets from splitter
+            while self.main_splitter.count() > 0:
+                widget = self.main_splitter.widget(0)
+                widget.setParent(None)
+
+            # Re-add panels in correct order
+            for panel in panel_widgets:
+                self.main_splitter.addWidget(panel)
+                panel.show()
+
+        # Set sizes
         total_height = self.main_splitter.height()
         if total_height == 0:
             total_height = 800  # 기본값
-        
+
         sizes = [
             int(total_height * 0.10),  # Summary
             int(total_height * 0.45),  # Graph
             int(total_height * 0.45),  # Table
         ]
         self.main_splitter.setSizes(sizes)
+
+    def _get_panel_key(self, panel: QWidget) -> Optional[str]:
+        """Get the panel key for a widget"""
+        if panel is self.summary_panel:
+            return "summary"
+        elif panel is self.graph_panel:
+            return "graph"
+        elif panel is self.table_panel:
+            return "table"
+        return None
     
     def _setup_statusbar(self):
         """Modern status bar setup"""
@@ -462,15 +503,29 @@ class MainWindow(QMainWindow):
 
         widget, title, splitter_index = panel_map[panel_key]
 
+        # Save current sizes before modification
+        current_sizes = self.main_splitter.sizes()
+
         # Float window 생성
         float_window = FloatWindow(title, widget, self)
         float_window.dock_requested.connect(lambda: self._dock_main_panel(panel_key))
         self._float_windows[panel_key] = float_window
 
-        # 플레이스홀더로 교체
-        placeholder = self._placeholders[panel_key]
-        self.main_splitter.replaceWidget(splitter_index, placeholder)
-        placeholder.show()
+        # Find the actual current index of the widget in splitter
+        actual_index = -1
+        for i in range(self.main_splitter.count()):
+            if self.main_splitter.widget(i) is widget:
+                actual_index = i
+                break
+
+        if actual_index >= 0:
+            # 플레이스홀더로 교체
+            placeholder = self._placeholders[panel_key]
+            self.main_splitter.replaceWidget(actual_index, placeholder)
+            placeholder.show()
+
+            # Restore sizes
+            self.main_splitter.setSizes(current_sizes)
 
         # Float 버튼 비활성화
         if hasattr(widget, 'float_btn'):
@@ -486,19 +541,41 @@ class MainWindow(QMainWindow):
         float_window = self._float_windows[panel_key]
         widget = float_window.get_content_widget()
 
-        index_map = {
-            "summary": 0,
-            "graph": 1,
-            "table": 2,
+        panel_map = {
+            "summary": (self.summary_panel, 0),
+            "graph": (self.graph_panel, 1),
+            "table": (self.table_panel, 2),
         }
 
-        splitter_index = index_map.get(panel_key, 0)
+        expected_widget, target_index = panel_map.get(panel_key, (None, 0))
         placeholder = self._placeholders[panel_key]
 
-        # 플레이스홀더를 원래 위젯으로 교체
-        self.main_splitter.replaceWidget(splitter_index, widget)
-        placeholder.hide()
-        widget.show()
+        # Save current sizes before modification
+        current_sizes = self.main_splitter.sizes()
+
+        # Find the actual current index of the placeholder in splitter
+        actual_index = -1
+        for i in range(self.main_splitter.count()):
+            if self.main_splitter.widget(i) is placeholder:
+                actual_index = i
+                break
+
+        if actual_index >= 0:
+            # 플레이스홀더를 원래 위젯으로 교체
+            self.main_splitter.replaceWidget(actual_index, widget)
+            placeholder.hide()
+            widget.show()
+
+            # Restore sizes
+            self.main_splitter.setSizes(current_sizes)
+        else:
+            # Placeholder not found, need to insert at correct position
+            # Remove widget from float window's layout first
+            widget.setParent(None)
+
+            # Insert at target index
+            self.main_splitter.insertWidget(target_index, widget)
+            widget.show()
 
         # Float 버튼 활성화
         if hasattr(widget, 'float_btn'):

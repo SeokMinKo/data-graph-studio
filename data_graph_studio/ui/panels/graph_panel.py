@@ -65,76 +65,116 @@ class ColorButton(QPushButton):
 
 class ExpandedChartDialog(QDialog):
     """확대된 차트를 보여주는 다이얼로그"""
-    
+
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumSize(800, 600)
         self.resize(1000, 700)
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
-        
+
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground('w')
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         layout.addWidget(self.plot_widget)
-        
+
         button_box = QDialogButtonBox(QDialogButtonBox.Close)
         button_box.rejected.connect(self.close)
         layout.addWidget(button_box)
-    
-    def plot_histogram(self, data: np.ndarray, title: str, color: tuple):
+
+    def plot_histogram(self, data: np.ndarray, title: str, color: tuple, bins: int = 50, horizontal: bool = False):
+        """Plot histogram - vertical (default) or horizontal"""
         self.setWindowTitle(title)
         self.plot_widget.clear()
-        
+
         if data is not None and len(data) > 0:
             try:
                 clean_data = data[~np.isnan(data)]
-                hist, bins = np.histogram(clean_data, bins=50)
-                self.plot_widget.plot(bins, hist, stepMode=True, fillLevel=0, 
-                                      brush=color, pen=pg.mkPen(color[:3], width=1))
-                self.plot_widget.setLabel('bottom', 'Value')
-                self.plot_widget.setLabel('left', 'Frequency')
-                
-                mean_val = np.mean(clean_data)
-                self.plot_widget.addLine(x=mean_val, pen=pg.mkPen('r', width=2, style=Qt.DashLine))
-                
-                stats_text = f"Mean: {mean_val:.2f}\nMedian: {np.median(clean_data):.2f}\nStd: {np.std(clean_data):.2f}"
-                text_item = pg.TextItem(stats_text, anchor=(0, 0), color='k')
-                text_item.setPos(bins[0], max(hist) * 0.9)
-                self.plot_widget.addItem(text_item)
+                hist, bin_edges = np.histogram(clean_data, bins=bins)
+
+                if horizontal:
+                    # Horizontal histogram: Y-axis is value bins, X-axis is frequency
+                    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                    bar_height = (bin_edges[1] - bin_edges[0]) * 0.8 if len(bin_edges) > 1 else 0.8
+
+                    # Use BarGraphItem for horizontal bars
+                    bar_item = pg.BarGraphItem(
+                        x0=np.zeros(len(hist)),
+                        y=bin_centers,
+                        width=hist,
+                        height=bar_height,
+                        brush=color,
+                        pen=pg.mkPen(color[:3], width=1)
+                    )
+                    self.plot_widget.addItem(bar_item)
+
+                    self.plot_widget.setLabel('bottom', 'Frequency')
+                    self.plot_widget.setLabel('left', 'Value')
+
+                    # Mean line (horizontal)
+                    mean_val = np.mean(clean_data)
+                    self.plot_widget.addLine(y=mean_val, pen=pg.mkPen('r', width=2, style=Qt.DashLine))
+
+                    # Stats text
+                    stats_text = f"Mean: {mean_val:.2f}\nMedian: {np.median(clean_data):.2f}\nStd: {np.std(clean_data):.2f}"
+                    text_item = pg.TextItem(stats_text, anchor=(0, 1), color='k')
+                    text_item.setPos(max(hist) * 0.1, bin_edges[-1])
+                    self.plot_widget.addItem(text_item)
+                else:
+                    # Vertical histogram (default)
+                    self.plot_widget.plot(bin_edges, hist, stepMode=True, fillLevel=0,
+                                          brush=color, pen=pg.mkPen(color[:3], width=1))
+                    self.plot_widget.setLabel('bottom', 'Value')
+                    self.plot_widget.setLabel('left', 'Frequency')
+
+                    mean_val = np.mean(clean_data)
+                    self.plot_widget.addLine(x=mean_val, pen=pg.mkPen('r', width=2, style=Qt.DashLine))
+
+                    stats_text = f"Mean: {mean_val:.2f}\nMedian: {np.median(clean_data):.2f}\nStd: {np.std(clean_data):.2f}"
+                    text_item = pg.TextItem(stats_text, anchor=(0, 0), color='k')
+                    text_item.setPos(bin_edges[0], max(hist) * 0.9)
+                    self.plot_widget.addItem(text_item)
             except Exception as e:
                 print(f"Error plotting histogram: {e}")
 
 
 class ClickablePlotWidget(pg.PlotWidget):
     """더블클릭 가능한 PlotWidget"""
-    
+
     double_clicked = Signal()
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._data = None
         self._title = ""
         self._color = (100, 100, 200, 100)
-    
-    def set_data(self, data: np.ndarray, title: str, color: tuple):
+        self._bins = 30  # Default bin count
+        self._horizontal = False  # Histogram orientation
+
+    def set_data(self, data: np.ndarray, title: str, color: tuple, bins: int = 30, horizontal: bool = False):
         self._data = data
         self._title = title
         self._color = color
-    
+        self._bins = bins
+        self._horizontal = horizontal
+
+    def set_bins(self, bins: int):
+        """Set the number of bins for histogram"""
+        self._bins = bins
+
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
             self.double_clicked.emit()
             self._show_expanded()
         super().mouseDoubleClickEvent(event)
-    
+
     def _show_expanded(self):
         if self._data is None:
             return
         dialog = ExpandedChartDialog(self._title, self)
-        dialog.plot_histogram(self._data, self._title, self._color)
+        dialog.plot_histogram(self._data, self._title, self._color, bins=self._bins, horizontal=self._horizontal)
         dialog.exec()
 
 
@@ -1220,10 +1260,12 @@ class StatPanel(QFrame):
 
     def _on_x_bins_changed(self, value: int):
         self._x_bins = value
+        self.x_hist_widget.set_bins(value)
         self._update_x_histogram()
 
     def _on_y_bins_changed(self, value: int):
         self._y_bins = value
+        self.y_hist_widget.set_bins(value)
         self._update_y_histogram()
 
     def _update_x_histogram(self):
@@ -1272,10 +1314,18 @@ class StatPanel(QFrame):
         self._y_data = y_data
 
         # Store data for double-click expansion
+        # X Distribution: vertical histogram (default)
         if x_data is not None:
-            self.x_hist_widget.set_data(x_data, "X-Axis Distribution", (100, 100, 200, 150))
+            self.x_hist_widget.set_data(
+                x_data, "X-Axis Distribution", (100, 100, 200, 150),
+                bins=self._x_bins, horizontal=False
+            )
+        # Y Distribution: horizontal histogram
         if y_data is not None:
-            self.y_hist_widget.set_data(y_data, "Y-Axis Distribution", (100, 200, 100, 150))
+            self.y_hist_widget.set_data(
+                y_data, "Y-Axis Distribution", (100, 200, 100, 150),
+                bins=self._y_bins, horizontal=True
+            )
 
         # Update histograms using current bin settings
         self._update_x_histogram()
@@ -1330,10 +1380,53 @@ class MainGraph(pg.PlotWidget):
         self._hover_data: Optional[Dict[str, list]] = None
         self._tooltip_item = None
 
+        # Selection ROI
+        self._selection_roi = None
+        self._selection_start = None
+        self._is_selecting = False
+
         # Enable mouse tracking for hover
         self.setMouseTracking(True)
         self.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.scene().sigMouseMoved.connect(self._on_mouse_moved)
+
+        # Connect to tool mode changes
+        self.state.tool_mode_changed.connect(self._on_tool_mode_changed)
+
+        # Apply initial tool mode
+        self._on_tool_mode_changed()
+
+    def _on_tool_mode_changed(self):
+        """Handle tool mode changes"""
+        mode = self.state.tool_mode
+        vb = self.plotItem.vb
+
+        # Clear any existing selection ROI
+        if self._selection_roi is not None:
+            self.removeItem(self._selection_roi)
+            self._selection_roi = None
+        self._is_selecting = False
+
+        if mode == ToolMode.ZOOM:
+            # Zoom mode: left-click-drag to zoom into rect
+            vb.setMouseMode(pg.ViewBox.RectMode)
+            vb.setMouseEnabled(x=True, y=True)
+            self.setCursor(Qt.CrossCursor)
+        elif mode == ToolMode.PAN:
+            # Pan mode: left-click-drag to pan
+            vb.setMouseMode(pg.ViewBox.PanMode)
+            vb.setMouseEnabled(x=True, y=True)
+            self.setCursor(Qt.OpenHandCursor)
+        elif mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
+            # Selection mode: disable default interactions
+            vb.setMouseMode(pg.ViewBox.PanMode)  # Disable rect zoom
+            vb.setMouseEnabled(x=False, y=False)  # Disable panning
+            self.setCursor(Qt.CrossCursor)
+        else:
+            # Default mode
+            vb.setMouseMode(pg.ViewBox.PanMode)
+            vb.setMouseEnabled(x=True, y=True)
+            self.setCursor(Qt.ArrowCursor)
     
     def plot_data(
         self,
@@ -1528,11 +1621,153 @@ class MainGraph(pg.PlotWidget):
         self.setLogMode(x=False, y=False)
     
     def _on_mouse_clicked(self, event):
+        """Handle mouse click for selection"""
         if self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
             pos = event.scenePos()
             mouse_point = self.plotItem.vb.mapSceneToView(pos)
-            # TODO: Selection logic
-            pass
+
+            if event.button() == Qt.LeftButton:
+                if not self._is_selecting:
+                    # Start selection
+                    self._selection_start = mouse_point
+                    self._is_selecting = True
+
+                    # Create selection rectangle
+                    if self._selection_roi is not None:
+                        self.removeItem(self._selection_roi)
+
+                    self._selection_roi = pg.RectROI(
+                        [mouse_point.x(), mouse_point.y()],
+                        [0, 0],
+                        pen=pg.mkPen('b', width=2, style=Qt.DashLine),
+                        movable=False,
+                        resizable=False
+                    )
+                    self._selection_roi.setPen(pg.mkPen('#6366F1', width=2, style=Qt.DashLine))
+                    self.addItem(self._selection_roi)
+                else:
+                    # Finish selection
+                    self._finish_selection(mouse_point)
+
+    def _finish_selection(self, end_point):
+        """Finish rectangle selection and select points within"""
+        if self._data_x is None or self._data_y is None:
+            self._is_selecting = False
+            return
+
+        if not hasattr(self, '_rect_start_x'):
+            self._is_selecting = False
+            return
+
+        # Get selection bounds using stored start position
+        start_x = self._rect_start_x
+        start_y = self._rect_start_y
+        end_x = end_point.x()
+        end_y = end_point.y()
+
+        x1 = min(start_x, end_x)
+        x2 = max(start_x, end_x)
+        y1 = min(start_y, end_y)
+        y2 = max(start_y, end_y)
+
+        # Find points within selection
+        selected_indices = []
+        for i in range(len(self._data_x)):
+            x, y = self._data_x[i], self._data_y[i]
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                selected_indices.append(i)
+
+        # Emit selection signal
+        if selected_indices:
+            self.points_selected.emit(selected_indices)
+            self.state.select_rows(selected_indices)
+
+        # Clean up selection ROI
+        if self._selection_roi is not None:
+            self.removeItem(self._selection_roi)
+            self._selection_roi = None
+
+        self._is_selecting = False
+        self._selection_start = None
+        if hasattr(self, '_rect_start_x'):
+            del self._rect_start_x
+        if hasattr(self, '_rect_start_y'):
+            del self._rect_start_y
+
+    def mousePressEvent(self, event):
+        """Handle mouse press for selection drag"""
+        if self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
+            if event.button() == Qt.LeftButton:
+                pos = self.plotItem.vb.mapSceneToView(event.position())
+                self._selection_start = pos
+                self._is_selecting = True
+
+                # Create selection rectangle
+                if self._selection_roi is not None:
+                    self.removeItem(self._selection_roi)
+
+                self._selection_roi = pg.LinearRegionItem(
+                    values=[pos.x(), pos.x()],
+                    orientation='vertical',
+                    movable=False,
+                    brush=pg.mkBrush('#6366F1', 30)
+                )
+                # Actually use RectROI for 2D selection
+                self.removeItem(self._selection_roi)
+                self._selection_roi = None
+
+                # Store start position
+                self._rect_start_x = pos.x()
+                self._rect_start_y = pos.y()
+
+                event.accept()
+                return
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Handle mouse move for selection drag"""
+        if self._is_selecting and self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
+            pos = self.plotItem.vb.mapSceneToView(event.position())
+
+            # Update selection rectangle visualization
+            if hasattr(self, '_rect_start_x'):
+                x1 = min(self._rect_start_x, pos.x())
+                y1 = min(self._rect_start_y, pos.y())
+                width = abs(pos.x() - self._rect_start_x)
+                height = abs(pos.y() - self._rect_start_y)
+
+                if self._selection_roi is not None:
+                    self.removeItem(self._selection_roi)
+
+                # Draw selection rectangle as a simple rect item
+                rect = pg.QtWidgets.QGraphicsRectItem(x1, y1, width, height)
+                rect.setPen(pg.mkPen('#6366F1', width=2, style=Qt.DashLine))
+                rect.setBrush(pg.mkBrush(99, 102, 241, 30))  # #6366F1 with alpha
+                self.addItem(rect)
+                self._selection_roi = rect
+
+            event.accept()
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release for selection"""
+        if self._is_selecting and self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
+            if event.button() == Qt.LeftButton:
+                pos = self.plotItem.vb.mapSceneToView(event.position())
+
+                if hasattr(self, '_rect_start_x'):
+                    # Create QPointF for end point
+                    from PySide6.QtCore import QPointF
+                    start_point = QPointF(self._rect_start_x, self._rect_start_y)
+                    self._finish_selection(pos)
+
+                event.accept()
+                return
+
+        super().mouseReleaseEvent(event)
 
     def _on_mouse_moved(self, pos):
         """Handle mouse move for hover tooltip"""
