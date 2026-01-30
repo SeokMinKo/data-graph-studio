@@ -28,8 +28,13 @@ logger = logging.getLogger(__name__)
 from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
 from .panels.table_panel import TablePanel
+from .panels.profile_bar import ProfileBar
 from .dialogs.parsing_preview_dialog import ParsingPreviewDialog, ParsingSettings
+from .dialogs.save_setting_dialog import SaveSettingDialog
+from .dialogs.profile_manager_dialog import ProfileManagerDialog
 from .floatable import FloatWindow
+from .floating_graph import FloatingGraphWindow, FloatingGraphManager
+from ..core.profile import Profile, GraphSetting, ProfileManager
 
 
 class DataLoaderThread(QThread):
@@ -128,6 +133,9 @@ class MainWindow(QMainWindow):
         self._float_windows: Dict[str, FloatWindow] = {}
         self._placeholders: Dict[str, QWidget] = {}
 
+        # Floating graph manager
+        self._floating_graph_manager: Optional[FloatingGraphManager] = None
+
         # Setup UI
         self._setup_window()
         self._setup_menubar()
@@ -207,6 +215,35 @@ class MainWindow(QMainWindow):
         export_image.setStatusTip("Export current graph as PNG image")
         export_image.triggered.connect(lambda: self._on_export("png"))
         export_menu.addAction(export_image)
+
+        file_menu.addSeparator()
+
+        # Profile submenu
+        profile_menu = file_menu.addMenu("&Profile")
+
+        new_profile_action = QAction("New Profile", self)
+        new_profile_action.setStatusTip("Create a new profile")
+        new_profile_action.triggered.connect(self._on_new_profile_menu)
+        profile_menu.addAction(new_profile_action)
+
+        load_profile_action = QAction("Load Profile...", self)
+        load_profile_action.setShortcut("Ctrl+Shift+O")
+        load_profile_action.setStatusTip("Load a profile file")
+        load_profile_action.triggered.connect(self._on_load_profile_menu)
+        profile_menu.addAction(load_profile_action)
+
+        save_profile_action = QAction("Save Profile...", self)
+        save_profile_action.setShortcut("Ctrl+Shift+S")
+        save_profile_action.setStatusTip("Save current profile")
+        save_profile_action.triggered.connect(self._on_save_profile_menu)
+        profile_menu.addAction(save_profile_action)
+
+        profile_menu.addSeparator()
+
+        manage_profiles_action = QAction("Manage Profiles...", self)
+        manage_profiles_action.setStatusTip("Open profile manager")
+        manage_profiles_action.triggered.connect(self._show_profile_manager)
+        profile_menu.addAction(manage_profiles_action)
 
         file_menu.addSeparator()
 
@@ -447,30 +484,47 @@ class MainWindow(QMainWindow):
         """메인 레이아웃 설정 (3단 스플리터)"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
+
         layout = QVBoxLayout(central_widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
+
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
-        
+
         # Summary Panel (상단)
         self.summary_panel = SummaryPanel(self.state)
         self.main_splitter.addWidget(self.summary_panel)
-        
+
+        # Profile Bar (Summary 아래) - 컨테이너로 감싸서 추가
+        self._profile_bar_container = QWidget()
+        profile_bar_layout = QVBoxLayout(self._profile_bar_container)
+        profile_bar_layout.setContentsMargins(8, 0, 8, 8)
+        profile_bar_layout.setSpacing(0)
+
+        self.profile_bar = ProfileBar(self.state)
+        self.profile_bar.setting_clicked.connect(self._on_profile_setting_clicked)
+        self.profile_bar.setting_double_clicked.connect(self._on_profile_setting_double_clicked)
+        self.profile_bar.add_setting_requested.connect(self._on_add_setting_requested)
+        profile_bar_layout.addWidget(self.profile_bar)
+
+        self.main_splitter.addWidget(self._profile_bar_container)
+
         # Graph Panel (중간)
         self.graph_panel = GraphPanel(self.state, self.engine)
         self.main_splitter.addWidget(self.graph_panel)
-        
+
         # Table Panel (하단)
         self.table_panel = TablePanel(self.state, self.engine)
         self.main_splitter.addWidget(self.table_panel)
-        
-        # 초기 비율 설정 (10%, 45%, 45%)
+
+        # 초기 비율 설정
         self._reset_layout()
-        
+
         layout.addWidget(self.main_splitter)
+
+        # Initialize floating graph manager
+        self._floating_graph_manager = FloatingGraphManager(self.state, self.engine)
     
     def _reset_layout(self):
         """레이아웃 비율 초기화 및 모든 Float 창 Dock"""
@@ -480,7 +534,7 @@ class MainWindow(QMainWindow):
             self._dock_main_panel(panel_key)
 
         # Ensure all panels are visible and in correct order
-        panel_widgets = [self.summary_panel, self.graph_panel, self.table_panel]
+        panel_widgets = [self.summary_panel, self._profile_bar_container, self.graph_panel, self.table_panel]
 
         # Verify all panels are in splitter, rebuild if necessary
         current_widgets = [self.main_splitter.widget(i) for i in range(self.main_splitter.count())]
@@ -510,9 +564,10 @@ class MainWindow(QMainWindow):
             total_height = 800  # 기본값
 
         sizes = [
-            int(total_height * 0.10),  # Summary
-            int(total_height * 0.45),  # Graph
-            int(total_height * 0.45),  # Table
+            int(total_height * 0.08),   # Summary
+            120,                         # Profile Bar (고정 높이)
+            int(total_height * 0.42),   # Graph
+            int(total_height * 0.42),   # Table
         ]
         self.main_splitter.setSizes(sizes)
 
@@ -1320,7 +1375,144 @@ class MainWindow(QMainWindow):
         if hasattr(self.graph_panel, 'refresh'):
             self.graph_panel.refresh()
 
+    # ==================== Profile Menu Actions ====================
+
+    def _on_new_profile_menu(self):
+        """메뉴에서 새 프로파일"""
+        name, ok = QInputDialog.getText(
+            self,
+            "New Profile",
+            "Enter profile name:",
+            text="New Profile"
+        )
+        if ok and name.strip():
+            profile = Profile.create_new(name.strip())
+            self.state.set_profile(profile)
+            self.statusbar.showMessage(f"Created new profile: {name.strip()}", 3000)
+
+    def _on_load_profile_menu(self):
+        """메뉴에서 프로파일 로드"""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Profile",
+            str(self.profile_bar.profile_manager.profiles_dir),
+            "Data Graph Profile (*.dgp)"
+        )
+        if path:
+            try:
+                profile = self.profile_bar.profile_manager.load(path)
+                self.state.set_profile(profile)
+                self.statusbar.showMessage(f"Loaded profile: {profile.name}", 3000)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Load Profile Error",
+                    f"Failed to load profile: {e}"
+                )
+
+    def _on_save_profile_menu(self):
+        """메뉴에서 프로파일 저장"""
+        profile = self.state.current_profile
+        if not profile:
+            QMessageBox.information(
+                self,
+                "Save Profile",
+                "No profile to save. Create a new profile first."
+            )
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Profile",
+            str(self.profile_bar.profile_manager.profiles_dir / f"{profile.name}.dgp"),
+            "Data Graph Profile (*.dgp)"
+        )
+        if path:
+            try:
+                profile.save(path)
+                self.profile_bar.profile_manager._add_recent_profile(path)
+                self.state.profile_saved.emit()
+                self.statusbar.showMessage(f"Profile saved: {profile.name}", 3000)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Save Profile Error",
+                    f"Failed to save profile: {e}"
+                )
+
+    # ==================== Profile Actions ====================
+
+    def _on_profile_setting_clicked(self, setting_id: str):
+        """프로파일 설정 클릭"""
+        profile = self.state.current_profile
+        if profile:
+            setting = profile.get_setting(setting_id)
+            if setting:
+                # 설정 적용
+                self.state.apply_graph_setting(setting)
+                self.state.activate_setting(setting_id)
+                # 그래프 새로고침
+                self.graph_panel.refresh()
+
+    def _on_profile_setting_double_clicked(self, setting_id: str):
+        """프로파일 설정 더블클릭 (Floating 창 열기)"""
+        profile = self.state.current_profile
+        if profile and self._floating_graph_manager:
+            setting = profile.get_setting(setting_id)
+            if setting:
+                self._floating_graph_manager.open_floating_graph(setting, self)
+
+    def _on_add_setting_requested(self):
+        """새 설정 추가 요청"""
+        # 프로파일이 없으면 새로 생성
+        if not self.state.current_profile:
+            name, ok = QInputDialog.getText(
+                self,
+                "New Profile",
+                "No profile loaded. Create a new profile first.\n\nEnter profile name:",
+                text="New Profile"
+            )
+            if not ok or not name.strip():
+                return
+            profile = Profile.create_new(name.strip())
+            self.state.set_profile(profile)
+
+        # 설정 저장 다이얼로그 표시
+        dialog = SaveSettingDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            setting = dialog.get_setting()
+            if setting:
+                # 현재 그래프 상태를 설정에 저장
+                graph_state = self.state.get_current_graph_state()
+                setting.chart_type = graph_state['chart_type']
+                setting.x_column = graph_state['x_column']
+                setting.group_columns = graph_state['group_columns']
+                setting.value_columns = graph_state['value_columns']
+                setting.hover_columns = graph_state['hover_columns']
+                setting.chart_settings = graph_state['chart_settings']
+
+                if dialog.get_include_filters():
+                    setting.filters = graph_state['filters']
+                    setting.include_filters = True
+
+                if dialog.get_include_sorts():
+                    setting.sorts = graph_state['sorts']
+                    setting.include_sorts = True
+
+                # 프로파일에 추가
+                self.state.add_setting(setting)
+                self.statusbar.showMessage(f"Setting '{setting.name}' saved", 3000)
+
+    def _show_profile_manager(self):
+        """프로파일 관리자 다이얼로그 표시"""
+        dialog = ProfileManagerDialog(self.profile_bar.profile_manager, self)
+        dialog.exec()
+
     def closeEvent(self, event):
         """창 닫기 이벤트"""
+        # Close all floating graph windows
+        if self._floating_graph_manager:
+            self._floating_graph_manager.close_all()
+
         # TODO: 저장 확인
         event.accept()
