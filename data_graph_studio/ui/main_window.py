@@ -22,6 +22,7 @@ from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterT
 from ..core.state import AppState, ToolMode, ChartType, ComparisonMode
 from ..core.comparison_report import ComparisonReport
 from ..core.ipc_server import IPCServer
+from ..core.clipboard_manager import ClipboardManager, DragDropHandler
 from ..utils.memory import MemoryMonitor
 
 # 에러 로깅 설정
@@ -185,6 +186,9 @@ class MainWindow(QMainWindow):
             (screen.width() - self.width()) // 2,
             (screen.height() - self.height()) // 2
         )
+        
+        # 드래그 앤 드롭 활성화
+        self.setAcceptDrops(True)
 
     @staticmethod
     def _format_tooltip(action_name: str, shortcut: str) -> str:
@@ -285,6 +289,27 @@ class MainWindow(QMainWindow):
         redo_action = QAction("&Redo", self)
         redo_action.setShortcut(QKeySequence.Redo)
         edit_menu.addAction(redo_action)
+        
+        edit_menu.addSeparator()
+        
+        # Clipboard operations
+        paste_data_action = QAction("&Paste Data", self)
+        paste_data_action.setShortcut(QKeySequence.Paste)
+        paste_data_action.setToolTip("Paste table data from clipboard (Excel, Google Sheets)")
+        paste_data_action.triggered.connect(self._paste_from_clipboard)
+        edit_menu.addAction(paste_data_action)
+        
+        copy_selection_action = QAction("&Copy Selection", self)
+        copy_selection_action.setShortcut(QKeySequence.Copy)
+        copy_selection_action.setToolTip("Copy selected table cells")
+        copy_selection_action.triggered.connect(self._copy_selection_to_clipboard)
+        edit_menu.addAction(copy_selection_action)
+        
+        copy_graph_action = QAction("Copy &Graph as Image", self)
+        copy_graph_action.setShortcut("Ctrl+Shift+C")
+        copy_graph_action.setToolTip("Copy current graph to clipboard as image")
+        copy_graph_action.triggered.connect(self._copy_graph_to_clipboard)
+        edit_menu.addAction(copy_graph_action)
         
         edit_menu.addSeparator()
         
@@ -2298,3 +2323,194 @@ class MainWindow(QMainWindow):
 
         # TODO: 저장 확인
         event.accept()
+    
+    # ==================== Drag & Drop ====================
+    
+    def dragEnterEvent(self, event):
+        """드래그 진입 이벤트"""
+        if event.mimeData().hasUrls():
+            # 지원하는 파일인지 확인
+            urls = event.mimeData().urls()
+            supported = DragDropHandler.get_supported_files(urls)
+            if supported:
+                event.acceptProposedAction()
+                self.statusBar().showMessage(f"Drop to load: {', '.join(os.path.basename(f) for f in supported)}")
+                return
+        
+        # 텍스트 데이터 (클립보드에서 드래그)
+        if event.mimeData().hasText() or event.mimeData().hasHtml():
+            event.acceptProposedAction()
+            self.statusBar().showMessage("Drop to paste data")
+            return
+        
+        event.ignore()
+    
+    def dragLeaveEvent(self, event):
+        """드래그 이탈 이벤트"""
+        self.statusBar().clearMessage()
+    
+    def dropEvent(self, event):
+        """드롭 이벤트"""
+        mime = event.mimeData()
+        
+        # 파일 드롭
+        if mime.hasUrls():
+            files = DragDropHandler.get_supported_files(mime.urls())
+            if files:
+                event.acceptProposedAction()
+                self._handle_dropped_files(files)
+                return
+        
+        # 텍스트/HTML 데이터 드롭 (Excel에서 드래그 등)
+        if mime.hasHtml() or mime.hasText():
+            event.acceptProposedAction()
+            self._paste_from_clipboard()
+            return
+        
+        event.ignore()
+    
+    def _handle_dropped_files(self, files: list):
+        """드롭된 파일 처리"""
+        if not files:
+            return
+        
+        if len(files) == 1:
+            file_path = files[0]
+            file_type = DragDropHandler.get_file_type(file_path)
+            
+            if file_type == 'project':
+                # 프로젝트 파일 로드
+                self._load_project(file_path)
+            elif file_type == 'profile':
+                # 프로필 적용
+                self._load_profile(file_path)
+            else:
+                # 데이터 파일 로드
+                self._open_file(file_path)
+        else:
+            # 여러 파일 - 첫 번째 파일만 로드 (또는 다중 로드 다이얼로그)
+            self._open_file(files[0])
+            self.statusBar().showMessage(f"Loaded first file. {len(files)-1} more files ignored.")
+    
+    # ==================== Clipboard ====================
+    
+    def keyPressEvent(self, event):
+        """키보드 이벤트 - 클립보드 단축키"""
+        # Ctrl+V: 붙여넣기
+        if event.key() == Qt.Key_V and event.modifiers() == Qt.ControlModifier:
+            self._paste_from_clipboard()
+            return
+        
+        # Ctrl+Shift+C: 그래프 이미지 복사
+        if event.key() == Qt.Key_C and event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+            self._copy_graph_to_clipboard()
+            return
+        
+        # Ctrl+C: 선택된 데이터 복사 (테이블에 포커스 있을 때)
+        if event.key() == Qt.Key_C and event.modifiers() == Qt.ControlModifier:
+            if self.table_panel and self.table_panel.hasFocus():
+                self._copy_selection_to_clipboard()
+                return
+        
+        # 기본 처리
+        super().keyPressEvent(event)
+    
+    def _paste_from_clipboard(self):
+        """클립보드에서 데이터 붙여넣기"""
+        if not ClipboardManager.has_table_data():
+            self.statusBar().showMessage("No valid table data in clipboard", 3000)
+            return
+        
+        df, message = ClipboardManager.paste_as_dataframe()
+        
+        if df is not None and len(df) > 0:
+            # 데이터 로드
+            try:
+                # 임시 데이터셋으로 추가
+                import uuid
+                dataset_id = f"clipboard_{uuid.uuid4().hex[:8]}"
+                
+                # 엔진에 직접 설정
+                self.engine._df = df
+                self.engine._columns = df.columns
+                self.engine._row_count = len(df)
+                
+                # 상태 업데이트
+                self.state.set_data_loaded(True, len(df))
+                self.state.set_column_order(df.columns)
+                
+                # UI 업데이트
+                self.table_panel.set_data(df)
+                self.graph_panel.set_columns(df.columns)
+                
+                self.statusBar().showMessage(f"✓ {message}", 5000)
+                
+            except Exception as e:
+                self.statusBar().showMessage(f"Paste error: {e}", 5000)
+        else:
+            self.statusBar().showMessage(message, 3000)
+    
+    def _copy_graph_to_clipboard(self):
+        """그래프를 이미지로 클립보드에 복사"""
+        try:
+            if self.graph_panel and self.graph_panel.graph:
+                # PyQtGraph에서 이미지 캡처
+                exporter = None
+                try:
+                    from pyqtgraph.exporters import ImageExporter
+                    exporter = ImageExporter(self.graph_panel.graph.plotItem)
+                    exporter.parameters()['width'] = 1920
+                    
+                    # QImage로 내보내기
+                    from PySide6.QtGui import QImage
+                    import tempfile
+                    
+                    # 임시 파일로 저장 후 로드
+                    temp_path = os.path.join(tempfile.gettempdir(), 'dgs_temp_chart.png')
+                    exporter.export(temp_path)
+                    
+                    image = QImage(temp_path)
+                    if not image.isNull():
+                        msg = ClipboardManager.copy_image(image)
+                        self.statusBar().showMessage(f"✓ {msg}", 3000)
+                    
+                    # 임시 파일 삭제
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                        
+                except Exception as e:
+                    self.statusBar().showMessage(f"Export error: {e}", 3000)
+        except Exception as e:
+            self.statusBar().showMessage(f"Copy error: {e}", 3000)
+    
+    def _copy_selection_to_clipboard(self):
+        """테이블 선택 영역 복사"""
+        try:
+            if self.table_panel and hasattr(self.table_panel, 'table_view'):
+                selection = self.table_panel.table_view.selectionModel()
+                if selection.hasSelection():
+                    # 선택된 행/열 데이터 추출
+                    indexes = selection.selectedIndexes()
+                    if indexes:
+                        rows = sorted(set(idx.row() for idx in indexes))
+                        cols = sorted(set(idx.column() for idx in indexes))
+                        
+                        # 데이터 추출
+                        model = self.table_panel.table_view.model()
+                        data = []
+                        for row in rows:
+                            row_data = []
+                            for col in cols:
+                                idx = model.index(row, col)
+                                value = model.data(idx, Qt.DisplayRole)
+                                row_data.append(str(value) if value else '')
+                            data.append('\t'.join(row_data))
+                        
+                        text = '\n'.join(data)
+                        msg = ClipboardManager.copy_text(text)
+                        self.statusBar().showMessage(f"✓ Copied {len(rows)} rows", 3000)
+                        return
+            
+            self.statusBar().showMessage("No selection to copy", 3000)
+        except Exception as e:
+            self.statusBar().showMessage(f"Copy error: {e}", 3000)
