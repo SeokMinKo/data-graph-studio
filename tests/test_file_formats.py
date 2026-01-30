@@ -302,9 +302,91 @@ class TestDataTypes:
             os.unlink(tmp_path)
 
 
+class TestETLFiles:
+    """ETL 파일 로딩 테스트"""
+
+    def setup_method(self):
+        self.engine = DataEngine()
+
+    def test_binary_etl_detection(self):
+        """바이너리 ETL 파일 감지 테스트"""
+        import platform
+
+        # 바이너리 ETL 파일 시뮬레이션 (null 바이트 포함)
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.etl', delete=False) as f:
+            # WPR ETL 파일과 유사한 바이너리 헤더 (null 바이트 포함)
+            binary_header = bytes([
+                0x42, 0x00, 0x55, 0x00, 0x46, 0x00, 0x46, 0x00,  # B.U.F.F. (UTF-16)
+                0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ] * 20)  # 반복하여 512바이트 이상
+            f.write(binary_header)
+            tmp_path = f.name
+
+        try:
+            # 바이너리 ETL은 Windows가 아닌 환경에서 에러 발생해야 함
+            success = self.engine.load_file(tmp_path, file_type=FileType.ETL)
+
+            if platform.system() != 'Windows':
+                # Linux/Mac에서는 실패하고 적절한 에러 메시지
+                assert not success
+                assert "ETL" in self.engine.progress.error_message
+            # Windows에서는 tracerpt가 없으면 실패
+        finally:
+            os.unlink(tmp_path)
+
+    def test_text_etl_loading(self):
+        """텍스트 ETL 파일 (변환된 파일) 로딩 테스트"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.etl', delete=False) as f:
+            # 이미 CSV로 변환된 ETL 파일 형태
+            f.write("EventName,TimeStamp,ProcessId,ThreadId\n")
+            f.write("DiskRead,1234567890,100,200\n")
+            f.write("DiskWrite,1234567891,100,201\n")
+            f.write("FileCreate,1234567892,101,300\n")
+            tmp_path = f.name
+
+        try:
+            success = self.engine.load_file(tmp_path, file_type=FileType.ETL)
+            assert success
+            assert self.engine.row_count == 3
+            assert 'EventName' in self.engine.columns
+            assert 'TimeStamp' in self.engine.columns
+        finally:
+            os.unlink(tmp_path)
+
+    def test_binary_vs_text_detection(self):
+        """바이너리 vs 텍스트 구분 테스트"""
+        # 텍스트 파일 (null 바이트 없음)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.etl', delete=False) as f:
+            f.write("col1,col2,col3\n")
+            f.write("a,b,c\n")
+            tmp_path_text = f.name
+
+        # 바이너리 파일 (null 바이트 있음)
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.etl', delete=False) as f:
+            f.write(b'\x00\x01\x02\x03\x04\x05' * 100)
+            tmp_path_binary = f.name
+
+        try:
+            # 텍스트 ETL은 성공해야 함
+            success_text = self.engine.load_file(tmp_path_text, file_type=FileType.ETL)
+            assert success_text
+
+            # 바이너리 ETL은 Linux/Mac에서 실패해야 함
+            import platform
+            self.engine.clear()
+            success_binary = self.engine.load_file(tmp_path_binary, file_type=FileType.ETL)
+
+            if platform.system() != 'Windows':
+                assert not success_binary
+        finally:
+            os.unlink(tmp_path_text)
+            os.unlink(tmp_path_binary)
+
+
 class TestEdgeCases:
     """엣지 케이스 테스트"""
-    
+
     def setup_method(self):
         self.engine = DataEngine()
     
