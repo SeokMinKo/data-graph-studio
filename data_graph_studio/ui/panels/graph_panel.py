@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QScrollArea, QSplitter, QToolButton, QButtonGroup,
     QSizePolicy, QGroupBox, QDialog, QDialogButtonBox,
     QLineEdit, QColorDialog, QPushButton, QSlider,
-    QTabWidget, QListWidget, QListWidgetItem, QGridLayout
+    QTabWidget, QListWidget, QListWidgetItem, QGridLayout,
+    QMessageBox
 )
 from PySide6.QtCore import Qt, Signal, Slot, QSize
 from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter
@@ -577,9 +578,63 @@ class GraphOptionsPanel(QFrame):
         self.smooth_check = QCheckBox("Smooth Line")
         self.smooth_check.stateChanged.connect(self._on_option_changed)
         data_layout.addWidget(self.smooth_check)
-        
+
         layout.addWidget(data_group)
-        
+
+        # Sampling Options
+        sampling_group = QGroupBox("Sampling")
+        sampling_layout = QVBoxLayout(sampling_group)
+        sampling_layout.setSpacing(8)
+
+        # Show All Data checkbox
+        self.show_all_data_check = QCheckBox("Show All Data (may be slow)")
+        self.show_all_data_check.setChecked(False)
+        self.show_all_data_check.stateChanged.connect(self._on_show_all_data_changed)
+        sampling_layout.addWidget(self.show_all_data_check)
+
+        # Max Points slider
+        max_points_layout = QVBoxLayout()
+        max_points_label_layout = QHBoxLayout()
+        max_points_label_layout.addWidget(QLabel("Max Points:"))
+        self.max_points_label = QLabel("10,000")
+        self.max_points_label.setStyleSheet("font-weight: 600; color: #4F46E5;")
+        max_points_label_layout.addWidget(self.max_points_label)
+        max_points_label_layout.addStretch()
+        max_points_layout.addLayout(max_points_label_layout)
+
+        self.max_points_slider = QSlider(Qt.Horizontal)
+        self.max_points_slider.setRange(1, 100)  # 1K to 100K
+        self.max_points_slider.setValue(10)  # Default 10K
+        self.max_points_slider.setTickPosition(QSlider.TicksBelow)
+        self.max_points_slider.setTickInterval(10)
+        self.max_points_slider.valueChanged.connect(self._on_max_points_changed)
+        max_points_layout.addWidget(self.max_points_slider)
+
+        # Min/Max labels
+        range_layout = QHBoxLayout()
+        range_layout.addWidget(QLabel("1K"))
+        range_layout.addStretch()
+        range_layout.addWidget(QLabel("100K"))
+        max_points_layout.addLayout(range_layout)
+
+        sampling_layout.addLayout(max_points_layout)
+
+        # Algorithm selection
+        algo_layout = QHBoxLayout()
+        algo_layout.addWidget(QLabel("Algorithm:"))
+        self.sampling_algo_combo = QComboBox()
+        self.sampling_algo_combo.addItems([
+            "Auto (LTTB/Min-Max)",
+            "LTTB (Time Series)",
+            "Min-Max (Extremes)",
+            "Random"
+        ])
+        self.sampling_algo_combo.currentIndexChanged.connect(self._on_option_changed)
+        algo_layout.addWidget(self.sampling_algo_combo)
+        sampling_layout.addLayout(algo_layout)
+
+        layout.addWidget(sampling_group)
+
         layout.addStretch()
         return widget
     
@@ -820,6 +875,47 @@ class GraphOptionsPanel(QFrame):
             'series': series_settings
         }
 
+    def _on_max_points_changed(self, value: int):
+        """Max points slider changed"""
+        points = value * 1000
+        self.max_points_label.setText(f"{points:,}")
+        # Disable show all data when adjusting max points
+        if self.show_all_data_check.isChecked():
+            self.show_all_data_check.blockSignals(True)
+            self.show_all_data_check.setChecked(False)
+            self.show_all_data_check.blockSignals(False)
+        self.option_changed.emit()
+
+    def _on_show_all_data_changed(self, state: int):
+        """Show all data checkbox changed"""
+        if state == Qt.Checked:
+            # Show warning dialog
+            reply = QMessageBox.warning(
+                self,
+                "Performance Warning",
+                "Displaying all data points may cause significant slowdown "
+                "with large datasets (>100K points).\n\n"
+                "OpenGL acceleration will be enabled automatically to improve "
+                "performance, but the application may still become unresponsive.\n\n"
+                "Are you sure you want to continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                self.show_all_data_check.blockSignals(True)
+                self.show_all_data_check.setChecked(False)
+                self.show_all_data_check.blockSignals(False)
+                return
+
+            # Disable max points slider when show all is enabled
+            self.max_points_slider.setEnabled(False)
+            self.sampling_algo_combo.setEnabled(False)
+        else:
+            self.max_points_slider.setEnabled(True)
+            self.sampling_algo_combo.setEnabled(True)
+
+        self.option_changed.emit()
+
     def _on_chart_type_changed(self, index: int):
         chart_type = self.chart_type_combo.currentData()
         if chart_type:
@@ -856,6 +952,9 @@ class GraphOptionsPanel(QFrame):
             'time'  # ms/s/min
         ]
 
+        # Sampling algorithm mapping
+        sampling_algorithms = ['auto', 'lttb', 'minmax', 'random']
+
         return {
             'x_title': self.x_title_edit.text() or None,
             'x_format': format_types[self.x_format_combo.currentIndex()],
@@ -882,6 +981,10 @@ class GraphOptionsPanel(QFrame):
             'marker_symbol': marker_symbols[self.marker_shape_combo.currentIndex()],
             'fill_opacity': self.fill_opacity_spin.value(),
             'bg_color': self.bg_color_btn.color(),
+            # Sampling options
+            'show_all_data': self.show_all_data_check.isChecked(),
+            'max_points': self.max_points_slider.value() * 1000,
+            'sampling_algorithm': sampling_algorithms[self.sampling_algo_combo.currentIndex()],
         }
 
 
@@ -1385,6 +1488,20 @@ class MainGraph(pg.PlotWidget):
         self._selection_start = None
         self._is_selecting = False
 
+        # Sampling status label
+        self._sampling_label = pg.TextItem(
+            text="",
+            anchor=(0, 0),
+            color='#6B7280'
+        )
+        self._sampling_label.setZValue(1000)
+        self._sampling_label.setFont(pg.QtGui.QFont('Arial', 9))
+        self.addItem(self._sampling_label)
+        self._sampling_label.hide()
+
+        # OpenGL state
+        self._opengl_enabled = False
+
         # Enable mouse tracking for hover
         self.setMouseTracking(True)
         self.scene().sigMouseClicked.connect(self._on_mouse_clicked)
@@ -1395,6 +1512,51 @@ class MainGraph(pg.PlotWidget):
 
         # Apply initial tool mode
         self._on_tool_mode_changed()
+
+    def enable_opengl(self, enable: bool = True):
+        """Enable or disable OpenGL acceleration"""
+        if enable and not self._opengl_enabled:
+            try:
+                self.useOpenGL(True)
+                self._opengl_enabled = True
+            except Exception as e:
+                print(f"Failed to enable OpenGL: {e}")
+        elif not enable and self._opengl_enabled:
+            try:
+                self.useOpenGL(False)
+                self._opengl_enabled = False
+            except Exception:
+                pass
+
+    def update_sampling_status(
+        self,
+        displayed_points: int,
+        total_points: int,
+        is_sampled: bool,
+        algorithm: str = ""
+    ):
+        """Update sampling status label"""
+        if is_sampled and total_points > displayed_points:
+            algo_text = f" [{algorithm}]" if algorithm else ""
+            text = f"Showing {displayed_points:,} of {total_points:,} points{algo_text}"
+            self._sampling_label.setText(text)
+
+            # Position at top-left of the plot
+            view_range = self.viewRange()
+            x_pos = view_range[0][0]
+            y_pos = view_range[1][1]
+            self._sampling_label.setPos(x_pos, y_pos)
+            self._sampling_label.show()
+        else:
+            self._sampling_label.hide()
+
+    def _update_sampling_label_position(self):
+        """Update sampling label position when view changes"""
+        if self._sampling_label.isVisible():
+            view_range = self.viewRange()
+            x_pos = view_range[0][0]
+            y_pos = view_range[1][1]
+            self._sampling_label.setPos(x_pos, y_pos)
 
     def _on_tool_mode_changed(self):
         """Handle tool mode changes"""
@@ -1935,7 +2097,12 @@ class GraphPanel(QWidget):
         # Get options including legend settings
         options = self.options_panel.get_chart_options()
         legend_settings = self.options_panel.get_legend_settings()
-        
+
+        # Get sampling settings from options
+        show_all_data = options.get('show_all_data', False)
+        max_points = options.get('max_points', 10000)
+        sampling_algorithm = options.get('sampling_algorithm', 'auto')
+
         # X column (from state, set by X Zone)
         x_col = self.state.x_column
         if not x_col:
@@ -1944,7 +2111,7 @@ class GraphPanel(QWidget):
         else:
             x_data = self.engine.df[x_col].to_numpy()
             options['x_title'] = options.get('x_title') or x_col
-        
+
         # Y column
         if self.state.value_columns:
             value_col = self.state.value_columns[0]
@@ -1958,38 +2125,92 @@ class GraphPanel(QWidget):
                 y_col_name = numeric_cols[0]
             else:
                 return
-        
+
         y_data = self.engine.df[y_col_name].to_numpy()
         options['y_title'] = options.get('y_title') or y_col_name
-        
+
         # Groups
         groups = None
         if self.state.group_columns:
             groups = self._build_group_masks()
-        
-        # Sampling for large datasets
-        MAX_POINTS = 10000
-        if len(x_data) > MAX_POINTS:
+
+        # Total points for status display
+        total_points = len(x_data)
+
+        # Determine if we need OpenGL acceleration
+        # Auto-enable OpenGL for large datasets (>50K points) or when showing all data
+        OPENGL_THRESHOLD = 50000
+        needs_opengl = total_points > OPENGL_THRESHOLD or (show_all_data and total_points > max_points)
+        self.main_graph.enable_opengl(needs_opengl)
+
+        # Sampling logic
+        is_sampled = False
+        algorithm_used = ""
+
+        if show_all_data:
+            # Show all data - no sampling
+            x_sampled, y_sampled = x_data, y_data
+        elif total_points > max_points:
+            # Apply sampling
             valid_mask = ~(np.isnan(x_data.astype(float)) | np.isnan(y_data.astype(float)))
             x_valid = x_data[valid_mask].astype(np.float64)
             y_valid = y_data[valid_mask].astype(np.float64)
-            
-            if len(x_valid) > MAX_POINTS:
-                x_sampled, y_sampled = DataSampler.auto_sample(
-                    x_valid, y_valid, max_points=MAX_POINTS
-                )
+
+            if len(x_valid) > max_points:
+                is_sampled = True
+
+                # Apply selected sampling algorithm
+                if sampling_algorithm == 'auto':
+                    x_sampled, y_sampled = DataSampler.auto_sample(
+                        x_valid, y_valid, max_points=max_points
+                    )
+                    # Determine which algorithm was used
+                    is_sorted = np.all(x_valid[:-1] <= x_valid[1:])
+                    algorithm_used = "LTTB" if is_sorted else "Min-Max"
+                elif sampling_algorithm == 'lttb':
+                    x_sampled, y_sampled = DataSampler.lttb(
+                        x_valid, y_valid, threshold=max_points
+                    )
+                    algorithm_used = "LTTB"
+                elif sampling_algorithm == 'minmax':
+                    x_sampled, y_sampled = DataSampler.min_max_per_bucket(
+                        x_valid, y_valid, n_buckets=max_points // 2
+                    )
+                    algorithm_used = "Min-Max"
+                elif sampling_algorithm == 'random':
+                    x_sampled, y_sampled = DataSampler.random_sample(
+                        x_valid, y_valid, n_samples=max_points
+                    )
+                    algorithm_used = "Random"
+                else:
+                    x_sampled, y_sampled = DataSampler.auto_sample(
+                        x_valid, y_valid, max_points=max_points
+                    )
+                    algorithm_used = "Auto"
+
+                # Clear groups when sampling (can't maintain group structure)
                 groups = None
             else:
                 x_sampled, y_sampled = x_valid, y_valid
         else:
             x_sampled, y_sampled = x_data, y_data
-        
+
+        # Plot data
         self.main_graph.plot_data(
             x_sampled, y_sampled,
             groups=groups,
             chart_type=options.get('chart_type', ChartType.LINE),
             options=options,
             legend_settings=legend_settings
+        )
+
+        # Update sampling status label
+        displayed_points = len(x_sampled)
+        self.main_graph.update_sampling_status(
+            displayed_points=displayed_points,
+            total_points=total_points,
+            is_sampled=is_sampled,
+            algorithm=algorithm_used
         )
 
         # Set hover data
@@ -2000,7 +2221,7 @@ class GraphPanel(QWidget):
                 if col in self.engine.df.columns:
                     col_data = self.engine.df[col].to_list()
                     # Apply same sampling if needed
-                    if len(col_data) > MAX_POINTS and len(x_sampled) < len(col_data):
+                    if len(col_data) > max_points and len(x_sampled) < len(col_data):
                         # Simple downsampling for hover data
                         step = len(col_data) // len(x_sampled)
                         col_data = col_data[::step][:len(x_sampled)]
