@@ -6,12 +6,13 @@ from typing import Dict, Any, Optional
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QScrollArea, QSizePolicy, QGraphicsDropShadowEffect
+    QScrollArea, QSizePolicy, QGraphicsDropShadowEffect, QPushButton
 )
 from PySide6.QtCore import Qt, Slot, QPropertyAnimation, QEasingCurve, Property
 from PySide6.QtGui import QFont, QColor
 
 from ...core.state import AppState
+from ..floatable import FloatButton
 
 
 class AnimatedNumber(QLabel):
@@ -239,15 +240,15 @@ class SummaryPanel(QWidget):
         # Header with title and context
         header = QHBoxLayout()
         header.setSpacing(12)
-        
+
         # Title with icon
         title_container = QHBoxLayout()
         title_container.setSpacing(8)
-        
+
         title_icon = QLabel("📊")
         title_icon.setStyleSheet("font-size: 18px; background: transparent;")
         title_container.addWidget(title_icon)
-        
+
         title = QLabel("Overview")
         title.setStyleSheet("""
             font-weight: 600;
@@ -257,7 +258,7 @@ class SummaryPanel(QWidget):
         """)
         title_container.addWidget(title)
         header.addLayout(title_container)
-        
+
         # Context label (shows grouping/filter info)
         self.context_label = QLabel("")
         self.context_label.setStyleSheet("""
@@ -268,10 +269,14 @@ class SummaryPanel(QWidget):
             border-radius: 12px;
         """)
         header.addWidget(self.context_label, 1)
-        
+
         # Quick actions (optional)
         header.addStretch()
-        
+
+        # Float button
+        self.float_btn = FloatButton()
+        header.addWidget(self.float_btn)
+
         main_layout.addLayout(header)
         
         # Cards scroll area

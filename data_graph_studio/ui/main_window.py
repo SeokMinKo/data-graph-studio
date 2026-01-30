@@ -4,12 +4,12 @@ Main Window - 메인 윈도우 및 레이아웃
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog
+    QProgressDialog, QApplication, QLabel, QDialog, QFrame
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread
 from PySide6.QtGui import QAction, QIcon, QKeySequence
@@ -21,6 +21,7 @@ from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
 from .panels.table_panel import TablePanel
 from .dialogs.parsing_preview_dialog import ParsingPreviewDialog, ParsingSettings
+from .floatable import FloatWindow
 
 
 class DataLoaderThread(QThread):
@@ -96,24 +97,31 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        
+
         # Core components
         self.engine = DataEngine()
         self.state = AppState()
-        
+
         # Loading thread
         self._loader_thread: Optional[DataLoaderThread] = None
-        
+
+        # Float windows tracking
+        self._float_windows: Dict[str, FloatWindow] = {}
+        self._placeholders: Dict[str, QWidget] = {}
+
         # Setup UI
         self._setup_window()
         self._setup_menubar()
         self._setup_toolbar()
         self._setup_main_layout()
         self._setup_statusbar()
-        
+
         # Connect signals
         self._connect_signals()
-        
+
+        # Setup float handlers for main panels
+        self._setup_float_handlers()
+
         # Apply initial state
         self._update_ui_state()
     
@@ -406,9 +414,100 @@ class MainWindow(QMainWindow):
         self.state.data_cleared.connect(self._on_data_cleared)
         self.state.selection_changed.connect(self._update_selection_status)
         self.state.tool_mode_changed.connect(self._on_tool_mode_changed)
-        
+
         # Panel signals - route through preview dialog
         self.table_panel.file_dropped.connect(self._show_parsing_preview)
+
+    def _setup_float_handlers(self):
+        """메인 패널들의 Float 버튼 핸들러 설정"""
+        # Connect float buttons for main panels
+        self.summary_panel.float_btn.clicked.connect(lambda: self._float_main_panel("summary"))
+        # GraphPanel은 내부적으로 float 처리
+        # TablePanel도 내부적으로 float 처리
+
+        # Create placeholders
+        for key, title in [("summary", "📊 Overview"), ("graph", "📈 Graph"), ("table", "📋 Table")]:
+            placeholder = QFrame()
+            placeholder.setStyleSheet("""
+                QFrame {
+                    background: #F9FAFB;
+                    border: 2px dashed #D1D5DB;
+                    border-radius: 8px;
+                }
+            """)
+            layout = QVBoxLayout(placeholder)
+            layout.setAlignment(Qt.AlignCenter)
+            label = QLabel(f"📤 {title}\n\nFloating as separate window\n\nClick 'Dock' to return")
+            label.setStyleSheet("color: #9CA3AF; font-size: 12px; background: transparent;")
+            label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(label)
+            placeholder.hide()
+            self._placeholders[key] = placeholder
+
+    def _float_main_panel(self, panel_key: str):
+        """메인 패널을 독립 창으로 분리"""
+        if panel_key in self._float_windows:
+            self._float_windows[panel_key].raise_()
+            self._float_windows[panel_key].activateWindow()
+            return
+
+        panel_map = {
+            "summary": (self.summary_panel, "📊 Overview", 0),
+            "graph": (self.graph_panel, "📈 Graph Panel", 1),
+            "table": (self.table_panel, "📋 Table Panel", 2),
+        }
+
+        if panel_key not in panel_map:
+            return
+
+        widget, title, splitter_index = panel_map[panel_key]
+
+        # Float window 생성
+        float_window = FloatWindow(title, widget, self)
+        float_window.dock_requested.connect(lambda: self._dock_main_panel(panel_key))
+        self._float_windows[panel_key] = float_window
+
+        # 플레이스홀더로 교체
+        placeholder = self._placeholders[panel_key]
+        self.main_splitter.replaceWidget(splitter_index, placeholder)
+        placeholder.show()
+
+        # Float 버튼 비활성화
+        if hasattr(widget, 'float_btn'):
+            widget.float_btn.setEnabled(False)
+
+        float_window.show()
+
+    def _dock_main_panel(self, panel_key: str):
+        """메인 패널을 메인 창으로 복귀"""
+        if panel_key not in self._float_windows:
+            return
+
+        float_window = self._float_windows[panel_key]
+        widget = float_window.get_content_widget()
+
+        index_map = {
+            "summary": 0,
+            "graph": 1,
+            "table": 2,
+        }
+
+        splitter_index = index_map.get(panel_key, 0)
+        placeholder = self._placeholders[panel_key]
+
+        # 플레이스홀더를 원래 위젯으로 교체
+        self.main_splitter.replaceWidget(splitter_index, widget)
+        placeholder.hide()
+        widget.show()
+
+        # Float 버튼 활성화
+        if hasattr(widget, 'float_btn'):
+            widget.float_btn.setEnabled(True)
+
+        # Float window 정리
+        float_window.close()
+        float_window.deleteLater()
+        del self._float_windows[panel_key]
     
     def _update_ui_state(self):
         """Update UI state with modern styling"""

@@ -21,6 +21,7 @@ from PySide6.QtGui import QDrag, QAction, QDropEvent, QDragEnterEvent
 from ...core.state import AppState, AggregationType, GroupColumn, ValueColumn
 from ...core.data_engine import DataEngine
 from .grouped_table_model import GroupedTableModel
+from ..floatable import FloatButton, FloatWindow
 
 
 class PolarsTableModel(QAbstractTableModel):
@@ -191,15 +192,15 @@ class XAxisZone(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
-        
-        # Header
+
+        # Header with float button
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
-        
+
         icon = QLabel("📐")
         icon.setStyleSheet("font-size: 16px; background: transparent;")
         header_layout.addWidget(icon)
-        
+
         header = QLabel("X-Axis")
         header.setStyleSheet("""
             font-weight: 600;
@@ -209,8 +210,12 @@ class XAxisZone(QFrame):
         """)
         header_layout.addWidget(header)
         header_layout.addStretch()
+
+        self.float_btn = FloatButton()
+        header_layout.addWidget(self.float_btn)
+
         layout.addLayout(header_layout)
-        
+
         # Help text
         help_label = QLabel("Drag column for X-axis\n(empty = use index)")
         help_label.setStyleSheet("""
@@ -376,15 +381,15 @@ class GroupZone(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
-        
-        # Header with icon
+
+        # Header with icon and float button
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
-        
+
         icon = QLabel("📁")
         icon.setStyleSheet("font-size: 16px; background: transparent;")
         header_layout.addWidget(icon)
-        
+
         header = QLabel("Group By")
         header.setStyleSheet("""
             font-weight: 600;
@@ -394,8 +399,12 @@ class GroupZone(QFrame):
         """)
         header_layout.addWidget(header)
         header_layout.addStretch()
+
+        self.float_btn = FloatButton()
+        header_layout.addWidget(self.float_btn)
+
         layout.addLayout(header_layout)
-        
+
         # Help text
         help_label = QLabel("Drag columns to group")
         help_label.setStyleSheet("""
@@ -520,15 +529,15 @@ class ValueZone(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
-        
-        # Header
+
+        # Header with float button
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
-        
+
         icon = QLabel("📊")
         icon.setStyleSheet("font-size: 16px; background: transparent;")
         header_layout.addWidget(icon)
-        
+
         header = QLabel("Y-Axis Values")
         header.setStyleSheet("""
             font-weight: 600;
@@ -538,8 +547,12 @@ class ValueZone(QFrame):
         """)
         header_layout.addWidget(header)
         header_layout.addStretch()
+
+        self.float_btn = FloatButton()
+        header_layout.addWidget(self.float_btn)
+
         layout.addLayout(header_layout)
-        
+
         # Help text
         help_label = QLabel("Drag numeric columns for Y values")
         help_label.setStyleSheet("""
@@ -1145,34 +1158,39 @@ class TablePanel(QWidget):
         super().__init__()
         self.state = state
         self.engine = engine
-        
+
+        # Float windows tracking
+        self._float_windows: Dict[str, FloatWindow] = {}
+        self._placeholders: Dict[str, QWidget] = {}
+
         self.setAcceptDrops(True)
-        
+
         self._setup_ui()
         self._connect_signals()
+        self._setup_float_handlers()
     
     def _setup_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
-        splitter = QSplitter(Qt.Horizontal)
-        
+
+        self.splitter = QSplitter(Qt.Horizontal)
+
         # Left panel: X Zone + Group Zone
-        left_panel = QWidget()
-        left_layout = QHBoxLayout(left_panel)
+        self.left_panel = QWidget()
+        left_layout = QHBoxLayout(self.left_panel)
         left_layout.setContentsMargins(4, 4, 4, 4)
         left_layout.setSpacing(6)
-        
+
         # X Zone
         self.x_zone = XAxisZone(self.state)
         left_layout.addWidget(self.x_zone)
-        
+
         # Group Zone
         self.group_zone = GroupZone(self.state)
         left_layout.addWidget(self.group_zone)
-        
-        splitter.addWidget(left_panel)
+
+        self.splitter.addWidget(self.left_panel)
         
         # Table area (center)
         table_container = QWidget()
@@ -1269,20 +1287,20 @@ class TablePanel(QWidget):
         self.table_view.clicked.connect(self._on_table_clicked)
         
         table_layout.addWidget(self.table_view)
-        
-        splitter.addWidget(table_container)
-        
+
+        self.splitter.addWidget(table_container)
+
         # Value Zone (right)
         self.value_zone = ValueZone(self.state)
-        splitter.addWidget(self.value_zone)
-        
+        self.splitter.addWidget(self.value_zone)
+
         # Splitter sizes
-        splitter.setSizes([310, 500, 200])
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 0)
-        
-        layout.addWidget(splitter)
+        self.splitter.setSizes([310, 500, 200])
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(2, 0)
+
+        layout.addWidget(self.splitter)
     
     def _connect_signals(self):
         self.table_view.rows_selected.connect(self._on_rows_selected)
@@ -1293,6 +1311,114 @@ class TablePanel(QWidget):
         self.state.group_zone_changed.connect(self._on_group_zone_changed)
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
         self.state.filter_changed.connect(self._on_filter_changed)
+
+    def _setup_float_handlers(self):
+        """Float 버튼 핸들러 설정"""
+        # Connect float buttons
+        self.x_zone.float_btn.clicked.connect(lambda: self._float_section("x_zone"))
+        self.group_zone.float_btn.clicked.connect(lambda: self._float_section("group_zone"))
+        self.value_zone.float_btn.clicked.connect(lambda: self._float_section("value_zone"))
+
+        # Create placeholders
+        for key, title in [("x_zone", "📐 X-Axis"), ("group_zone", "📁 Group By"), ("value_zone", "📊 Y-Axis Values")]:
+            placeholder = QFrame()
+            placeholder.setStyleSheet("""
+                QFrame {
+                    background: #F9FAFB;
+                    border: 2px dashed #D1D5DB;
+                    border-radius: 8px;
+                }
+            """)
+            layout = QVBoxLayout(placeholder)
+            layout.setAlignment(Qt.AlignCenter)
+            label = QLabel(f"📤 {title}\n\nFloating")
+            label.setStyleSheet("color: #9CA3AF; font-size: 10px; background: transparent;")
+            label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(label)
+            placeholder.hide()
+            self._placeholders[key] = placeholder
+
+    def _float_section(self, section_key: str):
+        """섹션을 독립 창으로 분리"""
+        if section_key in self._float_windows:
+            self._float_windows[section_key].raise_()
+            self._float_windows[section_key].activateWindow()
+            return
+
+        section_map = {
+            "x_zone": (self.x_zone, "📐 X-Axis"),
+            "group_zone": (self.group_zone, "📁 Group By"),
+            "value_zone": (self.value_zone, "📊 Y-Axis Values"),
+        }
+
+        if section_key not in section_map:
+            return
+
+        widget, title = section_map[section_key]
+
+        # 메인 윈도우 찾기
+        main_window = self._find_main_window()
+
+        # Float window 생성
+        float_window = FloatWindow(title, widget, main_window)
+        float_window.dock_requested.connect(lambda: self._dock_section(section_key))
+        self._float_windows[section_key] = float_window
+
+        # 플레이스홀더 설정
+        placeholder = self._placeholders[section_key]
+
+        # X Zone과 Group Zone은 left_panel 내부에 있음
+        if section_key in ["x_zone", "group_zone"]:
+            left_layout = self.left_panel.layout()
+            idx = 0 if section_key == "x_zone" else 1
+            left_layout.replaceWidget(widget, placeholder)
+        else:  # value_zone
+            self.splitter.replaceWidget(2, placeholder)
+
+        placeholder.show()
+
+        # Float 버튼 비활성화
+        if hasattr(widget, 'float_btn'):
+            widget.float_btn.setEnabled(False)
+
+        float_window.show()
+
+    def _dock_section(self, section_key: str):
+        """섹션을 메인 창으로 복귀"""
+        if section_key not in self._float_windows:
+            return
+
+        float_window = self._float_windows[section_key]
+        widget = float_window.get_content_widget()
+        placeholder = self._placeholders[section_key]
+
+        # X Zone과 Group Zone은 left_panel 내부에 있음
+        if section_key in ["x_zone", "group_zone"]:
+            left_layout = self.left_panel.layout()
+            left_layout.replaceWidget(placeholder, widget)
+        else:  # value_zone
+            self.splitter.replaceWidget(2, widget)
+
+        placeholder.hide()
+        widget.show()
+
+        # Float 버튼 활성화
+        if hasattr(widget, 'float_btn'):
+            widget.float_btn.setEnabled(True)
+
+        # Float window 정리
+        float_window.close()
+        float_window.deleteLater()
+        del self._float_windows[section_key]
+
+    def _find_main_window(self):
+        """메인 윈도우 찾기"""
+        widget = self
+        while widget:
+            if widget.inherits("QMainWindow"):
+                return widget
+            widget = widget.parentWidget()
+        return None
     
     def set_data(self, df: Optional[pl.DataFrame]):
         self._update_table_model(df)

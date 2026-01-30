@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, Slot, QSize
 from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter
 
+from ..floatable import FloatableSection, FloatButton, FloatWindow
+
 import pyqtgraph as pg
 
 
@@ -315,12 +317,23 @@ class GraphOptionsPanel(QFrame):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(8)
-        
-        # Header
+
+        # Header with float button
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(4)
+
         header = QLabel("⚙️ Chart Options")
         header.setStyleSheet("font-weight: 600; font-size: 13px; color: #111827; padding: 4px;")
-        main_layout.addWidget(header)
-        
+        header_layout.addWidget(header)
+
+        header_layout.addStretch()
+
+        self.float_btn = FloatButton()
+        header_layout.addWidget(self.float_btn)
+
+        main_layout.addLayout(header_layout)
+
         # Tabs
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
@@ -757,12 +770,23 @@ class LegendSettingsPanel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-        
-        # Header
+
+        # Header with float button
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(4)
+
         header = QLabel("📊 Legend")
         header.setStyleSheet("font-weight: 600; font-size: 13px; color: #111827; padding: 4px;")
-        layout.addWidget(header)
-        
+        header_layout.addWidget(header)
+
+        header_layout.addStretch()
+
+        self.float_btn = FloatButton()
+        header_layout.addWidget(self.float_btn)
+
+        layout.addLayout(header_layout)
+
         # Legend Options
         options_group = QGroupBox("Options")
         options_layout = QVBoxLayout(options_group)
@@ -959,10 +983,21 @@ class StatPanel(QFrame):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        # Header
+        # Header with float button
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(4)
+
         header = QLabel("📈 Statistics")
         header.setStyleSheet("font-weight: 600; font-size: 13px; color: #111827; padding: 4px;")
-        layout.addWidget(header)
+        header_layout.addWidget(header)
+
+        header_layout.addStretch()
+
+        self.float_btn = FloatButton()
+        header_layout.addWidget(self.float_btn)
+
+        layout.addLayout(header_layout)
 
         # Bin Range Control
         bin_group = QGroupBox("Bin Range")
@@ -1313,53 +1348,63 @@ class MainGraph(pg.PlotWidget):
 class GraphPanel(QWidget):
     """
     Graph Panel - Main container
-    
-    Layout:
-    ┌──────────┬───────────────────────────┬──────────┬──────────┐
-    │ Options  │       Main Graph          │  Legend  │  Stats   │
-    │ (240px)  │                           │ (200px)  │ (180px)  │
-    └──────────┴───────────────────────────┴──────────┴──────────┘
+
+    Layout (reordered):
+    ┌──────────┬──────────┬───────────────────────────┬──────────┐
+    │ Options  │  Legend  │       Main Graph          │  Stats   │
+    │ (240px)  │ (200px)  │                           │ (180px)  │
+    └──────────┴──────────┴───────────────────────────┴──────────┘
     """
-    
+
     def __init__(self, state: AppState, engine: DataEngine):
         super().__init__()
         self.state = state
         self.engine = engine
-        
+
+        # Float windows tracking
+        self._float_windows: Dict[str, FloatWindow] = {}
+        self._placeholders: Dict[str, QWidget] = {}
+
         self._setup_ui()
         self._connect_signals()
-    
+
     def _setup_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
-        splitter = QSplitter(Qt.Horizontal)
-        
+
+        self.splitter = QSplitter(Qt.Horizontal)
+
         # Options Panel (left)
         self.options_panel = GraphOptionsPanel(self.state)
-        splitter.addWidget(self.options_panel)
-        
-        # Main Graph (center)
-        self.main_graph = MainGraph(self.state)
-        splitter.addWidget(self.main_graph)
-        
-        # Legend Panel (right)
+        self.splitter.addWidget(self.options_panel)
+
+        # Legend Panel (second - moved here)
         self.legend_panel = LegendSettingsPanel(self.state)
-        splitter.addWidget(self.legend_panel)
-        
+        self.splitter.addWidget(self.legend_panel)
+
+        # Main Graph (center - main content)
+        self.main_graph = MainGraph(self.state)
+        self.splitter.addWidget(self.main_graph)
+
         # Stat Panel (far right)
         self.stat_panel = StatPanel(self.state)
-        splitter.addWidget(self.stat_panel)
-        
-        # Splitter sizes
-        splitter.setSizes([240, 500, 200, 180])
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 0)
-        splitter.setStretchFactor(3, 0)
-        
-        layout.addWidget(splitter)
+        self.splitter.addWidget(self.stat_panel)
+
+        # Splitter sizes: Options(240) + Legend(200) + Graph(stretch) + Stats(180)
+        self.splitter.setSizes([240, 200, 500, 180])
+        self.splitter.setStretchFactor(0, 0)  # Options: fixed
+        self.splitter.setStretchFactor(1, 0)  # Legend: fixed
+        self.splitter.setStretchFactor(2, 1)  # Graph: stretch
+        self.splitter.setStretchFactor(3, 0)  # Stats: fixed
+
+        layout.addWidget(self.splitter)
+
+        # Create placeholders for floating sections
+        self._create_placeholders()
+
+        # Connect float buttons
+        self._connect_float_buttons()
     
     def _connect_signals(self):
         self.state.chart_settings_changed.connect(self.refresh)
@@ -1368,6 +1413,119 @@ class GraphPanel(QWidget):
         self.state.selection_changed.connect(self._on_selection_changed)
         self.options_panel.option_changed.connect(self.refresh)
         self.legend_panel.settings_changed.connect(self.refresh)
+
+    def _create_placeholders(self):
+        """플로팅 시 보여줄 플레이스홀더 생성"""
+        sections = [
+            ("options", "⚙️ Chart Options"),
+            ("legend", "📊 Legend"),
+            ("graph", "📈 Graph"),
+            ("stats", "📈 Statistics")
+        ]
+
+        for key, title in sections:
+            placeholder = QFrame()
+            placeholder.setStyleSheet("""
+                QFrame {
+                    background: #F9FAFB;
+                    border: 2px dashed #D1D5DB;
+                    border-radius: 8px;
+                }
+            """)
+            layout = QVBoxLayout(placeholder)
+            layout.setAlignment(Qt.AlignCenter)
+            label = QLabel(f"📤 {title}\n\nFloating as separate window")
+            label.setStyleSheet("color: #9CA3AF; font-size: 11px; background: transparent;")
+            label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(label)
+            placeholder.hide()
+            self._placeholders[key] = placeholder
+
+    def _connect_float_buttons(self):
+        """Float 버튼들 연결"""
+        self.options_panel.float_btn.clicked.connect(lambda: self._float_section("options"))
+        self.legend_panel.float_btn.clicked.connect(lambda: self._float_section("legend"))
+        self.stat_panel.float_btn.clicked.connect(lambda: self._float_section("stats"))
+
+    def _float_section(self, section_key: str):
+        """섹션을 독립 창으로 분리"""
+        if section_key in self._float_windows:
+            # 이미 플로팅 중
+            self._float_windows[section_key].raise_()
+            self._float_windows[section_key].activateWindow()
+            return
+
+        # 섹션별 위젯과 타이틀 매핑
+        section_map = {
+            "options": (self.options_panel, "⚙️ Chart Options", 0),
+            "legend": (self.legend_panel, "📊 Legend", 1),
+            "stats": (self.stat_panel, "📈 Statistics", 3),
+        }
+
+        if section_key not in section_map:
+            return
+
+        widget, title, splitter_index = section_map[section_key]
+
+        # 메인 윈도우 찾기
+        main_window = self._find_main_window()
+
+        # Float window 생성
+        float_window = FloatWindow(title, widget, main_window)
+        float_window.dock_requested.connect(lambda: self._dock_section(section_key))
+        self._float_windows[section_key] = float_window
+
+        # 플레이스홀더로 교체
+        placeholder = self._placeholders[section_key]
+        self.splitter.replaceWidget(splitter_index, placeholder)
+        placeholder.show()
+
+        # Float 버튼 비활성화
+        if hasattr(widget, 'float_btn'):
+            widget.float_btn.setEnabled(False)
+
+        float_window.show()
+
+    def _dock_section(self, section_key: str):
+        """섹션을 메인 창으로 복귀"""
+        if section_key not in self._float_windows:
+            return
+
+        float_window = self._float_windows[section_key]
+        widget = float_window.get_content_widget()
+
+        # 섹션별 인덱스 매핑
+        index_map = {
+            "options": 0,
+            "legend": 1,
+            "stats": 3,
+        }
+
+        splitter_index = index_map.get(section_key, 0)
+
+        # 플레이스홀더를 원래 위젯으로 교체
+        placeholder = self._placeholders[section_key]
+        self.splitter.replaceWidget(splitter_index, widget)
+        placeholder.hide()
+        widget.show()
+
+        # Float 버튼 활성화
+        if hasattr(widget, 'float_btn'):
+            widget.float_btn.setEnabled(True)
+
+        # Float window 정리
+        float_window.close()
+        float_window.deleteLater()
+        del self._float_windows[section_key]
+
+    def _find_main_window(self):
+        """메인 윈도우 찾기"""
+        widget = self
+        while widget:
+            if widget.inherits("QMainWindow"):
+                return widget
+            widget = widget.parentWidget()
+        return None
     
     def _on_group_changed(self):
         """그룹 변경 시 범례 업데이트"""
