@@ -1689,6 +1689,9 @@ class MainGraph(pg.PlotWidget):
         self._data_x = None
         self._data_y = None
 
+        # Selection highlight scatter
+        self._selection_scatter = None
+
         # Hover data columns
         self._hover_columns: List[str] = []
         self._hover_data: Optional[Dict[str, list]] = None
@@ -1698,6 +1701,10 @@ class MainGraph(pg.PlotWidget):
         self._selection_roi = None
         self._selection_start = None
         self._is_selecting = False
+        
+        # Lasso selection
+        self._lasso_points = []  # List of (x, y) points for lasso path
+        self._lasso_path_item = None  # Visual path item
 
         # Sampling status label
         self._sampling_label = pg.TextItem(
@@ -2001,6 +2008,41 @@ class MainGraph(pg.PlotWidget):
         self._data_x = None
         self._data_y = None
         self.legend.clear()
+        # Clear selection highlight
+        if hasattr(self, '_selection_scatter') and self._selection_scatter is not None:
+            self.removeItem(self._selection_scatter)
+            self._selection_scatter = None
+
+    def highlight_selection(self, selected_indices: List[int]):
+        """Highlight selected data points on the graph"""
+        # Remove previous selection highlight
+        if hasattr(self, '_selection_scatter') and self._selection_scatter is not None:
+            self.removeItem(self._selection_scatter)
+            self._selection_scatter = None
+        
+        if not selected_indices or self._data_x is None or self._data_y is None:
+            return
+        
+        # Get selected points
+        valid_indices = [i for i in selected_indices if 0 <= i < len(self._data_x)]
+        if not valid_indices:
+            return
+        
+        selected_x = self._data_x[valid_indices]
+        selected_y = self._data_y[valid_indices]
+        
+        # Create highlight scatter with distinct style
+        self._selection_scatter = pg.ScatterPlotItem(
+            x=selected_x,
+            y=selected_y,
+            size=12,
+            pen=pg.mkPen('#EF4444', width=2),  # Red border
+            brush=pg.mkBrush('#EF444480'),  # Semi-transparent red fill
+            symbol='o',
+            pxMode=True
+        )
+        self._selection_scatter.setZValue(100)  # Render on top
+        self.addItem(self._selection_scatter)
 
     def plot_multi_series(
         self,
@@ -2213,30 +2255,38 @@ class MainGraph(pg.PlotWidget):
 
     def mousePressEvent(self, event):
         """Handle mouse press for selection drag"""
-        if self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
+        if self.state.tool_mode == ToolMode.RECT_SELECT:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
                 self._selection_start = pos
                 self._is_selecting = True
 
-                # Create selection rectangle
+                # Clear previous selection ROI
                 if self._selection_roi is not None:
                     self.removeItem(self._selection_roi)
+                    self._selection_roi = None
 
-                self._selection_roi = pg.LinearRegionItem(
-                    values=[pos.x(), pos.x()],
-                    orientation='vertical',
-                    movable=False,
-                    brush=pg.mkBrush(99, 102, 241, 30)  # #6366F1 with alpha
-                )
-                # Actually use RectROI for 2D selection
-                self.removeItem(self._selection_roi)
-                self._selection_roi = None
-
-                # Store start position
+                # Store start position for rect
                 self._rect_start_x = pos.x()
                 self._rect_start_y = pos.y()
 
+                event.accept()
+                return
+                
+        elif self.state.tool_mode == ToolMode.LASSO_SELECT:
+            if event.button() == Qt.LeftButton:
+                pos = self.plotItem.vb.mapSceneToView(event.position())
+                self._selection_start = pos
+                self._is_selecting = True
+                
+                # Clear previous lasso
+                if self._lasso_path_item is not None:
+                    self.removeItem(self._lasso_path_item)
+                    self._lasso_path_item = None
+                
+                # Initialize lasso points
+                self._lasso_points = [(pos.x(), pos.y())]
+                
                 event.accept()
                 return
 
@@ -2244,7 +2294,7 @@ class MainGraph(pg.PlotWidget):
 
     def mouseMoveEvent(self, event):
         """Handle mouse move for selection drag"""
-        if self._is_selecting and self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
+        if self._is_selecting and self.state.tool_mode == ToolMode.RECT_SELECT:
             pos = self.plotItem.vb.mapSceneToView(event.position())
 
             # Update selection rectangle visualization
@@ -2257,13 +2307,45 @@ class MainGraph(pg.PlotWidget):
                 if self._selection_roi is not None:
                     self.removeItem(self._selection_roi)
 
-                # Draw selection rectangle as a simple rect item
+                # Draw selection rectangle
                 rect = pg.QtWidgets.QGraphicsRectItem(x1, y1, width, height)
                 rect.setPen(pg.mkPen((99, 102, 241), width=2, style=Qt.DashLine))
-                rect.setBrush(pg.mkBrush(99, 102, 241, 30))  # #6366F1 with alpha
+                rect.setBrush(pg.mkBrush(99, 102, 241, 30))
                 self.addItem(rect)
                 self._selection_roi = rect
 
+            event.accept()
+            return
+            
+        elif self._is_selecting and self.state.tool_mode == ToolMode.LASSO_SELECT:
+            pos = self.plotItem.vb.mapSceneToView(event.position())
+            
+            # Add point to lasso path
+            self._lasso_points.append((pos.x(), pos.y()))
+            
+            # Update lasso path visualization
+            if self._lasso_path_item is not None:
+                self.removeItem(self._lasso_path_item)
+            
+            if len(self._lasso_points) >= 2:
+                # Create path
+                from PySide6.QtGui import QPainterPath, QPolygonF
+                from PySide6.QtCore import QPointF
+                
+                path = QPainterPath()
+                path.moveTo(QPointF(self._lasso_points[0][0], self._lasso_points[0][1]))
+                for px, py in self._lasso_points[1:]:
+                    path.lineTo(QPointF(px, py))
+                # Close path back to start
+                path.lineTo(QPointF(self._lasso_points[0][0], self._lasso_points[0][1]))
+                
+                # Create graphics item
+                path_item = pg.QtWidgets.QGraphicsPathItem(path)
+                path_item.setPen(pg.mkPen((236, 72, 153), width=2))  # Pink color
+                path_item.setBrush(pg.mkBrush(236, 72, 153, 30))
+                self.addItem(path_item)
+                self._lasso_path_item = path_item
+            
             event.accept()
             return
 
@@ -2271,20 +2353,116 @@ class MainGraph(pg.PlotWidget):
 
     def mouseReleaseEvent(self, event):
         """Handle mouse release for selection"""
-        if self._is_selecting and self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
+        if self._is_selecting and self.state.tool_mode == ToolMode.RECT_SELECT:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
 
                 if hasattr(self, '_rect_start_x'):
-                    # Create QPointF for end point
-                    from PySide6.QtCore import QPointF
-                    start_point = QPointF(self._rect_start_x, self._rect_start_y)
-                    self._finish_selection(pos)
+                    self._finish_rect_selection(pos)
 
+                event.accept()
+                return
+                
+        elif self._is_selecting and self.state.tool_mode == ToolMode.LASSO_SELECT:
+            if event.button() == Qt.LeftButton:
+                self._finish_lasso_selection()
                 event.accept()
                 return
 
         super().mouseReleaseEvent(event)
+    
+    def _finish_rect_selection(self, end_point):
+        """Finish rectangle selection"""
+        if self._data_x is None or self._data_y is None:
+            self._cleanup_selection()
+            return
+
+        if not hasattr(self, '_rect_start_x'):
+            self._cleanup_selection()
+            return
+
+        # Get bounds
+        x1 = min(self._rect_start_x, end_point.x())
+        x2 = max(self._rect_start_x, end_point.x())
+        y1 = min(self._rect_start_y, end_point.y())
+        y2 = max(self._rect_start_y, end_point.y())
+
+        # Find points within rectangle
+        selected_indices = []
+        for i in range(len(self._data_x)):
+            x, y = self._data_x[i], self._data_y[i]
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                selected_indices.append(i)
+
+        if selected_indices:
+            self.points_selected.emit(selected_indices)
+            self.state.select_rows(selected_indices)
+
+        self._cleanup_selection()
+    
+    def _finish_lasso_selection(self):
+        """Finish lasso selection - select points inside polygon"""
+        if self._data_x is None or self._data_y is None:
+            self._cleanup_lasso()
+            return
+
+        if len(self._lasso_points) < 3:
+            self._cleanup_lasso()
+            return
+
+        # Use point-in-polygon algorithm
+        selected_indices = []
+        polygon = self._lasso_points
+        
+        for i in range(len(self._data_x)):
+            x, y = self._data_x[i], self._data_y[i]
+            if self._point_in_polygon(x, y, polygon):
+                selected_indices.append(i)
+
+        if selected_indices:
+            self.points_selected.emit(selected_indices)
+            self.state.select_rows(selected_indices)
+
+        self._cleanup_lasso()
+    
+    def _point_in_polygon(self, x: float, y: float, polygon: list) -> bool:
+        """Ray casting algorithm to check if point is inside polygon"""
+        n = len(polygon)
+        inside = False
+        
+        j = n - 1
+        for i in range(n):
+            xi, yi = polygon[i]
+            xj, yj = polygon[j]
+            
+            if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
+                inside = not inside
+            j = i
+        
+        return inside
+    
+    def _cleanup_selection(self):
+        """Clean up rect selection state"""
+        if self._selection_roi is not None:
+            self.removeItem(self._selection_roi)
+            self._selection_roi = None
+        
+        self._is_selecting = False
+        self._selection_start = None
+        if hasattr(self, '_rect_start_x'):
+            del self._rect_start_x
+        if hasattr(self, '_rect_start_y'):
+            del self._rect_start_y
+    
+    def _cleanup_lasso(self):
+        """Clean up lasso selection state"""
+        if self._lasso_path_item is not None:
+            self.removeItem(self._lasso_path_item)
+            self._lasso_path_item = None
+        
+        self._lasso_points = []
+        self._is_selecting = False
+        self._selection_start = None
 
     def _on_mouse_moved(self, pos):
         """Handle mouse move for hover tooltip"""
@@ -2901,12 +3079,20 @@ class GraphPanel(QWidget):
         self.state.selection_changed.connect(self._on_selection_changed)
         self.options_panel.option_changed.connect(self.refresh)
 
+        # Connect graph selection to state
+        self.main_graph.points_selected.connect(self._on_graph_points_selected)
+
         # Connect sliding window signals
         self.x_sliding_window.range_changed.connect(self._on_x_window_changed)
         self.y_sliding_window.range_changed.connect(self._on_y_window_changed)
 
         # Connect view range changes to update sliding windows
         self.main_graph.plotItem.sigRangeChanged.connect(self._on_graph_range_changed)
+
+    def _on_graph_points_selected(self, indices: list):
+        """Handle selection from graph (rect select, lasso select)"""
+        if indices:
+            self.state.select_rows(indices)
 
     def _on_x_window_changed(self, min_val: float, max_val: float):
         """Handle X-axis sliding window range change"""
@@ -3344,7 +3530,91 @@ class GraphPanel(QWidget):
             self.options_panel.set_series(series_names)
 
     def _on_selection_changed(self):
-        pass
+        """Handle selection state change - highlight selected points and update stats"""
+        selected_rows = list(self.state.selection.selected_rows)
+        
+        # Update graph highlight
+        self.main_graph.highlight_selection(selected_rows)
+        
+        # Update stat panel with selected data statistics
+        if selected_rows and self.engine.is_loaded:
+            self._update_stats_for_selection(selected_rows)
+        else:
+            # Show stats for all data
+            if self.state.value_columns and self.engine.is_loaded:
+                stats = self.engine.get_statistics(self.state.value_columns[0].name)
+                self.stat_panel.update_stats(stats)
+
+    def _update_stats_for_selection(self, selected_rows: list):
+        """Update stat panel with statistics for selected rows only"""
+        if not self.engine.is_loaded or not selected_rows:
+            return
+        
+        try:
+            # Get selected data
+            df = self.engine.df
+            if df is None:
+                return
+            
+            # Filter to selected rows
+            selected_indices = [i for i in selected_rows if 0 <= i < len(df)]
+            if not selected_indices:
+                return
+            
+            # Get Y column name - try value_columns first, then any numeric column
+            y_col_name = None
+            if self.state.value_columns:
+                y_col_name = self.state.value_columns[0].name
+            
+            if not y_col_name or y_col_name not in df.columns:
+                # Find first numeric column
+                for col in self.engine.columns:
+                    dtype = self.engine.dtypes.get(col, '')
+                    if dtype.startswith(('Int', 'Float', 'UInt')):
+                        y_col_name = col
+                        break
+            
+            if not y_col_name or y_col_name not in df.columns:
+                # Still no column found - show basic stats
+                stats = {
+                    'Selected': len(selected_rows),
+                    'Total': len(df),
+                }
+                self.stat_panel.update_stats(stats)
+                return
+            
+            # Get selected data for Y column
+            y_data = df[y_col_name].to_numpy()
+            selected_y = y_data[selected_indices]
+            
+            # Calculate statistics for selection
+            clean_y = selected_y[~np.isnan(selected_y.astype(float))]
+            if len(clean_y) == 0:
+                return
+            
+            stats = {
+                'Selected': len(selected_rows),
+                'Mean': float(np.mean(clean_y)),
+                'Median': float(np.median(clean_y)),
+                'Std': float(np.std(clean_y)),
+                'Min': float(np.min(clean_y)),
+                'Max': float(np.max(clean_y)),
+            }
+            
+            self.stat_panel.update_stats(stats)
+            
+            # Update histograms with selected data
+            x_col = self.state.x_column
+            if x_col and x_col in df.columns:
+                x_data = df[x_col].to_numpy()
+                selected_x = x_data[selected_indices]
+            else:
+                selected_x = np.array(selected_indices)
+            
+            self.stat_panel.update_histograms(selected_x, selected_y)
+            
+        except Exception as e:
+            print(f"Error updating stats for selection: {e}")
     
     def _build_group_masks(self) -> Dict[str, np.ndarray]:
         if not self.state.group_columns or not self.engine.is_loaded:

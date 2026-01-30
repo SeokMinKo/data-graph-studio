@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
-    QMimeData, QByteArray
+    QMimeData, QByteArray, QItemSelection, QItemSelectionModel
 )
 from PySide6.QtGui import QDrag, QAction, QDropEvent, QDragEnterEvent
 
@@ -923,6 +923,38 @@ class DataTableView(QTableView):
         self.setSortingEnabled(True)
         self.setDragEnabled(True)
         
+        # Apply selection style
+        self.setStyleSheet("""
+            QTableView {
+                background: white;
+                alternate-background-color: #F9FAFB;
+                selection-background-color: #DBEAFE;
+                selection-color: #1E40AF;
+                gridline-color: #E5E7EB;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+            }
+            QTableView::item:selected {
+                background: #DBEAFE;
+                color: #1E40AF;
+            }
+            QTableView::item:hover {
+                background: #EFF6FF;
+            }
+            QHeaderView::section {
+                background: #F3F4F6;
+                border: none;
+                border-bottom: 1px solid #E5E7EB;
+                border-right: 1px solid #E5E7EB;
+                padding: 8px 12px;
+                font-weight: 600;
+                color: #374151;
+            }
+            QHeaderView::section:hover {
+                background: #E5E7EB;
+            }
+        """)
+        
         # Context menu for cells
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_cell_menu)
@@ -1481,6 +1513,36 @@ class TablePanel(QWidget):
         collapse_btn.clicked.connect(self._collapse_all)
         toolbar.addWidget(collapse_btn)
         
+        # Limit to Marking toggle button
+        self.limit_marking_btn = QPushButton("🔗 Limit to Marking")
+        self.limit_marking_btn.setCheckable(True)
+        self.limit_marking_btn.setChecked(False)
+        self.limit_marking_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #6B7280;
+                border: 1px solid #D1D5DB;
+                border-radius: 5px;
+                padding: 5px 10px;
+                font-size: 10px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background: #FEF3C7;
+                border-color: #F59E0B;
+                color: #92400E;
+            }
+            QPushButton:checked {
+                background: #FEF3C7;
+                border-color: #F59E0B;
+                color: #92400E;
+                font-weight: 600;
+            }
+        """)
+        self.limit_marking_btn.setToolTip("Show only marked/selected rows in table")
+        self.limit_marking_btn.clicked.connect(self._on_limit_marking_toggled)
+        toolbar.addWidget(self.limit_marking_btn)
+        
         toolbar.addStretch()
         
         self.group_info_label = QLabel("")
@@ -1534,6 +1596,8 @@ class TablePanel(QWidget):
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
         self.state.filter_changed.connect(self._on_filter_changed)
         self.state.hover_zone_changed.connect(self._on_hover_zone_changed)
+        self.state.limit_to_marking_changed.connect(self._on_limit_to_marking_changed)
+        self.state.selection_changed.connect(self._on_selection_for_limit_marking)
 
     def _on_hover_zone_changed(self):
         """Hover zone changed - trigger refresh if needed"""
@@ -1641,7 +1705,53 @@ class TablePanel(QWidget):
             self.state.select_rows(rows)
     
     def _on_state_selection_changed(self):
-        pass
+        """Sync table selection with state selection"""
+        selected_rows = self.state.selection.selected_rows
+        
+        if not selected_rows:
+            # Clear selection
+            self.table_view.clearSelection()
+            return
+        
+        model = self.table_view.model()
+        if model is None:
+            return
+        
+        row_count = model.rowCount()
+        col_count = model.columnCount()
+        
+        if row_count == 0 or col_count == 0:
+            return
+        
+        # Block signals to prevent feedback loop
+        self.table_view.blockSignals(True)
+        
+        try:
+            # Clear and rebuild selection
+            self.table_view.clearSelection()
+            
+            # Use QItemSelection for batch selection (more efficient)
+            selection = QItemSelection()
+            
+            for row in selected_rows:
+                if 0 <= row < row_count:
+                    # Create selection range for entire row
+                    top_left = model.index(row, 0)
+                    bottom_right = model.index(row, col_count - 1)
+                    selection.select(top_left, bottom_right)
+            
+            # Apply selection
+            selection_model = self.table_view.selectionModel()
+            if selection_model:
+                selection_model.select(selection, QItemSelectionModel.Select)
+            
+            # Scroll to first selected row
+            first_row = min(selected_rows)
+            if 0 <= first_row < row_count:
+                self.table_view.scrollTo(model.index(first_row, 0))
+                
+        finally:
+            self.table_view.blockSignals(False)
     
     def _on_group_zone_changed(self):
         if self.engine.is_loaded:
@@ -1763,6 +1873,62 @@ class TablePanel(QWidget):
         """Update hidden columns bar"""
         hidden = list(self.state._hidden_columns)
         self.hidden_bar.update_hidden_columns(hidden)
+    
+    # ==================== Limit to Marking ====================
+    
+    def _on_limit_marking_toggled(self, checked: bool):
+        """Handle limit to marking button toggle"""
+        self.state.set_limit_to_marking(checked)
+    
+    def _on_limit_to_marking_changed(self, enabled: bool):
+        """Handle limit to marking state change"""
+        self.limit_marking_btn.setChecked(enabled)
+        self._apply_limit_to_marking()
+    
+    def _on_selection_for_limit_marking(self):
+        """Update table when selection changes and limit to marking is enabled"""
+        if self.state.limit_to_marking:
+            self._apply_limit_to_marking()
+    
+    def _apply_limit_to_marking(self):
+        """Apply limit to marking filter to table"""
+        if not self.engine.is_loaded:
+            return
+        
+        df = self.engine.df
+        if df is None:
+            return
+        
+        if self.state.limit_to_marking and self.state.selection.has_selection:
+            # Filter to only selected rows
+            selected_rows = list(self.state.selection.selected_rows)
+            
+            # Ensure indices are within bounds
+            max_idx = len(df)
+            valid_indices = [i for i in selected_rows if 0 <= i < max_idx]
+            
+            if valid_indices:
+                # Create boolean mask
+                mask = pl.Series([i in valid_indices for i in range(len(df))])
+                filtered_df = df.filter(mask)
+                
+                # Update label
+                self.group_info_label.setText(f"Showing {len(valid_indices)} marked rows")
+                self.group_info_label.setStyleSheet("""
+                    color: #92400E;
+                    font-size: 10px;
+                    background: #FEF3C7;
+                    padding: 3px 8px;
+                    border-radius: 8px;
+                """)
+                
+                self._update_table_model(filtered_df)
+            else:
+                # No valid selection, show empty or all
+                self._update_table_model(df)
+        else:
+            # Show all data
+            self._apply_filters_and_update()
     
     # ==================== Drag & Drop ====================
     

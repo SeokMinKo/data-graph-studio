@@ -282,6 +282,7 @@ class AppState(QObject):
     sort_changed = Signal()
 
     selection_changed = Signal()
+    limit_to_marking_changed = Signal(bool)  # Limit table to marked rows
 
     chart_settings_changed = Signal()
     tool_mode_changed = Signal()
@@ -333,6 +334,7 @@ class AppState(QObject):
 
         # 선택 상태
         self._selection = SelectionState()
+        self._limit_to_marking = False  # When True, table shows only marked rows
 
         # 차트 설정
         self._chart_settings = ChartSettings()
@@ -861,6 +863,19 @@ class AppState(QObject):
     def select_all(self):
         self._selection.select(list(range(self._visible_rows)))
         self.selection_changed.emit()
+
+    # ==================== Limit to Marking ====================
+
+    @property
+    def limit_to_marking(self) -> bool:
+        """When True, table shows only marked/selected rows"""
+        return self._limit_to_marking
+
+    def set_limit_to_marking(self, enabled: bool):
+        """Toggle limit to marking mode"""
+        if self._limit_to_marking != enabled:
+            self._limit_to_marking = enabled
+            self.limit_to_marking_changed.emit(enabled)
     
     # ==================== Chart Settings ====================
     
