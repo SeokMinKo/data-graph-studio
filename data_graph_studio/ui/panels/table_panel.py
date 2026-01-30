@@ -25,69 +25,97 @@ from ..floatable import FloatButton, FloatWindow
 
 
 class PolarsTableModel(QAbstractTableModel):
-    """Polars DataFrame을 위한 Qt 테이블 모델"""
-    
+    """Polars DataFrame을 위한 Qt 테이블 모델 (최적화 버전)
+
+    성능 최적화:
+    - 컬럼 기반 캐싱 (Polars는 컬럼 지향이므로)
+    - 직접 인덱스 접근으로 iter_rows() 회피
+    - 필요한 데이터만 로드
+    """
+
+    # 테이블에 표시할 최대 행 수 (성능 보장)
+    MAX_DISPLAY_ROWS = 100_000
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._df: Optional[pl.DataFrame] = None
         self._visible_columns: List[str] = []
         self._row_count = 0
-        self._chunk_size = 1000
-        self._cache: Dict[int, List] = {}
-    
+        self._actual_row_count = 0  # 실제 데이터 행 수
+        # 컬럼 기반 캐시: column_index -> list of values
+        self._column_cache: Dict[int, list] = {}
+        self._cache_valid = False
+
     def set_dataframe(self, df: Optional[pl.DataFrame]):
         self.beginResetModel()
         self._df = df
+        self._column_cache.clear()
+        self._cache_valid = False
         if df is not None:
             self._visible_columns = df.columns
-            self._row_count = len(df)
+            self._actual_row_count = len(df)
+            # 성능을 위해 최대 행 수 제한
+            self._row_count = min(len(df), self.MAX_DISPLAY_ROWS)
         else:
             self._visible_columns = []
             self._row_count = 0
-        self._cache.clear()
+            self._actual_row_count = 0
         self.endResetModel()
-    
+
     def rowCount(self, parent=QModelIndex()):
         return self._row_count
-    
+
     def columnCount(self, parent=QModelIndex()):
         return len(self._visible_columns)
-    
+
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
         if not index.isValid() or self._df is None:
             return None
-        
+
         if role == Qt.DisplayRole or role == Qt.EditRole:
             row = index.row()
             col = index.column()
-            
-            if row not in self._cache:
-                self._load_chunk(row)
-            
-            if row in self._cache:
-                value = self._cache[row][col]
-                if value is None:
-                    return ""
-                return str(value)
-        
+
+            if row >= self._row_count or col >= len(self._visible_columns):
+                return None
+
+            # 컬럼 캐시에서 데이터 가져오기
+            if col not in self._column_cache:
+                self._cache_column(col)
+
+            if col in self._column_cache:
+                cache = self._column_cache[col]
+                if row < len(cache):
+                    value = cache[row]
+                    if value is None:
+                        return ""
+                    return str(value)
+
         return None
-    
-    def _load_chunk(self, row: int):
-        if self._df is None:
+
+    def _cache_column(self, col: int):
+        """컬럼 데이터를 캐시에 로드 (한 번만 변환)"""
+        if self._df is None or col >= len(self._visible_columns):
             return
-        
-        chunk_start = (row // self._chunk_size) * self._chunk_size
-        chunk_end = min(chunk_start + self._chunk_size, self._row_count)
-        chunk_df = self._df.slice(chunk_start, chunk_end - chunk_start)
-        
-        for i, row_data in enumerate(chunk_df.iter_rows()):
-            self._cache[chunk_start + i] = list(row_data)
-        
-        if len(self._cache) > self._chunk_size * 10:
-            keys = sorted(self._cache.keys())
-            for key in keys[:self._chunk_size]:
-                del self._cache[key]
-    
+
+        col_name = self._visible_columns[col]
+        try:
+            # 표시할 행 수만큼만 가져옴
+            if self._row_count < self._actual_row_count:
+                col_data = self._df[col_name].head(self._row_count).to_list()
+            else:
+                col_data = self._df[col_name].to_list()
+            self._column_cache[col] = col_data
+        except Exception:
+            self._column_cache[col] = []
+
+        # 캐시 크기 제한 (메모리 관리)
+        MAX_CACHED_COLUMNS = 50
+        if len(self._column_cache) > MAX_CACHED_COLUMNS:
+            # 가장 오래된 컬럼 제거 (LRU 간소화)
+            oldest = min(self._column_cache.keys())
+            del self._column_cache[oldest]
+
     def headerData(self, section: int, orientation: Qt.Orientation, role=Qt.DisplayRole):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
@@ -96,11 +124,15 @@ class PolarsTableModel(QAbstractTableModel):
             else:
                 return str(section + 1)
         return None
-    
+
     def get_column_name(self, index: int) -> Optional[str]:
         if 0 <= index < len(self._visible_columns):
             return self._visible_columns[index]
         return None
+
+    def get_actual_row_count(self) -> int:
+        """실제 데이터 행 수 (표시 제한과 무관)"""
+        return self._actual_row_count
 
 
 class DraggableListWidget(QListWidget):
@@ -1468,8 +1500,21 @@ class TablePanel(QWidget):
         else:
             self.table_model.set_dataframe(df)
             self.table_view.setModel(self.table_model)
-            self.group_info_label.setText("")
-        
+            # 데이터가 잘렸는지 표시
+            actual_rows = self.table_model.get_actual_row_count()
+            displayed_rows = self.table_model.rowCount()
+            if actual_rows > displayed_rows:
+                self.group_info_label.setText(f"Showing {displayed_rows:,} of {actual_rows:,} rows")
+                self.group_info_label.setStyleSheet("""
+                    color: #F59E0B;
+                    font-size: 10px;
+                    background: #FEF3C7;
+                    padding: 3px 8px;
+                    border-radius: 8px;
+                """)
+            else:
+                self.group_info_label.setText("")
+
         header = self.table_view.horizontalHeader()
         for i in range(min(10, self.table_view.model().columnCount())):
             header.resizeSection(i, 120)

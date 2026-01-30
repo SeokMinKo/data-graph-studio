@@ -211,7 +211,7 @@ class MiniSparkline(QFrame):
 class SummaryPanel(QWidget):
     """
     Modern Summary Panel with animated stat cards
-    
+
     Features:
     - Glassmorphism cards
     - Animated number transitions
@@ -219,11 +219,16 @@ class SummaryPanel(QWidget):
     - Mini sparklines
     - Responsive layout
     """
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
-        
+
+        # File info
+        self._file_name: str = ""
+        self._raw_rows: int = 0
+        self._sampled_rows: int = 0
+
         self._setup_ui()
         self._connect_signals()
     
@@ -297,7 +302,9 @@ class SummaryPanel(QWidget):
         
         # Default stat cards with icons and colors
         self.cards = {}
+        self._add_card("file", "📄", "File", "-", color="#0EA5E9")
         self._add_card("rows", "📋", "Total Rows", "-", color="#6366F1")
+        self._add_card("sampled", "📊", "Sampled", "-", color="#14B8A6")
         self._add_card("columns", "⊞", "Columns", "-", color="#8B5CF6")
         self._add_card("numeric", "🔢", "Numeric", "-", color="#10B981")
         self._add_card("text", "📝", "Text/Category", "-", color="#EC4899")
@@ -326,9 +333,32 @@ class SummaryPanel(QWidget):
     @Slot(dict)
     def _on_summary_updated(self, stats: Dict[str, Any]):
         """Update summary with new stats"""
+        # File name
+        if 'file_name' in stats:
+            self._file_name = stats['file_name']
+            # Truncate long file names
+            display_name = self._file_name
+            if len(display_name) > 15:
+                display_name = display_name[:12] + "..."
+            self.cards['file'].set_value(display_name)
+            self.cards['file'].setToolTip(self._file_name)
+
         # Basic stats
         if 'total_rows' in stats:
+            self._raw_rows = stats['total_rows']
             self.cards['rows'].set_value(f"{stats['total_rows']:,}")
+
+        # Sampled rows (for graph)
+        if 'sampled_rows' in stats:
+            self._sampled_rows = stats['sampled_rows']
+            ratio = (self._sampled_rows / self._raw_rows * 100) if self._raw_rows > 0 else 100
+            if self._sampled_rows == self._raw_rows:
+                self.cards['sampled'].set_value(f"{self._sampled_rows:,}", "100%")
+            else:
+                self.cards['sampled'].set_value(f"{self._sampled_rows:,}", f"{ratio:.1f}%")
+        elif 'total_rows' in stats:
+            # Default: no sampling
+            self.cards['sampled'].set_value(f"{stats['total_rows']:,}", "100%")
 
         if 'total_columns' in stats:
             self.cards['columns'].set_value(f"{stats['total_columns']}")
@@ -474,3 +504,6 @@ class SummaryPanel(QWidget):
         for card in self.cards.values():
             card.set_value("-")
         self.context_label.setText("")
+        self._file_name = ""
+        self._raw_rows = 0
+        self._sampled_rows = 0
