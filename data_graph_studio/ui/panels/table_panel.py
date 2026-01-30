@@ -1,5 +1,5 @@
 """
-Table Panel - 테이블 뷰 + Group Zone + Value Zone
+Table Panel - 테이블 뷰 + X Zone + Group Zone + Value Zone
 """
 
 from typing import Optional, List, Dict, Any
@@ -24,22 +24,17 @@ from .grouped_table_model import GroupedTableModel
 
 
 class PolarsTableModel(QAbstractTableModel):
-    """
-    Polars DataFrame을 위한 Qt 테이블 모델
-    
-    가상 스크롤 지원 - 필요한 행만 로드
-    """
+    """Polars DataFrame을 위한 Qt 테이블 모델"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self._df: Optional[pl.DataFrame] = None
         self._visible_columns: List[str] = []
         self._row_count = 0
-        self._chunk_size = 1000  # 한번에 캐시할 행 수
-        self._cache: Dict[int, List] = {}  # row_index -> row_data
+        self._chunk_size = 1000
+        self._cache: Dict[int, List] = {}
     
     def set_dataframe(self, df: Optional[pl.DataFrame]):
-        """데이터프레임 설정"""
         self.beginResetModel()
         self._df = df
         if df is not None:
@@ -65,7 +60,6 @@ class PolarsTableModel(QAbstractTableModel):
             row = index.row()
             col = index.column()
             
-            # 캐시 확인
             if row not in self._cache:
                 self._load_chunk(row)
             
@@ -78,23 +72,17 @@ class PolarsTableModel(QAbstractTableModel):
         return None
     
     def _load_chunk(self, row: int):
-        """청크 로드 (가상 스크롤용)"""
         if self._df is None:
             return
         
-        # 청크 범위 계산
         chunk_start = (row // self._chunk_size) * self._chunk_size
         chunk_end = min(chunk_start + self._chunk_size, self._row_count)
-        
-        # 청크 데이터 로드
         chunk_df = self._df.slice(chunk_start, chunk_end - chunk_start)
         
         for i, row_data in enumerate(chunk_df.iter_rows()):
             self._cache[chunk_start + i] = list(row_data)
         
-        # 캐시 크기 제한 (메모리 관리)
         if len(self._cache) > self._chunk_size * 10:
-            # 가장 오래된 청크 제거
             keys = sorted(self._cache.keys())
             for key in keys[:self._chunk_size]:
                 del self._cache[key]
@@ -117,12 +105,13 @@ class PolarsTableModel(QAbstractTableModel):
 class DraggableListWidget(QListWidget):
     """드래그 가능한 리스트 위젯"""
     
-    item_dropped = Signal(str)  # 드롭된 컬럼 이름
-    item_removed = Signal(str)  # 제거된 컬럼 이름
-    order_changed = Signal(list)  # 순서 변경
+    item_dropped = Signal(str)
+    item_removed = Signal(str)
+    order_changed = Signal(list)
     
-    def __init__(self, accept_drop: bool = True):
+    def __init__(self, accept_drop: bool = True, single_item: bool = False):
         super().__init__()
+        self.single_item = single_item
         self.setDragEnabled(True)
         self.setAcceptDrops(accept_drop)
         self.setDropIndicatorShown(True)
@@ -139,15 +128,20 @@ class DraggableListWidget(QListWidget):
     def dropEvent(self, event: QDropEvent):
         if event.mimeData().hasText():
             column_name = event.mimeData().text()
+            
+            # Single item mode: replace existing
+            if self.single_item and self.count() > 0:
+                old_name = self.item(0).text()
+                self.clear()
+                self.item_removed.emit(old_name)
+            
             self.item_dropped.emit(column_name)
             event.acceptProposedAction()
         else:
             super().dropEvent(event)
-            # 순서 변경 알림
             self.order_changed.emit([self.item(i).text() for i in range(self.count())])
     
     def add_column(self, name: str):
-        """컬럼 추가"""
         # 중복 체크
         for i in range(self.count()):
             if self.item(i).text() == name:
@@ -158,13 +152,199 @@ class DraggableListWidget(QListWidget):
         self.addItem(item)
     
     def remove_selected(self):
-        """선택된 항목 제거"""
         current = self.currentItem()
         if current:
             name = current.text()
             self.takeItem(self.row(current))
             self.item_removed.emit(name)
 
+
+# ==================== X-Axis Zone ====================
+
+class XAxisZone(QFrame):
+    """X-Axis Zone - X축 컬럼 선택"""
+    
+    x_changed = Signal()
+    
+    def __init__(self, state: AppState):
+        super().__init__()
+        self.state = state
+        self.setObjectName("XAxisZone")
+        self.setFixedWidth(150)
+        self.setAcceptDrops(True)
+        
+        self._setup_ui()
+        self._connect_signals()
+        self._apply_style()
+    
+    def _apply_style(self):
+        self.setStyleSheet("""
+            #XAxisZone {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ECFDF5, stop:1 #D1FAE5);
+                border: 1px solid #6EE7B7;
+                border-radius: 12px;
+            }
+        """)
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+        
+        # Header
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
+        
+        icon = QLabel("📐")
+        icon.setStyleSheet("font-size: 16px; background: transparent;")
+        header_layout.addWidget(icon)
+        
+        header = QLabel("X-Axis")
+        header.setStyleSheet("""
+            font-weight: 600;
+            font-size: 13px;
+            color: #047857;
+            background: transparent;
+        """)
+        header_layout.addWidget(header)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+        
+        # Help text
+        help_label = QLabel("Drag column for X-axis\n(empty = use index)")
+        help_label.setStyleSheet("""
+            color: #059669;
+            font-size: 10px;
+            background: transparent;
+        """)
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+        
+        # Current X column display
+        self.x_column_frame = QFrame()
+        self.x_column_frame.setStyleSheet("""
+            QFrame {
+                background: white;
+                border: 2px dashed #6EE7B7;
+                border-radius: 8px;
+                min-height: 50px;
+            }
+        """)
+        x_layout = QVBoxLayout(self.x_column_frame)
+        x_layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.x_label = QLabel("(Index)")
+        self.x_label.setAlignment(Qt.AlignCenter)
+        self.x_label.setStyleSheet("""
+            color: #94A3B8;
+            font-size: 12px;
+            font-style: italic;
+            background: transparent;
+        """)
+        x_layout.addWidget(self.x_label)
+        
+        layout.addWidget(self.x_column_frame)
+        
+        # Clear button
+        clear_btn = QPushButton("✕ Use Index")
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #059669;
+                border: 1px solid #6EE7B7;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: #D1FAE5;
+                border-color: #059669;
+            }
+        """)
+        clear_btn.clicked.connect(self._clear_x_column)
+        layout.addWidget(clear_btn)
+        
+        layout.addStretch()
+    
+    def _connect_signals(self):
+        # Listen for x_column changes from state
+        self.state.chart_settings_changed.connect(self._sync_from_state)
+    
+    def _set_x_column(self, column_name: str):
+        """Set X column"""
+        self.state.set_x_column(column_name)
+        self._update_display(column_name)
+    
+    def _clear_x_column(self):
+        """Clear X column (use index)"""
+        self.state.set_x_column(None)
+        self._update_display(None)
+    
+    def _update_display(self, column_name: Optional[str]):
+        """Update the display"""
+        if column_name:
+            self.x_label.setText(f"📊 {column_name}")
+            self.x_label.setStyleSheet("""
+                color: #047857;
+                font-size: 12px;
+                font-weight: 600;
+                font-style: normal;
+                background: transparent;
+            """)
+            self.x_column_frame.setStyleSheet("""
+                QFrame {
+                    background: #ECFDF5;
+                    border: 2px solid #10B981;
+                    border-radius: 8px;
+                    min-height: 50px;
+                }
+            """)
+        else:
+            self.x_label.setText("(Index)")
+            self.x_label.setStyleSheet("""
+                color: #94A3B8;
+                font-size: 12px;
+                font-style: italic;
+                background: transparent;
+            """)
+            self.x_column_frame.setStyleSheet("""
+                QFrame {
+                    background: white;
+                    border: 2px dashed #6EE7B7;
+                    border-radius: 8px;
+                    min-height: 50px;
+                }
+            """)
+    
+    def _sync_from_state(self):
+        """Sync from state"""
+        self._update_display(self.state.x_column)
+    
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+            self.x_column_frame.setStyleSheet("""
+                QFrame {
+                    background: #D1FAE5;
+                    border: 2px solid #10B981;
+                    border-radius: 8px;
+                    min-height: 50px;
+                }
+            """)
+    
+    def dragLeaveEvent(self, event):
+        self._update_display(self.state.x_column)
+    
+    def dropEvent(self, event: QDropEvent):
+        if event.mimeData().hasText():
+            column_name = event.mimeData().text()
+            self._set_x_column(column_name)
+            event.acceptProposedAction()
+
+
+# ==================== Group Zone ====================
 
 class GroupZone(QFrame):
     """Group Zone - Modern drag & drop zone"""
@@ -175,7 +355,7 @@ class GroupZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GroupZone")
-        self.setFixedWidth(170)
+        self.setFixedWidth(150)
         self.setAcceptDrops(True)
         
         self._setup_ui()
@@ -217,30 +397,18 @@ class GroupZone(QFrame):
         layout.addLayout(header_layout)
         
         # Help text
-        help_label = QLabel("Drag columns here to group data")
+        help_label = QLabel("Drag columns to group")
         help_label.setStyleSheet("""
             color: #64748B;
-            font-size: 11px;
+            font-size: 10px;
             background: transparent;
         """)
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
         
-        # Drop zone hint
-        self.drop_hint = QLabel("Drop columns here")
-        self.drop_hint.setStyleSheet("""
-            color: #94A3B8;
-            font-size: 11px;
-            padding: 20px;
-            border: 2px dashed #CBD5E1;
-            border-radius: 8px;
-            background: #F8FAFC;
-        """)
-        self.drop_hint.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.drop_hint)
-        
         # List widget
         self.list_widget = DraggableListWidget(accept_drop=True)
+        self.list_widget.setMaximumHeight(120)
         self.list_widget.setStyleSheet("""
             QListWidget {
                 background: transparent;
@@ -250,11 +418,12 @@ class GroupZone(QFrame):
             QListWidget::item {
                 background: white;
                 border: 1px solid #E2E8F0;
-                border-radius: 8px;
-                padding: 10px 12px;
-                margin: 3px 0;
+                border-radius: 6px;
+                padding: 8px 10px;
+                margin: 2px 0;
                 color: #334155;
                 font-weight: 500;
+                font-size: 11px;
             }
             QListWidget::item:hover {
                 border-color: #6366F1;
@@ -279,9 +448,9 @@ class GroupZone(QFrame):
                 color: #EF4444;
                 border: 1px solid #FCA5A5;
                 border-radius: 6px;
-                padding: 8px 12px;
+                padding: 6px 10px;
                 font-weight: 500;
-                font-size: 11px;
+                font-size: 10px;
             }
             QPushButton:hover {
                 background: #FEF2F2;
@@ -304,7 +473,6 @@ class GroupZone(QFrame):
         self.state.reorder_group_columns(new_order)
     
     def _sync_from_state(self):
-        """상태에서 동기화"""
         self.list_widget.clear()
         for group_col in self.state.group_columns:
             self.list_widget.add_column(group_col.name)
@@ -320,8 +488,10 @@ class GroupZone(QFrame):
             event.acceptProposedAction()
 
 
+# ==================== Value Zone ====================
+
 class ValueZone(QFrame):
-    """Value Zone - Modern aggregation zone"""
+    """Value Zone - Y-axis values"""
     
     value_changed = Signal()
     
@@ -329,7 +499,7 @@ class ValueZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("ValueZone")
-        self.setFixedWidth(200)
+        self.setMinimumWidth(180)
         self.setAcceptDrops(True)
         
         self._setup_ui()
@@ -351,7 +521,7 @@ class ValueZone(QFrame):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
         
-        # Header with icon
+        # Header
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
         
@@ -359,7 +529,7 @@ class ValueZone(QFrame):
         icon.setStyleSheet("font-size: 16px; background: transparent;")
         header_layout.addWidget(icon)
         
-        header = QLabel("Values")
+        header = QLabel("Y-Axis Values")
         header.setStyleSheet("""
             font-weight: 600;
             font-size: 13px;
@@ -371,10 +541,10 @@ class ValueZone(QFrame):
         layout.addLayout(header_layout)
         
         # Help text
-        help_label = QLabel("Drag numeric columns for aggregation")
+        help_label = QLabel("Drag numeric columns for Y values")
         help_label.setStyleSheet("""
             color: #9333EA;
-            font-size: 11px;
+            font-size: 10px;
             background: transparent;
         """)
         help_label.setWordWrap(True)
@@ -390,7 +560,7 @@ class ValueZone(QFrame):
         self.value_container.setStyleSheet("background: transparent;")
         self.value_layout = QVBoxLayout(self.value_container)
         self.value_layout.setContentsMargins(0, 4, 0, 4)
-        self.value_layout.setSpacing(8)
+        self.value_layout.setSpacing(6)
         self.value_layout.addStretch()
         
         scroll.setWidget(self.value_container)
@@ -400,15 +570,15 @@ class ValueZone(QFrame):
         self.state.value_zone_changed.connect(self._sync_from_state)
     
     def _add_value_card(self, value_col: ValueColumn, index: int):
-        """Add modern value card"""
+        """Add value card"""
         card = QFrame()
         card.setObjectName("ValueCard")
         card.setStyleSheet(f"""
             #ValueCard {{
                 background: white;
                 border: 1px solid {value_col.color}40;
-                border-left: 4px solid {value_col.color};
-                border-radius: 10px;
+                border-left: 3px solid {value_col.color};
+                border-radius: 8px;
             }}
             #ValueCard:hover {{
                 background: {value_col.color}08;
@@ -417,33 +587,27 @@ class ValueZone(QFrame):
         """)
         
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(12, 10, 12, 10)
-        card_layout.setSpacing(8)
+        card_layout.setContentsMargins(10, 8, 10, 8)
+        card_layout.setSpacing(6)
         
-        # Header row: name + remove button
+        # Header: name + remove
         header_row = QHBoxLayout()
         header_row.setSpacing(4)
         
-        # Color dot + Column name
-        name_label = QLabel(f"● {value_col.name[:15]}{'...' if len(value_col.name) > 15 else ''}")
-        name_label.setStyleSheet(f"""
-            font-weight: 600;
-            font-size: 12px;
-            color: #1E293B;
-            background: transparent;
-        """)
+        name_label = QLabel(f"● {value_col.name[:12]}{'...' if len(value_col.name) > 12 else ''}")
+        name_label.setStyleSheet(f"font-weight: 600; font-size: 11px; color: #1E293B; background: transparent;")
+        name_label.setToolTip(value_col.name)
         header_row.addWidget(name_label, 1)
         
-        # Remove button (x)
         remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(22, 22)
+        remove_btn.setFixedSize(20, 20)
         remove_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
                 color: #94A3B8;
                 border: none;
-                border-radius: 11px;
-                font-size: 16px;
+                border-radius: 10px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -462,23 +626,18 @@ class ValueZone(QFrame):
             QComboBox {{
                 background: {value_col.color}15;
                 border: 1px solid {value_col.color}30;
-                border-radius: 6px;
-                padding: 6px 10px;
+                border-radius: 5px;
+                padding: 4px 8px;
                 color: {value_col.color};
                 font-weight: 500;
-                font-size: 11px;
+                font-size: 10px;
             }}
             QComboBox:hover {{
                 border-color: {value_col.color};
             }}
             QComboBox::drop-down {{
                 border: none;
-                width: 20px;
-            }}
-            QComboBox::down-arrow {{
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid {value_col.color};
+                width: 18px;
             }}
         """)
         for agg in AggregationType:
@@ -489,7 +648,6 @@ class ValueZone(QFrame):
         )
         card_layout.addWidget(agg_combo)
         
-        # Add to layout (before stretch)
         self.value_layout.insertWidget(self.value_layout.count() - 1, card)
     
     def _on_agg_changed(self, index: int, agg: AggregationType):
@@ -499,14 +657,11 @@ class ValueZone(QFrame):
         self.state.remove_value_column(index)
     
     def _sync_from_state(self):
-        """상태에서 동기화"""
-        # 기존 카드 제거
-        while self.value_layout.count() > 1:  # stretch 유지
+        while self.value_layout.count() > 1:
             item = self.value_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
-        # 새 카드 추가
         for i, value_col in enumerate(self.state.value_columns):
             self._add_value_card(value_col, i)
     
@@ -521,32 +676,35 @@ class ValueZone(QFrame):
             event.acceptProposedAction()
 
 
+# ==================== Data Table View ====================
+
 class DataTableView(QTableView):
     """데이터 테이블 뷰"""
     
-    column_dragged = Signal(str)  # 드래그 시작된 컬럼
-    rows_selected = Signal(list)  # 선택된 행들
+    column_dragged = Signal(str)
+    rows_selected = Signal(list)
+    exclude_value = Signal(str, object)  # column, value
+    hide_column = Signal(str)  # column name
     
     def __init__(self):
         super().__init__()
         
-        # 설정
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
         self.setDragEnabled(True)
         
-        # 헤더 설정
+        # Context menu for cells
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_cell_menu)
+        
         self.horizontalHeader().setStretchLastSection(True)
         self.horizontalHeader().setSectionsMovable(True)
         self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_menu)
-        
-        # 드래그 시작
         self.horizontalHeader().sectionPressed.connect(self._on_header_pressed)
         
-        # 선택 변경
         self.selectionModel_connected = False
     
     def setModel(self, model):
@@ -556,12 +714,10 @@ class DataTableView(QTableView):
             self.selectionModel_connected = True
     
     def _on_header_pressed(self, logical_index: int):
-        """헤더 클릭 - 드래그 시작"""
         model = self.model()
         if model:
             column_name = model.get_column_name(logical_index)
             if column_name:
-                # 드래그 시작
                 drag = QDrag(self)
                 mime_data = QMimeData()
                 mime_data.setText(column_name)
@@ -569,13 +725,11 @@ class DataTableView(QTableView):
                 drag.exec(Qt.CopyAction)
     
     def _on_selection_changed(self, selected, deselected):
-        """선택 변경"""
         indexes = self.selectionModel().selectedRows()
         rows = [idx.row() for idx in indexes]
         self.rows_selected.emit(rows)
     
     def _show_header_menu(self, pos):
-        """헤더 컨텍스트 메뉴"""
         logical_index = self.horizontalHeader().logicalIndexAt(pos)
         model = self.model()
         if not model:
@@ -586,39 +740,406 @@ class DataTableView(QTableView):
             return
         
         menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background: #EEF2FF;
+                color: #4338CA;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #E5E7EB;
+                margin: 4px 8px;
+            }
+        """)
         
-        # 정렬
-        sort_asc = QAction(f"Sort Ascending", self)
+        sort_asc = QAction("↑ Sort Ascending", self)
         sort_asc.triggered.connect(lambda: self.sortByColumn(logical_index, Qt.AscendingOrder))
         menu.addAction(sort_asc)
         
-        sort_desc = QAction(f"Sort Descending", self)
+        sort_desc = QAction("↓ Sort Descending", self)
         sort_desc.triggered.connect(lambda: self.sortByColumn(logical_index, Qt.DescendingOrder))
         menu.addAction(sort_desc)
         
         menu.addSeparator()
         
-        # Group/Value에 추가
-        add_to_group = QAction(f"Add to Group Zone", self)
-        add_to_group.triggered.connect(lambda: self.column_dragged.emit(column_name))
+        hide_col = QAction("🚫 Hide Column", self)
+        hide_col.triggered.connect(lambda: self.hide_column.emit(column_name))
+        menu.addAction(hide_col)
+        
+        menu.addSeparator()
+        
+        add_to_x = QAction("📐 Set as X-Axis", self)
+        add_to_x.triggered.connect(lambda: self.column_dragged.emit(f"X:{column_name}"))
+        menu.addAction(add_to_x)
+        
+        add_to_group = QAction("📁 Add to Group", self)
+        add_to_group.triggered.connect(lambda: self.column_dragged.emit(f"G:{column_name}"))
         menu.addAction(add_to_group)
         
+        add_to_value = QAction("📊 Add to Values", self)
+        add_to_value.triggered.connect(lambda: self.column_dragged.emit(f"V:{column_name}"))
+        menu.addAction(add_to_value)
+        
         menu.exec(self.horizontalHeader().mapToGlobal(pos))
+    
+    def _show_cell_menu(self, pos):
+        """셀 우클릭 메뉴"""
+        index = self.indexAt(pos)
+        if not index.isValid():
+            return
+        
+        model = self.model()
+        if not model:
+            return
+        
+        column_name = model.get_column_name(index.column())
+        cell_value = model.data(index, Qt.DisplayRole)
+        
+        if not column_name:
+            return
+        
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background: #EEF2FF;
+                color: #4338CA;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #E5E7EB;
+                margin: 4px 8px;
+            }
+        """)
+        
+        # Filter options
+        if cell_value:
+            display_val = str(cell_value)[:20] + "..." if len(str(cell_value)) > 20 else str(cell_value)
+            
+            filter_eq = QAction(f"🔍 Filter: {column_name} = \"{display_val}\"", self)
+            filter_eq.triggered.connect(lambda: self.exclude_value.emit(column_name, ("eq", cell_value)))
+            menu.addAction(filter_eq)
+            
+            filter_ne = QAction(f"🚫 Exclude: {column_name} ≠ \"{display_val}\"", self)
+            filter_ne.triggered.connect(lambda: self.exclude_value.emit(column_name, ("ne", cell_value)))
+            menu.addAction(filter_ne)
+            
+            menu.addSeparator()
+        
+        # Copy
+        copy_action = QAction("📋 Copy", self)
+        copy_action.triggered.connect(lambda: QApplication.clipboard().setText(str(cell_value) if cell_value else ""))
+        menu.addAction(copy_action)
+        
+        menu.exec(self.viewport().mapToGlobal(pos))
 
+
+# ==================== Filter Bar ====================
+
+class FilterBar(QFrame):
+    """활성 필터 표시 바"""
+    
+    filter_removed = Signal(int)  # filter index
+    clear_all = Signal()
+    
+    def __init__(self, state: AppState):
+        super().__init__()
+        self.state = state
+        self.setObjectName("FilterBar")
+        self._setup_ui()
+        self._apply_style()
+        self._connect_signals()
+    
+    def _apply_style(self):
+        self.setStyleSheet("""
+            #FilterBar {
+                background: #FEF3C7;
+                border: 1px solid #FCD34D;
+                border-radius: 8px;
+                padding: 4px;
+            }
+        """)
+    
+    def _setup_ui(self):
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(8, 4, 8, 4)
+        self.main_layout.setSpacing(6)
+        
+        # Filter icon
+        icon = QLabel("🔍")
+        icon.setStyleSheet("font-size: 14px; background: transparent;")
+        self.main_layout.addWidget(icon)
+        
+        # Filters container
+        self.filters_layout = QHBoxLayout()
+        self.filters_layout.setSpacing(4)
+        self.main_layout.addLayout(self.filters_layout)
+        
+        self.main_layout.addStretch()
+        
+        # Clear all button
+        clear_btn = QPushButton("Clear All")
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #B45309;
+                border: 1px solid #F59E0B;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-size: 10px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background: #FDE68A;
+            }
+        """)
+        clear_btn.clicked.connect(self.clear_all.emit)
+        self.main_layout.addWidget(clear_btn)
+        
+        self.setVisible(False)  # Hidden by default
+    
+    def _connect_signals(self):
+        self.state.filter_changed.connect(self._update_filters)
+    
+    def _update_filters(self):
+        """Update filter display"""
+        # Clear existing
+        while self.filters_layout.count():
+            item = self.filters_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        filters = self.state.filters
+        
+        if not filters:
+            self.setVisible(False)
+            return
+        
+        self.setVisible(True)
+        
+        for i, f in enumerate(filters):
+            chip = self._create_filter_chip(f, i)
+            self.filters_layout.addWidget(chip)
+    
+    def _create_filter_chip(self, filter_cond, index: int) -> QWidget:
+        """Create a filter chip widget"""
+        chip = QFrame()
+        chip.setStyleSheet(f"""
+            QFrame {{
+                background: {'#FEF3C7' if filter_cond.enabled else '#F3F4F6'};
+                border: 1px solid {'#F59E0B' if filter_cond.enabled else '#D1D5DB'};
+                border-radius: 12px;
+                padding: 2px;
+            }}
+        """)
+        
+        layout = QHBoxLayout(chip)
+        layout.setContentsMargins(8, 2, 4, 2)
+        layout.setSpacing(4)
+        
+        # Operator display
+        op_map = {
+            'eq': '=', 'ne': '≠', 'gt': '>', 'lt': '<',
+            'ge': '≥', 'le': '≤', 'contains': '∋'
+        }
+        op = op_map.get(filter_cond.operator, filter_cond.operator)
+        
+        # Display value (truncate if too long)
+        val_str = str(filter_cond.value)
+        if len(val_str) > 15:
+            val_str = val_str[:15] + "..."
+        
+        label = QLabel(f"{filter_cond.column} {op} \"{val_str}\"")
+        label.setStyleSheet(f"""
+            font-size: 11px;
+            color: {'#92400E' if filter_cond.enabled else '#6B7280'};
+            background: transparent;
+        """)
+        layout.addWidget(label)
+        
+        # Remove button
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(18, 18)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #9CA3AF;
+                border: none;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #EF4444;
+            }
+        """)
+        remove_btn.clicked.connect(lambda: self.filter_removed.emit(index))
+        layout.addWidget(remove_btn)
+        
+        return chip
+
+
+# ==================== Hidden Columns Bar ====================
+
+class HiddenColumnsBar(QFrame):
+    """숨겨진 컬럼 표시 바"""
+    
+    show_column = Signal(str)  # column name
+    show_all = Signal()
+    
+    def __init__(self, state: AppState):
+        super().__init__()
+        self.state = state
+        self.setObjectName("HiddenColumnsBar")
+        self._setup_ui()
+        self._apply_style()
+    
+    def _apply_style(self):
+        self.setStyleSheet("""
+            #HiddenColumnsBar {
+                background: #EEF2FF;
+                border: 1px solid #C7D2FE;
+                border-radius: 8px;
+                padding: 4px;
+            }
+        """)
+    
+    def _setup_ui(self):
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(8, 4, 8, 4)
+        self.main_layout.setSpacing(6)
+        
+        # Icon
+        icon = QLabel("👁")
+        icon.setStyleSheet("font-size: 14px; background: transparent;")
+        self.main_layout.addWidget(icon)
+        
+        label = QLabel("Hidden columns:")
+        label.setStyleSheet("font-size: 11px; color: #4338CA; background: transparent;")
+        self.main_layout.addWidget(label)
+        
+        # Columns container
+        self.columns_layout = QHBoxLayout()
+        self.columns_layout.setSpacing(4)
+        self.main_layout.addLayout(self.columns_layout)
+        
+        self.main_layout.addStretch()
+        
+        # Show all button
+        show_all_btn = QPushButton("Show All")
+        show_all_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #4338CA;
+                border: 1px solid #6366F1;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-size: 10px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background: #E0E7FF;
+            }
+        """)
+        show_all_btn.clicked.connect(self.show_all.emit)
+        self.main_layout.addWidget(show_all_btn)
+        
+        self.setVisible(False)
+    
+    def update_hidden_columns(self, hidden_columns: List[str]):
+        """Update hidden columns display"""
+        # Clear existing
+        while self.columns_layout.count():
+            item = self.columns_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        if not hidden_columns:
+            self.setVisible(False)
+            return
+        
+        self.setVisible(True)
+        
+        for col in hidden_columns[:5]:  # Show max 5
+            chip = self._create_column_chip(col)
+            self.columns_layout.addWidget(chip)
+        
+        if len(hidden_columns) > 5:
+            more = QLabel(f"+{len(hidden_columns) - 5} more")
+            more.setStyleSheet("font-size: 10px; color: #6B7280; background: transparent;")
+            self.columns_layout.addWidget(more)
+    
+    def _create_column_chip(self, column: str) -> QWidget:
+        chip = QFrame()
+        chip.setStyleSheet("""
+            QFrame {
+                background: white;
+                border: 1px solid #C7D2FE;
+                border-radius: 10px;
+            }
+        """)
+        
+        layout = QHBoxLayout(chip)
+        layout.setContentsMargins(6, 2, 4, 2)
+        layout.setSpacing(2)
+        
+        label = QLabel(column[:12] + "..." if len(column) > 12 else column)
+        label.setStyleSheet("font-size: 10px; color: #4338CA; background: transparent;")
+        label.setToolTip(column)
+        layout.addWidget(label)
+        
+        show_btn = QPushButton("👁")
+        show_btn.setFixedSize(16, 16)
+        show_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background: #E0E7FF;
+            }
+        """)
+        show_btn.setToolTip(f"Show {column}")
+        show_btn.clicked.connect(lambda: self.show_column.emit(column))
+        layout.addWidget(show_btn)
+        
+        return chip
+
+
+# ==================== Table Panel ====================
 
 class TablePanel(QWidget):
     """
     Table Panel
     
     구조:
-    ┌────────────┬─────────────────────────────┬────────────┐
-    │   Group    │         Data Table          │   Value    │
-    │   Zone     │                             │   Zone     │
-    │  (150px)   │                             │  (180px)   │
-    └────────────┴─────────────────────────────┴────────────┘
+    ┌──────────┬──────────┬─────────────────────┬────────────┐
+    │  X Zone  │  Group   │     Data Table      │   Values   │
+    │ (150px)  │  Zone    │                     │   Zone     │
+    │          │ (150px)  │                     │  (180px+)  │
+    └──────────┴──────────┴─────────────────────┴────────────┘
     """
     
-    file_dropped = Signal(str)  # 파일 드롭
+    file_dropped = Signal(str)
     
     def __init__(self, state: AppState, engine: DataEngine):
         super().__init__()
@@ -635,61 +1156,80 @@ class TablePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # 스플리터
         splitter = QSplitter(Qt.Horizontal)
         
-        # Group Zone (왼쪽)
-        self.group_zone = GroupZone(self.state)
-        splitter.addWidget(self.group_zone)
+        # Left panel: X Zone + Group Zone
+        left_panel = QWidget()
+        left_layout = QHBoxLayout(left_panel)
+        left_layout.setContentsMargins(4, 4, 4, 4)
+        left_layout.setSpacing(6)
         
-        # 테이블 영역 (중앙)
+        # X Zone
+        self.x_zone = XAxisZone(self.state)
+        left_layout.addWidget(self.x_zone)
+        
+        # Group Zone
+        self.group_zone = GroupZone(self.state)
+        left_layout.addWidget(self.group_zone)
+        
+        splitter.addWidget(left_panel)
+        
+        # Table area (center)
         table_container = QWidget()
         table_layout = QVBoxLayout(table_container)
         table_layout.setContentsMargins(4, 4, 4, 4)
         table_layout.setSpacing(4)
         
-        # Modern search bar
+        # Filter bar (above search)
+        self.filter_bar = FilterBar(self.state)
+        self.filter_bar.filter_removed.connect(self._on_filter_removed)
+        self.filter_bar.clear_all.connect(self._on_clear_filters)
+        table_layout.addWidget(self.filter_bar)
+        
+        # Hidden columns bar
+        self.hidden_bar = HiddenColumnsBar(self.state)
+        self.hidden_bar.show_column.connect(self._on_show_column)
+        self.hidden_bar.show_all.connect(self._on_show_all_columns)
+        table_layout.addWidget(self.hidden_bar)
+        
+        # Search bar
         search_layout = QHBoxLayout()
-        search_layout.setContentsMargins(0, 0, 0, 8)
+        search_layout.setContentsMargins(0, 0, 0, 6)
         
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search data...")
+        self.search_input.setPlaceholderText("🔍 Search data...")
         self.search_input.setStyleSheet("""
             QLineEdit {
                 background: white;
                 border: 1px solid #E2E8F0;
-                border-radius: 10px;
-                padding: 10px 16px 10px 40px;
-                font-size: 13px;
+                border-radius: 8px;
+                padding: 8px 14px;
+                font-size: 12px;
                 color: #334155;
             }
             QLineEdit:focus {
                 border: 2px solid #6366F1;
                 background: #FAFAFF;
             }
-            QLineEdit::placeholder {
-                color: #94A3B8;
-            }
         """)
-        # Note: Search icon would need to be overlaid with a QLabel
         self.search_input.textChanged.connect(self._on_search)
         search_layout.addWidget(self.search_input)
         
         table_layout.addLayout(search_layout)
         
-        # Toolbar for expand/collapse
+        # Toolbar
         toolbar = QHBoxLayout()
-        toolbar.setSpacing(8)
+        toolbar.setSpacing(6)
         
-        expand_btn = QPushButton("▼ Expand All")
+        expand_btn = QPushButton("▼ Expand")
         expand_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
                 color: #6366F1;
                 border: 1px solid #6366F1;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-size: 11px;
+                border-radius: 5px;
+                padding: 5px 10px;
+                font-size: 10px;
                 font-weight: 500;
             }
             QPushButton:hover { background: #EEF2FF; }
@@ -697,15 +1237,15 @@ class TablePanel(QWidget):
         expand_btn.clicked.connect(self._expand_all)
         toolbar.addWidget(expand_btn)
         
-        collapse_btn = QPushButton("▶ Collapse All")
+        collapse_btn = QPushButton("▶ Collapse")
         collapse_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
                 color: #6366F1;
                 border: 1px solid #6366F1;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-size: 11px;
+                border-radius: 5px;
+                padding: 5px 10px;
+                font-size: 10px;
                 font-weight: 500;
             }
             QPushButton:hover { background: #EEF2FF; }
@@ -716,48 +1256,48 @@ class TablePanel(QWidget):
         toolbar.addStretch()
         
         self.group_info_label = QLabel("")
-        self.group_info_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self.group_info_label.setStyleSheet("color: #6B7280; font-size: 10px;")
         toolbar.addWidget(self.group_info_label)
         
         table_layout.addLayout(toolbar)
         
-        # Table view with grouped model
+        # Table view
         self.table_view = DataTableView()
         self.table_model = PolarsTableModel()
-        self.grouped_model = None  # Will be created when grouping
+        self.grouped_model = None
         self.table_view.setModel(self.table_model)
-        
-        # Enable click to expand/collapse
         self.table_view.clicked.connect(self._on_table_clicked)
         
         table_layout.addWidget(self.table_view)
         
         splitter.addWidget(table_container)
         
-        # Value Zone (오른쪽)
+        # Value Zone (right)
         self.value_zone = ValueZone(self.state)
         splitter.addWidget(self.value_zone)
         
-        # 스플리터 비율
-        splitter.setSizes([150, 500, 180])
-        splitter.setStretchFactor(0, 0)  # Group: 고정
-        splitter.setStretchFactor(1, 1)  # Table: 확장
-        splitter.setStretchFactor(2, 0)  # Value: 고정
+        # Splitter sizes
+        splitter.setSizes([310, 500, 200])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setStretchFactor(2, 0)
         
         layout.addWidget(splitter)
     
     def _connect_signals(self):
         self.table_view.rows_selected.connect(self._on_rows_selected)
+        self.table_view.exclude_value.connect(self._on_exclude_value)
+        self.table_view.hide_column.connect(self._on_hide_column)
+        self.table_view.column_dragged.connect(self._on_column_action)
         self.state.selection_changed.connect(self._on_state_selection_changed)
         self.state.group_zone_changed.connect(self._on_group_zone_changed)
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
+        self.state.filter_changed.connect(self._on_filter_changed)
     
     def set_data(self, df: Optional[pl.DataFrame]):
-        """Set data and apply grouping if configured"""
         self._update_table_model(df)
     
     def _update_table_model(self, df: Optional[pl.DataFrame] = None):
-        """Update table model with current grouping"""
         if df is None:
             df = self.engine.df if self.engine.is_loaded else None
         
@@ -766,9 +1306,7 @@ class TablePanel(QWidget):
             self.group_info_label.setText("")
             return
         
-        # Check if grouping is active
         if self.state.group_columns:
-            # Use grouped model
             if self.grouped_model is None:
                 self.grouped_model = GroupedTableModel()
             
@@ -785,36 +1323,31 @@ class TablePanel(QWidget):
             
             self.table_view.setModel(self.grouped_model)
             
-            # Update info label
             group_names = " → ".join(group_cols)
-            self.group_info_label.setText(f"Grouped by: {group_names}")
+            self.group_info_label.setText(f"Grouped: {group_names}")
             self.group_info_label.setStyleSheet("""
                 color: #6366F1;
-                font-size: 11px;
+                font-size: 10px;
                 background: #EEF2FF;
-                padding: 4px 10px;
-                border-radius: 10px;
+                padding: 3px 8px;
+                border-radius: 8px;
             """)
         else:
-            # Use flat model
             self.table_model.set_dataframe(df)
             self.table_view.setModel(self.table_model)
             self.group_info_label.setText("")
         
-        # Adjust column widths
         header = self.table_view.horizontalHeader()
         for i in range(min(10, self.table_view.model().columnCount())):
-            header.resizeSection(i, 150)
+            header.resizeSection(i, 120)
     
     def clear(self):
-        """Clear table"""
         self.table_model.set_dataframe(None)
         if self.grouped_model:
             self.grouped_model.set_data(None)
         self.group_info_label.setText("")
     
     def _on_search(self, text: str):
-        """Search filter"""
         if not text or not self.engine.is_loaded:
             self._update_table_model(self.engine.df)
             return
@@ -823,8 +1356,6 @@ class TablePanel(QWidget):
         self._update_table_model(result)
     
     def _on_rows_selected(self, rows: List[int]):
-        """Handle row selection from table"""
-        # If using grouped model, get actual row indices
         if self.grouped_model and self.state.group_columns:
             actual_rows = []
             for row in rows:
@@ -841,43 +1372,132 @@ class TablePanel(QWidget):
             self.state.select_rows(rows)
     
     def _on_state_selection_changed(self):
-        """Handle selection change from state (e.g., from graph)"""
-        # TODO: Highlight selected rows in table
         pass
     
     def _on_group_zone_changed(self):
-        """Handle group zone change - rebuild table"""
         if self.engine.is_loaded:
             self._update_table_model(self.engine.df)
     
     def _on_value_zone_changed(self):
-        """Handle value zone change - update aggregates"""
         if self.engine.is_loaded and self.state.group_columns:
             self._update_table_model(self.engine.df)
     
     def _on_table_clicked(self, index):
-        """Handle table click for expand/collapse"""
         if index.column() == 0 and self.grouped_model and self.state.group_columns:
-            # Check if this is a group header
             is_header = self.grouped_model.data(index, Qt.UserRole + 1)
             if is_header:
                 self.grouped_model.toggle_expand(index.row())
     
     def _expand_all(self):
-        """Expand all groups"""
         if self.grouped_model and self.state.group_columns:
             self.grouped_model.expand_all()
     
     def _collapse_all(self):
-        """Collapse all groups"""
         if self.grouped_model and self.state.group_columns:
             self.grouped_model.collapse_all()
     
     def get_group_data(self) -> List:
-        """Get group data for graph rendering"""
         if self.grouped_model and self.state.group_columns:
             return self.grouped_model.get_group_data()
         return []
+    
+    # ==================== Filter & Column Handlers ====================
+    
+    def _on_exclude_value(self, column: str, filter_info: tuple):
+        """Handle exclude value from cell context menu"""
+        operator, value = filter_info
+        self.state.add_filter(column, operator, value)
+    
+    def _on_hide_column(self, column: str):
+        """Handle hide column from header context menu"""
+        self.state.toggle_column_visibility(column)
+        self._update_hidden_bar()
+        self._update_table_model()
+    
+    def _on_column_action(self, action: str):
+        """Handle column actions from context menu"""
+        if action.startswith("X:"):
+            column = action[2:]
+            self.state.set_x_column(column)
+        elif action.startswith("G:"):
+            column = action[2:]
+            self.state.add_group_column(column)
+        elif action.startswith("V:"):
+            column = action[2:]
+            self.state.add_value_column(column)
+    
+    def _on_filter_removed(self, index: int):
+        """Handle filter removal"""
+        self.state.remove_filter(index)
+    
+    def _on_clear_filters(self):
+        """Handle clear all filters"""
+        self.state.clear_filters()
+    
+    def _on_filter_changed(self):
+        """Handle filter state change"""
+        if self.engine.is_loaded:
+            self._apply_filters_and_update()
+    
+    def _apply_filters_and_update(self):
+        """Apply filters to data and update table"""
+        df = self.engine.df
+        if df is None:
+            return
+        
+        # Apply all enabled filters
+        filtered_df = df
+        for f in self.state.filters:
+            if not f.enabled:
+                continue
+            try:
+                filtered_df = self.engine.filter(f.column, f.operator, f.value)
+                # Update engine's working df temporarily
+                # Actually, we should filter on the already filtered data
+                import polars as pl
+                col = pl.col(f.column)
+                
+                if f.operator == 'eq':
+                    filtered_df = filtered_df.filter(col == f.value)
+                elif f.operator == 'ne':
+                    filtered_df = filtered_df.filter(col != f.value)
+                elif f.operator == 'gt':
+                    filtered_df = filtered_df.filter(col > f.value)
+                elif f.operator == 'lt':
+                    filtered_df = filtered_df.filter(col < f.value)
+                elif f.operator == 'ge':
+                    filtered_df = filtered_df.filter(col >= f.value)
+                elif f.operator == 'le':
+                    filtered_df = filtered_df.filter(col <= f.value)
+                elif f.operator == 'contains':
+                    filtered_df = filtered_df.filter(col.str.contains(str(f.value)))
+            except Exception as e:
+                print(f"Filter error: {e}")
+                continue
+        
+        self._update_table_model(filtered_df)
+    
+    def _on_show_column(self, column: str):
+        """Show a hidden column"""
+        self.state.toggle_column_visibility(column)
+        self._update_hidden_bar()
+        self._update_table_model()
+    
+    def _on_show_all_columns(self):
+        """Show all hidden columns"""
+        # Need to add a method to state or iterate
+        hidden = list(self.state._hidden_columns)
+        for col in hidden:
+            self.state.toggle_column_visibility(col)
+        self._update_hidden_bar()
+        self._update_table_model()
+    
+    def _update_hidden_bar(self):
+        """Update hidden columns bar"""
+        hidden = list(self.state._hidden_columns)
+        self.hidden_bar.update_hidden_columns(hidden)
+    
+    # ==================== Drag & Drop ====================
     
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():

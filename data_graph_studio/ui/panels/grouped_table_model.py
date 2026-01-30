@@ -547,3 +547,14 @@ class GroupedTableModel(QAbstractItemModel):
             if row_idx is not None:
                 indices.append(row_idx)
         return indices
+    
+    def get_column_name(self, index: int) -> Optional[str]:
+        """Get column name by visual index (for drag & drop compatibility)"""
+        if index == 0:
+            # First column is the group/row indicator
+            return None
+        
+        data_col_idx = index - 1
+        if 0 <= data_col_idx < len(self._visible_columns):
+            return self._visible_columns[data_col_idx]
+        return None

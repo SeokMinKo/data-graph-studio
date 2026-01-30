@@ -9,17 +9,18 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel
+    QProgressDialog, QApplication, QLabel, QDialog
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 
-from ..core.data_engine import DataEngine, LoadingProgress
+from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
 from ..core.state import AppState, ToolMode, ChartType
 
 from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
 from .panels.table_panel import TablePanel
+from .dialogs.parsing_preview_dialog import ParsingPreviewDialog, ParsingSettings
 
 
 class DataLoaderThread(QThread):
@@ -35,6 +36,37 @@ class DataLoaderThread(QThread):
     def run(self):
         self.engine.set_progress_callback(self._on_progress)
         success = self.engine.load_file(self.file_path, optimize_memory=True)
+        self.finished_loading.emit(success)
+    
+    def _on_progress(self, progress: LoadingProgress):
+        self.progress_updated.emit(progress)
+
+
+class DataLoaderThreadWithSettings(QThread):
+    """비동기 데이터 로딩 스레드 (파싱 설정 적용)"""
+    progress_updated = Signal(object)  # LoadingProgress
+    finished_loading = Signal(bool)  # success
+    
+    def __init__(self, engine: DataEngine, file_path: str, settings: ParsingSettings):
+        super().__init__()
+        self.engine = engine
+        self.file_path = file_path
+        self.settings = settings
+    
+    def run(self):
+        self.engine.set_progress_callback(self._on_progress)
+        success = self.engine.load_file(
+            self.file_path,
+            file_type=self.settings.file_type,
+            encoding=self.settings.encoding,
+            delimiter=self.settings.delimiter,
+            delimiter_type=self.settings.delimiter_type,
+            regex_pattern=self.settings.regex_pattern if self.settings.regex_pattern else None,
+            has_header=self.settings.has_header,
+            skip_rows=self.settings.skip_rows,
+            comment_char=self.settings.comment_char if self.settings.comment_char else None,
+            optimize_memory=True
+        )
         self.finished_loading.emit(success)
     
     def _on_progress(self, progress: LoadingProgress):
@@ -374,8 +406,8 @@ class MainWindow(QMainWindow):
         self.state.selection_changed.connect(self._update_selection_status)
         self.state.tool_mode_changed.connect(self._on_tool_mode_changed)
         
-        # Panel signals
-        self.table_panel.file_dropped.connect(self._load_file)
+        # Panel signals - route through preview dialog
+        self.table_panel.file_dropped.connect(self._show_parsing_preview)
     
     def _update_ui_state(self):
         """Update UI state with modern styling"""
@@ -420,10 +452,25 @@ class MainWindow(QMainWindow):
         )
         
         if file_path:
-            self._load_file(file_path)
+            self._show_parsing_preview(file_path)
     
-    def _load_file(self, file_path: str):
-        """파일 로드"""
+    def _show_parsing_preview(self, file_path: str):
+        """파싱 미리보기 다이얼로그 표시"""
+        ext = Path(file_path).suffix.lower()
+        
+        # Binary formats don't need parsing preview
+        if ext in ['.parquet', '.xlsx', '.xls', '.json']:
+            self._load_file(file_path)
+            return
+        
+        # Show parsing preview dialog
+        dialog = ParsingPreviewDialog(file_path, self)
+        if dialog.exec() == QDialog.Accepted:
+            settings = dialog.get_settings()
+            self._load_file_with_settings(file_path, settings)
+    
+    def _load_file(self, file_path: str, settings: Optional[ParsingSettings] = None):
+        """파일 로드 (설정 없이 - 바이너리 포맷용)"""
         # 프로그레스 다이얼로그
         self._progress_dialog = QProgressDialog(
             f"Loading {Path(file_path).name}...",
@@ -437,6 +484,27 @@ class MainWindow(QMainWindow):
         
         # 로더 스레드 시작
         self._loader_thread = DataLoaderThread(self.engine, file_path)
+        self._loader_thread.progress_updated.connect(self._on_loading_progress)
+        self._loader_thread.finished_loading.connect(self._on_loading_finished)
+        self._loader_thread.start()
+        
+        self._progress_dialog.show()
+    
+    def _load_file_with_settings(self, file_path: str, settings: ParsingSettings):
+        """파일 로드 (파싱 설정 적용)"""
+        # 프로그레스 다이얼로그
+        self._progress_dialog = QProgressDialog(
+            f"Loading {Path(file_path).name}...",
+            "Cancel",
+            0, 100,
+            self
+        )
+        self._progress_dialog.setWindowModality(Qt.WindowModal)
+        self._progress_dialog.setAutoClose(True)
+        self._progress_dialog.canceled.connect(self._cancel_loading)
+        
+        # 로더 스레드 시작 (설정 적용)
+        self._loader_thread = DataLoaderThreadWithSettings(self.engine, file_path, settings)
         self._loader_thread.progress_updated.connect(self._on_loading_progress)
         self._loader_thread.finished_loading.connect(self._on_loading_finished)
         self._loader_thread.start()
