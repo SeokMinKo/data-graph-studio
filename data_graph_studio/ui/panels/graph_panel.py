@@ -108,6 +108,7 @@ class ClickablePlotWidget(pg.PlotWidget):
 
 from ...core.state import AppState, ChartType, ToolMode
 from ...core.data_engine import DataEngine
+from ...graph.sampling import DataSampler
 
 
 class GraphOptionsPanel(QFrame):
@@ -677,8 +678,27 @@ class GraphPanel(QWidget):
         x_label = x_col if x_col else "Index"
         y_label = y_col_name
         
+        # 대용량 데이터 샘플링 (최대 10,000 포인트)
+        MAX_POINTS = 10000
+        if len(x_data) > MAX_POINTS:
+            # NaN 제거 후 샘플링
+            valid_mask = ~(np.isnan(x_data) | np.isnan(y_data))
+            x_valid = x_data[valid_mask].astype(np.float64)
+            y_valid = y_data[valid_mask].astype(np.float64)
+            
+            if len(x_valid) > MAX_POINTS:
+                x_sampled, y_sampled = DataSampler.auto_sample(
+                    x_valid, y_valid, max_points=MAX_POINTS
+                )
+                # 샘플링 적용 시 그룹은 비활성화 (성능)
+                groups = None
+            else:
+                x_sampled, y_sampled = x_valid, y_valid
+        else:
+            x_sampled, y_sampled = x_data, y_data
+        
         self.main_graph.plot_data(
-            x_data, y_data,
+            x_sampled, y_sampled,
             groups=groups,
             chart_type=self.state.chart_settings.chart_type,
             settings=settings,
@@ -686,8 +706,8 @@ class GraphPanel(QWidget):
             y_label=y_label
         )
         
-        # 히스토그램 업데이트
-        self.stat_panel.update_histograms(x_data, y_data)
+        # 히스토그램 업데이트 (샘플링된 데이터 사용)
+        self.stat_panel.update_histograms(x_sampled, y_sampled)
         
         # 통계 업데이트
         if self.state.value_columns:
