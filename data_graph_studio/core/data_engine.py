@@ -1706,7 +1706,7 @@ class DataEngine:
             merged = df_a.select([key_column, value_column]).join(
                 df_b.select([key_column, value_column]),
                 on=key_column,
-                how="outer",
+                how="full",
                 suffix="_b"
             )
             value_a_col = value_column

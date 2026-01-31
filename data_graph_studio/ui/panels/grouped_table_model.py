@@ -209,7 +209,7 @@ class GroupedTableModel(QAbstractItemModel):
             return
         
         # 그룹별 집계를 Polars로 한번에 계산
-        agg_exprs = [pl.count().alias("_count")]
+        agg_exprs = [pl.len().alias("_count")]
         
         # Get effective default aggregation from Value Zone
         effective_default_agg = self._get_effective_default_aggregation()

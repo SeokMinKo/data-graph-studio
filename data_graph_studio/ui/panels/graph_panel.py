@@ -127,7 +127,7 @@ class ExpandedChartDialog(QDialog):
                     self.plot_widget.addItem(text_item)
                 else:
                     # Vertical histogram (default)
-                    self.plot_widget.plot(bin_edges, hist, stepMode=True, fillLevel=0,
+                    self.plot_widget.plot(bin_edges, hist, stepMode="center", fillLevel=0,
                                           brush=color, pen=pg.mkPen(color[:3], width=1))
                     self.plot_widget.setLabel('bottom', 'Value')
                     self.plot_widget.setLabel('left', 'Frequency')
@@ -1746,7 +1746,7 @@ class StatPanel(QFrame):
                 clean_x = self._x_data[~np.isnan(self._x_data)]
                 if len(clean_x) > 0:
                     hist, bins = np.histogram(clean_x, bins=self._x_bins)
-                    self.x_hist_widget.plot(bins, hist, stepMode=True, fillLevel=0,
+                    self.x_hist_widget.plot(bins, hist, stepMode="center", fillLevel=0,
                                             brush=(100, 100, 200, 100))
             except:
                 pass
