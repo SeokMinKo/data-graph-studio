@@ -307,6 +307,309 @@ class TestGroupedTableModel:
         assert '(Empty)' in names or any('Empty' in n for n in names)
 
 
+class TestGroupedTableModelAutoNumeric:
+    """Auto-aggregation of all numeric columns test"""
+    
+    @pytest.fixture
+    def sample_df(self):
+        return pl.DataFrame({
+            'Category': ['A', 'A', 'B', 'B', 'C'],
+            'Region': ['East', 'West', 'East', 'West', 'East'],
+            'Sales': [100, 200, 150, 250, 300],
+            'Quantity': [10, 20, 15, 25, 30],
+            'Price': [9.99, 19.99, 14.99, 24.99, 29.99],
+            'Name': ['Item1', 'Item2', 'Item3', 'Item4', 'Item5'],
+        })
+    
+    @pytest.fixture
+    def model(self):
+        return GroupedTableModel()
+    
+    def test_auto_detect_numeric_columns(self, model, sample_df):
+        """Test that numeric columns are auto-detected"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],  # Only Sales is explicit
+            aggregations={'Sales': 'sum'}
+        )
+        
+        # Quantity and Price should be auto-detected (numeric, not in group or value)
+        assert 'Quantity' in model._auto_numeric_columns
+        assert 'Price' in model._auto_numeric_columns
+        # Name should not be auto-detected (string)
+        assert 'Name' not in model._auto_numeric_columns
+        # Category should not be auto-detected (group column)
+        assert 'Category' not in model._auto_numeric_columns
+        # Sales should not be auto-detected (explicit value column)
+        assert 'Sales' not in model._auto_numeric_columns
+    
+    def test_auto_aggregation_values(self, model, sample_df):
+        """Test that auto-detected columns are aggregated"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],
+            aggregations={'Sales': 'sum'}
+        )
+        
+        # Check aggregates include auto-detected columns
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: 100 + 200 = 300 (explicit)
+                assert child.aggregates.get('Sales') == 300
+                # Quantity: 10 + 20 = 30 (auto, default sum)
+                assert child.aggregates.get('Quantity') == 30
+                # Price: 9.99 + 19.99 = 29.98 (auto, default sum)
+                assert abs(child.aggregates.get('Price') - 29.98) < 0.01
+    
+    def test_all_value_columns_combined(self, model, sample_df):
+        """Test _all_value_columns contains explicit + auto columns"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],
+            aggregations={'Sales': 'sum'}
+        )
+        
+        # all_value_columns = explicit + auto
+        assert 'Sales' in model._all_value_columns
+        assert 'Quantity' in model._all_value_columns
+        assert 'Price' in model._all_value_columns
+        assert len(model._all_value_columns) == 3  # Sales + Quantity + Price
+    
+    def test_explicit_aggregation_preserved(self, model, sample_df):
+        """Test explicit aggregation is preserved for value columns
+        
+        Note: Auto-detected columns now use the first value column's aggregation.
+        """
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales', 'Quantity'],
+            aggregations={'Sales': 'sum', 'Quantity': 'mean'}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: sum = 300 (explicit)
+                assert child.aggregates.get('Sales') == 300
+                # Quantity: mean = (10 + 20) / 2 = 15 (explicit)
+                assert child.aggregates.get('Quantity') == 15.0
+                # Price: uses first value column's agg (sum) = 9.99 + 19.99 = 29.98
+                assert abs(child.aggregates.get('Price') - 29.98) < 0.01
+    
+    def test_no_grouping_no_auto_aggregation(self, model, sample_df):
+        """Test no auto-aggregation when no grouping"""
+        model.set_data(
+            sample_df,
+            group_columns=[],  # No grouping
+            value_columns=['Sales'],
+        )
+        
+        # Without grouping, auto-detection still happens but no aggregation is performed
+        # because _build_tree doesn't build group tree
+        assert model.rowCount() == 5  # Just rows, no group headers
+    
+    def test_all_numeric_excluded_when_in_group(self, model, sample_df):
+        """Test numeric columns in group are excluded from auto-detection"""
+        # Create df with numeric group column
+        df = pl.DataFrame({
+            'Year': [2020, 2020, 2021, 2021],
+            'Quarter': [1, 2, 1, 2],
+            'Revenue': [100.0, 200.0, 150.0, 250.0],
+        })
+        
+        model.set_data(
+            df,
+            group_columns=['Year'],  # Year is numeric but used as group
+            value_columns=[],
+        )
+        
+        # Year should not be in auto_numeric (it's in group)
+        assert 'Year' not in model._auto_numeric_columns
+        # Quarter and Revenue should be auto-detected
+        assert 'Quarter' in model._auto_numeric_columns
+        assert 'Revenue' in model._auto_numeric_columns
+    
+    def test_empty_dataframe_no_crash(self, model):
+        """Test empty dataframe doesn't crash auto-detection"""
+        df = pl.DataFrame({
+            'Category': pl.Series([], dtype=pl.Utf8),
+            'Value': pl.Series([], dtype=pl.Int64),
+        })
+        
+        model.set_data(df, group_columns=['Category'])
+        
+        # Should not crash
+        assert model._auto_numeric_columns == ['Value']
+
+
+class TestGroupedTableModelEffectiveAggregation:
+    """Test effective aggregation propagation from Value Zone to auto-detected columns"""
+    
+    @pytest.fixture
+    def sample_df(self):
+        return pl.DataFrame({
+            'Category': ['A', 'A', 'B', 'B', 'C'],
+            'Sales': [100, 200, 150, 250, 300],
+            'Quantity': [10, 20, 15, 25, 30],
+            'Price': [10.0, 20.0, 15.0, 25.0, 30.0],
+        })
+    
+    @pytest.fixture
+    def model(self):
+        return GroupedTableModel()
+    
+    def test_mean_propagates_to_auto_columns(self, model, sample_df):
+        """Value Zone MEAN → auto columns도 MEAN"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],
+            aggregations={'Sales': 'mean'}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: mean = (100+200)/2 = 150
+                assert child.aggregates.get('Sales') == 150.0
+                # Quantity: mean = (10+20)/2 = 15 (propagated from Sales)
+                assert child.aggregates.get('Quantity') == 15.0
+                # Price: mean = (10+20)/2 = 15 (propagated from Sales)
+                assert child.aggregates.get('Price') == 15.0
+    
+    def test_sum_propagates_to_auto_columns(self, model, sample_df):
+        """Value Zone SUM → auto columns도 SUM"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],
+            aggregations={'Sales': 'sum'}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: sum = 300
+                assert child.aggregates.get('Sales') == 300
+                # Quantity: sum = 30 (propagated from Sales)
+                assert child.aggregates.get('Quantity') == 30
+                # Price: sum = 30 (propagated from Sales)
+                assert child.aggregates.get('Price') == 30.0
+    
+    def test_first_value_column_agg_used(self, model, sample_df):
+        """첫 번째 Value Zone 컬럼의 aggregation 사용"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales', 'Quantity'],
+            aggregations={'Sales': 'mean', 'Quantity': 'sum'}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: mean = 150 (explicit)
+                assert child.aggregates.get('Sales') == 150.0
+                # Quantity: sum = 30 (explicit)
+                assert child.aggregates.get('Quantity') == 30
+                # Price: mean = 15 (uses first value column's agg = mean)
+                assert child.aggregates.get('Price') == 15.0
+    
+    def test_empty_value_zone_uses_default(self, model, sample_df):
+        """Value Zone 비어있으면 기본값(SUM) 사용"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=[],  # Empty Value Zone
+            aggregations={}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # All auto-detected: use default SUM
+                assert child.aggregates.get('Sales') == 300  # sum
+                assert child.aggregates.get('Quantity') == 30  # sum
+                assert child.aggregates.get('Price') == 30.0  # sum
+    
+    def test_effective_default_aggregation_method(self, model, sample_df):
+        """_get_effective_default_aggregation() 메서드 테스트"""
+        # Empty Value Zone → default
+        model.set_data(sample_df, group_columns=['Category'], value_columns=[], aggregations={})
+        assert model._get_effective_default_aggregation() == 'sum'
+        
+        # With Value Zone → first column's agg
+        model.set_data(
+            sample_df, 
+            group_columns=['Category'], 
+            value_columns=['Sales'], 
+            aggregations={'Sales': 'mean'}
+        )
+        assert model._get_effective_default_aggregation() == 'mean'
+        
+        # Value column without explicit agg → default
+        model.set_data(
+            sample_df, 
+            group_columns=['Category'], 
+            value_columns=['Sales'], 
+            aggregations={}  # No aggregation specified
+        )
+        assert model._get_effective_default_aggregation() == 'sum'
+    
+    def test_count_propagates_to_auto_columns(self, model, sample_df):
+        """Value Zone COUNT → auto columns도 COUNT"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],
+            aggregations={'Sales': 'count'}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: count = 2
+                assert child.aggregates.get('Sales') == 2
+                # Quantity: count = 2 (propagated)
+                assert child.aggregates.get('Quantity') == 2
+                # Price: count = 2 (propagated)
+                assert child.aggregates.get('Price') == 2
+    
+    def test_min_propagates_to_auto_columns(self, model, sample_df):
+        """Value Zone MIN → auto columns도 MIN"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],
+            aggregations={'Sales': 'min'}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: min = 100
+                assert child.aggregates.get('Sales') == 100
+                # Quantity: min = 10 (propagated)
+                assert child.aggregates.get('Quantity') == 10
+                # Price: min = 10 (propagated)
+                assert child.aggregates.get('Price') == 10.0
+    
+    def test_max_propagates_to_auto_columns(self, model, sample_df):
+        """Value Zone MAX → auto columns도 MAX"""
+        model.set_data(
+            sample_df,
+            group_columns=['Category'],
+            value_columns=['Sales'],
+            aggregations={'Sales': 'max'}
+        )
+        
+        for child in model._root.children:
+            if child.display_name == 'A':
+                # Sales: max = 200
+                assert child.aggregates.get('Sales') == 200
+                # Quantity: max = 20 (propagated)
+                assert child.aggregates.get('Quantity') == 20
+                # Price: max = 20 (propagated)
+                assert child.aggregates.get('Price') == 20.0
+
+
 class TestGroupedTableModelAggregations:
     """집계 함수 테스트"""
     

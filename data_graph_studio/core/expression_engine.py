@@ -467,6 +467,51 @@ class ExpressionEngine:
         if func_name == 'EXP':
             return args[0].exp()
         
+        if func_name == 'SIN':
+            # Convert to numpy for trig, then back to Series
+            import numpy as np
+            arr = args[0].to_numpy()
+            return pl.Series(np.sin(arr))
+        
+        if func_name == 'COS':
+            import numpy as np
+            arr = args[0].to_numpy()
+            return pl.Series(np.cos(arr))
+        
+        if func_name == 'TAN':
+            import numpy as np
+            arr = args[0].to_numpy()
+            return pl.Series(np.tan(arr))
+        
+        if func_name == 'MIN':
+            # MIN with multiple arguments - element-wise minimum
+            if len(args) == 1:
+                # Single column - return scalar repeated
+                min_val = args[0].min()
+                return pl.Series([min_val] * len(args[0]))
+            else:
+                # Multiple columns - element-wise min
+                result = args[0]
+                for arg in args[1:]:
+                    # Use zip_with for element-wise comparison
+                    combined = pl.DataFrame({"a": result, "b": arg})
+                    result = combined.select(pl.min_horizontal("a", "b"))["a"]
+                return result
+        
+        if func_name == 'MAX':
+            # MAX with multiple arguments - element-wise maximum
+            if len(args) == 1:
+                # Single column - return scalar repeated
+                max_val = args[0].max()
+                return pl.Series([max_val] * len(args[0]))
+            else:
+                # Multiple columns - element-wise max
+                result = args[0]
+                for arg in args[1:]:
+                    combined = pl.DataFrame({"a": result, "b": arg})
+                    result = combined.select(pl.max_horizontal("a", "b"))["a"]
+                return result
+        
         # 문자열 함수
         if func_name == 'CONCAT':
             result = args[0].cast(pl.Utf8)
@@ -505,6 +550,20 @@ class ExpressionEngine:
             old = str(get_scalar(args[1]))
             new = str(get_scalar(args[2]))
             return args[0].str.replace_all(old, new)
+        
+        if func_name == 'CONTAINS':
+            # Check if string contains substring, returns boolean series
+            substring = str(get_scalar(args[1]))
+            return args[0].cast(pl.Utf8).str.contains(substring)
+        
+        if func_name == 'SUBSTRING':
+            # SUBSTRING(str, start, length) - 1-based indexing like SQL
+            start = int(get_scalar(args[1])) - 1  # Convert to 0-based
+            length = int(get_scalar(args[2])) if len(args) > 2 else None
+            if length is not None:
+                return args[0].str.slice(start, length)
+            else:
+                return args[0].str.slice(start)
         
         # 조건 함수
         if func_name == 'IF':

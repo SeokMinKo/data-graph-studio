@@ -30,8 +30,15 @@ class DataSampler:
         """
         n = len(x)
         
+        # Handle edge cases
+        if n == 0:
+            return np.array([]), np.array([])
+        
+        if threshold <= 0:
+            return np.array([]), np.array([])
+        
         if threshold >= n or threshold < 3:
-            return x, y
+            return x.copy(), y.copy()
         
         sampled_x = np.zeros(threshold)
         sampled_y = np.zeros(threshold)
@@ -102,10 +109,19 @@ class DataSampler:
         """
         n = len(x)
         
-        if n_buckets >= n // 2:
-            return x, y
+        # Handle edge cases
+        if n == 0:
+            return np.array([]), np.array([])
+        
+        if n_buckets <= 0:
+            return np.array([]), np.array([])
+        
+        if n_buckets >= n // 2 or n_buckets >= n:
+            return x.copy(), y.copy()
         
         bucket_size = n // n_buckets
+        if bucket_size == 0:
+            return x.copy(), y.copy()
         
         result_x = []
         result_y = []
@@ -184,10 +200,20 @@ class DataSampler:
         Returns:
             (sampled_x, sampled_y, sampled_groups)
         """
+        # Handle edge cases
+        n = len(x)
+        if n == 0:
+            return np.array([]), np.array([]), np.array([])
+        
+        if n_samples <= 0:
+            return np.array([]), np.array([]), np.array([])
+        
+        if n_samples >= n:
+            return x.copy(), y.copy(), groups.copy()
+        
         np.random.seed(seed)
         
         unique_groups = np.unique(groups)
-        n = len(x)
         
         result_indices = []
         
@@ -196,12 +222,18 @@ class DataSampler:
             group_indices = np.where(group_mask)[0]
             group_size = len(group_indices)
             
+            if group_size == 0:
+                continue
+            
             # 그룹별 샘플 수 (비율 유지)
             group_n_samples = max(1, int(n_samples * group_size / n))
             group_n_samples = min(group_n_samples, group_size)
             
             sampled = np.random.choice(group_indices, group_n_samples, replace=False)
             result_indices.extend(sampled)
+        
+        if not result_indices:
+            return np.array([]), np.array([]), np.array([])
         
         result_indices = np.sort(result_indices)
         

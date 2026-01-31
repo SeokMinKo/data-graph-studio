@@ -213,10 +213,9 @@ class XAxisZone(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #XAxisZone {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ECFDF5, stop:1 #D1FAE5);
-                border: 1px solid #6EE7B7;
-                border-radius: 12px;
+                background: #F0FDF4;
+                border: none;
+                border-radius: 8px;
             }
         """)
     
@@ -381,7 +380,7 @@ class XAxisZone(QFrame):
 # ==================== Group Zone ====================
 
 class GroupZone(QFrame):
-    """Group Zone - Modern drag & drop zone"""
+    """Group Zone - Minimal drag & drop zone"""
     
     group_changed = Signal()
     
@@ -389,7 +388,7 @@ class GroupZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GroupZone")
-        self.setFixedWidth(150)
+        self.setFixedWidth(140)
         self.setAcceptDrops(True)
         
         self._setup_ui()
@@ -399,10 +398,9 @@ class GroupZone(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #GroupZone {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #F8FAFC, stop:1 #F1F5F9);
-                border: 1px solid #E2E8F0;
-                border-radius: 12px;
+                background: #F8FAFC;
+                border: none;
+                border-radius: 8px;
             }
         """)
     
@@ -534,7 +532,7 @@ class ValueZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("ValueZone")
-        self.setMinimumWidth(180)
+        self.setMinimumWidth(160)
         self.setAcceptDrops(True)
         
         self._setup_ui()
@@ -544,10 +542,9 @@ class ValueZone(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #ValueZone {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #FDF4FF, stop:1 #FAF5FF);
-                border: 1px solid #E9D5FF;
-                border-radius: 12px;
+                background: #FAF5FF;
+                border: none;
+                border-radius: 8px;
             }
         """)
     
@@ -651,7 +648,7 @@ class ValueZone(QFrame):
                 color: #EF4444;
             }
         """)
-        remove_btn.clicked.connect(lambda: self._remove_value(index))
+        remove_btn.clicked.connect(lambda checked=False, i=index: self._remove_value(i))
         header_row.addWidget(remove_btn)
 
         card_layout.addLayout(header_row)
@@ -680,7 +677,7 @@ class ValueZone(QFrame):
             agg_combo.addItem(agg.value.upper(), agg)
         agg_combo.setCurrentText(value_col.aggregation.value.upper())
         agg_combo.currentIndexChanged.connect(
-            lambda idx, i=index: self._on_agg_changed(i, agg_combo.currentData())
+            lambda idx, i=index, combo=agg_combo: self._on_agg_changed(i, combo.currentData())
         )
         card_layout.addWidget(agg_combo)
 
@@ -781,10 +778,9 @@ class HoverZone(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #HoverZone {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #FEF9C3, stop:1 #FEF08A);
-                border: 1px solid #FACC15;
-                border-radius: 12px;
+                background: #FEFCE8;
+                border: none;
+                border-radius: 8px;
             }
         """)
 
@@ -907,7 +903,7 @@ class HoverZone(QFrame):
 # ==================== Data Table View ====================
 
 class DataTableView(QTableView):
-    """데이터 테이블 뷰"""
+    """데이터 테이블 뷰 - Minimal Design"""
     
     column_dragged = Signal(str)
     rows_selected = Signal(list)
@@ -923,35 +919,39 @@ class DataTableView(QTableView):
         self.setSortingEnabled(True)
         self.setDragEnabled(True)
         
-        # Apply selection style
+        # Compact, clean style
         self.setStyleSheet("""
             QTableView {
                 background: white;
-                alternate-background-color: #F9FAFB;
+                alternate-background-color: #FAFAFA;
                 selection-background-color: #DBEAFE;
                 selection-color: #1E40AF;
-                gridline-color: #E5E7EB;
-                border: 1px solid #E5E7EB;
+                gridline-color: #F3F4F6;
+                border: none;
                 border-radius: 8px;
+            }
+            QTableView::item {
+                padding: 4px 8px;
             }
             QTableView::item:selected {
                 background: #DBEAFE;
                 color: #1E40AF;
             }
             QTableView::item:hover {
-                background: #EFF6FF;
+                background: #F0F9FF;
             }
             QHeaderView::section {
-                background: #F3F4F6;
+                background: #FAFAFA;
                 border: none;
                 border-bottom: 1px solid #E5E7EB;
-                border-right: 1px solid #E5E7EB;
-                padding: 8px 12px;
+                padding: 6px 8px;
                 font-weight: 600;
-                color: #374151;
+                font-size: 11px;
+                color: #6B7280;
             }
             QHeaderView::section:hover {
-                background: #E5E7EB;
+                background: #F3F4F6;
+                color: #374151;
             }
         """)
         
@@ -1133,9 +1133,9 @@ class FilterBar(QFrame):
         self.setStyleSheet("""
             #FilterBar {
                 background: #FEF3C7;
-                border: 1px solid #FCD34D;
-                border-radius: 8px;
-                padding: 4px;
+                border: none;
+                border-radius: 6px;
+                padding: 2px;
             }
         """)
     
@@ -1276,9 +1276,9 @@ class HiddenColumnsBar(QFrame):
         self.setStyleSheet("""
             #HiddenColumnsBar {
                 background: #EEF2FF;
-                border: 1px solid #C7D2FE;
-                border-radius: 8px;
-                padding: 4px;
+                border: none;
+                border-radius: 6px;
+                padding: 2px;
             }
         """)
     

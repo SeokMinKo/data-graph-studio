@@ -61,22 +61,15 @@ class AnimatedNumber(QLabel):
 
 
 class StatCard(QFrame):
-    """Modern stat card with glassmorphism effect"""
+    """Compact stat card - minimal design"""
     
     def __init__(self, icon: str, title: str, value: str = "-", subtitle: str = "", color: str = "#6366F1"):
         super().__init__()
         self.color = color
         
         self.setObjectName("StatCard")
-        self.setMinimumWidth(140)
-        self.setMaximumWidth(200)
-        
-        # Shadow effect
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 25))
-        self.setGraphicsEffect(shadow)
+        self.setMinimumWidth(100)
+        self.setMaximumWidth(160)
         
         self._setup_style()
         self._setup_ui(icon, title, value, subtitle)
@@ -84,80 +77,62 @@ class StatCard(QFrame):
     def _setup_style(self):
         self.setStyleSheet(f"""
             #StatCard {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 0.9),
-                    stop:1 rgba(249, 250, 251, 0.95));
-                border: 1px solid rgba(255, 255, 255, 0.5);
-                border-radius: 16px;
+                background: white;
+                border: none;
+                border-radius: 8px;
             }}
             #StatCard:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 1),
-                    stop:1 rgba(249, 250, 251, 1));
-                border: 1px solid {self.color}40;
+                background: #F9FAFB;
             }}
         """)
     
     def _setup_ui(self, icon: str, title: str, value: str, subtitle: str):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(4)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(2)
         
-        # Header row with icon
+        # Title row with icon
         header = QHBoxLayout()
-        header.setSpacing(8)
+        header.setSpacing(4)
         
-        # Icon badge
+        # Small icon
         icon_label = QLabel(icon)
-        icon_label.setStyleSheet(f"""
-            background-color: {self.color}15;
-            color: {self.color};
-            border-radius: 8px;
-            padding: 6px;
-            font-size: 16px;
-        """)
-        icon_label.setFixedSize(32, 32)
-        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setStyleSheet(f"font-size: 12px; background: transparent;")
         header.addWidget(icon_label)
         
         # Title
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet("""
-            color: #6B7280;
-            font-size: 11px;
+            color: #9CA3AF;
+            font-size: 10px;
             font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
             background: transparent;
             border: none;
         """)
         header.addWidget(self.title_label, 1)
         layout.addLayout(header)
         
-        # Value (large)
+        # Value (compact)
         self.value_label = QLabel(value)
         self.value_label.setStyleSheet(f"""
             color: #111827;
-            font-size: 28px;
-            font-weight: 700;
+            font-size: 18px;
+            font-weight: 600;
             background: transparent;
             border: none;
-            margin-top: 4px;
         """)
         layout.addWidget(self.value_label)
         
-        # Subtitle with trend indicator
-        if subtitle:
-            self.subtitle_label = QLabel(subtitle)
-            self.subtitle_label.setStyleSheet("""
-                color: #9CA3AF;
-                font-size: 11px;
-                background: transparent;
-                border: none;
-            """)
-            layout.addWidget(self.subtitle_label)
-        else:
-            self.subtitle_label = None
+        # Subtitle
+        self.subtitle_label = QLabel(subtitle if subtitle else "")
+        self.subtitle_label.setStyleSheet("""
+            color: #9CA3AF;
+            font-size: 9px;
+            background: transparent;
+            border: none;
+        """)
+        self.subtitle_label.setVisible(bool(subtitle))
+        layout.addWidget(self.subtitle_label)
     
     def set_value(self, value: str, subtitle: str = ""):
         self.value_label.setText(value)
@@ -233,49 +208,40 @@ class SummaryPanel(QWidget):
         self._connect_signals()
     
     def _setup_ui(self):
-        """Setup modern UI"""
-        self.setMinimumHeight(140)
-        self.setMaximumHeight(220)
+        """Setup compact UI"""
+        self.setMinimumHeight(80)
+        self.setMaximumHeight(100)
         
         # Main layout
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 12, 16, 12)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(8, 4, 8, 4)
+        main_layout.setSpacing(4)
         
         # Header with title and context
         header = QHBoxLayout()
-        header.setSpacing(12)
+        header.setSpacing(8)
 
-        # Title with icon
-        title_container = QHBoxLayout()
-        title_container.setSpacing(8)
-
-        title_icon = QLabel("📊")
-        title_icon.setStyleSheet("font-size: 18px; background: transparent;")
-        title_container.addWidget(title_icon)
-
-        title = QLabel("Overview")
+        # Title with icon - compact
+        title = QLabel("📊 Overview")
         title.setStyleSheet("""
             font-weight: 600;
-            font-size: 15px;
-            color: #111827;
+            font-size: 12px;
+            color: #374151;
             background: transparent;
         """)
-        title_container.addWidget(title)
-        header.addLayout(title_container)
+        header.addWidget(title)
 
         # Context label (shows grouping/filter info)
         self.context_label = QLabel("")
         self.context_label.setStyleSheet("""
             color: #6B7280;
-            font-size: 12px;
+            font-size: 11px;
             background: transparent;
-            padding: 4px 12px;
-            border-radius: 12px;
+            padding: 2px 8px;
+            border-radius: 8px;
         """)
         header.addWidget(self.context_label, 1)
 
-        # Quick actions (optional)
         header.addStretch()
 
         # Float button
@@ -284,31 +250,31 @@ class SummaryPanel(QWidget):
 
         main_layout.addLayout(header)
         
-        # Cards scroll area
+        # Cards scroll area - compact
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setStyleSheet("background: transparent; border: none;")
-        scroll.setMaximumHeight(140)
+        scroll.setMaximumHeight(70)
         
-        # Card container with smooth scrolling
+        # Card container
         self.card_container = QWidget()
         self.card_container.setStyleSheet("background: transparent;")
         self.card_layout = QHBoxLayout(self.card_container)
-        self.card_layout.setContentsMargins(0, 4, 0, 4)
-        self.card_layout.setSpacing(12)
+        self.card_layout.setContentsMargins(0, 0, 0, 0)
+        self.card_layout.setSpacing(8)
         
-        # Default stat cards with icons and colors
+        # Default stat cards - compact
         self.cards = {}
         self._add_card("file", "📄", "File", "-", color="#0EA5E9")
-        self._add_card("rows", "📋", "Total Rows", "-", color="#6366F1")
+        self._add_card("rows", "📋", "Rows", "-", color="#6366F1")
         self._add_card("sampled", "📊", "Sampled", "-", color="#14B8A6")
-        self._add_card("columns", "⊞", "Columns", "-", color="#8B5CF6")
-        self._add_card("numeric", "🔢", "Numeric", "-", color="#10B981")
-        self._add_card("text", "📝", "Text/Category", "-", color="#EC4899")
-        self._add_card("missing", "⚠", "Missing %", "-", color="#F59E0B")
+        self._add_card("columns", "⊞", "Cols", "-", color="#8B5CF6")
+        self._add_card("numeric", "#", "Numeric", "-", color="#10B981")
+        self._add_card("text", "A", "Text", "-", color="#EC4899")
+        self._add_card("missing", "⚠", "Missing", "-", color="#F59E0B")
         self._add_card("memory", "💾", "Memory", "-", color="#3B82F6")
         
         self.card_layout.addStretch()

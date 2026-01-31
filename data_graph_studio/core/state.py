@@ -121,6 +121,11 @@ class ToolMode(Enum):
     PAN = "pan"
     RECT_SELECT = "rect_select"
     LASSO_SELECT = "lasso_select"
+    # Drawing modes
+    LINE_DRAW = "line_draw"
+    CIRCLE_DRAW = "circle_draw"
+    RECT_DRAW = "rect_draw"
+    TEXT_DRAW = "text_draw"
 
 
 @dataclass
@@ -571,19 +576,21 @@ class AppState(QObject):
 
         단일 모드에서 활성 데이터셋 전환 시 호출됨
         """
+        import copy
         state = self._dataset_states.get(dataset_id)
         if not state:
             return
 
-        # 기존 속성들 업데이트 (하위 호환성)
+        # 기존 속성들 업데이트 (하위 호환성) - 깊은 복사 사용
         self._x_column = state.x_column
-        self._group_columns = state.group_columns
-        self._value_columns = state.value_columns
-        self._hover_columns = state.hover_columns
-        self._filters = state.filters
-        self._sorts = state.sorts
+        self._group_columns = copy.deepcopy(state.group_columns)
+        self._value_columns = copy.deepcopy(state.value_columns)
+        self._hover_columns = copy.deepcopy(state.hover_columns)
+        self._filters = copy.deepcopy(state.filters)
+        self._sorts = copy.deepcopy(state.sorts)
+        # Selection은 참조 유지 (양방향 동기화 필요)
         self._selection = state.selection
-        self._chart_settings = state.chart_settings
+        self._chart_settings = copy.deepcopy(state.chart_settings)
 
         # 시그널 발생
         self.group_zone_changed.emit()
@@ -599,19 +606,21 @@ class AppState(QObject):
 
         단일 모드에서 상태 변경 시 호출됨
         """
+        import copy
         target_id = dataset_id or self._active_dataset_id
         if not target_id or target_id not in self._dataset_states:
             return
 
         state = self._dataset_states[target_id]
         state.x_column = self._x_column
-        state.group_columns = self._group_columns
-        state.value_columns = self._value_columns
-        state.hover_columns = self._hover_columns
-        state.filters = self._filters
-        state.sorts = self._sorts
+        state.group_columns = copy.deepcopy(self._group_columns)
+        state.value_columns = copy.deepcopy(self._value_columns)
+        state.hover_columns = copy.deepcopy(self._hover_columns)
+        state.filters = copy.deepcopy(self._filters)
+        state.sorts = copy.deepcopy(self._sorts)
+        # Selection은 참조 유지 (양방향 동기화 필요)
         state.selection = self._selection
-        state.chart_settings = self._chart_settings
+        state.chart_settings = copy.deepcopy(self._chart_settings)
 
     def clear_all_datasets(self):
         """모든 데이터셋 제거"""

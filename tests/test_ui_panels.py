@@ -317,6 +317,56 @@ class TestLegendConfig:
         assert config.style == LegendStyle.HORIZONTAL
 
 
+class TestLegendSeriesSync:
+    """Legend 시리즈 동기화 테스트"""
+
+    def test_series_colors_unique(self):
+        """각 시리즈(그룹)가 고유한 색상을 갖는지 테스트"""
+        from data_graph_studio.ui.panels.color_scheme import ColorScheme
+        
+        # 5개 그룹이 있을 때 각각 고유 색상을 가져야 함
+        scheme = ColorScheme(
+            name="Test",
+            colors=["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF"]
+        )
+        
+        group_names = ["Group A", "Group B", "Group C", "Group D", "Group E"]
+        colors = [scheme.get_color(i) for i in range(len(group_names))]
+        
+        # 모든 색상이 고유해야 함
+        assert len(set(colors)) == len(group_names)
+    
+    def test_series_colors_cycle(self):
+        """그룹 수가 팔레트보다 많을 때 색상 순환 테스트"""
+        from data_graph_studio.ui.panels.color_scheme import ColorScheme
+        
+        scheme = ColorScheme(
+            name="Small",
+            colors=["#FF0000", "#00FF00", "#0000FF"]
+        )
+        
+        # 5개 그룹, 3개 색상 → 순환
+        colors = [scheme.get_color(i) for i in range(5)]
+        
+        assert colors[0] == colors[3]  # 순환
+        assert colors[1] == colors[4]
+    
+    def test_legend_visibility(self):
+        """Legend 표시/숨김 동작 테스트"""
+        config = LegendConfig()
+        
+        # 기본 표시
+        assert config.visible is True
+        
+        # 숨김
+        config.visible = False
+        assert config.visible is False
+        
+        # 다시 표시
+        config.visible = True
+        assert config.visible is True
+
+
 class TestColorScheme:
     """ColorScheme 테스트"""
 
@@ -397,3 +447,220 @@ class TestColorSchemeManager:
         manager.remove_scheme("ToRemove")
 
         assert "ToRemove" not in manager.list_schemes()
+
+
+class TestStatPanel:
+    """StatPanel 테스트 - 2x2 그리드 레이아웃 및 새 그래프"""
+
+    @pytest.fixture
+    def sample_data(self):
+        """테스트용 샘플 데이터"""
+        import numpy as np
+        np.random.seed(42)
+        return {
+            'x_data': np.random.randn(100),
+            'y_data': np.random.randn(100) * 10 + 50,
+            'group_data': {
+                'Group A': 100.0,
+                'Group B': 200.0,
+                'Group C': 150.0,
+            }
+        }
+
+    def test_stat_panel_init(self):
+        """StatPanel 초기화 테스트"""
+        from data_graph_studio.core.state import AppState
+        from data_graph_studio.ui.panels.graph_panel import StatPanel
+
+        state = AppState()
+        panel = StatPanel(state)
+
+        # 기본 속성 확인
+        assert panel is not None
+        assert panel.minimumWidth() >= 280  # compact design
+        assert panel.maximumWidth() <= 360
+
+    def test_stat_panel_widgets(self):
+        """StatPanel 4개 그래프 위젯 존재 확인"""
+        from data_graph_studio.core.state import AppState
+        from data_graph_studio.ui.panels.graph_panel import StatPanel
+
+        state = AppState()
+        panel = StatPanel(state)
+
+        # 4개 그래프 위젯 확인
+        assert hasattr(panel, 'x_hist_widget')
+        assert hasattr(panel, 'y_hist_widget')
+        assert hasattr(panel, 'pie_widget')
+        assert hasattr(panel, 'percentile_widget')
+        assert hasattr(panel, 'stats_label')
+
+    def test_stat_panel_update_histograms(self, sample_data):
+        """히스토그램 업데이트 테스트"""
+        from data_graph_studio.core.state import AppState
+        from data_graph_studio.ui.panels.graph_panel import StatPanel
+
+        state = AppState()
+        panel = StatPanel(state)
+
+        # 데이터 업데이트
+        panel.update_histograms(
+            sample_data['x_data'],
+            sample_data['y_data'],
+            sample_data['group_data']
+        )
+
+        # 데이터가 저장되었는지 확인
+        assert panel._x_data is not None
+        assert panel._y_data is not None
+        assert panel._group_data is not None
+
+    def test_stat_panel_update_stats(self):
+        """통계 업데이트 테스트"""
+        from data_graph_studio.core.state import AppState
+        from data_graph_studio.ui.panels.graph_panel import StatPanel
+
+        state = AppState()
+        panel = StatPanel(state)
+
+        stats = {
+            'mean': 50.0,
+            'median': 49.5,
+            'std': 10.0,
+            'min': 20.0,
+            'max': 80.0,
+        }
+
+        panel.update_stats(stats)
+
+        # stats_label에 값이 표시되었는지 확인
+        label_text = panel.stats_label.text()
+        assert "mean" in label_text.lower() or "50" in label_text
+
+    def test_stat_panel_set_group_data(self):
+        """Pie chart 그룹 데이터 설정 테스트"""
+        from data_graph_studio.core.state import AppState
+        from data_graph_studio.ui.panels.graph_panel import StatPanel
+
+        state = AppState()
+        panel = StatPanel(state)
+
+        group_data = {
+            'Category A': 150.0,
+            'Category B': 250.0,
+            'Category C': 100.0,
+        }
+
+        panel.set_group_data(group_data)
+
+        assert panel._group_data == group_data
+
+
+class TestExpandedChartDialog:
+    """ExpandedChartDialog 테스트 - Non-modal 동작"""
+
+    def test_expanded_chart_dialog_init(self):
+        """ExpandedChartDialog 초기화 및 non-modal 확인"""
+        from data_graph_studio.ui.panels.graph_panel import ExpandedChartDialog
+
+        dialog = ExpandedChartDialog("Test Title")
+
+        # Non-modal 확인
+        assert dialog.isModal() is False
+        assert dialog.windowTitle() == "Test Title"
+
+    def test_expanded_chart_dialog_histogram(self):
+        """히스토그램 플롯 테스트"""
+        import numpy as np
+        from data_graph_studio.ui.panels.graph_panel import ExpandedChartDialog
+
+        dialog = ExpandedChartDialog("Histogram Test")
+        data = np.random.randn(100)
+
+        # 플롯 호출 (에러 없이 실행되어야 함)
+        dialog.plot_histogram(data, "Test Histogram", (100, 100, 200, 100))
+        assert dialog.windowTitle() == "Test Histogram"
+
+    def test_expanded_chart_dialog_pie(self):
+        """Pie chart 플롯 테스트"""
+        from data_graph_studio.ui.panels.graph_panel import ExpandedChartDialog
+
+        dialog = ExpandedChartDialog("Pie Test")
+        labels = ['A', 'B', 'C']
+        values = [100, 200, 150]
+
+        # 플롯 호출 (에러 없이 실행되어야 함)
+        dialog.plot_pie_chart(labels, values, "Test Pie Chart")
+        assert dialog.windowTitle() == "Test Pie Chart"
+
+    def test_expanded_chart_dialog_percentile(self):
+        """Percentile chart 플롯 테스트"""
+        import numpy as np
+        from data_graph_studio.ui.panels.graph_panel import ExpandedChartDialog
+
+        dialog = ExpandedChartDialog("Percentile Test")
+        data = np.random.randn(100)
+
+        # 플롯 호출 (에러 없이 실행되어야 함)
+        dialog.plot_percentile(data, "Test Percentile")
+        assert dialog.windowTitle() == "Test Percentile"
+
+
+class TestClickablePlotWidget:
+    """ClickablePlotWidget 테스트 - 다양한 차트 타입 지원"""
+
+    def test_clickable_plot_widget_histogram_data(self):
+        """히스토그램 데이터 설정 테스트"""
+        import numpy as np
+        from data_graph_studio.ui.panels.graph_panel import ClickablePlotWidget
+
+        widget = ClickablePlotWidget()
+        data = np.random.randn(100)
+
+        widget.set_data(data, "Test Histogram", (100, 100, 200, 100))
+
+        assert widget._chart_type == "histogram"
+        assert widget._data is not None
+        assert widget._title == "Test Histogram"
+
+    def test_clickable_plot_widget_pie_data(self):
+        """Pie chart 데이터 설정 테스트"""
+        from data_graph_studio.ui.panels.graph_panel import ClickablePlotWidget
+
+        widget = ClickablePlotWidget()
+        labels = ['A', 'B', 'C']
+        values = [100, 200, 150]
+
+        widget.set_pie_data(labels, values, "Test Pie")
+
+        assert widget._chart_type == "pie"
+        assert widget._pie_labels == labels
+        assert widget._pie_values == values
+
+    def test_clickable_plot_widget_percentile_data(self):
+        """Percentile chart 데이터 설정 테스트"""
+        import numpy as np
+        from data_graph_studio.ui.panels.graph_panel import ClickablePlotWidget
+
+        widget = ClickablePlotWidget()
+        data = np.random.randn(100)
+
+        widget.set_percentile_data(data, "Test Percentile")
+
+        assert widget._chart_type == "percentile"
+        assert widget._data is not None
+
+
+class TestFloatWindowNonModal:
+    """FloatWindow Non-modal 동작 테스트"""
+
+    def test_float_window_is_non_modal(self):
+        """FloatWindow가 non-modal인지 테스트"""
+        from data_graph_studio.ui.floatable import FloatWindow
+        from PySide6.QtWidgets import QLabel
+
+        content = QLabel("Test Content")
+        window = FloatWindow("Test", content)
+
+        # Non-modal 확인
+        assert window.isModal() is False

@@ -250,8 +250,8 @@ class TrellisCalculator:
         # 패널 값 추출
         panel_values = data[settings.panel_column].unique().sort().to_list()
         total_panels = len(panel_values)
-        panels_per_page = settings.panels_per_page
-        total_pages = math.ceil(total_panels / panels_per_page) if panels_per_page > 0 else 1
+        panels_per_page = max(1, settings.panels_per_page)  # Ensure at least 1
+        total_pages = math.ceil(total_panels / panels_per_page) if total_panels > 0 else 1
 
         # 그리드 계산 (정사각형에 가깝게)
         n_cols = math.ceil(math.sqrt(panels_per_page))

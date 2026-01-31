@@ -262,6 +262,128 @@ class TestAutoSample:
         assert len(sampled_x) <= 2000  # min/max 경우 최대 2배
 
 
+class TestGroupAwareSampling:
+    """그룹 인식 샘플링 테스트 (GraphPanel에서 사용하는 로직)"""
+    
+    def test_group_sampling_preserves_all_groups(self):
+        """그룹별 샘플링이 모든 그룹을 보존하는지 테스트"""
+        # 3개의 그룹: A=500, B=300, C=200 (총 1000)
+        x = np.arange(1000).astype(float)
+        y = np.sin(x / 50) * 100
+        
+        groups = {
+            'A': np.array([True] * 500 + [False] * 500),
+            'B': np.array([False] * 500 + [True] * 300 + [False] * 200),
+            'C': np.array([False] * 800 + [True] * 200)
+        }
+        
+        max_points = 100
+        
+        # 그룹별 샘플링 수행 (graph_panel.py와 동일한 로직)
+        total_valid = sum(np.sum(mask) for mask in groups.values())
+        min_points_per_group = max(10, max_points // 100)
+        
+        x_sampled_list = []
+        y_sampled_list = []
+        new_groups = {}
+        current_offset = 0
+        
+        for group_name, mask in groups.items():
+            x_group = x[mask]
+            y_group = y[mask]
+            
+            if len(x_group) == 0:
+                continue
+            
+            group_ratio = len(x_group) / total_valid if total_valid > 0 else 0
+            group_points = max(min_points_per_group, int(max_points * group_ratio))
+            
+            if len(x_group) > group_points:
+                x_group_sampled, y_group_sampled = DataSampler.lttb(
+                    x_group, y_group, threshold=group_points
+                )
+            else:
+                x_group_sampled, y_group_sampled = x_group, y_group
+            
+            group_len = len(x_group_sampled)
+            x_sampled_list.append(x_group_sampled)
+            y_sampled_list.append(y_group_sampled)
+            new_groups[group_name] = (current_offset, group_len)
+            current_offset += group_len
+        
+        x_sampled = np.concatenate(x_sampled_list)
+        y_sampled = np.concatenate(y_sampled_list)
+        
+        # 새 그룹 마스크 생성
+        total_sampled = len(x_sampled)
+        final_groups = {}
+        for group_name, (offset, length) in new_groups.items():
+            mask = np.zeros(total_sampled, dtype=bool)
+            mask[offset:offset + length] = True
+            final_groups[group_name] = mask
+        
+        # 검증: 모든 그룹이 보존됨
+        assert set(final_groups.keys()) == {'A', 'B', 'C'}
+        
+        # 검증: 각 그룹이 최소 포인트 수 이상
+        for group_name, mask in final_groups.items():
+            assert np.sum(mask) >= min_points_per_group
+        
+        # 검증: 그룹 마스크가 겹치지 않음
+        combined_mask = np.zeros(total_sampled, dtype=bool)
+        for mask in final_groups.values():
+            assert not np.any(combined_mask & mask)  # 겹침 없음
+            combined_mask |= mask
+        
+        # 검증: 모든 포인트가 어떤 그룹에 속함
+        assert np.all(combined_mask)
+    
+    def test_proportional_sampling(self):
+        """그룹 크기에 비례한 샘플링 테스트"""
+        # 불균형 그룹: Large=900, Small=100
+        x = np.arange(1000).astype(float)
+        y = np.arange(1000).astype(float)
+        
+        groups = {
+            'Large': np.array([True] * 900 + [False] * 100),
+            'Small': np.array([False] * 900 + [True] * 100)
+        }
+        
+        max_points = 100
+        total_valid = 1000
+        min_points_per_group = max(10, max_points // 100)
+        
+        # 각 그룹의 할당 포인트 계산
+        large_ratio = 900 / total_valid
+        small_ratio = 100 / total_valid
+        
+        large_points = max(min_points_per_group, int(max_points * large_ratio))
+        small_points = max(min_points_per_group, int(max_points * small_ratio))
+        
+        # Large 그룹이 더 많은 포인트를 가져야 함
+        assert large_points > small_points
+        
+        # Small 그룹도 최소 포인트 수 확보
+        assert small_points >= min_points_per_group
+    
+    def test_empty_group_handling(self):
+        """빈 그룹 처리 테스트"""
+        x = np.arange(100).astype(float)
+        y = np.arange(100).astype(float)
+        
+        groups = {
+            'A': np.array([True] * 50 + [False] * 50),
+            'Empty': np.zeros(100, dtype=bool),  # 빈 그룹
+            'B': np.array([False] * 50 + [True] * 50)
+        }
+        
+        non_empty_groups = {k: v for k, v in groups.items() if np.sum(v) > 0}
+        
+        # 빈 그룹은 제외됨
+        assert 'Empty' not in non_empty_groups
+        assert len(non_empty_groups) == 2
+
+
 class TestEdgeCases:
     """엣지 케이스 테스트"""
     

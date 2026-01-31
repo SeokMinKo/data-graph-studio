@@ -196,322 +196,312 @@ class MainWindow(QMainWindow):
         return f"<b>{action_name}</b><br><span style='color: #6B7280;'>Shortcut: {shortcut}</span>"
     
     def _setup_menubar(self):
-        """메뉴바 설정"""
+        """메뉴바 설정 - 새 구조"""
         menubar = self.menuBar()
 
+        # ============================================================
         # File Menu
+        # ============================================================
         file_menu = menubar.addMenu("&File")
 
-        open_action = QAction("&Open...", self)
-        open_action.setShortcut(QKeySequence.Open)
-        open_action.setStatusTip("Open data file - CSV, Excel, Parquet, JSON (Ctrl+O)")
-        open_action.setToolTip("Open a data file\nSupports: CSV, TSV, Excel, Parquet, JSON")
-        open_action.triggered.connect(self._on_open_file)
-        file_menu.addAction(open_action)
+        # Open Data
+        open_data_action = QAction("Open &Data...", self)
+        open_data_action.setShortcut(QKeySequence.Open)
+        open_data_action.setStatusTip("Open data file - CSV, Excel, Parquet, JSON (Ctrl+O)")
+        open_data_action.triggered.connect(self._on_open_file)
+        file_menu.addAction(open_data_action)
 
-        open_multi_action = QAction("Open &Multiple Files...", self)
-        open_multi_action.setShortcut("Ctrl+Shift+O")
-        open_multi_action.setStatusTip("Open multiple files for comparison analysis")
-        open_multi_action.setToolTip("Open multiple files as separate datasets\nUseful for A/B comparison")
-        open_multi_action.triggered.connect(self._on_open_multiple_files)
-        file_menu.addAction(open_multi_action)
+        # Open Settings
+        open_settings_action = QAction("Open &Settings...", self)
+        open_settings_action.setShortcut("Ctrl+Shift+O")
+        open_settings_action.setStatusTip("Load a saved settings/profile file")
+        open_settings_action.triggered.connect(self._on_open_settings)
+        file_menu.addAction(open_settings_action)
 
-        file_menu.addSeparator()
-
-        save_project_action = QAction("&Save Project...", self)
-        save_project_action.setShortcut(QKeySequence.Save)
-        save_project_action.setStatusTip("Save current project (Ctrl+S)")
-        save_project_action.triggered.connect(self._on_save_project)
-        file_menu.addAction(save_project_action)
+        # Open Settings Bundle
+        open_bundle_action = QAction("Open Settings &Bundle...", self)
+        open_bundle_action.setStatusTip("Load a settings bundle (multiple settings)")
+        open_bundle_action.triggered.connect(self._on_open_settings_bundle)
+        file_menu.addAction(open_bundle_action)
 
         file_menu.addSeparator()
 
-        export_menu = file_menu.addMenu("&Export")
+        # Save Data
+        save_data_action = QAction("Save Data", self)
+        save_data_action.setShortcut(QKeySequence.Save)
+        save_data_action.setStatusTip("Save current data (Ctrl+S)")
+        save_data_action.triggered.connect(self._on_save_data)
+        file_menu.addAction(save_data_action)
 
-        export_csv = QAction("Export as CSV...", self)
-        export_csv.setShortcut("Ctrl+E")
-        export_csv.setStatusTip("Export data as CSV file")
-        export_csv.triggered.connect(lambda: self._on_export("csv"))
-        export_menu.addAction(export_csv)
+        # Save Data As
+        save_data_as_action = QAction("Save Data As...", self)
+        save_data_as_action.setShortcut("Ctrl+Shift+S")
+        save_data_as_action.setStatusTip("Save current data to a new file")
+        save_data_as_action.triggered.connect(self._on_save_data_as)
+        file_menu.addAction(save_data_as_action)
 
-        export_excel = QAction("Export as Excel...", self)
-        export_excel.setStatusTip("Export data as Excel file")
-        export_excel.triggered.connect(lambda: self._on_export("excel"))
-        export_menu.addAction(export_excel)
+        # Save Settings
+        save_settings_action = QAction("Save Settings", self)
+        save_settings_action.setStatusTip("Save current settings/profile")
+        save_settings_action.triggered.connect(self._on_save_settings)
+        file_menu.addAction(save_settings_action)
 
-        export_image = QAction("Export Graph as PNG...", self)
-        export_image.setStatusTip("Export current graph as PNG image")
-        export_image.triggered.connect(lambda: self._on_export("png"))
-        export_menu.addAction(export_image)
+        # Save Settings As
+        save_settings_as_action = QAction("Save Settings As...", self)
+        save_settings_as_action.setStatusTip("Save current settings to a new file")
+        save_settings_as_action.triggered.connect(self._on_save_settings_as)
+        file_menu.addAction(save_settings_as_action)
 
-        file_menu.addSeparator()
+        # Save Settings Bundle
+        save_bundle_action = QAction("Save Settings Bundle", self)
+        save_bundle_action.setStatusTip("Save current settings bundle")
+        save_bundle_action.triggered.connect(self._on_save_settings_bundle)
+        file_menu.addAction(save_bundle_action)
 
-        # Profile submenu
-        profile_menu = file_menu.addMenu("&Profile")
-
-        new_profile_action = QAction("New Profile", self)
-        new_profile_action.setStatusTip("Create a new profile")
-        new_profile_action.triggered.connect(self._on_new_profile_menu)
-        profile_menu.addAction(new_profile_action)
-
-        load_profile_action = QAction("Load Profile...", self)
-        load_profile_action.setShortcut("Ctrl+Shift+O")
-        load_profile_action.setStatusTip("Load a profile file")
-        load_profile_action.triggered.connect(self._on_load_profile_menu)
-        profile_menu.addAction(load_profile_action)
-
-        save_profile_action = QAction("Save Profile...", self)
-        save_profile_action.setShortcut("Ctrl+Shift+S")
-        save_profile_action.setStatusTip("Save current profile")
-        save_profile_action.triggered.connect(self._on_save_profile_menu)
-        profile_menu.addAction(save_profile_action)
-
-        profile_menu.addSeparator()
-
-        manage_profiles_action = QAction("Manage Profiles...", self)
-        manage_profiles_action.setStatusTip("Open profile manager")
-        manage_profiles_action.triggered.connect(self._show_profile_manager)
-        profile_menu.addAction(manage_profiles_action)
+        # Save Settings Bundle As
+        save_bundle_as_action = QAction("Save Settings Bundle As...", self)
+        save_bundle_as_action.setStatusTip("Save current settings bundle to a new file")
+        save_bundle_as_action.triggered.connect(self._on_save_settings_bundle_as)
+        file_menu.addAction(save_bundle_as_action)
 
         file_menu.addSeparator()
 
+        # Export Report
+        export_report_action = QAction("&Export Report...", self)
+        export_report_action.setShortcut("Ctrl+R")
+        export_report_action.setStatusTip("Export data and charts as a report")
+        export_report_action.triggered.connect(self._on_export_report)
+        file_menu.addAction(export_report_action)
+
+        # Import
+        import_action = QAction("&Import...", self)
+        import_action.setShortcut("Ctrl+I")
+        import_action.setStatusTip("Import data from various sources")
+        import_action.triggered.connect(self._on_import_data)
+        file_menu.addAction(import_action)
+
+        file_menu.addSeparator()
+
+        # Recent Files submenu
+        self._recent_files_menu = file_menu.addMenu("Recent Files")
+        self._recent_files_menu.setStatusTip("Recently opened files")
+        self._update_recent_files_menu()
+
+        file_menu.addSeparator()
+
+        # Exit
         exit_action = QAction("E&xit", self)
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.setStatusTip("Exit application (Ctrl+Q)")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
-        
-        # Edit Menu
-        edit_menu = menubar.addMenu("&Edit")
-        
-        undo_action = QAction("&Undo", self)
-        undo_action.setShortcut(QKeySequence.Undo)
-        edit_menu.addAction(undo_action)
-        
-        redo_action = QAction("&Redo", self)
-        redo_action.setShortcut(QKeySequence.Redo)
-        edit_menu.addAction(redo_action)
-        
-        edit_menu.addSeparator()
-        
-        # Clipboard operations
-        paste_data_action = QAction("&Paste Data", self)
-        paste_data_action.setShortcut(QKeySequence.Paste)
-        paste_data_action.setToolTip("Paste table data from clipboard (Excel, Google Sheets)")
-        paste_data_action.triggered.connect(self._paste_from_clipboard)
-        edit_menu.addAction(paste_data_action)
-        
-        copy_selection_action = QAction("&Copy Selection", self)
-        copy_selection_action.setShortcut(QKeySequence.Copy)
-        copy_selection_action.setToolTip("Copy selected table cells")
-        copy_selection_action.triggered.connect(self._copy_selection_to_clipboard)
-        edit_menu.addAction(copy_selection_action)
-        
-        copy_graph_action = QAction("Copy &Graph as Image", self)
-        copy_graph_action.setShortcut("Ctrl+Shift+C")
-        copy_graph_action.setToolTip("Copy current graph to clipboard as image")
-        copy_graph_action.triggered.connect(self._copy_graph_to_clipboard)
-        edit_menu.addAction(copy_graph_action)
-        
-        edit_menu.addSeparator()
-        
-        clear_selection = QAction("Clear Selection", self)
-        clear_selection.setShortcut(Qt.Key_Escape)
-        clear_selection.triggered.connect(self.state.clear_selection)
-        edit_menu.addAction(clear_selection)
-        
-        select_all = QAction("Select All", self)
-        select_all.setShortcut(QKeySequence.SelectAll)
-        select_all.triggered.connect(self.state.select_all)
-        edit_menu.addAction(select_all)
-        
+
+        # ============================================================
         # View Menu
+        # ============================================================
         view_menu = menubar.addMenu("&View")
 
-        reset_layout = QAction("Reset Layout", self)
-        reset_layout.triggered.connect(self._reset_layout)
-        view_menu.addAction(reset_layout)
-
-        view_menu.addSeparator()
-
-        # Views submenu - Toggle panels visibility
-        views_submenu = view_menu.addMenu("Views")
-
+        # Overview (checkbox)
         self._view_actions = {}
-
-        # Overview panel toggle
-        overview_action = QAction("Overview", self)
+        overview_action = QAction("&Overview", self)
         overview_action.setCheckable(True)
         overview_action.setChecked(True)
+        overview_action.setStatusTip("Toggle Overview/Summary panel visibility")
         overview_action.triggered.connect(lambda checked: self._toggle_panel_visibility("summary", checked))
-        views_submenu.addAction(overview_action)
+        view_menu.addAction(overview_action)
         self._view_actions["summary"] = overview_action
 
-        # Graph panel toggle
-        graph_action = QAction("Graph", self)
-        graph_action.setCheckable(True)
-        graph_action.setChecked(True)
-        graph_action.triggered.connect(lambda checked: self._toggle_panel_visibility("graph", checked))
-        views_submenu.addAction(graph_action)
-        self._view_actions["graph"] = graph_action
+        # Graph Elements submenu
+        graph_elements_menu = view_menu.addMenu("&Graph Elements")
+        
+        self._graph_element_actions = {}
+        
+        legend_action = QAction("Legend", self)
+        legend_action.setCheckable(True)
+        legend_action.setChecked(True)
+        legend_action.triggered.connect(self._on_toggle_legend)
+        graph_elements_menu.addAction(legend_action)
+        self._graph_element_actions["legend"] = legend_action
+        self._show_legend_action = legend_action
+        
+        grid_action = QAction("Grid", self)
+        grid_action.setCheckable(True)
+        grid_action.setChecked(True)
+        grid_action.triggered.connect(self._on_toggle_grid)
+        graph_elements_menu.addAction(grid_action)
+        self._graph_element_actions["grid"] = grid_action
+        self._show_grid_action = grid_action
+        
+        statistics_overlay_action = QAction("Statistics Overlay", self)
+        statistics_overlay_action.setCheckable(True)
+        statistics_overlay_action.setChecked(False)
+        statistics_overlay_action.triggered.connect(self._on_toggle_statistics_overlay)
+        graph_elements_menu.addAction(statistics_overlay_action)
+        self._graph_element_actions["statistics_overlay"] = statistics_overlay_action
+        
+        axis_labels_action = QAction("Axis Labels", self)
+        axis_labels_action.setCheckable(True)
+        axis_labels_action.setChecked(True)
+        axis_labels_action.triggered.connect(self._on_toggle_axis_labels)
+        graph_elements_menu.addAction(axis_labels_action)
+        self._graph_element_actions["axis_labels"] = axis_labels_action
 
-        # Table panel toggle
-        table_action = QAction("Table", self)
-        table_action.setCheckable(True)
-        table_action.setChecked(True)
-        table_action.triggered.connect(lambda checked: self._toggle_panel_visibility("table", checked))
-        views_submenu.addAction(table_action)
-        self._view_actions["table"] = table_action
+        # Table Elements submenu
+        table_elements_menu = view_menu.addMenu("&Table Elements")
+        
+        self._table_element_actions = {}
+        
+        row_numbers_action = QAction("Row Numbers", self)
+        row_numbers_action.setCheckable(True)
+        row_numbers_action.setChecked(True)
+        row_numbers_action.triggered.connect(self._on_toggle_row_numbers)
+        table_elements_menu.addAction(row_numbers_action)
+        self._table_element_actions["row_numbers"] = row_numbers_action
+        
+        column_headers_action = QAction("Column Headers", self)
+        column_headers_action.setCheckable(True)
+        column_headers_action.setChecked(True)
+        column_headers_action.triggered.connect(self._on_toggle_column_headers)
+        table_elements_menu.addAction(column_headers_action)
+        self._table_element_actions["column_headers"] = column_headers_action
+        
+        filter_bar_action = QAction("Filter Bar", self)
+        filter_bar_action.setCheckable(True)
+        filter_bar_action.setChecked(False)
+        filter_bar_action.triggered.connect(self._on_toggle_filter_bar)
+        table_elements_menu.addAction(filter_bar_action)
+        self._table_element_actions["filter_bar"] = filter_bar_action
 
         view_menu.addSeparator()
 
-        # Chart Type submenu
-        chart_menu = view_menu.addMenu("Chart Type")
+        # Multi-Grid View
+        multi_grid_action = QAction("&Multi-Grid View", self)
+        multi_grid_action.setShortcut("Ctrl+M")
+        multi_grid_action.setStatusTip("Display multiple graphs in a grid layout")
+        multi_grid_action.triggered.connect(self._on_multi_grid_view)
+        view_menu.addAction(multi_grid_action)
+
+        view_menu.addSeparator()
+
+        # Theme submenu
+        theme_menu = view_menu.addMenu("&Theme")
+        self._theme_actions = {}
+
+        light_theme_action = QAction("Light", self)
+        light_theme_action.setCheckable(True)
+        light_theme_action.setChecked(True)
+        light_theme_action.triggered.connect(lambda: self._on_theme_changed("light"))
+        theme_menu.addAction(light_theme_action)
+        self._theme_actions["light"] = light_theme_action
+
+        dark_theme_action = QAction("Dark", self)
+        dark_theme_action.setCheckable(True)
+        dark_theme_action.triggered.connect(lambda: self._on_theme_changed("dark"))
+        theme_menu.addAction(dark_theme_action)
+        self._theme_actions["dark"] = dark_theme_action
+
+        midnight_theme_action = QAction("Midnight", self)
+        midnight_theme_action.setCheckable(True)
+        midnight_theme_action.triggered.connect(lambda: self._on_theme_changed("midnight"))
+        theme_menu.addAction(midnight_theme_action)
+        self._theme_actions["midnight"] = midnight_theme_action
+
+        # ============================================================
+        # Data Menu
+        # ============================================================
+        data_menu = menubar.addMenu("&Data")
+
+        # Add Calculated Field
+        add_calc_field_action = QAction("&Add Calculated Field...", self)
+        add_calc_field_action.setShortcut("Ctrl+Alt+F")
+        add_calc_field_action.setStatusTip("Add a new calculated column based on expression")
+        add_calc_field_action.triggered.connect(self._on_add_calculated_field)
+        data_menu.addAction(add_calc_field_action)
+
+        # Remove Field
+        remove_field_action = QAction("&Remove Field...", self)
+        remove_field_action.setStatusTip("Remove a field/column from the data")
+        remove_field_action.triggered.connect(self._on_remove_field)
+        data_menu.addAction(remove_field_action)
+
+        # ============================================================
+        # Graph Menu
+        # ============================================================
+        graph_menu = menubar.addMenu("&Graph")
+
+        # Statistics submenu
+        statistics_menu = graph_menu.addMenu("&Statistics")
+
+        histogram_bins_action = QAction("&Histogram Bins...", self)
+        histogram_bins_action.setStatusTip("Set the number of bins for histograms")
+        histogram_bins_action.triggered.connect(self._on_set_both_bins)
+        statistics_menu.addAction(histogram_bins_action)
+
+        # Options submenu
+        options_menu = graph_menu.addMenu("&Options")
+
+        # Chart Type submenu within Options
+        chart_type_menu = options_menu.addMenu("Chart &Type")
         for chart_type in ChartType:
             action = QAction(chart_type.value.title(), self)
             action.triggered.connect(lambda checked, ct=chart_type: self.state.set_chart_type(ct))
-            chart_menu.addAction(action)
+            chart_type_menu.addAction(action)
 
-        view_menu.addSeparator()
+        options_menu.addSeparator()
 
-        # Comparison Mode submenu
-        compare_menu = view_menu.addMenu("Comparison Mode")
+        # Axis settings
+        axis_settings_action = QAction("&Axis Settings...", self)
+        axis_settings_action.setStatusTip("Configure axis range, labels, and scale")
+        axis_settings_action.triggered.connect(self._on_axis_settings)
+        options_menu.addAction(axis_settings_action)
 
-        self._comparison_mode_actions = {}
+        # Curve fitting
+        curve_fitting_action = QAction("&Curve Fitting...", self)
+        curve_fitting_action.setStatusTip("Configure curve fitting options")
+        curve_fitting_action.triggered.connect(self._on_curve_fitting)
+        options_menu.addAction(curve_fitting_action)
 
-        single_action = QAction("Single Dataset", self)
-        single_action.setShortcut("Ctrl+1")
-        single_action.setStatusTip("Show single dataset (Ctrl+1)")
-        single_action.setCheckable(True)
-        single_action.setChecked(True)
-        single_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.SINGLE))
-        compare_menu.addAction(single_action)
-        self._comparison_mode_actions[ComparisonMode.SINGLE] = single_action
-
-        overlay_action = QAction("Overlay", self)
-        overlay_action.setShortcut("Ctrl+2")
-        overlay_action.setStatusTip("Overlay datasets on same graph (Ctrl+2)")
-        overlay_action.setCheckable(True)
-        overlay_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.OVERLAY))
-        compare_menu.addAction(overlay_action)
-        self._comparison_mode_actions[ComparisonMode.OVERLAY] = overlay_action
-
-        side_by_side_action = QAction("Side by Side", self)
-        side_by_side_action.setShortcut("Ctrl+3")
-        side_by_side_action.setStatusTip("Show datasets side by side (Ctrl+3)")
-        side_by_side_action.setCheckable(True)
-        side_by_side_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.SIDE_BY_SIDE))
-        compare_menu.addAction(side_by_side_action)
-        self._comparison_mode_actions[ComparisonMode.SIDE_BY_SIDE] = side_by_side_action
-
-        difference_action = QAction("Difference Analysis", self)
-        difference_action.setShortcut("Ctrl+4")
-        difference_action.setStatusTip("Show difference analysis (Ctrl+4)")
-        difference_action.setCheckable(True)
-        difference_action.triggered.connect(lambda: self._set_comparison_mode(ComparisonMode.DIFFERENCE))
-        compare_menu.addAction(difference_action)
-        self._comparison_mode_actions[ComparisonMode.DIFFERENCE] = difference_action
-
-        compare_menu.addSeparator()
-
-        compare_stats_action = QAction("Comparison Statistics...", self)
-        compare_stats_action.setShortcut("Ctrl+Shift+C")
-        compare_stats_action.setStatusTip("Show comparison statistics panel (Ctrl+Shift+C)")
-        compare_stats_action.triggered.connect(self._show_comparison_stats_panel)
-        compare_menu.addAction(compare_stats_action)
-
-        export_report_action = QAction("Export Comparison Report...", self)
-        export_report_action.setStatusTip("Export comparison report as HTML, JSON, or CSV")
-        export_report_action.triggered.connect(self._on_export_comparison_report)
-        compare_menu.addAction(export_report_action)
-
-        # Help Menu
-        help_menu = menubar.addMenu("&Help")
-        
-        # Quick Start Guide
-        quick_start_action = QAction("📚 &Quick Start Guide", self)
-        quick_start_action.setShortcut("F1")
-        quick_start_action.setToolTip("Learn how to use Data Graph Studio")
-        quick_start_action.triggered.connect(self._show_quick_start)
-        help_menu.addAction(quick_start_action)
-        
-        # Keyboard Shortcuts
-        shortcuts_action = QAction("⌨️ &Keyboard Shortcuts", self)
-        shortcuts_action.setShortcut("Ctrl+/")
-        shortcuts_action.setToolTip("View all keyboard shortcuts")
-        shortcuts_action.triggered.connect(self._show_shortcuts)
-        help_menu.addAction(shortcuts_action)
-        
-        # Tips & Tricks
-        tips_action = QAction("💡 Tips && Tricks", self)
-        tips_action.setToolTip("Useful tips for power users")
-        tips_action.triggered.connect(self._show_tips)
-        help_menu.addAction(tips_action)
-        
-        help_menu.addSeparator()
-        
-        # Documentation (online)
-        docs_action = QAction("📖 Online Documentation", self)
-        docs_action.setToolTip("Open documentation in browser")
-        docs_action.triggered.connect(lambda: self._open_url("https://github.com/SeokMinKo/data-graph-studio#readme"))
-        help_menu.addAction(docs_action)
-        
-        # GitHub
-        github_action = QAction("🐙 GitHub Repository", self)
-        github_action.setToolTip("View source code and report issues")
-        github_action.triggered.connect(lambda: self._open_url("https://github.com/SeokMinKo/data-graph-studio"))
-        help_menu.addAction(github_action)
-        
-        help_menu.addSeparator()
-        
-        # What's New
-        whats_new_action = QAction("🆕 What's New in v0.2", self)
-        whats_new_action.triggered.connect(self._show_whats_new)
-        help_menu.addAction(whats_new_action)
-        
-        help_menu.addSeparator()
-        
-        # About
-        about_action = QAction("ℹ️ &About", self)
-        about_action.setToolTip("About Data Graph Studio")
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
+        # Trend line
+        trend_line_action = QAction("Add &Trend Line...", self)
+        trend_line_action.setStatusTip("Add a trend line to the current graph")
+        trend_line_action.triggered.connect(self._on_add_trend_line)
+        options_menu.addAction(trend_line_action)
     
     def _setup_toolbar(self):
-        """Modern toolbar setup"""
+        """Compact toolbar setup"""
         toolbar = QToolBar("Main Toolbar")
         toolbar.setMovable(False)
-        toolbar.setIconSize(QSize(20, 20))
+        toolbar.setIconSize(QSize(16, 16))
         toolbar.setStyleSheet("""
             QToolBar {
-                background: white;
+                background: #FAFAFA;
                 border: none;
                 border-bottom: 1px solid #E5E7EB;
-                padding: 8px 16px;
-                spacing: 4px;
+                padding: 4px 8px;
+                spacing: 2px;
             }
             QToolBar::separator {
                 width: 1px;
                 background: #E5E7EB;
-                margin: 6px 12px;
+                margin: 4px 8px;
             }
             QToolButton {
                 background: transparent;
                 border: none;
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-size: 13px;
+                border-radius: 6px;
+                padding: 6px 8px;
+                font-size: 12px;
                 color: #374151;
             }
             QToolButton:hover {
-                background: #F3F4F6;
+                background: #E5E7EB;
             }
             QToolButton:checked {
-                background: #EEF2FF;
-                color: #4338CA;
+                background: #DBEAFE;
+                color: #1D4ED8;
             }
             QToolButton:pressed {
-                background: #E0E7FF;
+                background: #BFDBFE;
             }
         """)
         self.addToolBar(toolbar)
@@ -544,6 +534,29 @@ class MainWindow(QMainWindow):
         
         # Default to Pan
         self._tool_actions[ToolMode.PAN].setChecked(True)
+
+        toolbar.addSeparator()
+
+        # Draw tools label
+        draw_label = QLabel("  Draw: ")
+        draw_label.setStyleSheet("color: #6B7280; font-size: 12px;")
+        toolbar.addWidget(draw_label)
+
+        # Drawing tools
+        draw_tools = [
+            (ToolMode.LINE_DRAW, "🖊️", "Line Draw", "Shift+L"),
+            (ToolMode.CIRCLE_DRAW, "⭕", "Circle Draw", "Shift+C"),
+            (ToolMode.RECT_DRAW, "▢", "Rectangle Draw", "Shift+R"),
+            (ToolMode.TEXT_DRAW, "📝", "Text Draw", "Shift+T"),
+        ]
+
+        for mode, icon, name, shortcut in draw_tools:
+            action = QAction(f"{icon}", self)
+            action.setToolTip(self._format_tooltip(name, shortcut))
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, m=mode: self.state.set_tool_mode(m))
+            toolbar.addAction(action)
+            self._tool_actions[mode] = action
 
         toolbar.addSeparator()
 
@@ -725,16 +738,17 @@ class MainWindow(QMainWindow):
                 self.main_splitter.addWidget(panel)
                 panel.show()
 
-        # Set sizes
+        # Set sizes - optimized ratios
         total_height = self.main_splitter.height()
         if total_height == 0:
             total_height = 800  # 기본값
 
+        # More space for graph and table, compact summary and profile bar
         sizes = [
-            int(total_height * 0.08),   # Summary
-            120,                         # Profile Bar (고정 높이)
-            int(total_height * 0.42),   # Graph
-            int(total_height * 0.42),   # Table
+            80,                          # Summary - compact
+            100,                         # Profile Bar (고정 높이)
+            int(total_height * 0.45),   # Graph - larger
+            int(total_height * 0.45),   # Table - larger
         ]
         self.main_splitter.setSizes(sizes)
 
@@ -1651,6 +1665,46 @@ class MainWindow(QMainWindow):
         msg.setText(shortcuts)
         msg.setIcon(QMessageBox.Information)
         msg.exec()
+    
+    def _on_set_x_bins(self):
+        """Set X-axis histogram bins"""
+        current_bins = 30
+        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+            current_bins = self.graph_panel.stat_panel._x_bins
+        
+        value, ok = QInputDialog.getInt(
+            self, "Set X Bins", "Number of bins for X-axis histogram:",
+            current_bins, 5, 200, 5
+        )
+        if ok and hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+            self.graph_panel.stat_panel.x_bins_spin.setValue(value)
+    
+    def _on_set_y_bins(self):
+        """Set Y-axis histogram bins"""
+        current_bins = 30
+        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+            current_bins = self.graph_panel.stat_panel._y_bins
+        
+        value, ok = QInputDialog.getInt(
+            self, "Set Y Bins", "Number of bins for Y-axis histogram:",
+            current_bins, 5, 200, 5
+        )
+        if ok and hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+            self.graph_panel.stat_panel.y_bins_spin.setValue(value)
+    
+    def _on_set_both_bins(self):
+        """Set both X and Y histogram bins"""
+        current_bins = 30
+        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+            current_bins = self.graph_panel.stat_panel._x_bins
+        
+        value, ok = QInputDialog.getInt(
+            self, "Set Bins", "Number of bins for both histograms:",
+            current_bins, 5, 200, 5
+        )
+        if ok and hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+            self.graph_panel.stat_panel.x_bins_spin.setValue(value)
+            self.graph_panel.stat_panel.y_bins_spin.setValue(value)
     
     def _show_tips(self):
         """Tips & Tricks 다이얼로그"""
@@ -2780,3 +2834,625 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self.statusBar().showMessage("No selection to copy", 3000)
         except Exception as e:
             self.statusBar().showMessage(f"Copy error: {e}", 3000)
+
+    # ==================== New Menu Actions ====================
+
+    def _update_recent_files_menu(self):
+        """최근 파일 메뉴 업데이트"""
+        self._recent_files_menu.clear()
+        
+        # 최근 파일 목록 로드 (최대 10개)
+        recent_files = self._get_recent_files()
+        
+        if not recent_files:
+            no_files_action = QAction("(No recent files)", self)
+            no_files_action.setEnabled(False)
+            self._recent_files_menu.addAction(no_files_action)
+        else:
+            for file_path in recent_files[:10]:
+                action = QAction(Path(file_path).name, self)
+                action.setToolTip(file_path)
+                action.setStatusTip(file_path)
+                action.triggered.connect(lambda checked, fp=file_path: self._open_recent_file(fp))
+                self._recent_files_menu.addAction(action)
+            
+            self._recent_files_menu.addSeparator()
+            clear_action = QAction("Clear Recent Files", self)
+            clear_action.triggered.connect(self._clear_recent_files)
+            self._recent_files_menu.addAction(clear_action)
+
+    def _get_recent_files(self) -> List[str]:
+        """최근 파일 목록 가져오기"""
+        try:
+            recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
+            if recent_file_path.exists():
+                with open(recent_file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return [f for f in data.get('files', []) if Path(f).exists()]
+        except Exception:
+            pass
+        return []
+
+    def _add_to_recent_files(self, file_path: str):
+        """최근 파일에 추가"""
+        try:
+            recent_dir = Path.home() / ".data_graph_studio"
+            recent_dir.mkdir(parents=True, exist_ok=True)
+            recent_file_path = recent_dir / "recent_files.json"
+            
+            recent_files = self._get_recent_files()
+            # 중복 제거 후 맨 앞에 추가
+            if file_path in recent_files:
+                recent_files.remove(file_path)
+            recent_files.insert(0, file_path)
+            # 최대 20개 유지
+            recent_files = recent_files[:20]
+            
+            with open(recent_file_path, 'w', encoding='utf-8') as f:
+                json.dump({'files': recent_files}, f, ensure_ascii=False, indent=2)
+            
+            self._update_recent_files_menu()
+        except Exception as e:
+            logger.debug(f"Failed to add to recent files: {e}")
+
+    def _open_recent_file(self, file_path: str):
+        """최근 파일 열기"""
+        if Path(file_path).exists():
+            self._show_parsing_preview(file_path)
+        else:
+            QMessageBox.warning(self, "File Not Found", f"File no longer exists:\n{file_path}")
+            self._update_recent_files_menu()
+
+    def _clear_recent_files(self):
+        """최근 파일 목록 지우기"""
+        try:
+            recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
+            if recent_file_path.exists():
+                recent_file_path.unlink()
+            self._update_recent_files_menu()
+            self.statusbar.showMessage("Recent files cleared", 3000)
+        except Exception as e:
+            logger.debug(f"Failed to clear recent files: {e}")
+
+    def _on_import_from_clipboard(self):
+        """클립보드에서 데이터 직접 임포트"""
+        self._paste_from_clipboard()
+
+    def _on_find_data(self):
+        """데이터 검색 다이얼로그"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Find", "No data loaded.")
+            return
+        
+        text, ok = QInputDialog.getText(
+            self, "Find Data", "Search for:",
+            text=""
+        )
+        if ok and text.strip():
+            # 테이블 패널에 검색 요청
+            if hasattr(self.table_panel, 'find_text'):
+                found = self.table_panel.find_text(text.strip())
+                if found:
+                    self.statusbar.showMessage(f"Found matches for '{text}'", 3000)
+                else:
+                    self.statusbar.showMessage(f"No matches found for '{text}'", 3000)
+            else:
+                self.statusbar.showMessage("Search functionality not available", 3000)
+
+    def _on_goto_row(self):
+        """특정 행으로 이동"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Go to Row", "No data loaded.")
+            return
+        
+        max_row = self.engine.row_count
+        row, ok = QInputDialog.getInt(
+            self, "Go to Row", f"Enter row number (1-{max_row}):",
+            value=1, min=1, max=max_row
+        )
+        if ok:
+            if hasattr(self.table_panel, 'goto_row'):
+                self.table_panel.goto_row(row - 1)  # 0-indexed
+                self.statusbar.showMessage(f"Jumped to row {row}", 3000)
+            else:
+                self.statusbar.showMessage("Go to row functionality not available", 3000)
+
+    def _on_filter_data(self):
+        """필터 패널 토글"""
+        # 필터 패널이 있으면 토글, 없으면 생성
+        if hasattr(self, 'filter_panel') and self.filter_panel:
+            self.filter_panel.setVisible(not self.filter_panel.isVisible())
+        else:
+            self.statusbar.showMessage("Filter panel toggled", 3000)
+            # 필터 패널이 없는 경우 그래프 패널의 필터 기능 활성화
+            if hasattr(self.graph_panel, 'toggle_filter'):
+                self.graph_panel.toggle_filter()
+
+    def _on_sort_data(self):
+        """정렬 다이얼로그"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Sort", "No data loaded.")
+            return
+        
+        columns = self.engine.columns
+        column, ok = QInputDialog.getItem(
+            self, "Sort Data", "Select column to sort by:",
+            columns, 0, False
+        )
+        if ok and column:
+            # 정렬 순서 선택
+            orders = ["Ascending", "Descending"]
+            order, ok2 = QInputDialog.getItem(
+                self, "Sort Order", "Select sort order:",
+                orders, 0, False
+            )
+            if ok2:
+                ascending = (order == "Ascending")
+                self.statusbar.showMessage(f"Sorted by '{column}' ({order})", 3000)
+                # TODO: 실제 정렬 구현
+                # self.engine.sort_data(column, ascending)
+                # self._on_data_loaded()
+
+    def _on_add_calculated_field(self):
+        """계산 필드 추가 다이얼로그"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Add Calculated Field", "No data loaded.")
+            return
+        
+        QMessageBox.information(
+            self, "Add Calculated Field",
+            "Calculated field dialog will be implemented.\n\n"
+            "This feature allows you to create new columns based on expressions."
+        )
+
+    def _on_remove_duplicates(self):
+        """중복 제거"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Remove Duplicates", "No data loaded.")
+            return
+        
+        reply = QMessageBox.question(
+            self, "Remove Duplicates",
+            f"This will remove duplicate rows from the data.\n"
+            f"Current rows: {self.engine.row_count:,}\n\n"
+            f"Continue?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            # TODO: 실제 중복 제거 구현
+            self.statusbar.showMessage("Duplicate removal feature coming soon", 3000)
+
+    def _on_data_summary(self):
+        """데이터 요약 다이얼로그"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Data Summary", "No data loaded.")
+            return
+        
+        # 간단한 요약 정보 표시
+        summary = f"""
+        <h2>Data Summary</h2>
+        <table>
+            <tr><td><b>Rows:</b></td><td>{self.engine.row_count:,}</td></tr>
+            <tr><td><b>Columns:</b></td><td>{self.engine.column_count}</td></tr>
+        </table>
+        <h3>Columns:</h3>
+        <ul>
+        """
+        for col in self.engine.columns[:20]:  # 최대 20개만 표시
+            summary += f"<li>{col}</li>"
+        if len(self.engine.columns) > 20:
+            summary += f"<li>... and {len(self.engine.columns) - 20} more</li>"
+        summary += "</ul>"
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Data Summary")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(summary)
+        msg.setIcon(QMessageBox.Information)
+        msg.exec()
+
+    def _on_zoom_in(self):
+        """줌 인"""
+        if hasattr(self.graph_panel, 'zoom_in'):
+            self.graph_panel.zoom_in()
+        else:
+            self.statusbar.showMessage("Zoom in", 2000)
+
+    def _on_zoom_out(self):
+        """줌 아웃"""
+        if hasattr(self.graph_panel, 'zoom_out'):
+            self.graph_panel.zoom_out()
+        else:
+            self.statusbar.showMessage("Zoom out", 2000)
+
+    def _on_toggle_fullscreen(self):
+        """전체 화면 토글"""
+        if self.isFullScreen():
+            self.showNormal()
+            self._fullscreen_action.setChecked(False)
+        else:
+            self.showFullScreen()
+            self._fullscreen_action.setChecked(True)
+
+    def _on_theme_changed(self, theme_id: str):
+        """테마 변경"""
+        from .theme import ThemeManager
+        
+        # 테마 액션 상태 업데이트
+        for tid, action in self._theme_actions.items():
+            action.setChecked(tid == theme_id)
+        
+        # 테마 적용
+        if not hasattr(self, '_theme_manager'):
+            self._theme_manager = ThemeManager()
+        
+        self._theme_manager.set_theme(theme_id)
+        stylesheet = self._theme_manager.generate_stylesheet()
+        QApplication.instance().setStyleSheet(stylesheet)
+        
+        self.statusbar.showMessage(f"Theme changed to {theme_id.title()}", 3000)
+
+    def _on_toggle_grid(self, checked: bool):
+        """그리드 표시 토글"""
+        if hasattr(self.graph_panel, 'set_grid_visible'):
+            self.graph_panel.set_grid_visible(checked)
+        self.statusbar.showMessage(f"Grid {'shown' if checked else 'hidden'}", 2000)
+
+    def _on_toggle_legend(self, checked: bool):
+        """범례 표시 토글"""
+        if hasattr(self.graph_panel, 'set_legend_visible'):
+            self.graph_panel.set_legend_visible(checked)
+        self.statusbar.showMessage(f"Legend {'shown' if checked else 'hidden'}", 2000)
+
+    def _on_add_trend_line(self):
+        """추세선 추가"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Add Trend Line", "No data loaded.")
+            return
+        
+        types = ["Linear", "Polynomial (2nd)", "Polynomial (3rd)", "Exponential", "Logarithmic"]
+        trend_type, ok = QInputDialog.getItem(
+            self, "Add Trend Line", "Select trend line type:",
+            types, 0, False
+        )
+        if ok:
+            self.statusbar.showMessage(f"Adding {trend_type} trend line...", 3000)
+            # TODO: 실제 추세선 추가 구현
+            # self.graph_panel.add_trend_line(trend_type)
+
+    def _on_curve_fitting(self):
+        """곡선 피팅 설정"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Curve Fitting", "No data loaded.")
+            return
+        
+        QMessageBox.information(
+            self, "Curve Fitting",
+            "Curve fitting dialog will be implemented.\n\n"
+            "This feature allows you to fit various curves to your data."
+        )
+
+    def _on_calculate_statistics(self):
+        """통계 계산 트리거"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Calculate Statistics", "No data loaded.")
+            return
+        
+        # 통계 패널 업데이트 트리거
+        if hasattr(self.graph_panel, 'stat_panel'):
+            self.graph_panel.stat_panel.refresh()
+        self.summary_panel.refresh()
+        self.statusbar.showMessage("Statistics calculated", 3000)
+
+    def _on_export_report(self):
+        """레포트 내보내기"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Export Report", "No data loaded.")
+            return
+        
+        # ReportDialog 사용
+        try:
+            from .dialogs.report_dialog import ReportDialog
+            dialog = ReportDialog(self.engine, self.state, self.graph_panel, self)
+            dialog.exec()
+        except ImportError:
+            # ReportDialog가 없으면 간단한 내보내기
+            file_path, selected_filter = QFileDialog.getSaveFileName(
+                self, "Export Report", "report",
+                "HTML Report (*.html);;PDF Report (*.pdf)"
+            )
+            if file_path:
+                self.statusbar.showMessage(f"Report exported to {file_path}", 3000)
+
+    # ============================================================
+    # New Menu Action Methods (File Menu)
+    # ============================================================
+
+    def _on_open_settings(self):
+        """Open Settings - 설정/프로파일 파일 불러오기"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Settings",
+            str(Path.home() / ".data_graph_studio"),
+            "DGS Settings (*.dgs-settings *.json);;All Files (*.*)"
+        )
+        if file_path:
+            try:
+                # 프로파일 로드 시도
+                self._on_load_profile_menu()
+            except Exception as e:
+                QMessageBox.warning(self, "Open Settings", f"Failed to load settings: {e}")
+
+    def _on_open_settings_bundle(self):
+        """Open Settings Bundle - 설정 묶음 불러오기"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Settings Bundle",
+            str(Path.home() / ".data_graph_studio"),
+            "DGS Settings Bundle (*.dgs-bundle *.zip);;All Files (*.*)"
+        )
+        if file_path:
+            QMessageBox.information(
+                self, "Open Settings Bundle",
+                f"Settings bundle loading will be implemented.\n\nSelected: {file_path}"
+            )
+            self.statusbar.showMessage(f"Settings bundle: {Path(file_path).name}", 3000)
+
+    def _on_save_data(self):
+        """Save Data - 현재 데이터 저장"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Save Data", "No data loaded.")
+            return
+        
+        # 현재 로드된 파일 경로가 있으면 그대로 저장
+        current_path = getattr(self.engine, '_current_file_path', None)
+        if current_path:
+            try:
+                self.engine.df.to_csv(current_path, index=False)
+                self.statusbar.showMessage(f"Data saved to {current_path}", 3000)
+            except Exception as e:
+                QMessageBox.warning(self, "Save Data", f"Failed to save: {e}")
+        else:
+            # 경로가 없으면 Save As로 전환
+            self._on_save_data_as()
+
+    def _on_save_data_as(self):
+        """Save Data As - 다른 이름으로 데이터 저장"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Save Data As", "No data loaded.")
+            return
+        
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Save Data As", "data",
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;Parquet Files (*.parquet);;All Files (*.*)"
+        )
+        if file_path:
+            try:
+                if file_path.endswith('.xlsx'):
+                    self.engine.df.to_excel(file_path, index=False)
+                elif file_path.endswith('.parquet'):
+                    self.engine.df.to_parquet(file_path, index=False)
+                else:
+                    self.engine.df.to_csv(file_path, index=False)
+                self.engine._current_file_path = file_path
+                self.statusbar.showMessage(f"Data saved to {file_path}", 3000)
+            except Exception as e:
+                QMessageBox.warning(self, "Save Data As", f"Failed to save: {e}")
+
+    def _on_save_settings(self):
+        """Save Settings - 현재 설정 저장"""
+        # 현재 프로파일 저장
+        self._on_save_profile_menu()
+
+    def _on_save_settings_as(self):
+        """Save Settings As - 다른 이름으로 설정 저장"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Settings As",
+            str(Path.home() / ".data_graph_studio" / "settings"),
+            "DGS Settings (*.dgs-settings);;JSON Files (*.json);;All Files (*.*)"
+        )
+        if file_path:
+            try:
+                # 현재 상태를 설정으로 저장
+                settings = {
+                    'chart_type': self.state._chart_settings.chart_type.name if hasattr(self.state, '_chart_settings') else 'LINE',
+                    'x_column': self.state.x_column,
+                    'y_columns': list(self.state._y_columns) if hasattr(self.state, '_y_columns') else [],
+                    'theme': getattr(self, '_current_theme', 'light'),
+                }
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(settings, f, indent=2)
+                self.statusbar.showMessage(f"Settings saved to {file_path}", 3000)
+            except Exception as e:
+                QMessageBox.warning(self, "Save Settings As", f"Failed to save settings: {e}")
+
+    def _on_save_settings_bundle(self):
+        """Save Settings Bundle - 설정 묶음 저장"""
+        QMessageBox.information(
+            self, "Save Settings Bundle",
+            "Settings bundle save functionality will be implemented.\n\n"
+            "This will save multiple settings configurations together."
+        )
+
+    def _on_save_settings_bundle_as(self):
+        """Save Settings Bundle As - 다른 이름으로 설정 묶음 저장"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Settings Bundle As",
+            str(Path.home() / ".data_graph_studio" / "bundle"),
+            "DGS Settings Bundle (*.dgs-bundle);;ZIP Files (*.zip);;All Files (*.*)"
+        )
+        if file_path:
+            QMessageBox.information(
+                self, "Save Settings Bundle As",
+                f"Bundle will be saved to:\n{file_path}\n\n(Feature under development)"
+            )
+
+    def _on_import_data(self):
+        """Import - 데이터 임포트"""
+        # 다양한 소스에서 데이터 가져오기
+        sources = ["From File...", "From Clipboard", "From URL...", "From Database..."]
+        source, ok = QInputDialog.getItem(
+            self, "Import Data", "Select import source:",
+            sources, 0, False
+        )
+        if ok:
+            if source == "From File...":
+                self._on_open_file()
+            elif source == "From Clipboard":
+                self._on_import_from_clipboard()
+            elif source == "From URL...":
+                url, url_ok = QInputDialog.getText(
+                    self, "Import from URL", "Enter URL:"
+                )
+                if url_ok and url:
+                    self.statusbar.showMessage(f"Importing from {url}...", 3000)
+                    # TODO: URL에서 데이터 로드 구현
+            elif source == "From Database...":
+                QMessageBox.information(
+                    self, "Import from Database",
+                    "Database import will be implemented.\n\n"
+                    "Supported: PostgreSQL, MySQL, SQLite, etc."
+                )
+
+    # ============================================================
+    # New Menu Action Methods (View Menu - Graph Elements)
+    # ============================================================
+
+    def _on_toggle_statistics_overlay(self, checked: bool = None):
+        """통계 오버레이 표시 토글"""
+        if checked is None:
+            checked = self._graph_element_actions.get("statistics_overlay", QAction()).isChecked()
+        
+        if hasattr(self.graph_panel, 'set_statistics_overlay_visible'):
+            self.graph_panel.set_statistics_overlay_visible(checked)
+        self.statusbar.showMessage(f"Statistics overlay {'shown' if checked else 'hidden'}", 2000)
+
+    def _on_toggle_axis_labels(self, checked: bool = None):
+        """축 레이블 표시 토글"""
+        if checked is None:
+            checked = self._graph_element_actions.get("axis_labels", QAction()).isChecked()
+        
+        if hasattr(self.graph_panel, 'set_axis_labels_visible'):
+            self.graph_panel.set_axis_labels_visible(checked)
+        self.statusbar.showMessage(f"Axis labels {'shown' if checked else 'hidden'}", 2000)
+
+    # ============================================================
+    # New Menu Action Methods (View Menu - Table Elements)
+    # ============================================================
+
+    def _on_toggle_row_numbers(self, checked: bool = None):
+        """행 번호 표시 토글"""
+        if checked is None:
+            checked = self._table_element_actions.get("row_numbers", QAction()).isChecked()
+        
+        if hasattr(self.table_panel, 'set_row_numbers_visible'):
+            self.table_panel.set_row_numbers_visible(checked)
+        else:
+            # 대안: 테이블 뷰의 행 헤더 숨기기/보이기
+            if hasattr(self.table_panel, 'table_view'):
+                self.table_panel.table_view.verticalHeader().setVisible(checked)
+        self.statusbar.showMessage(f"Row numbers {'shown' if checked else 'hidden'}", 2000)
+
+    def _on_toggle_column_headers(self, checked: bool = None):
+        """열 헤더 표시 토글"""
+        if checked is None:
+            checked = self._table_element_actions.get("column_headers", QAction()).isChecked()
+        
+        if hasattr(self.table_panel, 'set_column_headers_visible'):
+            self.table_panel.set_column_headers_visible(checked)
+        else:
+            # 대안: 테이블 뷰의 열 헤더 숨기기/보이기
+            if hasattr(self.table_panel, 'table_view'):
+                self.table_panel.table_view.horizontalHeader().setVisible(checked)
+        self.statusbar.showMessage(f"Column headers {'shown' if checked else 'hidden'}", 2000)
+
+    def _on_toggle_filter_bar(self, checked: bool = None):
+        """필터 바 표시 토글"""
+        if checked is None:
+            checked = self._table_element_actions.get("filter_bar", QAction()).isChecked()
+        
+        if hasattr(self.table_panel, 'set_filter_bar_visible'):
+            self.table_panel.set_filter_bar_visible(checked)
+        self.statusbar.showMessage(f"Filter bar {'shown' if checked else 'hidden'}", 2000)
+
+    # ============================================================
+    # New Menu Action Methods (View Menu - Multi-Grid)
+    # ============================================================
+
+    def _on_multi_grid_view(self):
+        """Multi-Grid View - 여러 그래프를 그리드로 표시"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Multi-Grid View", "No data loaded.")
+            return
+        
+        # 그리드 설정 다이얼로그
+        layouts = ["2x1 (Horizontal)", "1x2 (Vertical)", "2x2 (Grid)", "3x2 (Wide Grid)", "Custom..."]
+        layout, ok = QInputDialog.getItem(
+            self, "Multi-Grid View", "Select grid layout:",
+            layouts, 2, False
+        )
+        if ok:
+            if layout == "Custom...":
+                # 커스텀 그리드 설정
+                rows, rows_ok = QInputDialog.getInt(self, "Custom Grid", "Number of rows:", 2, 1, 10)
+                if rows_ok:
+                    cols, cols_ok = QInputDialog.getInt(self, "Custom Grid", "Number of columns:", 2, 1, 10)
+                    if cols_ok:
+                        self.statusbar.showMessage(f"Multi-grid view: {rows}x{cols}", 3000)
+            else:
+                self.statusbar.showMessage(f"Multi-grid view: {layout}", 3000)
+            
+            # TODO: 실제 멀티 그리드 뷰 구현
+            # self._floating_graph_manager.create_grid_view(rows, cols)
+
+    # ============================================================
+    # New Menu Action Methods (Data Menu)
+    # ============================================================
+
+    def _on_remove_field(self):
+        """Remove Field - 필드/컬럼 제거"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Remove Field", "No data loaded.")
+            return
+        
+        columns = self.engine.columns
+        if not columns:
+            QMessageBox.information(self, "Remove Field", "No columns available.")
+            return
+        
+        column, ok = QInputDialog.getItem(
+            self, "Remove Field", "Select column to remove:",
+            columns, 0, False
+        )
+        if ok and column:
+            reply = QMessageBox.question(
+                self, "Confirm Remove",
+                f"Are you sure you want to remove column '{column}'?\n\nThis action cannot be undone.",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                try:
+                    self.engine.df.drop(columns=[column], inplace=True)
+                    self.table_panel.set_data(self.engine.df)
+                    self.graph_panel.update_graph()
+                    self.statusbar.showMessage(f"Column '{column}' removed", 3000)
+                except Exception as e:
+                    QMessageBox.warning(self, "Remove Field", f"Failed to remove column: {e}")
+
+    # ============================================================
+    # New Menu Action Methods (Graph Menu - Options)
+    # ============================================================
+
+    def _on_axis_settings(self):
+        """Axis Settings - 축 설정 다이얼로그"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Axis Settings", "No data loaded.")
+            return
+        
+        QMessageBox.information(
+            self, "Axis Settings",
+            "Axis settings dialog will be implemented.\n\n"
+            "Configure:\n"
+            "• X/Y axis range (min/max)\n"
+            "• Axis labels\n"
+            "• Scale type (linear/log)\n"
+            "• Tick marks and intervals"
+        )

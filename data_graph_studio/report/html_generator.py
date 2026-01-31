@@ -23,6 +23,9 @@ from data_graph_studio.core.report import (
     DifferenceAnalysis,
     ChartData,
     TableData,
+    ChartStatistics,
+    StatisticType,
+    get_default_statistics_for_chart,
 )
 
 
@@ -515,6 +518,33 @@ body {{
     color: {text_secondary};
 }}
 
+/* Chart Statistics Table */
+.chart-statistics {{
+    margin-top: 15px;
+    display: flex;
+    justify-content: center;
+}}
+
+.chart-statistics .stats-table {{
+    max-width: 350px;
+    margin: 0;
+    font-size: 0.85rem;
+}}
+
+.chart-statistics .stats-table th {{
+    background: {secondary};
+    padding: 8px 12px;
+}}
+
+.chart-statistics .stats-table td {{
+    padding: 6px 12px;
+}}
+
+.chart-statistics .stats-table td:first-child {{
+    font-weight: 500;
+    color: {text_secondary};
+}}
+
 .charts-grid {{
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -749,7 +779,7 @@ body {{
         report_data: ReportData,
         options: ReportOptions
     ) -> str:
-        """Executive Summary 렌더링"""
+        """Executive Summary 렌더링 - 객관적 수치만 표시"""
         is_ko = options.language == 'ko'
 
         # 주요 지표 카드
@@ -791,33 +821,7 @@ body {{
             for m in metrics
         ])
 
-        # Key Findings
-        findings_html = ""
-        if report_data.key_findings:
-            findings_title = "핵심 발견 사항" if is_ko else "Key Findings"
-            findings_items = ''.join([
-                f'<li>{html.escape(finding)}</li>'
-                for finding in report_data.key_findings
-            ])
-            findings_html = f'''
-            <h3>{findings_title}</h3>
-            <ul class="findings-list">
-                {findings_items}
-            </ul>'''
-
-        # Recommendations
-        recommendations_html = ""
-        if report_data.recommendations:
-            rec_title = "권장 사항" if is_ko else "Recommendations"
-            rec_items = ''.join([
-                f'<li>{html.escape(rec)}</li>'
-                for rec in report_data.recommendations
-            ])
-            recommendations_html = f'''
-            <h3>{rec_title}</h3>
-            <ul class="recommendations-list">
-                {rec_items}
-            </ul>'''
+        # key_findings와 recommendations는 주관적 의견이므로 제거됨
 
         section_title = "Executive Summary" if not is_ko else "요약"
 
@@ -827,8 +831,6 @@ body {{
     <div class="metrics-grid">
         {metrics_html}
     </div>
-    {findings_html}
-    {recommendations_html}
 </section>'''
 
     def _render_data_overview(
@@ -972,12 +974,93 @@ body {{
     {''.join(tables_html)}
 </section>'''
 
+    def _render_chart_statistics(
+        self,
+        chart: ChartData,
+        options: ReportOptions
+    ) -> str:
+        """차트 통계 테이블 렌더링"""
+        if not options.include_chart_statistics:
+            return ""
+        
+        # 표시할 통계 가져오기
+        stats_to_display = chart.get_statistics_for_display()
+        if not stats_to_display:
+            return ""
+        
+        is_ko = options.language == 'ko'
+        
+        # 통계 이름 번역
+        stat_labels = {
+            'count': ('개수', 'Count'),
+            'total': ('합계', 'Total'),
+            'mean': ('평균', 'Mean'),
+            'median': ('중앙값', 'Median'),
+            'min': ('최소', 'Min'),
+            'max': ('최대', 'Max'),
+            'std': ('표준편차', 'Std'),
+            'change_percent': ('변화율', 'Change%'),
+            'start_value': ('시작값', 'Start'),
+            'end_value': ('종료값', 'End'),
+            'trend_direction': ('추세', 'Trend'),
+            'percentage': ('비율', '%'),
+            'correlation': ('상관계수', 'r'),
+            'r_squared': ('결정계수', 'R²'),
+            'x_range': ('X 범위', 'X Range'),
+            'y_range': ('Y 범위', 'Y Range'),
+            'max_cell_location': ('최대 위치', 'Max Cell'),
+            'min_cell_location': ('최소 위치', 'Min Cell'),
+            'q1': ('Q1', 'Q1'),
+            'q3': ('Q3', 'Q3'),
+            'iqr': ('IQR', 'IQR'),
+            'outlier_count': ('이상치 수', 'Outliers'),
+            'skewness': ('왜도', 'Skewness'),
+            'mode': ('최빈값', 'Mode'),
+            'bin_count': ('구간 수', 'Bins'),
+        }
+        
+        rows = []
+        for stat_key, value in stats_to_display.items():
+            label_ko, label_en = stat_labels.get(stat_key, (stat_key, stat_key))
+            label = label_ko if is_ko else label_en
+            
+            # 값 포맷팅
+            if isinstance(value, float):
+                if stat_key == 'change_percent':
+                    formatted_value = self.format_percentage(value)
+                elif stat_key in ('correlation', 'r_squared'):
+                    formatted_value = f"{value:.4f}"
+                else:
+                    formatted_value = self.format_number(value)
+            elif isinstance(value, (list, tuple)):
+                formatted_value = f"{self.format_number(value[0])} ~ {self.format_number(value[1])}"
+            elif isinstance(value, dict):
+                # For percentage breakdown in pie charts
+                formatted_items = [f"{k}: {self.format_percentage(v)}" for k, v in value.items()]
+                formatted_value = ", ".join(formatted_items[:5])  # Limit display
+                if len(value) > 5:
+                    formatted_value += "..."
+            else:
+                formatted_value = str(value) if value is not None else "-"
+            
+            rows.append(f'<tr><td>{label}</td><td class="numeric">{formatted_value}</td></tr>')
+        
+        stats_title = "통계" if is_ko else "Statistics"
+        
+        return f'''
+            <div class="chart-statistics">
+                <table class="data-table stats-table">
+                    <thead><tr><th colspan="2">{stats_title}</th></tr></thead>
+                    <tbody>{''.join(rows)}</tbody>
+                </table>
+            </div>'''
+
     def _render_visualizations(
         self,
         report_data: ReportData,
         options: ReportOptions
     ) -> str:
-        """시각화 렌더링"""
+        """시각화 렌더링 - 통계 테이블 포함, description 제외"""
         is_ko = options.language == 'ko'
 
         charts_html = []
@@ -990,15 +1073,14 @@ body {{
                 b64 = base64.b64encode(chart.image_bytes).decode('utf-8')
                 img_html = f'<img src="data:image/{chart.image_format};base64,{b64}" alt="{html.escape(chart.title)}">'
 
-            description_html = ""
-            if chart.description:
-                description_html = f'<p class="chart-description">{html.escape(chart.description)}</p>'
+            # 차트 통계 렌더링
+            stats_html = self._render_chart_statistics(chart, options)
 
             charts_html.append(f'''
             <div class="chart-container">
                 <h4>{html.escape(chart.title)}</h4>
                 {img_html}
-                {description_html}
+                {stats_html}
             </div>''')
 
         section_title = "시각화" if is_ko else "Visualizations"

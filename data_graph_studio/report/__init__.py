@@ -8,6 +8,7 @@ Exports:
     - PDFReportGenerator: PDF 레포트 생성기
     - DOCXReportGenerator: Word 문서 생성기
     - PPTXReportGenerator: PowerPoint 생성기
+    - MarkdownReportGenerator: Markdown 레포트 생성기
 """
 
 from data_graph_studio.core.report import (
@@ -16,6 +17,12 @@ from data_graph_studio.core.report import (
     PageSize,
     PageOrientation,
     ChartImageFormat,
+    ChartType,
+    StatisticType,
+    ChartStatisticsConfig,
+    ChartStatistics,
+    DEFAULT_CHART_STATISTICS,
+    get_default_statistics_for_chart,
     ReportMetadata,
     DatasetSummary,
     StatisticalSummary,
@@ -37,6 +44,7 @@ from data_graph_studio.report.html_generator import HTMLReportGenerator
 from data_graph_studio.report.pdf_generator import PDFReportGenerator
 from data_graph_studio.report.docx_generator import DOCXReportGenerator
 from data_graph_studio.report.pptx_generator import PPTXReportGenerator
+from data_graph_studio.report.markdown_generator import MarkdownReportGenerator
 
 __all__ = [
     # Enums
@@ -45,6 +53,13 @@ __all__ = [
     "PageSize",
     "PageOrientation",
     "ChartImageFormat",
+    "ChartType",
+    "StatisticType",
+    # Chart Statistics
+    "ChartStatisticsConfig",
+    "ChartStatistics",
+    "DEFAULT_CHART_STATISTICS",
+    "get_default_statistics_for_chart",
     # Data classes
     "ReportMetadata",
     "DatasetSummary",
@@ -63,6 +78,7 @@ __all__ = [
     "PDFReportGenerator",
     "DOCXReportGenerator",
     "PPTXReportGenerator",
+    "MarkdownReportGenerator",
     # Manager
     "ReportManager",
     # Utilities
@@ -85,5 +101,6 @@ def create_report_manager() -> ReportManager:
     manager.register_generator(ReportFormat.PDF, PDFReportGenerator())
     manager.register_generator(ReportFormat.DOCX, DOCXReportGenerator())
     manager.register_generator(ReportFormat.PPTX, PPTXReportGenerator())
+    manager.register_generator(ReportFormat.MARKDOWN, MarkdownReportGenerator())
 
     return manager

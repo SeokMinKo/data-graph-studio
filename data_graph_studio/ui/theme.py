@@ -295,8 +295,7 @@ class ThemeManager:
             
             /* ============ Main Window ============ */
             QMainWindow {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {t.background}, stop:1 {t.surface});
+                background: {t.background};
             }}
             
             QWidget {{
@@ -307,15 +306,15 @@ class ThemeManager:
             /* ============ Cards & Surfaces ============ */
             QFrame {{
                 background-color: {t.surface};
-                border: 1px solid {t.border};
-                border-radius: 12px;
+                border: none;
+                border-radius: 8px;
             }}
             
             QFrame[frameShape="4"] {{  /* StyledPanel */
                 background-color: {t.surface};
-                border: 1px solid {t.border_light};
-                border-radius: 12px;
-                padding: 8px;
+                border: none;
+                border-radius: 8px;
+                padding: 4px;
             }}
             
             /* ============ Labels ============ */
@@ -463,15 +462,15 @@ class ThemeManager:
             QTableView {{
                 background-color: {t.surface};
                 color: {t.foreground};
-                border: 1px solid {t.border};
-                border-radius: 12px;
+                border: none;
+                border-radius: 8px;
                 gridline-color: {t.border_light};
                 selection-background-color: {t.selected};
                 alternate-background-color: {t.surface_hover};
             }}
             
             QTableView::item {{
-                padding: 8px 12px;
+                padding: 6px 10px;
                 border: none;
             }}
             
@@ -485,19 +484,17 @@ class ThemeManager:
             }}
             
             QHeaderView::section {{
-                background-color: {t.surface_hover};
+                background-color: {t.surface};
                 color: {t.text_secondary};
                 border: none;
-                border-bottom: 2px solid {t.border};
-                padding: 12px 16px;
+                border-bottom: 1px solid {t.border_light};
+                padding: 8px 10px;
                 font-weight: 600;
                 font-size: 11px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
             }}
             
             QHeaderView::section:hover {{
-                background-color: {t.surface_active};
+                background-color: {t.surface_hover};
                 color: {t.foreground};
             }}
             
@@ -544,22 +541,19 @@ class ThemeManager:
             
             /* ============ Splitter ============ */
             QSplitter::handle {{
-                background-color: {t.border_light};
-                margin: 2px;
+                background-color: transparent;
             }}
             
             QSplitter::handle:hover {{
-                background-color: {t.primary};
+                background-color: {t.primary}40;
             }}
             
             QSplitter::handle:vertical {{
-                height: 4px;
-                border-radius: 2px;
+                height: 6px;
             }}
             
             QSplitter::handle:horizontal {{
-                width: 4px;
-                border-radius: 2px;
+                width: 6px;
             }}
             
             /* ============ Menu Bar ============ */
@@ -648,22 +642,21 @@ class ThemeManager:
             
             /* ============ Group Box ============ */
             QGroupBox {{
-                background-color: {t.surface};
-                border: 1px solid {t.border};
-                border-radius: 12px;
-                margin-top: 16px;
-                padding: 16px;
-                font-weight: 600;
+                background-color: transparent;
+                border: none;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding: 8px;
+                font-weight: 500;
             }}
             
             QGroupBox::title {{
                 color: {t.text_secondary};
                 subcontrol-origin: margin;
-                left: 16px;
-                padding: 0 8px;
+                left: 8px;
+                padding: 0 4px;
                 font-size: 11px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
+                font-weight: 600;
             }}
             
             /* ============ Check Box ============ */

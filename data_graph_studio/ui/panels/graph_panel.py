@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 from PySide6.QtCore import Qt, Signal, Slot, QSize
-from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter
+from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter, QBrush
 
 from ..floatable import FloatableSection, FloatButton, FloatWindow
 
@@ -65,11 +65,13 @@ class ColorButton(QPushButton):
 
 
 class ExpandedChartDialog(QDialog):
-    """확대된 차트를 보여주는 다이얼로그"""
+    """확대된 차트를 보여주는 다이얼로그 (Non-modal)"""
 
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
+        self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint)
+        self.setModal(False)  # Non-modal: main window remains interactive
         self.setMinimumSize(800, 600)
         self.resize(1000, 700)
 
@@ -140,6 +142,110 @@ class ExpandedChartDialog(QDialog):
             except Exception as e:
                 print(f"Error plotting histogram: {e}")
 
+    def plot_pie_chart(self, labels: list, values: list, title: str, colors: list = None):
+        """Plot pie chart as bar chart (pyqtgraph doesn't support pie charts natively)"""
+        self.setWindowTitle(title)
+        self.plot_widget.clear()
+
+        if not labels or not values:
+            return
+
+        try:
+            # Convert to percentages for display
+            total = sum(values)
+            if total == 0:
+                return
+
+            percentages = [v / total * 100 for v in values]
+
+            # Default colors
+            if colors is None:
+                default_colors = [
+                    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+                ]
+                colors = [default_colors[i % len(default_colors)] for i in range(len(labels))]
+
+            # Create horizontal bar chart representation
+            x_positions = np.arange(len(labels))
+            bars = pg.BarGraphItem(
+                x=x_positions,
+                height=values,
+                width=0.6,
+                brushes=[pg.mkBrush(c) for c in colors],
+                pens=[pg.mkPen(c, width=1) for c in colors]
+            )
+            self.plot_widget.addItem(bars)
+
+            # Set axis labels
+            self.plot_widget.setLabel('left', 'Value (Sum)')
+            self.plot_widget.setLabel('bottom', 'Category')
+
+            # Create custom x-axis labels
+            ax = self.plot_widget.getAxis('bottom')
+            ax.setTicks([[(i, str(label)[:15]) for i, label in enumerate(labels)]])
+
+            # Add percentage labels on top of bars
+            for i, (val, pct) in enumerate(zip(values, percentages)):
+                text = pg.TextItem(f'{pct:.1f}%', anchor=(0.5, 1), color='k')
+                text.setPos(i, val)
+                self.plot_widget.addItem(text)
+
+            # Add total label
+            total_text = pg.TextItem(f'Total: {total:,.2f}', anchor=(0, 0), color='#4B5563')
+            total_text.setPos(0, max(values) * 1.1)
+            self.plot_widget.addItem(total_text)
+
+        except Exception as e:
+            print(f"Error plotting pie chart: {e}")
+
+    def plot_percentile(self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)):
+        """Plot percentile graph (line chart showing value at each percentile)"""
+        self.setWindowTitle(title)
+        self.plot_widget.clear()
+
+        if data is None or len(data) == 0:
+            return
+
+        try:
+            clean_data = data[~np.isnan(data)]
+            if len(clean_data) == 0:
+                return
+
+            # Calculate percentiles from 0 to 100
+            percentiles = np.arange(0, 101)
+            percentile_values = np.percentile(clean_data, percentiles)
+
+            # Plot line
+            pen = pg.mkPen(color=color[:3], width=2)
+            self.plot_widget.plot(percentiles, percentile_values, pen=pen)
+
+            # Add key percentile markers
+            key_percentiles = [25, 50, 75]
+            key_values = np.percentile(clean_data, key_percentiles)
+
+            scatter = pg.ScatterPlotItem(
+                x=key_percentiles,
+                y=key_values,
+                size=10,
+                brush=pg.mkBrush('#EF4444'),
+                pen=pg.mkPen('w', width=1)
+            )
+            self.plot_widget.addItem(scatter)
+
+            # Labels
+            self.plot_widget.setLabel('bottom', 'Percentile')
+            self.plot_widget.setLabel('left', 'Value')
+
+            # Stats text
+            stats_text = f"P25: {key_values[0]:.2f}\nP50: {key_values[1]:.2f}\nP75: {key_values[2]:.2f}"
+            text_item = pg.TextItem(stats_text, anchor=(0, 0), color='k')
+            text_item.setPos(5, percentile_values[-1] * 0.9)
+            self.plot_widget.addItem(text_item)
+
+        except Exception as e:
+            print(f"Error plotting percentile: {e}")
+
 
 class ClickablePlotWidget(pg.PlotWidget):
     """더블클릭 가능한 PlotWidget"""
@@ -153,6 +259,10 @@ class ClickablePlotWidget(pg.PlotWidget):
         self._color = (100, 100, 200, 100)
         self._bins = 30  # Default bin count
         self._horizontal = False  # Histogram orientation
+        self._chart_type = "histogram"  # histogram, pie, percentile
+        self._pie_labels = None
+        self._pie_values = None
+        self._pie_colors = None
 
     def set_data(self, data: np.ndarray, title: str, color: tuple, bins: int = 30, horizontal: bool = False):
         self._data = data
@@ -160,6 +270,22 @@ class ClickablePlotWidget(pg.PlotWidget):
         self._color = color
         self._bins = bins
         self._horizontal = horizontal
+        self._chart_type = "histogram"
+
+    def set_pie_data(self, labels: list, values: list, title: str, colors: list = None):
+        """Set data for pie chart display"""
+        self._pie_labels = labels
+        self._pie_values = values
+        self._title = title
+        self._pie_colors = colors
+        self._chart_type = "pie"
+
+    def set_percentile_data(self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)):
+        """Set data for percentile chart display"""
+        self._data = data
+        self._title = title
+        self._color = color
+        self._chart_type = "percentile"
 
     def set_bins(self, bins: int):
         """Set the number of bins for histogram"""
@@ -172,17 +298,36 @@ class ClickablePlotWidget(pg.PlotWidget):
         super().mouseDoubleClickEvent(event)
 
     def _show_expanded(self):
-        if self._data is None:
-            return
         dialog = ExpandedChartDialog(self._title, self)
-        dialog.plot_histogram(self._data, self._title, self._color, bins=self._bins, horizontal=self._horizontal)
-        dialog.exec()
+
+        if self._chart_type == "histogram":
+            if self._data is None:
+                return
+            dialog.plot_histogram(self._data, self._title, self._color, bins=self._bins, horizontal=self._horizontal)
+        elif self._chart_type == "pie":
+            if self._pie_labels is None or self._pie_values is None:
+                return
+            dialog.plot_pie_chart(self._pie_labels, self._pie_values, self._title, self._pie_colors)
+        elif self._chart_type == "percentile":
+            if self._data is None:
+                return
+            dialog.plot_percentile(self._data, self._title, self._color)
+        else:
+            return
+
+        dialog.show()  # Non-modal: use show() instead of exec()
 
 
 from ...core.state import AppState, ChartType, ToolMode, ComparisonMode
 from ...core.data_engine import DataEngine
 from ...core.expression_engine import ExpressionEngine, ExpressionError
 from ...graph.sampling import DataSampler
+from ..drawing import (
+    DrawingManager, DrawingStyle, LineStyle,
+    LineDrawing, CircleDrawing, RectDrawing, TextDrawing,
+    DrawingStyleDialog, RectStyleDialog, TextInputDialog,
+    snap_to_angle
+)
 import polars as pl
 
 
@@ -394,7 +539,7 @@ class FormattedAxisItem(pg.AxisItem):
 # ==================== Options Panel ====================
 
 class GraphOptionsPanel(QFrame):
-    """Enhanced Graph Options Panel - Excel-like"""
+    """Compact Graph Options Panel"""
     
     option_changed = Signal()
     
@@ -402,8 +547,8 @@ class GraphOptionsPanel(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GraphOptionsPanel")
-        self.setMinimumWidth(240)
-        self.setMaximumWidth(280)
+        self.setMinimumWidth(200)
+        self.setMaximumWidth(240)
         
         self._setup_ui()
         self._apply_style()
@@ -412,7 +557,7 @@ class GraphOptionsPanel(QFrame):
         self.setStyleSheet("""
             #GraphOptionsPanel {
                 background: #FAFAFA;
-                border: 1px solid #E5E7EB;
+                border: none;
                 border-radius: 8px;
             }
             QTabWidget::pane {
@@ -420,74 +565,69 @@ class GraphOptionsPanel(QFrame):
                 background: transparent;
             }
             QTabBar::tab {
-                background: #F3F4F6;
+                background: transparent;
                 border: none;
-                padding: 8px 12px;
+                padding: 6px 10px;
                 margin-right: 2px;
-                border-radius: 6px 6px 0 0;
-                font-size: 11px;
-                color: #6B7280;
+                font-size: 10px;
+                color: #9CA3AF;
             }
             QTabBar::tab:selected {
-                background: white;
                 color: #4F46E5;
                 font-weight: 600;
+                border-bottom: 2px solid #4F46E5;
             }
             QGroupBox {
-                background: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                margin-top: 14px;
-                padding: 12px;
-                font-weight: 600;
-                font-size: 11px;
-                color: #374151;
+                background: transparent;
+                border: none;
+                margin-top: 8px;
+                padding: 4px;
+                font-weight: 500;
+                font-size: 10px;
+                color: #6B7280;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px;
-                background: white;
+                left: 4px;
+                padding: 0 2px;
             }
             QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
-                background: #F9FAFB;
+                background: white;
                 border: 1px solid #E5E7EB;
-                border-radius: 5px;
-                padding: 5px 8px;
+                border-radius: 4px;
+                padding: 4px 6px;
                 color: #374151;
-                min-height: 24px;
+                min-height: 20px;
+                font-size: 11px;
             }
             QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
                 border-color: #6366F1;
             }
-            QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QLineEdit:focus {
-                border-color: #4F46E5;
-            }
             QCheckBox {
                 color: #374151;
-                font-size: 11px;
-                spacing: 6px;
+                font-size: 10px;
+                spacing: 4px;
             }
             QLabel {
                 color: #6B7280;
-                font-size: 11px;
+                font-size: 10px;
                 background: transparent;
             }
             QSlider::groove:horizontal {
-                height: 4px;
+                height: 3px;
                 background: #E5E7EB;
-                border-radius: 2px;
+                border-radius: 1px;
             }
             QSlider::handle:horizontal {
-                width: 14px;
-                height: 14px;
-                margin: -5px 0;
+                width: 10px;
+                height: 10px;
+                margin: -4px 0;
                 background: #4F46E5;
-                border-radius: 7px;
+                border-radius: 5px;
             }
             QSlider::sub-page:horizontal {
                 background: #4F46E5;
-                border-radius: 2px;
+                border-radius: 1px;
             }
         """)
     
@@ -1202,11 +1342,10 @@ class GraphOptionsPanel(QFrame):
 # ==================== Legend Panel ====================
 
 class LegendSettingsPanel(QFrame):
-    """범례 설정 패널"""
+    """Compact Legend Settings Panel"""
     
     settings_changed = Signal()
     
-    # Default colors
     DEFAULT_COLORS = [
         "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
         "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
@@ -1216,10 +1355,10 @@ class LegendSettingsPanel(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("LegendPanel")
-        self.setMinimumWidth(200)
-        self.setMaximumWidth(240)
+        self.setMinimumWidth(160)
+        self.setMaximumWidth(200)
         
-        self._series_items: List[Dict] = []  # {name, color_btn, visible_check}
+        self._series_items: List[Dict] = []
         self._setup_ui()
         self._apply_style()
     
@@ -1227,50 +1366,48 @@ class LegendSettingsPanel(QFrame):
         self.setStyleSheet("""
             #LegendPanel {
                 background: #FAFAFA;
-                border: 1px solid #E5E7EB;
+                border: none;
                 border-radius: 8px;
             }
             QGroupBox {
-                background: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                margin-top: 14px;
-                padding: 10px;
-                font-weight: 600;
-                font-size: 11px;
-                color: #374151;
+                background: transparent;
+                border: none;
+                margin-top: 8px;
+                padding: 4px;
+                font-weight: 500;
+                font-size: 10px;
+                color: #6B7280;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px;
-                background: white;
+                left: 4px;
+                padding: 0 2px;
             }
             QComboBox {
-                background: #F9FAFB;
+                background: white;
                 border: 1px solid #E5E7EB;
-                border-radius: 5px;
-                padding: 5px 8px;
+                border-radius: 4px;
+                padding: 4px 6px;
                 color: #374151;
-                min-height: 24px;
+                min-height: 20px;
+                font-size: 11px;
             }
             QCheckBox {
                 color: #374151;
-                font-size: 11px;
+                font-size: 10px;
             }
             QLabel {
                 color: #6B7280;
-                font-size: 11px;
+                font-size: 10px;
                 background: transparent;
             }
             QListWidget {
-                background: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                padding: 4px;
+                background: transparent;
+                border: none;
+                padding: 2px;
             }
             QListWidget::item {
-                padding: 4px;
+                padding: 2px;
                 border-radius: 4px;
             }
             QListWidget::item:hover {
@@ -1448,19 +1585,33 @@ class LegendSettingsPanel(QFrame):
 # ==================== Stat Panel ====================
 
 class StatPanel(QFrame):
-    """Statistics Panel"""
+    """
+    Statistics Panel with 2x2 Grid Layout - Minimal Design
+    
+    Layout:
+    ┌─────────────────────────────────────┐
+    │  📈 Statistics                      │
+    ├──────────────────┬──────────────────┤
+    │  X Distribution  │  Y Distribution  │
+    ├──────────────────┼──────────────────┤
+    │  Pie Chart       │  Percentile      │
+    ├──────────────────┴──────────────────┤
+    │  Summary                            │
+    └─────────────────────────────────────┘
+    """
 
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
         self.setObjectName("StatPanel")
-        self.setMinimumWidth(180)
-        self.setMaximumWidth(220)
+        self.setMinimumWidth(280)
+        self.setMaximumWidth(360)
 
         self._x_data: Optional[np.ndarray] = None
         self._y_data: Optional[np.ndarray] = None
         self._x_bins: int = 30
         self._y_bins: int = 30
+        self._group_data: Optional[Dict[str, float]] = None
 
         self._setup_ui()
         self._apply_style()
@@ -1469,102 +1620,108 @@ class StatPanel(QFrame):
         self.setStyleSheet("""
             #StatPanel {
                 background: #FAFAFA;
-                border: 1px solid #E5E7EB;
+                border: none;
                 border-radius: 8px;
             }
             QGroupBox {
-                background: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding: 8px;
-                font-weight: 600;
-                font-size: 11px;
+                background: transparent;
+                border: none;
+                margin-top: 8px;
+                padding: 4px;
+                font-weight: 500;
+                font-size: 10px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px;
-                background: white;
-                color: #374151;
+                left: 4px;
+                padding: 0 2px;
+                color: #6B7280;
+            }
+            QLabel {
+                background: transparent;
             }
         """)
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
 
-        # Header (no float button for internal sections)
+        # Header - compact
         header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setContentsMargins(4, 0, 4, 0)
         header_layout.setSpacing(4)
 
-        header = QLabel("📈 Statistics")
-        header.setStyleSheet("font-weight: 600; font-size: 13px; color: #111827; padding: 4px;")
+        header = QLabel("📈 Stats")
+        header.setStyleSheet("font-weight: 600; font-size: 11px; color: #374151;")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
 
-        layout.addLayout(header_layout)
-
-        # Bin Range Control
-        bin_group = QGroupBox("Bin Range")
-        bin_layout = QGridLayout(bin_group)
-        bin_layout.setSpacing(4)
-
-        bin_layout.addWidget(QLabel("X bins:"), 0, 0)
+        # Bin controls (hidden)
         self.x_bins_spin = QSpinBox()
-        self.x_bins_spin.setRange(5, 100)
+        self.x_bins_spin.setRange(5, 200)
         self.x_bins_spin.setValue(30)
         self.x_bins_spin.valueChanged.connect(self._on_x_bins_changed)
-        bin_layout.addWidget(self.x_bins_spin, 0, 1)
+        self.x_bins_spin.hide()
 
-        bin_layout.addWidget(QLabel("Y bins:"), 1, 0)
         self.y_bins_spin = QSpinBox()
-        self.y_bins_spin.setRange(5, 100)
+        self.y_bins_spin.setRange(5, 200)
         self.y_bins_spin.setValue(30)
         self.y_bins_spin.valueChanged.connect(self._on_y_bins_changed)
-        bin_layout.addWidget(self.y_bins_spin, 1, 1)
+        self.y_bins_spin.hide()
+        
+        layout.addLayout(header_layout)
 
-        layout.addWidget(bin_group)
+        # 2x2 Grid for graphs - compact
+        graph_grid = QGridLayout()
+        graph_grid.setSpacing(4)
+        graph_grid.setContentsMargins(0, 0, 0, 0)
 
-        # X Distribution (vertical histogram - standard)
-        x_group = QGroupBox("X Distribution")
-        x_group.setToolTip("Double-click to expand")
-        x_layout = QVBoxLayout(x_group)
+        # Create mini plot widgets with minimal chrome
+        def create_plot_group(title: str) -> tuple:
+            group = QGroupBox(title)
+            group.setToolTip("Double-click to expand")
+            grp_layout = QVBoxLayout(group)
+            grp_layout.setContentsMargins(2, 2, 2, 2)
+            grp_layout.setSpacing(0)
+            
+            widget = ClickablePlotWidget()
+            widget.setMinimumHeight(60)
+            widget.setMaximumHeight(80)
+            widget.setBackground('#FAFAFA')
+            widget.hideAxis('bottom')
+            widget.hideAxis('left')
+            widget.setCursor(Qt.PointingHandCursor)
+            widget.getPlotItem().setContentsMargins(0, 0, 0, 0)
+            grp_layout.addWidget(widget)
+            return group, widget
 
-        self.x_hist_widget = ClickablePlotWidget()
-        self.x_hist_widget.setMaximumHeight(80)
-        self.x_hist_widget.setBackground('w')
-        self.x_hist_widget.hideAxis('bottom')
-        self.x_hist_widget.hideAxis('left')
-        self.x_hist_widget.setCursor(Qt.PointingHandCursor)
-        x_layout.addWidget(self.x_hist_widget)
+        # X Distribution
+        x_group, self.x_hist_widget = create_plot_group("X Dist")
+        graph_grid.addWidget(x_group, 0, 0)
 
-        layout.addWidget(x_group)
+        # Y Distribution
+        y_group, self.y_hist_widget = create_plot_group("Y Dist")
+        graph_grid.addWidget(y_group, 0, 1)
 
-        # Y Distribution (horizontal histogram)
-        y_group = QGroupBox("Y Distribution")
-        y_group.setToolTip("Double-click to expand")
-        y_layout = QVBoxLayout(y_group)
+        # Pie Chart
+        pie_group, self.pie_widget = create_plot_group("Pie")
+        graph_grid.addWidget(pie_group, 1, 0)
 
-        self.y_hist_widget = ClickablePlotWidget()
-        self.y_hist_widget.setMaximumHeight(80)
-        self.y_hist_widget.setBackground('w')
-        self.y_hist_widget.hideAxis('bottom')
-        self.y_hist_widget.hideAxis('left')
-        self.y_hist_widget.setCursor(Qt.PointingHandCursor)
-        y_layout.addWidget(self.y_hist_widget)
+        # Percentile
+        pct_group, self.percentile_widget = create_plot_group("Pctl")
+        graph_grid.addWidget(pct_group, 1, 1)
 
-        layout.addWidget(y_group)
+        layout.addLayout(graph_grid)
 
-        # Summary Stats
+        # Summary Stats - compact
         stats_group = QGroupBox("Summary")
         stats_layout = QVBoxLayout(stats_group)
+        stats_layout.setContentsMargins(4, 4, 4, 4)
 
         self.stats_label = QLabel("No data")
-        self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 10px; color: #4B5563;")
+        self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 9px; color: #6B7280;")
         self.stats_label.setWordWrap(True)
         stats_layout.addWidget(self.stats_label)
 
@@ -1601,14 +1758,8 @@ class StatPanel(QFrame):
                 clean_y = self._y_data[~np.isnan(self._y_data)]
                 if len(clean_y) > 0:
                     hist, bins = np.histogram(clean_y, bins=self._y_bins)
-                    # Horizontal histogram: swap x and y, plot rotated
-                    # bins represent Y values, hist represents frequency (horizontal extent)
+                    # Horizontal histogram style
                     bin_centers = (bins[:-1] + bins[1:]) / 2
-                    self.y_hist_widget.plot(hist, bin_centers, stepMode=False, fillLevel=0,
-                                            pen=pg.mkPen((100, 200, 100, 255), width=1),
-                                            brush=(100, 200, 100, 100),
-                                            symbol=None)
-                    # Fill as horizontal bars using BarGraphItem
                     self.y_hist_widget.clear()
                     bar_height = (bins[1] - bins[0]) * 0.8 if len(bins) > 1 else 0.8
                     bar_item = pg.BarGraphItem(
@@ -1622,10 +1773,98 @@ class StatPanel(QFrame):
                     self.y_hist_widget.addItem(bar_item)
             except:
                 pass
+
+    def _update_pie_chart(self):
+        """Update the pie chart (displayed as bar chart)"""
+        self.pie_widget.clear()
+        if self._group_data is None or len(self._group_data) == 0:
+            # If no group data, show Y value distribution by quartiles
+            if self._y_data is not None and len(self._y_data) > 0:
+                try:
+                    clean_y = self._y_data[~np.isnan(self._y_data)]
+                    if len(clean_y) > 0:
+                        q1 = np.percentile(clean_y, 25)
+                        q2 = np.percentile(clean_y, 50)
+                        q3 = np.percentile(clean_y, 75)
+                        
+                        # Count values in each quartile
+                        c1 = np.sum(clean_y <= q1)
+                        c2 = np.sum((clean_y > q1) & (clean_y <= q2))
+                        c3 = np.sum((clean_y > q2) & (clean_y <= q3))
+                        c4 = np.sum(clean_y > q3)
+                        
+                        labels = ['Q1', 'Q2', 'Q3', 'Q4']
+                        values = [c1, c2, c3, c4]
+                        colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444']
+                        
+                        # Mini bar chart
+                        x = np.arange(len(labels))
+                        bars = pg.BarGraphItem(
+                            x=x, height=values, width=0.6,
+                            brushes=[pg.mkBrush(c) for c in colors]
+                        )
+                        self.pie_widget.addItem(bars)
+                        
+                        # Store for expansion
+                        self.pie_widget.set_pie_data(labels, values, "Y Value Distribution by Quartile", colors)
+                except:
+                    pass
+            return
+
+        try:
+            labels = list(self._group_data.keys())[:10]  # Limit to 10 categories
+            values = [self._group_data[k] for k in labels]
+            
+            colors = [
+                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+            ]
+            
+            # Mini bar chart representation
+            x = np.arange(len(labels))
+            bars = pg.BarGraphItem(
+                x=x, height=values, width=0.6,
+                brushes=[pg.mkBrush(colors[i % len(colors)]) for i in range(len(labels))]
+            )
+            self.pie_widget.addItem(bars)
+            
+            # Store for expansion
+            self.pie_widget.set_pie_data(labels, values, "Y Groupby Aggregation", colors)
+        except:
+            pass
+
+    def _update_percentile_chart(self):
+        """Update the percentile line chart"""
+        self.percentile_widget.clear()
+        if self._y_data is None or len(self._y_data) == 0:
+            return
+
+        try:
+            clean_y = self._y_data[~np.isnan(self._y_data)]
+            if len(clean_y) == 0:
+                return
+
+            # Calculate percentiles (0, 10, 20, ..., 100)
+            percentiles = np.arange(0, 101, 5)  # Every 5% for mini chart
+            values = np.percentile(clean_y, percentiles)
+            
+            # Line plot
+            pen = pg.mkPen(color=(148, 103, 189), width=2)  # Purple
+            self.percentile_widget.plot(percentiles, values, pen=pen)
+            
+            # Store for expansion (use finer granularity)
+            self.percentile_widget.set_percentile_data(
+                clean_y, "Y Values Percentile Distribution", (148, 103, 189)
+            )
+        except:
+            pass
     
-    def update_histograms(self, x_data: Optional[np.ndarray], y_data: Optional[np.ndarray]):
+    def update_histograms(self, x_data: Optional[np.ndarray], y_data: Optional[np.ndarray],
+                          group_data: Optional[Dict[str, float]] = None):
+        """Update all charts with new data"""
         self._x_data = x_data
         self._y_data = y_data
+        self._group_data = group_data
 
         # Store data for double-click expansion
         # X Distribution: vertical histogram (default)
@@ -1641,9 +1880,16 @@ class StatPanel(QFrame):
                 bins=self._y_bins, horizontal=True
             )
 
-        # Update histograms using current bin settings
+        # Update all charts
         self._update_x_histogram()
         self._update_y_histogram()
+        self._update_pie_chart()
+        self._update_percentile_chart()
+
+    def set_group_data(self, group_data: Dict[str, float]):
+        """Set groupby aggregation data for pie chart"""
+        self._group_data = group_data
+        self._update_pie_chart()
     
     def update_stats(self, stats: Dict[str, Any]):
         if not stats:
@@ -1651,11 +1897,19 @@ class StatPanel(QFrame):
             return
         
         lines = []
-        for key, value in stats.items():
-            if isinstance(value, float):
-                lines.append(f"{key}: {value:.2f}")
+        # Format stats in a more compact 2-column layout
+        items = list(stats.items())
+        for i in range(0, len(items), 2):
+            left = items[i]
+            right = items[i + 1] if i + 1 < len(items) else None
+            
+            left_str = f"{left[0]}: {left[1]:.2f}" if isinstance(left[1], float) else f"{left[0]}: {left[1]}"
+            
+            if right:
+                right_str = f"{right[0]}: {right[1]:.2f}" if isinstance(right[1], float) else f"{right[0]}: {right[1]}"
+                lines.append(f"{left_str:<20} {right_str}")
             else:
-                lines.append(f"{key}: {value}")
+                lines.append(left_str)
         
         self.stats_label.setText("\n".join(lines))
 
@@ -1705,6 +1959,14 @@ class MainGraph(pg.PlotWidget):
         # Lasso selection
         self._lasso_points = []  # List of (x, y) points for lasso path
         self._lasso_path_item = None  # Visual path item
+        
+        # Drawing mode
+        self._is_drawing = False
+        self._drawing_start = None
+        self._drawing_preview_item = None
+        self._drawing_manager: Optional[DrawingManager] = None
+        self._current_drawing_style = DrawingStyle()
+        self._shift_pressed = False
 
         # Sampling status label
         self._sampling_label = pg.TextItem(
@@ -1786,6 +2048,12 @@ class MainGraph(pg.PlotWidget):
             self.removeItem(self._selection_roi)
             self._selection_roi = None
         self._is_selecting = False
+        
+        # Clear any drawing in progress
+        self._is_drawing = False
+        if hasattr(self, '_drawing_preview_item') and self._drawing_preview_item is not None:
+            self.removeItem(self._drawing_preview_item)
+            self._drawing_preview_item = None
 
         if mode == ToolMode.ZOOM:
             # Zoom mode: left-click-drag to zoom into rect
@@ -1801,6 +2069,12 @@ class MainGraph(pg.PlotWidget):
             # Selection mode: disable default interactions
             vb.setMouseMode(pg.ViewBox.PanMode)  # Disable rect zoom
             vb.setMouseEnabled(x=False, y=False)  # Disable panning
+            self.setCursor(Qt.CrossCursor)
+        elif mode in [ToolMode.LINE_DRAW, ToolMode.CIRCLE_DRAW, 
+                      ToolMode.RECT_DRAW, ToolMode.TEXT_DRAW]:
+            # Drawing mode: disable default interactions
+            vb.setMouseMode(pg.ViewBox.PanMode)
+            vb.setMouseEnabled(x=False, y=False)
             self.setCursor(Qt.CrossCursor)
         else:
             # Default mode
@@ -1820,6 +2094,17 @@ class MainGraph(pg.PlotWidget):
         y_categorical_labels: Optional[List[str]] = None
     ):
         self.clear_plot()
+
+        # Handle empty or None data
+        if x_data is None or y_data is None:
+            self._data_x = None
+            self._data_y = None
+            return
+
+        if len(x_data) == 0 or len(y_data) == 0:
+            self._data_x = None
+            self._data_y = None
+            return
 
         self._data_x = x_data
         self._data_y = y_data
@@ -2191,6 +2476,10 @@ class MainGraph(pg.PlotWidget):
                     self._selection_start = mouse_point
                     self._is_selecting = True
 
+                    # Store start position for rect (important for _finish_selection)
+                    self._rect_start_x = mouse_point.x()
+                    self._rect_start_y = mouse_point.y()
+
                     # Create selection rectangle
                     if self._selection_roi is not None:
                         self.removeItem(self._selection_roi)
@@ -2289,6 +2578,29 @@ class MainGraph(pg.PlotWidget):
                 
                 event.accept()
                 return
+        
+        # Drawing modes
+        elif self.state.tool_mode in [ToolMode.LINE_DRAW, ToolMode.CIRCLE_DRAW, 
+                                       ToolMode.RECT_DRAW]:
+            if event.button() == Qt.LeftButton:
+                pos = self.plotItem.vb.mapSceneToView(event.position())
+                self._drawing_start = (pos.x(), pos.y())
+                self._is_drawing = True
+                
+                # Clear any previous preview
+                if self._drawing_preview_item is not None:
+                    self.removeItem(self._drawing_preview_item)
+                    self._drawing_preview_item = None
+                
+                event.accept()
+                return
+        
+        elif self.state.tool_mode == ToolMode.TEXT_DRAW:
+            if event.button() == Qt.LeftButton:
+                pos = self.plotItem.vb.mapSceneToView(event.position())
+                self._handle_text_draw(pos.x(), pos.y())
+                event.accept()
+                return
 
         super().mousePressEvent(event)
 
@@ -2348,6 +2660,15 @@ class MainGraph(pg.PlotWidget):
             
             event.accept()
             return
+        
+        # Drawing mode preview
+        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW, 
+                                                            ToolMode.CIRCLE_DRAW, 
+                                                            ToolMode.RECT_DRAW]:
+            pos = self.plotItem.vb.mapSceneToView(event.position())
+            self._update_drawing_preview(pos.x(), pos.y())
+            event.accept()
+            return
 
         super().mouseMoveEvent(event)
 
@@ -2366,6 +2687,16 @@ class MainGraph(pg.PlotWidget):
         elif self._is_selecting and self.state.tool_mode == ToolMode.LASSO_SELECT:
             if event.button() == Qt.LeftButton:
                 self._finish_lasso_selection()
+                event.accept()
+                return
+        
+        # Drawing mode finish
+        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW, 
+                                                            ToolMode.CIRCLE_DRAW, 
+                                                            ToolMode.RECT_DRAW]:
+            if event.button() == Qt.LeftButton:
+                pos = self.plotItem.vb.mapSceneToView(event.position())
+                self._finish_drawing(pos.x(), pos.y())
                 event.accept()
                 return
 
@@ -2492,18 +2823,28 @@ class MainGraph(pg.PlotWidget):
             self._hide_tooltip()
             return
 
-        # Normalized distance
-        dx = (self._data_x - mx) / x_range
-        dy = (self._data_y - my) / y_range
-        distances = np.sqrt(dx**2 + dy**2)
+        # Normalized distance (handle NaN values)
+        try:
+            dx = (self._data_x - mx) / x_range
+            dy = (self._data_y - my) / y_range
+            distances = np.sqrt(dx**2 + dy**2)
 
-        nearest_idx = np.argmin(distances)
-        min_dist = distances[nearest_idx]
+            # Replace NaN distances with infinity so they're not selected
+            distances = np.where(np.isnan(distances), np.inf, distances)
 
-        # Only show tooltip if close enough (within 5% of view range)
-        if min_dist < 0.05:
-            self._show_tooltip(nearest_idx, self._data_x[nearest_idx], self._data_y[nearest_idx])
-        else:
+            if np.all(np.isinf(distances)):
+                self._hide_tooltip()
+                return
+
+            nearest_idx = np.argmin(distances)
+            min_dist = distances[nearest_idx]
+
+            # Only show tooltip if close enough (within 5% of view range)
+            if min_dist < 0.05 and not np.isinf(min_dist):
+                self._show_tooltip(nearest_idx, self._data_x[nearest_idx], self._data_y[nearest_idx])
+            else:
+                self._hide_tooltip()
+        except Exception:
             self._hide_tooltip()
 
     def _show_tooltip(self, idx: int, x_val: float, y_val: float):
@@ -2547,6 +2888,202 @@ class MainGraph(pg.PlotWidget):
         """Set hover data columns and values"""
         self._hover_columns = hover_columns or []
         self._hover_data = hover_data or {}
+
+    # ==================== Drawing Methods ====================
+
+    def set_drawing_manager(self, manager: DrawingManager):
+        """Set the drawing manager"""
+        self._drawing_manager = manager
+
+    def get_drawing_manager(self) -> Optional[DrawingManager]:
+        """Get the drawing manager"""
+        return self._drawing_manager
+
+    def set_drawing_style(self, style: DrawingStyle):
+        """Set the current drawing style"""
+        self._current_drawing_style = style
+
+    def keyPressEvent(self, event):
+        """Handle key press events"""
+        if event.key() == Qt.Key_Shift:
+            self._shift_pressed = True
+        elif event.key() == Qt.Key_Delete:
+            # Delete selected drawing
+            if self._drawing_manager:
+                self._drawing_manager.delete_selected()
+        elif event.key() == Qt.Key_Z and event.modifiers() & Qt.ControlModifier:
+            # Undo
+            if self._drawing_manager:
+                self._drawing_manager.undo()
+        elif event.key() == Qt.Key_Y and event.modifiers() & Qt.ControlModifier:
+            # Redo
+            if self._drawing_manager:
+                self._drawing_manager.redo()
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        """Handle key release events"""
+        if event.key() == Qt.Key_Shift:
+            self._shift_pressed = False
+        super().keyReleaseEvent(event)
+
+    def _update_drawing_preview(self, x: float, y: float):
+        """Update drawing preview while dragging"""
+        if not self._drawing_start:
+            return
+
+        x1, y1 = self._drawing_start
+        x2, y2 = x, y
+
+        # Apply Shift constraint
+        if self._shift_pressed:
+            if self.state.tool_mode == ToolMode.LINE_DRAW:
+                # Snap to 45-degree angles
+                x2, y2 = snap_to_angle(x1, y1, x2, y2, 45.0)
+            elif self.state.tool_mode == ToolMode.CIRCLE_DRAW:
+                # Make perfect circle
+                radius = max(abs(x2 - x1), abs(y2 - y1))
+                x2 = x1 + radius if x2 > x1 else x1 - radius
+                y2 = y1 + radius if y2 > y1 else y1 - radius
+            elif self.state.tool_mode == ToolMode.RECT_DRAW:
+                # Make perfect square
+                size = max(abs(x2 - x1), abs(y2 - y1))
+                x2 = x1 + size if x2 > x1 else x1 - size
+                y2 = y1 + size if y2 > y1 else y1 - size
+
+        # Remove old preview
+        if self._drawing_preview_item is not None:
+            self.removeItem(self._drawing_preview_item)
+            self._drawing_preview_item = None
+
+        # Create preview based on tool mode
+        style = self._current_drawing_style
+        pen = pg.mkPen(
+            color=style.stroke_color,
+            width=style.stroke_width,
+            style=style.line_style.to_qt()
+        )
+
+        if self.state.tool_mode == ToolMode.LINE_DRAW:
+            # Line preview
+            from PySide6.QtCore import QLineF
+            line = pg.QtWidgets.QGraphicsLineItem(QLineF(x1, y1, x2, y2))
+            line.setPen(pen)
+            self.addItem(line)
+            self._drawing_preview_item = line
+
+        elif self.state.tool_mode == ToolMode.CIRCLE_DRAW:
+            # Circle/ellipse preview
+            cx = (x1 + x2) / 2
+            cy = (y1 + y2) / 2
+            rx = abs(x2 - x1) / 2
+            ry = abs(y2 - y1) / 2
+            ellipse = pg.QtWidgets.QGraphicsEllipseItem(
+                cx - rx, cy - ry, rx * 2, ry * 2
+            )
+            ellipse.setPen(pen)
+            if style.fill_color:
+                fill = QColor(style.fill_color)
+                fill.setAlphaF(style.fill_opacity)
+                ellipse.setBrush(QBrush(fill))
+            self.addItem(ellipse)
+            self._drawing_preview_item = ellipse
+
+        elif self.state.tool_mode == ToolMode.RECT_DRAW:
+            # Rectangle preview
+            rect_x = min(x1, x2)
+            rect_y = min(y1, y2)
+            width = abs(x2 - x1)
+            height = abs(y2 - y1)
+            rect = pg.QtWidgets.QGraphicsRectItem(rect_x, rect_y, width, height)
+            rect.setPen(pen)
+            if style.fill_color:
+                fill = QColor(style.fill_color)
+                fill.setAlphaF(style.fill_opacity)
+                rect.setBrush(QBrush(fill))
+            self.addItem(rect)
+            self._drawing_preview_item = rect
+
+    def _finish_drawing(self, x: float, y: float):
+        """Finish drawing and create the object"""
+        if not self._drawing_start or not self._drawing_manager:
+            self._cleanup_drawing()
+            return
+
+        x1, y1 = self._drawing_start
+        x2, y2 = x, y
+
+        # Apply Shift constraint
+        if self._shift_pressed:
+            if self.state.tool_mode == ToolMode.LINE_DRAW:
+                x2, y2 = snap_to_angle(x1, y1, x2, y2, 45.0)
+            elif self.state.tool_mode == ToolMode.CIRCLE_DRAW:
+                radius = max(abs(x2 - x1), abs(y2 - y1))
+                x2 = x1 + radius if x2 > x1 else x1 - radius
+                y2 = y1 + radius if y2 > y1 else y1 - radius
+            elif self.state.tool_mode == ToolMode.RECT_DRAW:
+                size = max(abs(x2 - x1), abs(y2 - y1))
+                x2 = x1 + size if x2 > x1 else x1 - size
+                y2 = y1 + size if y2 > y1 else y1 - size
+
+        # Create drawing object
+        style = DrawingStyle(
+            stroke_color=self._current_drawing_style.stroke_color,
+            stroke_width=self._current_drawing_style.stroke_width,
+            line_style=self._current_drawing_style.line_style,
+            fill_color=self._current_drawing_style.fill_color,
+            fill_opacity=self._current_drawing_style.fill_opacity,
+        )
+
+        drawing = None
+
+        if self.state.tool_mode == ToolMode.LINE_DRAW:
+            drawing = LineDrawing(
+                x1=x1, y1=y1, x2=x2, y2=y2,
+                style=style
+            )
+        elif self.state.tool_mode == ToolMode.CIRCLE_DRAW:
+            cx = (x1 + x2) / 2
+            cy = (y1 + y2) / 2
+            rx = abs(x2 - x1) / 2
+            ry = abs(y2 - y1) / 2
+            drawing = CircleDrawing(
+                cx=cx, cy=cy, rx=rx, ry=ry,
+                style=style
+            )
+        elif self.state.tool_mode == ToolMode.RECT_DRAW:
+            rect_x = min(x1, x2)
+            rect_y = min(y1, y2)
+            width = abs(x2 - x1)
+            height = abs(y2 - y1)
+            drawing = RectDrawing(
+                x=rect_x, y=rect_y, width=width, height=height,
+                style=style
+            )
+
+        if drawing:
+            self._drawing_manager.add_drawing(drawing)
+
+        self._cleanup_drawing()
+
+    def _handle_text_draw(self, x: float, y: float):
+        """Handle text drawing - show dialog"""
+        if not self._drawing_manager:
+            return
+
+        dialog = TextInputDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            text_drawing = dialog.get_text_drawing(x, y)
+            self._drawing_manager.add_drawing(text_drawing)
+
+    def _cleanup_drawing(self):
+        """Clean up drawing state"""
+        if self._drawing_preview_item is not None:
+            self.removeItem(self._drawing_preview_item)
+            self._drawing_preview_item = None
+
+        self._is_drawing = False
+        self._drawing_start = None
 
 
 # ==================== Sliding Window Widget ====================
@@ -3063,13 +3600,17 @@ class GraphPanel(QWidget):
         self.stat_panel = StatPanel(self.state)
         self.splitter.addWidget(self.stat_panel)
 
-        # Splitter sizes: Options(280) + Graph(stretch) + Stats(180)
-        self.splitter.setSizes([280, 500, 180])
+        # Splitter sizes: Options(280) + Graph(stretch) + Stats(360) - Stats doubled
+        self.splitter.setSizes([280, 500, 360])
         self.splitter.setStretchFactor(0, 0)  # Options: fixed
         self.splitter.setStretchFactor(1, 1)  # Graph: stretch
-        self.splitter.setStretchFactor(2, 0)  # Stats: fixed
+        self.splitter.setStretchFactor(2, 0)  # Stats: fixed (2x width)
 
         layout.addWidget(self.splitter)
+
+        # Initialize DrawingManager
+        self._drawing_manager = DrawingManager(self.main_graph)
+        self.main_graph.set_drawing_manager(self._drawing_manager)
     
     def _connect_signals(self):
         self.state.chart_settings_changed.connect(self.refresh)
@@ -3255,6 +3796,20 @@ class GraphPanel(QWidget):
         is_sampled = False
         algorithm_used = ""
 
+        # Helper function to apply sampling algorithm
+        def _apply_sampling(x_arr, y_arr, n_points, algo):
+            """Apply sampling algorithm to data arrays"""
+            if algo == 'auto':
+                return DataSampler.auto_sample(x_arr, y_arr, max_points=n_points)
+            elif algo == 'lttb':
+                return DataSampler.lttb(x_arr, y_arr, threshold=n_points)
+            elif algo == 'minmax':
+                return DataSampler.min_max_per_bucket(x_arr, y_arr, n_buckets=max(1, n_points // 2))
+            elif algo == 'random':
+                return DataSampler.random_sample(x_arr, y_arr, n_samples=n_points)
+            else:
+                return DataSampler.auto_sample(x_arr, y_arr, max_points=n_points)
+
         # Don't sample categorical data
         if x_is_categorical or y_is_categorical:
             x_sampled, y_sampled = x_data, y_data
@@ -3271,37 +3826,101 @@ class GraphPanel(QWidget):
                 if len(x_valid) > max_points:
                     is_sampled = True
 
-                    # Apply selected sampling algorithm
-                    if sampling_algorithm == 'auto':
-                        x_sampled, y_sampled = DataSampler.auto_sample(
-                            x_valid, y_valid, max_points=max_points
-                        )
-                        # Determine which algorithm was used
-                        is_sorted = np.all(x_valid[:-1] <= x_valid[1:])
-                        algorithm_used = "LTTB" if is_sorted else "Min-Max"
-                    elif sampling_algorithm == 'lttb':
-                        x_sampled, y_sampled = DataSampler.lttb(
-                            x_valid, y_valid, threshold=max_points
-                        )
-                        algorithm_used = "LTTB"
-                    elif sampling_algorithm == 'minmax':
-                        x_sampled, y_sampled = DataSampler.min_max_per_bucket(
-                            x_valid, y_valid, n_buckets=max_points // 2
-                        )
-                        algorithm_used = "Min-Max"
-                    elif sampling_algorithm == 'random':
-                        x_sampled, y_sampled = DataSampler.random_sample(
-                            x_valid, y_valid, n_samples=max_points
-                        )
-                        algorithm_used = "Random"
+                    # Group-aware sampling: sample each group separately to preserve group structure
+                    if groups is not None and len(groups) > 0:
+                        # Calculate points per group (proportional to group size)
+                        group_sizes = {name: np.sum(mask[valid_mask]) for name, mask in groups.items()}
+                        total_valid = sum(group_sizes.values())
+                        
+                        # Ensure minimum points per group (at least 10 or 1% of max_points)
+                        min_points_per_group = max(10, max_points // 100)
+                        
+                        x_sampled_list = []
+                        y_sampled_list = []
+                        new_groups = {}
+                        current_offset = 0
+                        
+                        for group_name, mask in groups.items():
+                            # Get valid data for this group
+                            group_valid_mask = mask[valid_mask]
+                            x_group = x_valid[group_valid_mask]
+                            y_group = y_valid[group_valid_mask]
+                            
+                            if len(x_group) == 0:
+                                continue
+                            
+                            # Calculate proportional points for this group
+                            group_ratio = len(x_group) / total_valid if total_valid > 0 else 0
+                            group_points = max(min_points_per_group, int(max_points * group_ratio))
+                            
+                            # Apply sampling if group has more points than allocated
+                            if len(x_group) > group_points:
+                                x_group_sampled, y_group_sampled = _apply_sampling(
+                                    x_group, y_group, group_points, sampling_algorithm
+                                )
+                            else:
+                                x_group_sampled, y_group_sampled = x_group, y_group
+                            
+                            # Create new group mask for sampled data
+                            group_len = len(x_group_sampled)
+                            new_mask = np.zeros(0, dtype=bool)  # Will be resized later
+                            
+                            x_sampled_list.append(x_group_sampled)
+                            y_sampled_list.append(y_group_sampled)
+                            new_groups[group_name] = (current_offset, group_len)
+                            current_offset += group_len
+                        
+                        # Concatenate all sampled data
+                        if x_sampled_list:
+                            x_sampled = np.concatenate(x_sampled_list)
+                            y_sampled = np.concatenate(y_sampled_list)
+                            
+                            # Build new group masks for concatenated data
+                            total_sampled = len(x_sampled)
+                            groups = {}
+                            for group_name, (offset, length) in new_groups.items():
+                                mask = np.zeros(total_sampled, dtype=bool)
+                                mask[offset:offset + length] = True
+                                groups[group_name] = mask
+                        else:
+                            x_sampled, y_sampled = x_valid, y_valid
                     else:
-                        x_sampled, y_sampled = DataSampler.auto_sample(
-                            x_valid, y_valid, max_points=max_points
-                        )
-                        algorithm_used = "Auto"
-
-                    # Clear groups when sampling (can't maintain group structure)
-                    groups = None
+                        # No groups - sample entire dataset
+                        if sampling_algorithm == 'auto':
+                            x_sampled, y_sampled = DataSampler.auto_sample(
+                                x_valid, y_valid, max_points=max_points
+                            )
+                            # Determine which algorithm was used
+                            is_sorted = np.all(x_valid[:-1] <= x_valid[1:])
+                            algorithm_used = "LTTB" if is_sorted else "Min-Max"
+                        elif sampling_algorithm == 'lttb':
+                            x_sampled, y_sampled = DataSampler.lttb(
+                                x_valid, y_valid, threshold=max_points
+                            )
+                            algorithm_used = "LTTB"
+                        elif sampling_algorithm == 'minmax':
+                            x_sampled, y_sampled = DataSampler.min_max_per_bucket(
+                                x_valid, y_valid, n_buckets=max_points // 2
+                            )
+                            algorithm_used = "Min-Max"
+                        elif sampling_algorithm == 'random':
+                            x_sampled, y_sampled = DataSampler.random_sample(
+                                x_valid, y_valid, n_samples=max_points
+                            )
+                            algorithm_used = "Random"
+                        else:
+                            x_sampled, y_sampled = DataSampler.auto_sample(
+                                x_valid, y_valid, max_points=max_points
+                            )
+                            algorithm_used = "Auto"
+                    
+                    # Set algorithm used for display
+                    if not algorithm_used:
+                        if sampling_algorithm == 'auto':
+                            is_sorted = np.all(x_valid[:-1] <= x_valid[1:])
+                            algorithm_used = "LTTB" if is_sorted else "Min-Max"
+                        else:
+                            algorithm_used = sampling_algorithm.upper()
                 else:
                     x_sampled, y_sampled = x_valid, y_valid
             except (ValueError, TypeError):
@@ -3347,8 +3966,23 @@ class GraphPanel(QWidget):
         else:
             self.main_graph.set_hover_data([], {})
 
-        # Update stats
-        self.stat_panel.update_histograms(x_sampled, y_sampled)
+        # Update stats - compute group aggregation for pie chart
+        group_data = None
+        if groups is not None and len(groups) > 0:
+            # Calculate sum of Y values for each group for pie chart
+            try:
+                group_data = {}
+                for group_name, mask in groups.items():
+                    group_y = y_sampled[mask]
+                    clean_y = group_y[~np.isnan(group_y)]
+                    if len(clean_y) > 0:
+                        group_data[group_name] = float(np.sum(clean_y))
+                    else:
+                        group_data[group_name] = 0.0
+            except Exception:
+                group_data = None
+
+        self.stat_panel.update_histograms(x_sampled, y_sampled, group_data)
         if self.state.value_columns:
             stats = self.engine.get_statistics(self.state.value_columns[0].name)
             self.stat_panel.update_stats(stats)
@@ -3804,3 +4438,46 @@ class GraphPanel(QWidget):
             self.options_panel.x_sliding_window_check.setChecked(options['x_sliding_window'])
         if 'y_sliding_window' in options:
             self.options_panel.y_sliding_window_check.setChecked(options['y_sliding_window'])
+
+    # ==================== Drawing Methods ====================
+
+    def get_drawing_manager(self) -> DrawingManager:
+        """Get the drawing manager"""
+        return self._drawing_manager
+
+    def set_drawing_style(self, style: DrawingStyle):
+        """Set the current drawing style for new drawings"""
+        self._drawing_manager.current_style = style
+        self.main_graph.set_drawing_style(style)
+
+    def get_drawings_data(self) -> Dict[str, Any]:
+        """Get all drawings as serializable dict (for saving)"""
+        return self._drawing_manager.to_dict()
+
+    def load_drawings_data(self, data: Dict[str, Any]):
+        """Load drawings from serialized dict"""
+        self._drawing_manager.from_dict(data)
+
+    def clear_drawings(self):
+        """Clear all drawings"""
+        self._drawing_manager.clear()
+
+    def undo_drawing(self) -> bool:
+        """Undo last drawing action"""
+        return self._drawing_manager.undo()
+
+    def redo_drawing(self) -> bool:
+        """Redo last undone action"""
+        return self._drawing_manager.redo()
+
+    def delete_selected_drawing(self) -> bool:
+        """Delete the currently selected drawing"""
+        return self._drawing_manager.delete_selected()
+
+    def show_drawing_style_dialog(self):
+        """Show dialog to configure drawing style"""
+        dialog = DrawingStyleDialog("Drawing Style", self)
+        dialog.set_style(self._drawing_manager.current_style)
+        if dialog.exec() == QDialog.Accepted:
+            style = dialog.get_style()
+            self.set_drawing_style(style)

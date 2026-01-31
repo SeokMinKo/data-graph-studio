@@ -62,17 +62,43 @@ class GroupedTableModel(QAbstractItemModel):
     - Expand/collapse groups
     - Aggregate values in group headers
     - Virtual scrolling friendly
+    - Auto-aggregation of all numeric columns
     """
     
     expand_changed = Signal()  # Emitted when expand state changes
+    
+    # Default aggregation for auto-detected numeric columns (fallback when Value Zone is empty)
+    DEFAULT_AUTO_AGGREGATION = 'sum'
+    
+    def _get_effective_default_aggregation(self) -> str:
+        """Get default aggregation for auto-detected numeric columns.
+        
+        If Value Zone has columns with specified aggregation, use the first one's type.
+        Otherwise, fall back to DEFAULT_AUTO_AGGREGATION (sum).
+        
+        Returns:
+            Aggregation function name ('sum', 'mean', 'count', 'min', 'max')
+        """
+        # If there are value columns with specified aggregations, use the first one
+        if self._value_columns and self._aggregations:
+            for col in self._value_columns:
+                if col in self._aggregations:
+                    return self._aggregations[col]
+        
+        return self.DEFAULT_AUTO_AGGREGATION
     
     def __init__(self, parent=None):
         super().__init__(parent)
         
         self._df: Optional[pl.DataFrame] = None
         self._group_columns: List[str] = []
-        self._value_columns: List[str] = []
+        self._value_columns: List[str] = []  # Explicit value columns from Value Zone
         self._aggregations: Dict[str, str] = {}  # column -> agg function
+        
+        # Auto-detected numeric columns (not in value_columns)
+        self._auto_numeric_columns: List[str] = []
+        # Combined list: value_columns + auto_numeric_columns
+        self._all_value_columns: List[str] = []
         
         self._root: Optional[GroupNode] = None
         self._flat_view: List[Tuple[GroupNode, Optional[int]]] = []  # (node, row_idx or None for header)
@@ -92,7 +118,12 @@ class GroupedTableModel(QAbstractItemModel):
         value_columns: List[str] = None,
         aggregations: Dict[str, str] = None
     ):
-        """Set data and grouping configuration"""
+        """Set data and grouping configuration
+        
+        Auto-detects all numeric columns and aggregates them:
+        - Explicit value_columns use their specified aggregation
+        - Other numeric columns use DEFAULT_AUTO_AGGREGATION (sum)
+        """
         self.beginResetModel()
         
         self._df = df
@@ -102,13 +133,48 @@ class GroupedTableModel(QAbstractItemModel):
         
         if df is not None:
             self._visible_columns = df.columns
+            # Auto-detect numeric columns not in value_columns
+            self._auto_numeric_columns = self._detect_numeric_columns(df)
+            # Combine explicit and auto columns
+            self._all_value_columns = self._value_columns + self._auto_numeric_columns
             self._build_tree()
         else:
             self._root = None
             self._flat_view = []
             self._visible_columns = []
+            self._auto_numeric_columns = []
+            self._all_value_columns = []
         
         self.endResetModel()
+    
+    def _detect_numeric_columns(self, df: pl.DataFrame) -> List[str]:
+        """Detect numeric columns not already in value_columns or group_columns
+        
+        Returns:
+            List of numeric column names to auto-aggregate
+        """
+        if df is None or len(df.columns) == 0:
+            return []
+        
+        # Columns to exclude from auto-detection
+        exclude_set = set(self._value_columns) | set(self._group_columns)
+        
+        # Numeric dtypes in Polars
+        numeric_dtypes = (
+            pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+            pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
+            pl.Float32, pl.Float64,
+        )
+        
+        auto_numeric = []
+        for col in df.columns:
+            if col in exclude_set:
+                continue
+            # Check if column is numeric
+            if df[col].dtype in numeric_dtypes:
+                auto_numeric.append(col)
+        
+        return auto_numeric
     
     def _build_tree(self):
         """Build hierarchical group tree (optimized with Polars)"""
@@ -133,16 +199,31 @@ class GroupedTableModel(QAbstractItemModel):
         self._rebuild_flat_view()
     
     def _build_tree_optimized(self):
-        """Polars groupby를 사용한 최적화된 트리 빌드"""
+        """Polars groupby를 사용한 최적화된 트리 빌드
+        
+        Aggregates all value columns:
+        - Explicit value_columns use their specified aggregation
+        - Auto-detected numeric columns use DEFAULT_AUTO_AGGREGATION
+        """
         if self._df is None or not self._group_columns:
             return
         
         # 그룹별 집계를 Polars로 한번에 계산
         agg_exprs = [pl.count().alias("_count")]
         
-        for col in self._value_columns:
+        # Get effective default aggregation from Value Zone
+        effective_default_agg = self._get_effective_default_aggregation()
+        
+        # Aggregate all value columns (explicit + auto-detected)
+        for col in self._all_value_columns:
             if col in self._df.columns:
-                agg_func = self._aggregations.get(col, 'sum')
+                # Use explicit aggregation if specified, otherwise use effective default
+                if col in self._value_columns:
+                    agg_func = self._aggregations.get(col, 'sum')
+                else:
+                    # Auto-detected column: use effective default (from Value Zone or fallback)
+                    agg_func = effective_default_agg
+                
                 if agg_func == 'sum':
                     agg_exprs.append(pl.col(col).sum().alias(f"_agg_{col}"))
                 elif agg_func == 'mean':
@@ -204,7 +285,7 @@ class GroupedTableModel(QAbstractItemModel):
             
             # 마지막 노드에 집계값 저장
             parent.aggregates["_count"] = row["_count"]
-            for col in self._value_columns:
+            for col in self._all_value_columns:
                 agg_key = f"_agg_{col}"
                 if agg_key in row:
                     parent.aggregates[col] = row[agg_key]
@@ -261,7 +342,10 @@ class GroupedTableModel(QAbstractItemModel):
                 child.rows = child_rows
     
     def _calculate_aggregates(self, node: GroupNode):
-        """Calculate aggregate values for node and children"""
+        """Calculate aggregate values for node and children
+        
+        Aggregates all value columns (explicit + auto-detected)
+        """
         # Process children first (bottom-up)
         for child in node.children:
             self._calculate_aggregates(child)
@@ -277,12 +361,19 @@ class GroupedTableModel(QAbstractItemModel):
         
         subset = self._df[all_rows]
         
-        # Calculate aggregates for value columns
-        for col in self._value_columns:
+        # Get effective default aggregation from Value Zone
+        effective_default_agg = self._get_effective_default_aggregation()
+        
+        # Calculate aggregates for all value columns (explicit + auto-detected)
+        for col in self._all_value_columns:
             if col not in self._df.columns:
                 continue
             
-            agg_func = self._aggregations.get(col, 'sum')
+            # Use explicit aggregation if specified, otherwise use effective default
+            if col in self._value_columns:
+                agg_func = self._aggregations.get(col, 'sum')
+            else:
+                agg_func = effective_default_agg
             
             try:
                 if agg_func == 'sum':

@@ -44,11 +44,29 @@ class ComparisonStatsPanel(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
 
-        # 탭 위젯
+        # 탭 위젯 - compact style
         self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background: transparent;
+            }
+            QTabBar::tab {
+                background: transparent;
+                border: none;
+                padding: 6px 12px;
+                font-size: 11px;
+                color: #9CA3AF;
+            }
+            QTabBar::tab:selected {
+                color: #4F46E5;
+                font-weight: 600;
+                border-bottom: 2px solid #4F46E5;
+            }
+        """)
         layout.addWidget(self.tab_widget)
 
         # 탭 1: 기본 통계 비교

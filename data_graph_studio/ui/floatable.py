@@ -12,14 +12,16 @@ from PySide6.QtGui import QIcon
 
 
 class FloatWindow(QDialog):
-    """독립 창으로 분리된 섹션을 위한 윈도우"""
+    """독립 창으로 분리된 섹션을 위한 윈도우 (Non-modal)"""
 
     dock_requested = Signal()  # 다시 메인 창으로 복귀 요청
 
     def __init__(self, title: str, content_widget: QWidget, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
+        # Non-modal window with standard window controls
         self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint)
+        self.setModal(False)  # Non-modal: main window remains interactive
         self.setMinimumSize(400, 300)
 
         self._content_widget = content_widget
