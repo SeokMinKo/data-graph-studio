@@ -999,6 +999,7 @@ class MainWindow(QMainWindow):
 
         # Panel signals - route through preview dialog
         self.table_panel.file_dropped.connect(self._show_parsing_preview)
+        self.table_panel.window_changed.connect(self._on_window_changed)
 
     def _setup_float_handlers(self):
         """메인 패널들의 Float 버튼 핸들러 설정"""
@@ -1439,11 +1440,18 @@ class MainWindow(QMainWindow):
         
         # 패널들에 데이터 전달
         self.table_panel.set_data(self.engine.df)
+        if self.engine.is_windowed:
+            self.state.set_visible_rows(len(self.engine.df))
         
         # 그래프 패널에 컬럼 목록 전달 (X-Axis 드롭다운용)
         self.graph_panel.set_columns(self.engine.columns)
         self.graph_panel.refresh()
         
+        self.summary_panel.refresh()
+
+    def _on_window_changed(self):
+        """Window 이동 시 그래프/요약 갱신"""
+        self.graph_panel.refresh()
         self.summary_panel.refresh()
     
     def _on_data_cleared(self):

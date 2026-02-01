@@ -371,6 +371,22 @@ class DataEngine:
         self._df = self._load_window_from_lazy(self._lazy_df, self._window_start, self._window_size)
         self._windowed = True
         return True
+
+    @property
+    def is_windowed(self) -> bool:
+        return self._windowed
+
+    @property
+    def total_rows(self) -> int:
+        return self._total_rows if self._total_rows else self.row_count
+
+    @property
+    def window_start(self) -> int:
+        return self._window_start
+
+    @property
+    def window_size(self) -> int:
+        return self._window_size
     
     def detect_file_type(self, path: str) -> FileType:
         """파일 형식 자동 감지"""
@@ -1162,17 +1178,53 @@ class DataEngine:
     
     def get_statistics(self, column: str) -> Dict[str, Any]:
         """컬럼 통계"""
-        if self._df is None or column not in self._df.columns:
+        if self._df is None:
             return {}
-        
+
+        # Windowed 모드면 LazyFrame 기준으로 전체 통계 계산
+        if self._windowed and self._lazy_df is not None:
+            try:
+                if column not in self._lazy_df.columns:
+                    return {}
+
+                dtype = self._lazy_df.schema.get(column)
+                exprs = [
+                    pl.len().alias('count'),
+                    pl.col(column).null_count().alias('null_count'),
+                    pl.col(column).n_unique().alias('unique_count'),
+                ]
+
+                if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
+                    exprs.extend([
+                        pl.col(column).sum().alias('sum'),
+                        pl.col(column).mean().alias('mean'),
+                        pl.col(column).median().alias('median'),
+                        pl.col(column).std().alias('std'),
+                        pl.col(column).min().alias('min'),
+                        pl.col(column).max().alias('max'),
+                        pl.col(column).quantile(0.25).alias('q1'),
+                        pl.col(column).quantile(0.75).alias('q3'),
+                    ])
+
+                stats_df = self._collect_streaming(self._lazy_df.select(exprs))
+                if stats_df is None or stats_df.height == 0:
+                    return {}
+
+                return stats_df.to_dicts()[0]
+            except Exception:
+                pass
+
+        if column not in self._df.columns:
+            return {}
+
         series = self._df[column]
-        
+
         stats = {
             'count': len(series),
             'null_count': series.null_count(),
             'unique_count': series.n_unique(),
         }
-        
+
         # 숫자형 통계
         if series.dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
             stats.update({
@@ -1185,7 +1237,7 @@ class DataEngine:
                 'q1': series.quantile(0.25),
                 'q3': series.quantile(0.75),
             })
-        
+
         return stats
 
     def is_column_categorical(self, column: str, max_unique_ratio: float = 0.05, max_unique_count: int = 100) -> bool:

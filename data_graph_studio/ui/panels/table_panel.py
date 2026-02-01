@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QTableView, QHeaderView, QAbstractItemView, QMenu,
     QLineEdit, QComboBox, QPushButton, QScrollArea,
     QSplitter, QSizePolicy, QApplication, QListWidget,
-    QListWidgetItem, QGroupBox
+    QListWidgetItem, QGroupBox, QSlider
 )
 from PySide6.QtCore import (
     Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
@@ -1400,6 +1400,7 @@ class TablePanel(QWidget):
     """
 
     file_dropped = Signal(str)
+    window_changed = Signal()
 
     def __init__(self, state: AppState, engine: DataEngine):
         super().__init__()
@@ -1542,6 +1543,41 @@ class TablePanel(QWidget):
         self.limit_marking_btn.setToolTip("Show only marked/selected rows in table")
         self.limit_marking_btn.clicked.connect(self._on_limit_marking_toggled)
         toolbar.addWidget(self.limit_marking_btn)
+
+        # Window controls (for large datasets)
+        self.window_widget = QWidget()
+        window_layout = QHBoxLayout(self.window_widget)
+        window_layout.setContentsMargins(8, 0, 8, 0)
+        window_layout.setSpacing(6)
+
+        self.window_prev_btn = QPushButton("◀")
+        self.window_prev_btn.setFixedWidth(24)
+        self.window_prev_btn.setToolTip("Previous window")
+        self.window_prev_btn.clicked.connect(self._on_window_prev)
+        window_layout.addWidget(self.window_prev_btn)
+
+        self.window_slider = QSlider(Qt.Horizontal)
+        self.window_slider.setFixedWidth(160)
+        self.window_slider.setMinimum(0)
+        self.window_slider.setMaximum(0)
+        self.window_slider.setSingleStep(1000)
+        self.window_slider.setPageStep(10000)
+        self.window_slider.sliderReleased.connect(self._on_window_slider_released)
+        self.window_slider.valueChanged.connect(self._on_window_slider_changed)
+        window_layout.addWidget(self.window_slider)
+
+        self.window_next_btn = QPushButton("▶")
+        self.window_next_btn.setFixedWidth(24)
+        self.window_next_btn.setToolTip("Next window")
+        self.window_next_btn.clicked.connect(self._on_window_next)
+        window_layout.addWidget(self.window_next_btn)
+
+        self.window_label = QLabel("")
+        self.window_label.setStyleSheet("color: #6B7280; font-size: 10px;")
+        window_layout.addWidget(self.window_label)
+
+        self.window_widget.setVisible(False)
+        toolbar.addWidget(self.window_widget)
         
         toolbar.addStretch()
         
@@ -1609,6 +1645,7 @@ class TablePanel(QWidget):
         if self.grouped_model:
             self.grouped_model._row_cache = []
         self._update_table_model(df)
+        self._update_window_controls()
     
     def _update_table_model(self, df: Optional[pl.DataFrame] = None):
         if df is None:
@@ -1930,6 +1967,59 @@ class TablePanel(QWidget):
             # Show all data
             self._apply_filters_and_update()
     
+    # ==================== Windowed Loading ====================
+
+    def _update_window_controls(self):
+        if not self.engine.is_loaded or not self.engine.is_windowed:
+            self.window_widget.setVisible(False)
+            return
+
+        total_rows = self.engine.total_rows
+        window_size = self.engine.window_size
+        max_start = max(0, total_rows - window_size)
+
+        self.window_widget.setVisible(True)
+        self.window_slider.blockSignals(True)
+        self.window_slider.setMinimum(0)
+        self.window_slider.setMaximum(max_start)
+        self.window_slider.setValue(min(self.engine.window_start, max_start))
+        self.window_slider.blockSignals(False)
+
+        self._set_window_label(self.engine.window_start, window_size, total_rows)
+
+    def _set_window_label(self, start: int, size: int, total: int):
+        end = min(start + size, total) if total else start + size
+        self.window_label.setText(f"{start + 1:,}–{end:,} / {total:,}")
+
+    def _apply_window(self, start: int):
+        if not self.engine.is_windowed:
+            return
+
+        total_rows = self.engine.total_rows
+        window_size = self.engine.window_size
+        max_start = max(0, total_rows - window_size)
+        start = max(0, min(start, max_start))
+
+        if self.engine.set_window(start, window_size):
+            self.state.clear_selection()
+            self.state.set_visible_rows(len(self.engine.df))
+            self.set_data(self.engine.df)
+            self.window_changed.emit()
+
+    def _on_window_prev(self):
+        self._apply_window(self.engine.window_start - self.engine.window_size)
+
+    def _on_window_next(self):
+        self._apply_window(self.engine.window_start + self.engine.window_size)
+
+    def _on_window_slider_changed(self, value: int):
+        if not self.engine.is_windowed:
+            return
+        self._set_window_label(value, self.engine.window_size, self.engine.total_rows)
+
+    def _on_window_slider_released(self):
+        self._apply_window(self.window_slider.value())
+
     # ==================== Drag & Drop ====================
     
     def dragEnterEvent(self, event: QDragEnterEvent):
