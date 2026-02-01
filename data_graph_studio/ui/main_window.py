@@ -869,6 +869,7 @@ class MainWindow(QMainWindow):
         self._ipc_server.register_handler('set_columns', self._ipc_set_columns)
         self._ipc_server.register_handler('load_file', self._ipc_load_file)
         self._ipc_server.register_handler('get_panels', self._ipc_get_panels)
+        self._ipc_server.register_handler('get_summary', self._ipc_get_summary)
         self._ipc_server.register_handler('execute', self._ipc_execute)
         
         # 서버 시작
@@ -932,13 +933,15 @@ class MainWindow(QMainWindow):
         if dataset_id:
             self.state.set_data_loaded(True, self.engine.row_count)
             self.table_panel.set_data(self.engine.df)
+            # Summary 업데이트
+            self._update_summary_from_profile()
             return {'success': True, 'dataset_id': dataset_id}
         return {'success': False}
     
     def _ipc_get_panels(self) -> dict:
         """패널 정보 반환"""
         panels = {}
-        for name in ['table_panel', 'graph_panel', 'filter_panel', 'property_panel']:
+        for name in ['table_panel', 'graph_panel', 'filter_panel', 'property_panel', 'summary_panel']:
             if hasattr(self, name):
                 panel = getattr(self, name)
                 panels[name] = {
@@ -946,6 +949,39 @@ class MainWindow(QMainWindow):
                     'visible': panel.isVisible() if panel else False,
                 }
         return panels
+
+    def _ipc_get_summary(self) -> dict:
+        """Summary 통계 반환"""
+        summary = self.engine.get_full_profile_summary()
+        profile = self.engine.profile
+
+        if summary is None and profile is None:
+            return {}
+
+        if summary is None and profile is not None:
+            numeric_cols = sum(1 for c in profile.columns if c.is_numeric)
+            text_cols = sum(1 for c in profile.columns if not c.is_numeric and not c.is_temporal)
+            temporal_cols = sum(1 for c in profile.columns if c.is_temporal)
+
+            total_cells = profile.total_rows * profile.total_columns
+            total_nulls = sum(c.null_count for c in profile.columns)
+            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
+
+            summary = {
+                'total_rows': profile.total_rows,
+                'total_columns': profile.total_columns,
+                'numeric_columns': numeric_cols,
+                'text_columns': text_cols + temporal_cols,
+                'missing_percent': missing_percent,
+                'memory_bytes': profile.memory_bytes,
+                'load_time_seconds': profile.load_time_seconds,
+            }
+
+        # file name
+        if self.engine._source and self.engine._source.path:
+            summary['file_name'] = Path(self.engine._source.path).name
+
+        return summary
     
     def _ipc_execute(self, code: str) -> any:
         """Python 코드 실행 (디버깅용)"""
@@ -956,6 +992,7 @@ class MainWindow(QMainWindow):
             'engine': self.engine,
             'table_panel': self.table_panel,
             'graph_panel': self.graph_panel,
+            'summary_panel': self.summary_panel,
         }
         return eval(code, {'__builtins__': {}}, local_vars)
 
