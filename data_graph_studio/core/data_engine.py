@@ -1240,6 +1240,53 @@ class DataEngine:
 
         return stats
 
+    def get_full_profile_summary(self) -> Optional[Dict[str, Any]]:
+        """전체 데이터 기준 요약 통계 (windowed 모드 대응)"""
+        if not self._windowed or self._lazy_df is None:
+            if self._profile is None:
+                return None
+            return {
+                'total_rows': self._profile.total_rows,
+                'total_columns': self._profile.total_columns,
+                'columns': self._profile.columns,
+                'memory_bytes': self._profile.memory_bytes,
+                'load_time_seconds': self._profile.load_time_seconds,
+            }
+
+        try:
+            schema = self._lazy_df.schema
+            total_columns = len(schema)
+            numeric_cols = sum(1 for dtype in schema.values() if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64])
+            temporal_cols = sum(1 for dtype in schema.values() if dtype in [pl.Date, pl.Datetime, pl.Time])
+            text_cols = total_columns - numeric_cols - temporal_cols
+
+            null_exprs = [pl.col(c).null_count().alias(c) for c in schema.keys()]
+            stats_df = self._collect_streaming(self._lazy_df.select([pl.len().alias('total_rows')] + null_exprs))
+            if stats_df is None or stats_df.height == 0:
+                return None
+
+            total_rows = int(stats_df[0, 'total_rows'])
+            total_nulls = 0
+            for c in schema.keys():
+                try:
+                    total_nulls += int(stats_df[0, c])
+                except Exception:
+                    pass
+            total_cells = total_rows * total_columns if total_rows > 0 else 0
+            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0.0
+
+            return {
+                'total_rows': total_rows,
+                'total_columns': total_columns,
+                'numeric_columns': numeric_cols,
+                'text_columns': text_cols + temporal_cols,
+                'missing_percent': missing_percent,
+                'memory_bytes': 0,
+                'load_time_seconds': 0,
+            }
+        except Exception:
+            return None
+
     def is_column_categorical(self, column: str, max_unique_ratio: float = 0.05, max_unique_count: int = 100) -> bool:
         """
         컬럼이 categorical인지 판단

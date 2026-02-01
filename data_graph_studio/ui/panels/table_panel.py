@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QSplitter, QSizePolicy, QApplication, QListWidget,
     QListWidgetItem, QGroupBox, QSlider
 )
+from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
     Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
     QMimeData, QByteArray, QItemSelection, QItemSelectionModel
@@ -1562,9 +1563,16 @@ class TablePanel(QWidget):
         self.window_slider.setMaximum(0)
         self.window_slider.setSingleStep(1000)
         self.window_slider.setPageStep(10000)
-        self.window_slider.sliderReleased.connect(self._on_window_slider_released)
         self.window_slider.valueChanged.connect(self._on_window_slider_changed)
+        self.window_slider.sliderReleased.connect(self._on_window_slider_released)
         window_layout.addWidget(self.window_slider)
+
+        self.window_size_combo = QComboBox()
+        self.window_size_combo.addItems(["50k", "100k", "200k", "500k"])
+        self.window_size_combo.setCurrentText("200k")
+        self.window_size_combo.setToolTip("Window size")
+        self.window_size_combo.currentTextChanged.connect(self._on_window_size_changed)
+        window_layout.addWidget(self.window_size_combo)
 
         self.window_next_btn = QPushButton("▶")
         self.window_next_btn.setFixedWidth(24)
@@ -1575,6 +1583,11 @@ class TablePanel(QWidget):
         self.window_label = QLabel("")
         self.window_label.setStyleSheet("color: #6B7280; font-size: 10px;")
         window_layout.addWidget(self.window_label)
+
+        self._window_debounce = QTimer(self)
+        self._window_debounce.setSingleShot(True)
+        self._window_debounce.setInterval(250)
+        self._window_debounce.timeout.connect(self._apply_window_debounced)
 
         self.window_widget.setVisible(False)
         toolbar.addWidget(self.window_widget)
@@ -1985,6 +1998,12 @@ class TablePanel(QWidget):
         self.window_slider.setValue(min(self.engine.window_start, max_start))
         self.window_slider.blockSignals(False)
 
+        size_label = f"{int(window_size/1000)}k"
+        if size_label in [self.window_size_combo.itemText(i) for i in range(self.window_size_combo.count())]:
+            self.window_size_combo.blockSignals(True)
+            self.window_size_combo.setCurrentText(size_label)
+            self.window_size_combo.blockSignals(False)
+
         self._set_window_label(self.engine.window_start, window_size, total_rows)
 
     def _set_window_label(self, start: int, size: int, total: int):
@@ -2016,9 +2035,26 @@ class TablePanel(QWidget):
         if not self.engine.is_windowed:
             return
         self._set_window_label(value, self.engine.window_size, self.engine.total_rows)
+        self._window_debounce.start()
 
     def _on_window_slider_released(self):
+        self._window_debounce.stop()
         self._apply_window(self.window_slider.value())
+
+    def _apply_window_debounced(self):
+        self._apply_window(self.window_slider.value())
+
+    def _on_window_size_changed(self, text: str):
+        if not self.engine.is_windowed:
+            return
+        size = int(text.replace("k", "")) * 1000
+        current_start = self.engine.window_start
+        self.engine.set_window(current_start, size)
+        self._update_window_controls()
+        self.state.clear_selection()
+        self.state.set_visible_rows(len(self.engine.df))
+        self.set_data(self.engine.df)
+        self.window_changed.emit()
 
     # ==================== Drag & Drop ====================
     

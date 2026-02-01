@@ -1467,46 +1467,66 @@ class MainWindow(QMainWindow):
             return
 
         profile = self.engine.profile
-
-        # Count column types
-        numeric_cols = sum(1 for c in profile.columns if c.is_numeric)
-        text_cols = sum(1 for c in profile.columns if not c.is_numeric and not c.is_temporal)
-        temporal_cols = sum(1 for c in profile.columns if c.is_temporal)
-
-        # Calculate missing data percentage
-        total_cells = profile.total_rows * profile.total_columns
-        total_nulls = sum(c.null_count for c in profile.columns)
-        missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
+        summary = self.engine.get_full_profile_summary()
+        if summary is None and profile is None:
+            return
 
         # Get file name from engine source
         file_name = ""
         if self.engine._source and self.engine._source.path:
             file_name = Path(self.engine._source.path).name
 
+        if summary is None and profile is not None:
+            # Count column types
+            numeric_cols = sum(1 for c in profile.columns if c.is_numeric)
+            text_cols = sum(1 for c in profile.columns if not c.is_numeric and not c.is_temporal)
+            temporal_cols = sum(1 for c in profile.columns if c.is_temporal)
+
+            # Calculate missing data percentage
+            total_cells = profile.total_rows * profile.total_columns
+            total_nulls = sum(c.null_count for c in profile.columns)
+            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
+
+            total_rows = profile.total_rows
+            total_columns = profile.total_columns
+            numeric_columns = numeric_cols
+            text_columns = text_cols + temporal_cols
+            memory_mb = profile.memory_bytes / (1024 * 1024)
+            load_time = profile.load_time_seconds
+        else:
+            total_rows = summary.get('total_rows', 0)
+            total_columns = summary.get('total_columns', 0)
+            numeric_columns = summary.get('numeric_columns', 0)
+            text_columns = summary.get('text_columns', 0)
+            missing_percent = summary.get('missing_percent', 0)
+            memory_mb = summary.get('memory_bytes', 0) / (1024 * 1024) if summary else 0
+            load_time = summary.get('load_time_seconds', 0) if summary else 0
+
         # Calculate sampled rows (for graph - max 10000 points)
         MAX_GRAPH_POINTS = 10000
-        sampled_rows = min(profile.total_rows, MAX_GRAPH_POINTS)
+        sampled_rows = min(total_rows, MAX_GRAPH_POINTS)
 
         stats = {
             'file_name': file_name,
-            'total_rows': profile.total_rows,
+            'total_rows': total_rows,
             'sampled_rows': sampled_rows,
-            'total_columns': profile.total_columns,
-            'numeric_columns': numeric_cols,
-            'text_columns': text_cols + temporal_cols,
+            'total_columns': total_columns,
+            'numeric_columns': numeric_columns,
+            'text_columns': text_columns,
             'missing_percent': missing_percent,
-            'memory_mb': profile.memory_bytes / (1024 * 1024),
-            'load_time': profile.load_time_seconds,
+            'memory_mb': memory_mb,
+            'load_time': load_time,
         }
 
         # 숫자형 컬럼 통계
-        for col_info in profile.columns:
-            if col_info.is_numeric:
-                stats[col_info.name] = {
-                    'min': col_info.min_value,
-                    'max': col_info.max_value,
-                    'null_count': col_info.null_count,
-                }
+        if profile is not None:
+            for col_info in profile.columns:
+                if col_info.is_numeric:
+                    stats[col_info.name] = {
+                        'min': col_info.min_value,
+                        'max': col_info.max_value,
+                        'null_count': col_info.null_count,
+                    }
 
         self.state.update_summary(stats)
     
