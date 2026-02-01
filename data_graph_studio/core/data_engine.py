@@ -356,6 +356,21 @@ class DataEngine:
     ) -> pl.DataFrame:
         """LazyFrame에서 window 구간만 로드"""
         return self._collect_streaming(lazy_df.slice(window_start, window_size))
+
+    def set_window(self, start: int, size: int) -> bool:
+        """현재 window 구간 변경 (LazyFrame 기반)"""
+        if self._lazy_df is None:
+            return False
+
+        start = max(0, int(start))
+        size = max(1, int(size))
+
+        self._window_start = start
+        self._window_size = size
+
+        self._df = self._load_window_from_lazy(self._lazy_df, self._window_start, self._window_size)
+        self._windowed = True
+        return True
     
     def detect_file_type(self, path: str) -> FileType:
         """파일 형식 자동 감지"""
