@@ -99,19 +99,19 @@ class DatasetItemWidget(QFrame):
         # 행 수
         rows_text = f"{self.dataset_info.row_count:,}" if self.dataset_info else "0"
         self.rows_label = QLabel(f"📊 {rows_text} rows")
-        self.rows_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.rows_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
         info_layout.addWidget(self.rows_label)
 
         # 컬럼 수
         cols_text = f"{self.dataset_info.column_count}" if self.dataset_info else "0"
         self.cols_label = QLabel(f"× {cols_text} cols")
-        self.cols_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.cols_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
         info_layout.addWidget(self.cols_label)
 
         # 메모리
         memory_mb = self.metadata.memory_bytes / (1024 * 1024)
         self.memory_label = QLabel(f"💾 {memory_mb:.1f} MB")
-        self.memory_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.memory_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
         info_layout.addWidget(self.memory_label)
 
         info_layout.addStretch()
@@ -128,21 +128,21 @@ class DatasetItemWidget(QFrame):
         if self.metadata.is_active:
             self.setStyleSheet("""
                 DatasetItemWidget {
-                    background-color: #e3f2fd;
-                    border: 2px solid #1976d2;
+                    background-color: #3A4E63;
+                    border: 2px solid #59B8E3;
                     border-radius: 4px;
                 }
             """)
         else:
             self.setStyleSheet("""
                 DatasetItemWidget {
-                    background-color: #f5f5f5;
-                    border: 1px solid #ddd;
+                    background-color: #2F3946;
+                    border: 1px solid #3E4A59;
                     border-radius: 4px;
                 }
                 DatasetItemWidget:hover {
-                    background-color: #eeeeee;
-                    border-color: #999;
+                    background-color: #3A4654;
+                    border-color: #59B8E3;
                 }
             """)
 
@@ -245,14 +245,14 @@ class DatasetManagerPanel(QWidget):
         header_layout = QHBoxLayout()
 
         title = QLabel("📂 Datasets")
-        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #F2F4F8;")
         header_layout.addWidget(title)
 
         header_layout.addStretch()
 
         # 데이터셋 수 표시
         self.count_label = QLabel("0 / 10")
-        self.count_label.setStyleSheet("color: #666;")
+        self.count_label.setStyleSheet("color: #C9D1DB;")
         header_layout.addWidget(self.count_label)
 
         layout.addLayout(header_layout)
@@ -353,7 +353,7 @@ class DatasetManagerPanel(QWidget):
 
         # 메모리 사용량
         self.memory_label = QLabel("💾 메모리: 0 MB / 4 GB")
-        self.memory_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.memory_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
         layout.addWidget(self.memory_label)
 
     def _connect_signals(self):

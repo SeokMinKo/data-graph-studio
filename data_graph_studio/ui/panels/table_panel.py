@@ -954,7 +954,7 @@ class DataTableView(QTableView):
             }
             QHeaderView::section:hover {
                 background: #3A4654;
-                color: #E6E9EF;
+                color: #F2F4F8;
             }
         """)
         

@@ -103,7 +103,7 @@ class StatCard(QFrame):
         # Title
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet("""
-            color: #C2C8D1;
+            color: #C9D1DB;
             font-size: 10px;
             font-weight: 500;
             background: transparent;
@@ -115,7 +115,7 @@ class StatCard(QFrame):
         # Value (compact)
         self.value_label = QLabel(value)
         self.value_label.setStyleSheet(f"""
-            color: #E6E9EF;
+            color: #F2F4F8;
             font-size: 18px;
             font-weight: 600;
             background: transparent;
@@ -126,7 +126,7 @@ class StatCard(QFrame):
         # Subtitle
         self.subtitle_label = QLabel(subtitle if subtitle else "")
         self.subtitle_label.setStyleSheet("""
-            color: #C2C8D1;
+            color: #C9D1DB;
             font-size: 9px;
             background: transparent;
             border: none;
@@ -226,7 +226,7 @@ class SummaryPanel(QWidget):
         title.setStyleSheet("""
             font-weight: 600;
             font-size: 12px;
-            color: #E6E9EF;
+            color: #F2F4F8;
             background: transparent;
         """)
         header.addWidget(title)
@@ -234,7 +234,7 @@ class SummaryPanel(QWidget):
         # Context label (shows grouping/filter info)
         self.context_label = QLabel("")
         self.context_label.setStyleSheet("""
-            color: #C2C8D1;
+            color: #C9D1DB;
             font-size: 11px;
             background: transparent;
             padding: 2px 8px;
