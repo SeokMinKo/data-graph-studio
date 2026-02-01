@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QProgressDialog, QApplication, QLabel, QDialog, QFrame, QComboBox,
-    QInputDialog
+    QInputDialog, QTabWidget
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence
@@ -666,11 +666,9 @@ class MainWindow(QMainWindow):
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
 
-        # Summary Panel (상단)
+        # Summary/Profile tabs (상단)
         self.summary_panel = SummaryPanel(self.state)
-        self.main_splitter.addWidget(self.summary_panel)
 
-        # Profile Bar (Summary 아래) - 컨테이너로 감싸서 추가
         self._profile_bar_container = QWidget()
         profile_bar_layout = QVBoxLayout(self._profile_bar_container)
         profile_bar_layout.setContentsMargins(8, 0, 8, 8)
@@ -682,7 +680,16 @@ class MainWindow(QMainWindow):
         self.profile_bar.add_setting_requested.connect(self._on_add_setting_requested)
         profile_bar_layout.addWidget(self.profile_bar)
 
-        self.main_splitter.addWidget(self._profile_bar_container)
+        self._top_tabs = QTabWidget()
+        self._top_tabs.setStyleSheet("""
+            QTabWidget::pane { border: none; background: #F7F7F7; }
+            QTabBar::tab { padding: 6px 10px; margin-right: 2px; color: #666666; }
+            QTabBar::tab:selected { color: #3A7AFE; border-bottom: 2px solid #3A7AFE; }
+        """)
+        self._top_tabs.addTab(self.summary_panel, "Overview")
+        self._top_tabs.addTab(self._profile_bar_container, "Profile")
+
+        self.main_splitter.addWidget(self._top_tabs)
 
         # Graph Panel (중간)
         self.graph_panel = GraphPanel(self.state, self.engine)
@@ -714,7 +721,7 @@ class MainWindow(QMainWindow):
             self._dock_main_panel(panel_key)
 
         # Ensure all panels are visible and in correct order
-        panel_widgets = [self.summary_panel, self._profile_bar_container, self.graph_panel, self.table_panel]
+        panel_widgets = [self._top_tabs, self.graph_panel, self.table_panel]
 
         # Verify all panels are in splitter, rebuild if necessary
         current_widgets = [self.main_splitter.widget(i) for i in range(self.main_splitter.count())]
