@@ -58,7 +58,7 @@ class SettingButton(QFrame):
         self._name_label.setStyleSheet("""
             QLabel {
                 font-size: 10px;
-                color: #374151;
+                color: #222222;
                 background: transparent;
             }
         """)
@@ -85,7 +85,7 @@ class SettingButton(QFrame):
             }
             QToolButton:hover {
                 background: #EEF2FF;
-                border-color: #6366F1;
+                border-color: #3A7AFE;
             }
         """)
         self._float_btn.clicked.connect(self.float_requested.emit)
@@ -104,7 +104,7 @@ class SettingButton(QFrame):
             self.setStyleSheet("""
                 SettingButton {
                     background: #EEF2FF;
-                    border: 2px solid #6366F1;
+                    border: 2px solid #3A7AFE;
                     border-radius: 8px;
                 }
                 SettingButton:hover {
@@ -115,11 +115,11 @@ class SettingButton(QFrame):
             self.setStyleSheet("""
                 SettingButton {
                     background: #F9FAFB;
-                    border: 1px solid #E5E7EB;
+                    border: 1px solid #E6E6E6;
                     border-radius: 8px;
                 }
                 SettingButton:hover {
-                    background: #F3F4F6;
+                    background: #EFEFEF;
                     border-color: #D1D5DB;
                 }
             """)
@@ -224,12 +224,12 @@ class AddSettingButton(QPushButton):
                 color: #9CA3AF;
             }
             QPushButton:hover {
-                background: #F3F4F6;
-                border-color: #6366F1;
-                color: #6366F1;
+                background: #EFEFEF;
+                border-color: #3A7AFE;
+                color: #3A7AFE;
             }
             QPushButton:pressed {
-                background: #E5E7EB;
+                background: #E6E6E6;
             }
         """)
 
@@ -257,7 +257,7 @@ class ProfileBar(QFrame):
         self.setStyleSheet("""
             ProfileBar {
                 background: #FFFFFF;
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 8px;
             }
         """)
@@ -277,7 +277,7 @@ class ProfileBar(QFrame):
 
         # 프로파일 라벨
         profile_label = QLabel("Profile:")
-        profile_label.setStyleSheet("color: #6B7280; font-size: 12px; background: transparent;")
+        profile_label.setStyleSheet("color: #666666; font-size: 12px; background: transparent;")
         header_layout.addWidget(profile_label)
 
         # 프로파일 드롭다운
@@ -292,7 +292,7 @@ class ProfileBar(QFrame):
                 min-height: 20px;
             }
             QComboBox:hover {
-                border-color: #6366F1;
+                border-color: #3A7AFE;
             }
             QComboBox::drop-down {
                 border: none;
@@ -369,13 +369,13 @@ class ProfileBar(QFrame):
     def _action_btn_style(self) -> str:
         return """
             QToolButton {
-                background: #F3F4F6;
-                border: 1px solid #E5E7EB;
+                background: #EFEFEF;
+                border: 1px solid #E6E6E6;
                 border-radius: 4px;
                 font-size: 14px;
             }
             QToolButton:hover {
-                background: #E5E7EB;
+                background: #E6E6E6;
                 border-color: #D1D5DB;
             }
             QToolButton:pressed {

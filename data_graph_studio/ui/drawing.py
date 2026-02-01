@@ -326,7 +326,7 @@ class LineGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#4F46E5"))
+        pen = QPen(QColor("#3A7AFE"))
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#FFFFFF")))
@@ -389,7 +389,7 @@ class CircleGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#4F46E5"))
+        pen = QPen(QColor("#3A7AFE"))
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#FFFFFF")))
@@ -457,7 +457,7 @@ class RectGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#4F46E5"))
+        pen = QPen(QColor("#3A7AFE"))
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#FFFFFF")))
@@ -533,11 +533,11 @@ class ColorButton(QPushButton):
         self.setStyleSheet(f"""
             QPushButton {{
                 background: {self._color.name()};
-                border: 2px solid #E5E7EB;
+                border: 2px solid #E6E6E6;
                 border-radius: 4px;
             }}
             QPushButton:hover {{
-                border-color: #6366F1;
+                border-color: #3A7AFE;
             }}
         """)
 
@@ -600,7 +600,7 @@ class DrawingStyleDialog(QDialog):
         fill_layout.addWidget(self.fill_enabled_check, 0, 0, 1, 2)
 
         fill_layout.addWidget(QLabel("Color:"), 1, 0)
-        self.fill_color_btn = ColorButton(QColor("#4F46E5"))
+        self.fill_color_btn = ColorButton(QColor("#3A7AFE"))
         fill_layout.addWidget(self.fill_color_btn, 1, 1)
 
         fill_layout.addWidget(QLabel("Opacity:"), 2, 0)
@@ -625,7 +625,7 @@ class DrawingStyleDialog(QDialog):
         self.setStyleSheet("""
             QGroupBox {
                 font-weight: 600;
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 8px;
                 margin-top: 12px;
                 padding-top: 16px;

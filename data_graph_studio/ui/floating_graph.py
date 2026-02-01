@@ -137,15 +137,15 @@ class FloatingGraphWindow(QDialog):
         footer = QFrame()
         footer.setStyleSheet("""
             QFrame {
-                background: #FAFAFA;
-                border-top: 1px solid #E5E7EB;
+                background: #F7F7F7;
+                border-top: 1px solid #E6E6E6;
             }
         """)
         footer_layout = QHBoxLayout(footer)
         footer_layout.setContentsMargins(12, 6, 12, 6)
 
         self._status_label = QLabel("Ready")
-        self._status_label.setStyleSheet("color: #6B7280; font-size: 11px; background: transparent;")
+        self._status_label.setStyleSheet("color: #666666; font-size: 11px; background: transparent;")
         footer_layout.addWidget(self._status_label)
 
         footer_layout.addStretch()
@@ -162,11 +162,11 @@ class FloatingGraphWindow(QDialog):
                 font-size: 14px;
             }
             QToolButton:hover {
-                background: #F3F4F6;
+                background: #EFEFEF;
                 border-color: #9CA3AF;
             }
             QToolButton:pressed {
-                background: #E5E7EB;
+                background: #E6E6E6;
             }
         """
 

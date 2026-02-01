@@ -175,13 +175,13 @@ class ParsingPreviewDialog(QDialog):
         # Modern style
         self.setStyleSheet("""
             QDialog {
-                background: #FAFAFA;
+                background: #F7F7F7;
             }
             QGroupBox {
                 font-weight: bold;
                 font-size: 13px;
-                color: #374151;
-                border: 1px solid #E5E7EB;
+                color: #222222;
+                border: 1px solid #E6E6E6;
                 border-radius: 8px;
                 margin-top: 12px;
                 padding: 16px;
@@ -204,14 +204,14 @@ class ParsingPreviewDialog(QDialog):
                 min-height: 28px;
             }
             QComboBox:focus, QSpinBox:focus, QLineEdit:focus {
-                border-color: #6366F1;
+                border-color: #3A7AFE;
             }
             QComboBox::drop-down {
                 border: none;
                 width: 24px;
             }
             QCheckBox {
-                color: #374151;
+                color: #222222;
                 font-size: 12px;
             }
             QPushButton {
@@ -227,10 +227,10 @@ class ParsingPreviewDialog(QDialog):
                 border-color: #9CA3AF;
             }
             QPushButton:pressed {
-                background: #F3F4F6;
+                background: #EFEFEF;
             }
             QPushButton#primary {
-                background: #4F46E5;
+                background: #3A7AFE;
                 color: white;
                 border: none;
             }
@@ -241,9 +241,9 @@ class ParsingPreviewDialog(QDialog):
                 background: #3730A3;
             }
             QTableWidget {
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 6px;
-                gridline-color: #F3F4F6;
+                gridline-color: #EFEFEF;
                 background: white;
             }
             QTableWidget::item {
@@ -256,14 +256,14 @@ class ParsingPreviewDialog(QDialog):
             QHeaderView::section {
                 background: #F9FAFB;
                 border: none;
-                border-bottom: 1px solid #E5E7EB;
-                border-right: 1px solid #E5E7EB;
+                border-bottom: 1px solid #E6E6E6;
+                border-right: 1px solid #E6E6E6;
                 padding: 8px;
                 font-weight: 500;
-                color: #374151;
+                color: #222222;
             }
             QTextEdit {
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 6px;
                 background: #1F2937;
                 color: #D1D5DB;
@@ -400,20 +400,20 @@ class ParsingPreviewDialog(QDialog):
 
         # Status/progress for ETL conversion
         self.etl_status_label = QLabel("Converting ETL file...")
-        self.etl_status_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self.etl_status_label.setStyleSheet("color: #666666; font-size: 11px;")
         etl_layout.addWidget(self.etl_status_label)
 
         self.etl_progress = QProgressBar()
         self.etl_progress.setRange(0, 0)  # Indeterminate
         self.etl_progress.setStyleSheet("""
             QProgressBar {
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 4px;
                 height: 8px;
-                background: #F3F4F6;
+                background: #EFEFEF;
             }
             QProgressBar::chunk {
-                background: #6366F1;
+                background: #3A7AFE;
                 border-radius: 4px;
             }
         """)
@@ -452,7 +452,7 @@ class ParsingPreviewDialog(QDialog):
 
         # Stats
         self.stats_label = QLabel("")
-        self.stats_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self.stats_label.setStyleSheet("color: #666666; font-size: 11px;")
         layout.addWidget(self.stats_label)
 
         layout.addStretch()
@@ -514,7 +514,7 @@ class ParsingPreviewDialog(QDialog):
         btn_row.addStretch()
 
         self.column_count_label = QLabel("")
-        self.column_count_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self.column_count_label.setStyleSheet("color: #666666; font-size: 11px;")
         btn_row.addWidget(self.column_count_label)
 
         column_group_layout.addLayout(btn_row)
@@ -880,7 +880,7 @@ class ParsingPreviewDialog(QDialog):
                 item = QTableWidgetItem(val)
                 # Gray out excluded columns
                 if j in self._excluded_columns:
-                    item.setBackground(QColor("#F3F4F6"))
+                    item.setBackground(QColor("#EFEFEF"))
                     item.setForeground(QColor("#9CA3AF"))
                 self.preview_table.setItem(i, j, item)
 
@@ -916,13 +916,13 @@ class ParsingPreviewDialog(QDialog):
             cb.setStyleSheet("""
                 QCheckBox {
                     background: white;
-                    border: 1px solid #E5E7EB;
+                    border: 1px solid #E6E6E6;
                     border-radius: 4px;
                     padding: 4px 8px;
                     font-size: 11px;
                 }
                 QCheckBox:hover {
-                    border-color: #6366F1;
+                    border-color: #3A7AFE;
                 }
                 QCheckBox::indicator {
                     width: 14px;

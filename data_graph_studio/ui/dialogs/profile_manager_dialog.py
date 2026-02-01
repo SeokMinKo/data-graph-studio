@@ -32,7 +32,7 @@ class SettingItem(QFrame):
         self.setStyleSheet("""
             SettingItem {
                 background: white;
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 8px;
                 padding: 8px;
             }
@@ -83,7 +83,7 @@ class SettingItem(QFrame):
             details += f", {len(self._setting.value_columns)} value(s)"
 
         detail_label = QLabel(details)
-        detail_label.setStyleSheet("color: #6B7280; font-size: 11px; background: transparent;")
+        detail_label.setStyleSheet("color: #666666; font-size: 11px; background: transparent;")
         info_layout.addWidget(detail_label)
 
         layout.addLayout(info_layout, 1)
@@ -126,7 +126,7 @@ class SettingItem(QFrame):
                 font-size: 14px;
             }
             QToolButton:hover {
-                background: #F3F4F6;
+                background: #EFEFEF;
                 border-color: #D1D5DB;
             }
         """
@@ -167,7 +167,7 @@ class ProfileManagerDialog(QDialog):
         left_panel.setStyleSheet("""
             QFrame {
                 background: #F9FAFB;
-                border-right: 1px solid #E5E7EB;
+                border-right: 1px solid #E6E6E6;
             }
         """)
         left_layout = QVBoxLayout(left_panel)
@@ -184,16 +184,16 @@ class ProfileManagerDialog(QDialog):
         self._profile_list.setStyleSheet("""
             QListWidget {
                 background: white;
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 8px;
             }
             QListWidget::item {
                 padding: 8px 12px;
-                border-bottom: 1px solid #F3F4F6;
+                border-bottom: 1px solid #EFEFEF;
             }
             QListWidget::item:selected {
                 background: #EEF2FF;
-                color: #4F46E5;
+                color: #3A7AFE;
             }
             QListWidget::item:hover {
                 background: #F9FAFB;
@@ -293,7 +293,7 @@ class ProfileManagerDialog(QDialog):
         footer.setStyleSheet("""
             QFrame {
                 background: #F9FAFB;
-                border-top: 1px solid #E5E7EB;
+                border-top: 1px solid #E6E6E6;
             }
         """)
         footer_layout = QHBoxLayout(footer)
@@ -304,15 +304,15 @@ class ProfileManagerDialog(QDialog):
         close_btn = QPushButton("Close")
         close_btn.setStyleSheet("""
             QPushButton {
-                background: #F3F4F6;
+                background: #EFEFEF;
                 border: 1px solid #D1D5DB;
                 border-radius: 6px;
                 padding: 8px 24px;
-                color: #374151;
+                color: #222222;
                 font-weight: 500;
             }
             QPushButton:hover {
-                background: #E5E7EB;
+                background: #E6E6E6;
             }
         """)
         close_btn.clicked.connect(self.close)
@@ -323,15 +323,15 @@ class ProfileManagerDialog(QDialog):
     def _action_btn_style(self) -> str:
         return """
             QPushButton {
-                background: #F3F4F6;
-                border: 1px solid #E5E7EB;
+                background: #EFEFEF;
+                border: 1px solid #E6E6E6;
                 border-radius: 6px;
                 padding: 6px 12px;
-                color: #374151;
+                color: #222222;
                 font-size: 12px;
             }
             QPushButton:hover {
-                background: #E5E7EB;
+                background: #E6E6E6;
                 border-color: #D1D5DB;
             }
         """

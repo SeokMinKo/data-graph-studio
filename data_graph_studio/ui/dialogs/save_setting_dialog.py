@@ -58,7 +58,7 @@ class SaveSettingDialog(QDialog):
         # 구분선
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background: #E5E7EB;")
+        line.setStyleSheet("background: #E6E6E6;")
         layout.addWidget(line)
 
         # 폼 영역
@@ -68,7 +68,7 @@ class SaveSettingDialog(QDialog):
 
         # 이름
         name_label = QLabel("Name:")
-        name_label.setStyleSheet("font-weight: 500; color: #374151;")
+        name_label.setStyleSheet("font-weight: 500; color: #222222;")
         form_layout.addWidget(name_label, 0, 0, Qt.AlignRight)
 
         self._name_edit = QLineEdit()
@@ -81,14 +81,14 @@ class SaveSettingDialog(QDialog):
                 background: white;
             }
             QLineEdit:focus {
-                border-color: #6366F1;
+                border-color: #3A7AFE;
             }
         """)
         form_layout.addWidget(self._name_edit, 0, 1)
 
         # 아이콘
         icon_label = QLabel("Icon:")
-        icon_label.setStyleSheet("font-weight: 500; color: #374151;")
+        icon_label.setStyleSheet("font-weight: 500; color: #222222;")
         form_layout.addWidget(icon_label, 1, 0, Qt.AlignRight)
 
         self._icon_combo = QComboBox()
@@ -104,14 +104,14 @@ class SaveSettingDialog(QDialog):
                 font-size: 18px;
             }
             QComboBox:hover {
-                border-color: #6366F1;
+                border-color: #3A7AFE;
             }
         """)
         form_layout.addWidget(self._icon_combo, 1, 1, Qt.AlignLeft)
 
         # 설명
         desc_label = QLabel("Description:")
-        desc_label.setStyleSheet("font-weight: 500; color: #374151;")
+        desc_label.setStyleSheet("font-weight: 500; color: #222222;")
         form_layout.addWidget(desc_label, 2, 0, Qt.AlignRight | Qt.AlignTop)
 
         self._desc_edit = QTextEdit()
@@ -125,7 +125,7 @@ class SaveSettingDialog(QDialog):
                 background: white;
             }
             QTextEdit:focus {
-                border-color: #6366F1;
+                border-color: #3A7AFE;
             }
         """)
         form_layout.addWidget(self._desc_edit, 2, 1)
@@ -137,7 +137,7 @@ class SaveSettingDialog(QDialog):
         options_frame.setStyleSheet("""
             QFrame {
                 background: #F9FAFB;
-                border: 1px solid #E5E7EB;
+                border: 1px solid #E6E6E6;
                 border-radius: 8px;
                 padding: 12px;
             }
@@ -146,7 +146,7 @@ class SaveSettingDialog(QDialog):
         options_layout.setSpacing(8)
 
         options_header = QLabel("Include in setting:")
-        options_header.setStyleSheet("font-weight: 500; color: #374151;")
+        options_header.setStyleSheet("font-weight: 500; color: #222222;")
         options_layout.addWidget(options_header)
 
         self._include_filters_cb = QCheckBox("Include current filters")
@@ -166,15 +166,15 @@ class SaveSettingDialog(QDialog):
         cancel_btn = QPushButton("Cancel")
         cancel_btn.setStyleSheet("""
             QPushButton {
-                background: #F3F4F6;
+                background: #EFEFEF;
                 border: 1px solid #D1D5DB;
                 border-radius: 6px;
                 padding: 8px 20px;
-                color: #374151;
+                color: #222222;
                 font-weight: 500;
             }
             QPushButton:hover {
-                background: #E5E7EB;
+                background: #E6E6E6;
             }
         """)
         cancel_btn.clicked.connect(self.reject)
@@ -183,7 +183,7 @@ class SaveSettingDialog(QDialog):
         save_btn = QPushButton("Save")
         save_btn.setStyleSheet("""
             QPushButton {
-                background: #6366F1;
+                background: #3A7AFE;
                 border: none;
                 border-radius: 6px;
                 padding: 8px 24px;
@@ -191,7 +191,7 @@ class SaveSettingDialog(QDialog):
                 font-weight: 600;
             }
             QPushButton:hover {
-                background: #4F46E5;
+                background: #3A7AFE;
             }
             QPushButton:pressed {
                 background: #4338CA;
