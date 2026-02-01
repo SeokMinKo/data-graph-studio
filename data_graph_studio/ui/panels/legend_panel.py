@@ -60,7 +60,7 @@ class LegendConfig:
     max_height: int = 400
 
     # 스타일
-    background_color: str = "#FFFFFF"
+    background_color: str = "#323D4A"
     background_opacity: float = 0.9
     border_color: str = "#CCCCCC"
     border_width: int = 1

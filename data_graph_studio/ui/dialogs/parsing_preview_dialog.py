@@ -175,13 +175,13 @@ class ParsingPreviewDialog(QDialog):
         # Modern style
         self.setStyleSheet("""
             QDialog {
-                background: #F7F7F7;
+                background: #2B3440;
             }
             QGroupBox {
                 font-weight: bold;
                 font-size: 13px;
-                color: #222222;
-                border: 1px solid #E6E6E6;
+                color: #E6E9EF;
+                border: 1px solid #3E4A59;
                 border-radius: 8px;
                 margin-top: 12px;
                 padding: 16px;
@@ -193,7 +193,7 @@ class ParsingPreviewDialog(QDialog):
                 padding: 0 8px;
             }
             QLabel {
-                color: #222222;
+                color: #E6E9EF;
                 font-size: 12px;
             }
             QComboBox, QSpinBox, QLineEdit {
@@ -204,14 +204,14 @@ class ParsingPreviewDialog(QDialog):
                 min-height: 28px;
             }
             QComboBox:focus, QSpinBox:focus, QLineEdit:focus {
-                border-color: #7EB6FF;
+                border-color: #59B8E3;
             }
             QComboBox::drop-down {
                 border: none;
                 width: 24px;
             }
             QCheckBox {
-                color: #222222;
+                color: #E6E9EF;
                 font-size: 12px;
             }
             QPushButton {
@@ -227,10 +227,10 @@ class ParsingPreviewDialog(QDialog):
                 border-color: #9CA3AF;
             }
             QPushButton:pressed {
-                background: #EFEFEF;
+                background: #3A4654;
             }
             QPushButton#primary {
-                background: #7EB6FF;
+                background: #59B8E3;
                 color: white;
                 border: none;
             }
@@ -241,32 +241,32 @@ class ParsingPreviewDialog(QDialog):
                 background: #3730A3;
             }
             QTableWidget {
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 6px;
-                gridline-color: #EFEFEF;
+                gridline-color: #3A4654;
                 background: white;
             }
             QTableWidget::item {
                 padding: 4px 8px;
             }
             QTableWidget::item:selected {
-                background: #EAF2FF;
-                color: #222222;
+                background: #3A4E63;
+                color: #E6E9EF;
             }
             QHeaderView::section {
-                background: #F7F7F7;
+                background: #2B3440;
                 border: none;
-                border-bottom: 1px solid #E6E6E6;
-                border-right: 1px solid #E6E6E6;
+                border-bottom: 1px solid #3E4A59;
+                border-right: 1px solid #3E4A59;
                 padding: 8px;
                 font-weight: 500;
-                color: #222222;
+                color: #E6E9EF;
             }
             QTextEdit {
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 6px;
-                background: #FFFFFF;
-                color: #222222;
+                background: #323D4A;
+                color: #E6E9EF;
                 font-family: 'Consolas', 'Monaco', monospace;
                 font-size: 11px;
                 padding: 8px;
@@ -279,7 +279,7 @@ class ParsingPreviewDialog(QDialog):
         
         # Header
         header = QLabel(f"📄 {self.file_name}")
-        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #222222;")
+        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6E9EF;")
         layout.addWidget(header)
         
         # Main content - settings on left, preview on right
@@ -400,20 +400,20 @@ class ParsingPreviewDialog(QDialog):
 
         # Status/progress for ETL conversion
         self.etl_status_label = QLabel("Converting ETL file...")
-        self.etl_status_label.setStyleSheet("color: #666666; font-size: 11px;")
+        self.etl_status_label.setStyleSheet("color: #C2C8D1; font-size: 11px;")
         etl_layout.addWidget(self.etl_status_label)
 
         self.etl_progress = QProgressBar()
         self.etl_progress.setRange(0, 0)  # Indeterminate
         self.etl_progress.setStyleSheet("""
             QProgressBar {
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 4px;
                 height: 8px;
-                background: #EFEFEF;
+                background: #3A4654;
             }
             QProgressBar::chunk {
-                background: #7EB6FF;
+                background: #59B8E3;
                 border-radius: 4px;
             }
         """)
@@ -452,7 +452,7 @@ class ParsingPreviewDialog(QDialog):
 
         # Stats
         self.stats_label = QLabel("")
-        self.stats_label.setStyleSheet("color: #666666; font-size: 11px;")
+        self.stats_label.setStyleSheet("color: #C2C8D1; font-size: 11px;")
         layout.addWidget(self.stats_label)
 
         layout.addStretch()
@@ -514,7 +514,7 @@ class ParsingPreviewDialog(QDialog):
         btn_row.addStretch()
 
         self.column_count_label = QLabel("")
-        self.column_count_label.setStyleSheet("color: #666666; font-size: 11px;")
+        self.column_count_label.setStyleSheet("color: #C2C8D1; font-size: 11px;")
         btn_row.addWidget(self.column_count_label)
 
         column_group_layout.addLayout(btn_row)
@@ -880,7 +880,7 @@ class ParsingPreviewDialog(QDialog):
                 item = QTableWidgetItem(val)
                 # Gray out excluded columns
                 if j in self._excluded_columns:
-                    item.setBackground(QColor("#EFEFEF"))
+                    item.setBackground(QColor("#3A4654"))
                     item.setForeground(QColor("#9CA3AF"))
                 self.preview_table.setItem(i, j, item)
 
@@ -916,13 +916,13 @@ class ParsingPreviewDialog(QDialog):
             cb.setStyleSheet("""
                 QCheckBox {
                     background: white;
-                    border: 1px solid #E6E6E6;
+                    border: 1px solid #3E4A59;
                     border-radius: 4px;
                     padding: 4px 8px;
                     font-size: 11px;
                 }
                 QCheckBox:hover {
-                    border-color: #7EB6FF;
+                    border-color: #59B8E3;
                 }
                 QCheckBox::indicator {
                     width: 14px;

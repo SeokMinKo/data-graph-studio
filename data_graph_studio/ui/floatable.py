@@ -53,7 +53,7 @@ class FloatWindow(QDialog):
         dock_btn.setToolTip("Return to main window")
         dock_btn.setStyleSheet("""
             QPushButton {
-                background: #7EB6FF;
+                background: #59B8E3;
                 color: white;
                 border: none;
                 border-radius: 4px;
@@ -136,16 +136,16 @@ class FloatableSectionHeader(QFrame):
         self.float_btn.setCursor(Qt.PointingHandCursor)
         self.float_btn.setStyleSheet("""
             QPushButton {
-                background: #EFEFEF;
-                border: 1px solid #E6E6E6;
+                background: #3A4654;
+                border: 1px solid #3E4A59;
                 border-radius: 4px;
                 font-size: 12px;
-                color: #666666;
+                color: #C2C8D1;
             }
             QPushButton:hover {
-                background: #E6E6E6;
+                background: #3E4A59;
                 border-color: #D1D5DB;
-                color: #222222;
+                color: #E6E9EF;
             }
             QPushButton:pressed {
                 background: #D1D5DB;
@@ -336,17 +336,17 @@ class FloatButton(QPushButton):
         self.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 4px;
                 font-size: 11px;
                 color: #9CA3AF;
             }
             QPushButton:hover {
-                background: #EFEFEF;
+                background: #3A4654;
                 border-color: #D1D5DB;
-                color: #666666;
+                color: #C2C8D1;
             }
             QPushButton:pressed {
-                background: #E6E6E6;
+                background: #3E4A59;
             }
         """)

@@ -16,7 +16,7 @@ class Theme:
     secondary: str
     
     # Accent Colors (Vibrant)
-    accent: str = "#7EB6FF"       # Indigo
+    accent: str = "#59B8E3"       # Indigo
     success: str = "#10B981"      # Emerald
     warning: str = "#F59E0B"      # Amber
     error: str = "#EF4444"        # Red
@@ -54,21 +54,21 @@ class Theme:
         
         # Surface colors
         if not self.surface:
-            self.surface = "#FFFFFF" if is_light else "#1F2937"
+            self.surface = "#323D4A" if is_light else "#1F2937"
         if not self.surface_hover:
-            self.surface_hover = "#F9FAFB" if is_light else "#222222"
+            self.surface_hover = "#F9FAFB" if is_light else "#E6E9EF"
         if not self.surface_active:
-            self.surface_active = "#EFEFEF" if is_light else "#4B5563"
+            self.surface_active = "#3A4654" if is_light else "#4B5563"
         
         # Borders
         if not self.border:
-            self.border = "#E6E6E6" if is_light else "#222222"
+            self.border = "#3E4A59" if is_light else "#E6E9EF"
         if not self.border_light:
-            self.border_light = "#EFEFEF" if is_light else "#1F2937"
+            self.border_light = "#3A4654" if is_light else "#1F2937"
         
         # Interactive
         if not self.hover:
-            self.hover = "#EFEFEF" if is_light else "#222222"
+            self.hover = "#3A4654" if is_light else "#E6E9EF"
         if not self.selected:
             self.selected = self.primary + "20"  # 12% opacity
         if not self.focused:
@@ -78,9 +78,9 @@ class Theme:
         if not self.text_primary:
             self.text_primary = self.foreground
         if not self.text_secondary:
-            self.text_secondary = "#666666" if is_light else "#9CA3AF"
+            self.text_secondary = "#C2C8D1" if is_light else "#9CA3AF"
         if not self.text_muted:
-            self.text_muted = "#9CA3AF" if is_light else "#666666"
+            self.text_muted = "#9CA3AF" if is_light else "#C2C8D1"
         if not self.text_disabled:
             self.text_disabled = "#D1D5DB" if is_light else "#4B5563"
         
@@ -132,7 +132,7 @@ class ColorPalette:
     def default(cls) -> 'ColorPalette':
         """Modern vibrant palette"""
         return cls([
-            "#7EB6FF",  # Indigo
+            "#59B8E3",  # Indigo
             "#EC4899",  # Pink
             "#10B981",  # Emerald
             "#F59E0B",  # Amber
@@ -152,7 +152,7 @@ class ColorPalette:
             "#06B6D4",  # Cyan
             "#14B8A6",  # Teal
             "#3B82F6",  # Blue
-            "#7EB6FF",  # Indigo
+            "#59B8E3",  # Indigo
             "#8B5CF6",  # Violet
             "#0284C7",  # Light Blue
             "#0891B2",  # Cyan Dark
@@ -200,10 +200,10 @@ LIGHT_THEME = Theme(
     name="Light",
     background="#F9FAFB",
     foreground="#111827",
-    primary="#7EB6FF",
+    primary="#59B8E3",
     secondary="#EC4899",
-    surface="#FFFFFF",
-    border="#E6E6E6",
+    surface="#323D4A",
+    border="#3E4A59",
     accent="#8B5CF6",
 )
 

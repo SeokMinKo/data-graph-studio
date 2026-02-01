@@ -460,12 +460,12 @@ class GroupZone(QFrame):
                 font-size: 11px;
             }
             QListWidget::item:hover {
-                border-color: #7EB6FF;
+                border-color: #59B8E3;
                 background: #F8FAFC;
             }
             QListWidget::item:selected {
                 background: #EEF2FF;
-                border-color: #7EB6FF;
+                border-color: #59B8E3;
                 color: #4338CA;
             }
         """)
@@ -687,7 +687,7 @@ class ValueZone(QFrame):
         formula_layout.setSpacing(4)
 
         formula_label = QLabel("f(y):")
-        formula_label.setStyleSheet("font-size: 10px; color: #666666; background: transparent;")
+        formula_label.setStyleSheet("font-size: 10px; color: #C2C8D1; background: transparent;")
         formula_label.setToolTip("Y값에 적용할 수식 (예: y*2, y+100, LOG(y))")
         formula_layout.addWidget(formula_label)
 
@@ -701,7 +701,7 @@ class ValueZone(QFrame):
                 border-radius: 4px;
                 padding: 3px 6px;
                 font-size: 10px;
-                color: #222222;
+                color: #E6E9EF;
             }}
             QLineEdit:focus {{
                 border-color: {value_col.color};
@@ -923,38 +923,38 @@ class DataTableView(QTableView):
         # Compact, clean style
         self.setStyleSheet("""
             QTableView {
-                background: #FFFFFF;
-                alternate-background-color: #F7F7F7;
-                selection-background-color: #EAF2FF;
-                selection-color: #222222;
-                gridline-color: #E6E6E6;
+                background: #323D4A;
+                alternate-background-color: #2B3440;
+                selection-background-color: #3A4E63;
+                selection-color: #E6E9EF;
+                gridline-color: #3E4A59;
                 border: none;
                 border-radius: 8px;
-                color: #222222;
+                color: #E6E9EF;
             }
             QTableView::item {
                 padding: 4px 8px;
-                color: #222222;
+                color: #E6E9EF;
             }
             QTableView::item:selected {
-                background: #EAF2FF;
-                color: #222222;
+                background: #3A4E63;
+                color: #E6E9EF;
             }
             QTableView::item:hover {
-                background: #F3F7FF;
+                background: #384554;
             }
             QHeaderView::section {
-                background: #F7F7F7;
+                background: #2B3440;
                 border: none;
-                border-bottom: 1px solid #E6E6E6;
+                border-bottom: 1px solid #3E4A59;
                 padding: 6px 8px;
                 font-weight: 600;
                 font-size: 11px;
-                color: #222222;
+                color: #E6E9EF;
             }
             QHeaderView::section:hover {
-                background: #EFEFEF;
-                color: #222222;
+                background: #3A4654;
+                color: #E6E9EF;
             }
         """)
         
@@ -1006,7 +1006,7 @@ class DataTableView(QTableView):
         menu.setStyleSheet("""
             QMenu {
                 background: white;
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 8px;
                 padding: 4px;
             }
@@ -1020,7 +1020,7 @@ class DataTableView(QTableView):
             }
             QMenu::separator {
                 height: 1px;
-                background: #E6E6E6;
+                background: #3E4A59;
                 margin: 4px 8px;
             }
         """)
@@ -1075,7 +1075,7 @@ class DataTableView(QTableView):
         menu.setStyleSheet("""
             QMenu {
                 background: white;
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 8px;
                 padding: 4px;
             }
@@ -1089,7 +1089,7 @@ class DataTableView(QTableView):
             }
             QMenu::separator {
                 height: 1px;
-                background: #E6E6E6;
+                background: #3E4A59;
                 margin: 4px 8px;
             }
         """)
@@ -1208,7 +1208,7 @@ class FilterBar(QFrame):
         chip = QFrame()
         chip.setStyleSheet(f"""
             QFrame {{
-                background: {'#FEF3C7' if filter_cond.enabled else '#EFEFEF'};
+                background: {'#FEF3C7' if filter_cond.enabled else '#3A4654'};
                 border: 1px solid {'#F59E0B' if filter_cond.enabled else '#D1D5DB'};
                 border-radius: 12px;
                 padding: 2px;
@@ -1234,7 +1234,7 @@ class FilterBar(QFrame):
         label = QLabel(f"{filter_cond.column} {op} \"{val_str}\"")
         label.setStyleSheet(f"""
             font-size: 11px;
-            color: {'#92400E' if filter_cond.enabled else '#666666'};
+            color: {'#92400E' if filter_cond.enabled else '#C2C8D1'};
             background: transparent;
         """)
         layout.addWidget(label)
@@ -1312,7 +1312,7 @@ class HiddenColumnsBar(QFrame):
             QPushButton {
                 background: transparent;
                 color: #4338CA;
-                border: 1px solid #7EB6FF;
+                border: 1px solid #59B8E3;
                 border-radius: 4px;
                 padding: 4px 10px;
                 font-size: 10px;
@@ -1347,7 +1347,7 @@ class HiddenColumnsBar(QFrame):
         
         if len(hidden_columns) > 5:
             more = QLabel(f"+{len(hidden_columns) - 5} more")
-            more.setStyleSheet("font-size: 10px; color: #666666; background: transparent;")
+            more.setStyleSheet("font-size: 10px; color: #C2C8D1; background: transparent;")
             self.columns_layout.addWidget(more)
     
     def _create_column_chip(self, column: str) -> QWidget:
@@ -1472,7 +1472,7 @@ class TablePanel(QWidget):
                 color: #334155;
             }
             QLineEdit:focus {
-                border: 2px solid #7EB6FF;
+                border: 2px solid #59B8E3;
                 background: #FAFAFF;
             }
         """)
@@ -1489,8 +1489,8 @@ class TablePanel(QWidget):
         expand_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: #7EB6FF;
-                border: 1px solid #7EB6FF;
+                color: #59B8E3;
+                border: 1px solid #59B8E3;
                 border-radius: 5px;
                 padding: 5px 10px;
                 font-size: 10px;
@@ -1505,8 +1505,8 @@ class TablePanel(QWidget):
         collapse_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: #7EB6FF;
-                border: 1px solid #7EB6FF;
+                color: #59B8E3;
+                border: 1px solid #59B8E3;
                 border-radius: 5px;
                 padding: 5px 10px;
                 font-size: 10px;
@@ -1524,7 +1524,7 @@ class TablePanel(QWidget):
         self.limit_marking_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: #666666;
+                color: #C2C8D1;
                 border: 1px solid #D1D5DB;
                 border-radius: 5px;
                 padding: 5px 10px;
@@ -1583,7 +1583,7 @@ class TablePanel(QWidget):
         window_layout.addWidget(self.window_next_btn)
 
         self.window_label = QLabel("")
-        self.window_label.setStyleSheet("color: #666666; font-size: 10px;")
+        self.window_label.setStyleSheet("color: #C2C8D1; font-size: 10px;")
         window_layout.addWidget(self.window_label)
 
         self._window_debounce = QTimer(self)
@@ -1597,7 +1597,7 @@ class TablePanel(QWidget):
         toolbar.addStretch()
         
         self.group_info_label = QLabel("")
-        self.group_info_label.setStyleSheet("color: #666666; font-size: 10px;")
+        self.group_info_label.setStyleSheet("color: #C2C8D1; font-size: 10px;")
         toolbar.addWidget(self.group_info_label)
         
         table_layout.addLayout(toolbar)
@@ -1698,7 +1698,7 @@ class TablePanel(QWidget):
             group_names = " → ".join(group_cols)
             self.group_info_label.setText(f"Grouped: {group_names}")
             self.group_info_label.setStyleSheet("""
-                color: #7EB6FF;
+                color: #59B8E3;
                 font-size: 10px;
                 background: #EEF2FF;
                 padding: 3px 8px;

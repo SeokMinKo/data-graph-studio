@@ -326,10 +326,10 @@ class LineGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#7EB6FF"))
+        pen = QPen(QColor("#59B8E3"))
         pen.setWidth(2)
         painter.setPen(pen)
-        painter.setBrush(QBrush(QColor("#FFFFFF")))
+        painter.setBrush(QBrush(QColor("#323D4A")))
 
         for x, y in [(self.drawing.x1, self.drawing.y1),
                      (self.drawing.x2, self.drawing.y2)]:
@@ -389,10 +389,10 @@ class CircleGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#7EB6FF"))
+        pen = QPen(QColor("#59B8E3"))
         pen.setWidth(2)
         painter.setPen(pen)
-        painter.setBrush(QBrush(QColor("#FFFFFF")))
+        painter.setBrush(QBrush(QColor("#323D4A")))
 
         # Corner handles
         x1, y1, x2, y2 = self.drawing.get_bounds()
@@ -457,10 +457,10 @@ class RectGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#7EB6FF"))
+        pen = QPen(QColor("#59B8E3"))
         pen.setWidth(2)
         painter.setPen(pen)
-        painter.setBrush(QBrush(QColor("#FFFFFF")))
+        painter.setBrush(QBrush(QColor("#323D4A")))
 
         x, y = self.drawing.x, self.drawing.y
         w, h = self.drawing.width, self.drawing.height
@@ -533,11 +533,11 @@ class ColorButton(QPushButton):
         self.setStyleSheet(f"""
             QPushButton {{
                 background: {self._color.name()};
-                border: 2px solid #E6E6E6;
+                border: 2px solid #3E4A59;
                 border-radius: 4px;
             }}
             QPushButton:hover {{
-                border-color: #7EB6FF;
+                border-color: #59B8E3;
             }}
         """)
 
@@ -600,7 +600,7 @@ class DrawingStyleDialog(QDialog):
         fill_layout.addWidget(self.fill_enabled_check, 0, 0, 1, 2)
 
         fill_layout.addWidget(QLabel("Color:"), 1, 0)
-        self.fill_color_btn = ColorButton(QColor("#7EB6FF"))
+        self.fill_color_btn = ColorButton(QColor("#59B8E3"))
         fill_layout.addWidget(self.fill_color_btn, 1, 1)
 
         fill_layout.addWidget(QLabel("Opacity:"), 2, 0)
@@ -625,7 +625,7 @@ class DrawingStyleDialog(QDialog):
         self.setStyleSheet("""
             QGroupBox {
                 font-weight: 600;
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 8px;
                 margin-top: 12px;
                 padding-top: 16px;

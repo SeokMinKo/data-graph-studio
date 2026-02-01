@@ -46,7 +46,7 @@ class TooltipConfig:
     items: List[TooltipItem] = field(default_factory=list)
 
     # 스타일
-    background_color: str = "#FFFFFF"
+    background_color: str = "#323D4A"
     text_color: str = "#000000"
     border_color: str = "#CCCCCC"
     font_size: int = 10

@@ -269,7 +269,7 @@ class ColorSchemeManager:
         # Red-Blue Diverging
         self._schemes["RedBlue"] = ColorScheme(
             name="RedBlue",
-            colors=["#B71C1C", "#FFCDD2", "#FFFFFF", "#BBDEFB", "#0D47A1"],
+            colors=["#B71C1C", "#FFCDD2", "#323D4A", "#BBDEFB", "#0D47A1"],
             scheme_type=ColorSchemeType.DIVERGING
         )
 

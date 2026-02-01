@@ -41,11 +41,11 @@ class ColorButton(QPushButton):
         self.setStyleSheet(f"""
             QPushButton {{
                 background: {self._color.name()};
-                border: 2px solid #E6E6E6;
+                border: 2px solid #3E4A59;
                 border-radius: 4px;
             }}
             QPushButton:hover {{
-                border-color: #7EB6FF;
+                border-color: #59B8E3;
             }}
         """)
     
@@ -556,7 +556,7 @@ class GraphOptionsPanel(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #GraphOptionsPanel {
-                background: #F7F7F7;
+                background: #2B3440;
                 border: none;
                 border-radius: 8px;
             }
@@ -570,12 +570,12 @@ class GraphOptionsPanel(QFrame):
                 padding: 6px 10px;
                 margin-right: 2px;
                 font-size: 10px;
-                color: #666666;
+                color: #C2C8D1;
             }
             QTabBar::tab:selected {
-                color: #7EB6FF;
+                color: #59B8E3;
                 font-weight: 600;
-                border-bottom: 2px solid #7EB6FF;
+                border-bottom: 2px solid #59B8E3;
             }
             QGroupBox {
                 background: transparent;
@@ -584,7 +584,7 @@ class GraphOptionsPanel(QFrame):
                 padding: 4px;
                 font-weight: 500;
                 font-size: 10px;
-                color: #666666;
+                color: #C2C8D1;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -592,41 +592,41 @@ class GraphOptionsPanel(QFrame):
                 padding: 0 2px;
             }
             QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
-                background: #FFFFFF;
-                border: 1px solid #E6E6E6;
+                background: #323D4A;
+                border: 1px solid #3E4A59;
                 border-radius: 4px;
                 padding: 4px 6px;
-                color: #222222;
+                color: #E6E9EF;
                 min-height: 20px;
                 font-size: 11px;
             }
             QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
-                border-color: #7EB6FF;
+                border-color: #59B8E3;
             }
             QCheckBox {
-                color: #222222;
+                color: #E6E9EF;
                 font-size: 10px;
                 spacing: 4px;
             }
             QLabel {
-                color: #666666;
+                color: #C2C8D1;
                 font-size: 10px;
                 background: transparent;
             }
             QSlider::groove:horizontal {
                 height: 3px;
-                background: #E6E6E6;
+                background: #3E4A59;
                 border-radius: 1px;
             }
             QSlider::handle:horizontal {
                 width: 10px;
                 height: 10px;
                 margin: -4px 0;
-                background: #7EB6FF;
+                background: #59B8E3;
                 border-radius: 5px;
             }
             QSlider::sub-page:horizontal {
-                background: #7EB6FF;
+                background: #59B8E3;
                 border-radius: 1px;
             }
         """)
@@ -676,6 +676,8 @@ class GraphOptionsPanel(QFrame):
         x_group = QGroupBox("X-Axis Format")
         x_layout = QGridLayout(x_group)
         x_layout.setSpacing(6)
+        x_layout.setColumnMinimumWidth(0, 60)
+        x_layout.setColumnStretch(1, 1)
 
         x_layout.addWidget(QLabel("Title:"), 0, 0)
         self.x_title_edit = QLineEdit()
@@ -723,6 +725,8 @@ class GraphOptionsPanel(QFrame):
         y_group = QGroupBox("Y-Axis")
         y_layout = QGridLayout(y_group)
         y_layout.setSpacing(6)
+        y_layout.setColumnMinimumWidth(0, 60)
+        y_layout.setColumnStretch(1, 1)
 
         y_layout.addWidget(QLabel("Title:"), 0, 0)
         self.y_title_edit = QLineEdit()
@@ -873,6 +877,8 @@ class GraphOptionsPanel(QFrame):
         title_group = QGroupBox("Titles")
         title_layout = QGridLayout(title_group)
         title_layout.setSpacing(6)
+        title_layout.setColumnMinimumWidth(0, 60)
+        title_layout.setColumnStretch(1, 1)
         
         title_layout.addWidget(QLabel("Title:"), 0, 0)
         self.chart_title_edit = QLineEdit()
@@ -923,7 +929,7 @@ class GraphOptionsPanel(QFrame):
         max_points_label_layout = QHBoxLayout()
         max_points_label_layout.addWidget(QLabel("Max Points:"))
         self.max_points_label = QLabel("10,000")
-        self.max_points_label.setStyleSheet("font-weight: 600; color: #7EB6FF;")
+        self.max_points_label.setStyleSheet("font-weight: 600; color: #59B8E3;")
         max_points_label_layout.addWidget(self.max_points_label)
         max_points_label_layout.addStretch()
         max_points_layout.addLayout(max_points_label_layout)
@@ -1032,7 +1038,7 @@ class GraphOptionsPanel(QFrame):
         
         bg_color_layout = QHBoxLayout()
         bg_color_layout.addWidget(QLabel("Color:"))
-        self.bg_color_btn = ColorButton(QColor("#FFFFFF"))
+        self.bg_color_btn = ColorButton(QColor("#323D4A"))
         self.bg_color_btn.color_changed.connect(self._on_option_changed)
         bg_color_layout.addWidget(self.bg_color_btn)
         bg_color_layout.addStretch()
@@ -1160,7 +1166,7 @@ class GraphOptionsPanel(QFrame):
 
         # Name label
         name_label = QLabel(name)
-        name_label.setStyleSheet("font-size: 11px; color: #222222;")
+        name_label.setStyleSheet("font-size: 11px; color: #E6E9EF;")
         item_layout.addWidget(name_label, 1)
 
         # Insert before stretch
@@ -1365,7 +1371,7 @@ class LegendSettingsPanel(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #LegendPanel {
-                background: #F7F7F7;
+                background: #2B3440;
                 border: none;
                 border-radius: 8px;
             }
@@ -1376,7 +1382,7 @@ class LegendSettingsPanel(QFrame):
                 padding: 4px;
                 font-weight: 500;
                 font-size: 10px;
-                color: #666666;
+                color: #C2C8D1;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -1385,19 +1391,19 @@ class LegendSettingsPanel(QFrame):
             }
             QComboBox {
                 background: white;
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 4px;
                 padding: 4px 6px;
-                color: #222222;
+                color: #E6E9EF;
                 min-height: 20px;
                 font-size: 11px;
             }
             QCheckBox {
-                color: #222222;
+                color: #E6E9EF;
                 font-size: 10px;
             }
             QLabel {
-                color: #666666;
+                color: #C2C8D1;
                 font-size: 10px;
                 background: transparent;
             }
@@ -1411,7 +1417,7 @@ class LegendSettingsPanel(QFrame):
                 border-radius: 4px;
             }
             QListWidget::item:hover {
-                background: #EFEFEF;
+                background: #3A4654;
             }
         """)
     
@@ -1529,7 +1535,7 @@ class LegendSettingsPanel(QFrame):
         
         # Name label
         name_label = QLabel(name)
-        name_label.setStyleSheet("font-size: 11px; color: #222222;")
+        name_label.setStyleSheet("font-size: 11px; color: #E6E9EF;")
         item_layout.addWidget(name_label, 1)
         
         # Insert before stretch
@@ -1619,7 +1625,7 @@ class StatPanel(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #StatPanel {
-                background: #F7F7F7;
+                background: #2B3440;
                 border: none;
                 border-radius: 8px;
             }
@@ -1635,11 +1641,11 @@ class StatPanel(QFrame):
                 subcontrol-origin: margin;
                 left: 4px;
                 padding: 0 2px;
-                color: #666666;
+                color: #C2C8D1;
             }
             QLabel {
                 background: transparent;
-                color: #222222;
+                color: #E6E9EF;
             }
         """)
     
@@ -1654,7 +1660,7 @@ class StatPanel(QFrame):
         header_layout.setSpacing(4)
 
         header = QLabel("📈 Stats")
-        header.setStyleSheet("font-weight: 600; font-size: 11px; color: #222222;")
+        header.setStyleSheet("font-weight: 600; font-size: 11px; color: #E6E9EF;")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
@@ -1690,7 +1696,7 @@ class StatPanel(QFrame):
             widget = ClickablePlotWidget()
             widget.setMinimumHeight(60)
             widget.setMaximumHeight(80)
-            widget.setBackground('#F7F7F7')
+            widget.setBackground('#2B3440')
             widget.hideAxis('bottom')
             widget.hideAxis('left')
             widget.setCursor(Qt.PointingHandCursor)
@@ -1722,7 +1728,7 @@ class StatPanel(QFrame):
         stats_layout.setContentsMargins(4, 4, 4, 4)
 
         self.stats_label = QLabel("No data")
-        self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 9px; color: #666666;")
+        self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 9px; color: #C2C8D1;")
         self.stats_label.setWordWrap(True)
         stats_layout.addWidget(self.stats_label)
 
@@ -1973,7 +1979,7 @@ class MainGraph(pg.PlotWidget):
         self._sampling_label = pg.TextItem(
             text="",
             anchor=(0, 0),
-            color='#666666'
+            color='#C2C8D1'
         )
         self._sampling_label.setZValue(1000)
         self._sampling_label.setFont(pg.QtGui.QFont('Arial', 9))
@@ -2143,7 +2149,7 @@ class MainGraph(pg.PlotWidget):
         self.showGrid(x=grid_x, y=grid_y, alpha=grid_alpha)
         
         # Background
-        bg_color = options.get('bg_color', QColor('#FFFFFF'))
+        bg_color = options.get('bg_color', QColor('#323D4A'))
         self.setBackground(bg_color.name())
         
         # Title
@@ -3129,7 +3135,7 @@ class SlidingWindowWidget(QWidget):
         self.setStyleSheet("""
             SlidingWindowWidget {
                 background: #F9FAFB;
-                border: 1px solid #E6E6E6;
+                border: 1px solid #3E4A59;
                 border-radius: 4px;
             }
         """)
@@ -3210,8 +3216,8 @@ class SlidingWindowWidget(QWidget):
             plot_rect = rect.adjusted(margin + 15, margin, -margin, -margin)
 
         # Background
-        painter.fillRect(plot_rect, QColor('#FFFFFF'))
-        painter.setPen(QPen(QColor('#E6E6E6'), 1))
+        painter.fillRect(plot_rect, QColor('#323D4A'))
+        painter.setPen(QPen(QColor('#3E4A59'), 1))
         painter.drawRect(plot_rect)
 
         # Draw data overview (simplified histogram/line)
@@ -3294,16 +3300,16 @@ class SlidingWindowWidget(QWidget):
             )
 
             # Draw window frame
-            painter.setPen(QPen(QColor('#7EB6FF'), 2))
+            painter.setPen(QPen(QColor('#59B8E3'), 2))
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(int(x1), plot_rect.top(), int(x2 - x1), plot_rect.height())
 
             # Draw handles
             handle_width = 6
             painter.fillRect(int(x1 - handle_width // 2), plot_rect.top(),
-                            handle_width, plot_rect.height(), QColor('#7EB6FF'))
+                            handle_width, plot_rect.height(), QColor('#59B8E3'))
             painter.fillRect(int(x2 - handle_width // 2), plot_rect.top(),
-                            handle_width, plot_rect.height(), QColor('#7EB6FF'))
+                            handle_width, plot_rect.height(), QColor('#59B8E3'))
         else:
             y1 = plot_rect.top() + (1 - win_end) * plot_rect.height()
             y2 = plot_rect.top() + (1 - win_start) * plot_rect.height()
@@ -3321,16 +3327,16 @@ class SlidingWindowWidget(QWidget):
             )
 
             # Draw window frame
-            painter.setPen(QPen(QColor('#7EB6FF'), 2))
+            painter.setPen(QPen(QColor('#59B8E3'), 2))
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(plot_rect.left(), int(y1), plot_rect.width(), int(y2 - y1))
 
             # Draw handles
             handle_height = 6
             painter.fillRect(plot_rect.left(), int(y1 - handle_height // 2),
-                            plot_rect.width(), handle_height, QColor('#7EB6FF'))
+                            plot_rect.width(), handle_height, QColor('#59B8E3'))
             painter.fillRect(plot_rect.left(), int(y2 - handle_height // 2),
-                            plot_rect.width(), handle_height, QColor('#7EB6FF'))
+                            plot_rect.width(), handle_height, QColor('#59B8E3'))
 
     def _draw_labels(self, painter, rect, plot_rect):
         """Draw axis labels"""
@@ -3338,7 +3344,7 @@ class SlidingWindowWidget(QWidget):
 
         font = QFont('Arial', 8)
         painter.setFont(font)
-        painter.setPen(QColor('#666666'))
+        painter.setPen(QColor('#C2C8D1'))
 
         # Format values
         def fmt(v):
@@ -3360,7 +3366,7 @@ class SlidingWindowWidget(QWidget):
             win_start_x = plot_rect.left() + self._value_to_pos(self._window_min) * plot_rect.width()
             win_end_x = plot_rect.left() + self._value_to_pos(self._window_max) * plot_rect.width()
 
-            painter.setPen(QColor('#7EB6FF'))
+            painter.setPen(QColor('#59B8E3'))
             painter.drawText(int(win_start_x) - 20, rect.bottom() - 2, fmt(self._window_min))
             painter.drawText(int(win_end_x) - 20, rect.bottom() - 2, fmt(self._window_max))
         else:

@@ -193,7 +193,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _format_tooltip(action_name: str, shortcut: str) -> str:
         """툴팁에 단축키를 보기 좋게 포맷팅"""
-        return f"<b>{action_name}</b><br><span style='color: #666666;'>Shortcut: {shortcut}</span>"
+        return f"<b>{action_name}</b><br><span style='color: #C2C8D1;'>Shortcut: {shortcut}</span>"
     
     def _setup_menubar(self):
         """메뉴바 설정 - 새 구조"""
@@ -474,15 +474,15 @@ class MainWindow(QMainWindow):
         toolbar.setIconSize(QSize(16, 16))
         toolbar.setStyleSheet("""
             QToolBar {
-                background: #F7F7F7;
+                background: #2B3440;
                 border: none;
-                border-bottom: 1px solid #E6E6E6;
+                border-bottom: 1px solid #3E4A59;
                 padding: 4px 8px;
                 spacing: 2px;
             }
             QToolBar::separator {
                 width: 1px;
-                background: #E6E6E6;
+                background: #3E4A59;
                 margin: 4px 8px;
             }
             QToolButton {
@@ -491,17 +491,17 @@ class MainWindow(QMainWindow):
                 border-radius: 6px;
                 padding: 6px 8px;
                 font-size: 12px;
-                color: #222222;
+                color: #E6E9EF;
             }
             QToolButton:hover {
-                background: #EFEFEF;
+                background: #3A4654;
             }
             QToolButton:checked {
-                background: #EAF2FF;
-                color: #7EB6FF;
+                background: #3A4E63;
+                color: #59B8E3;
             }
             QToolButton:pressed {
-                background: #D6E6FF;
+                background: #365069;
             }
         """)
         self.addToolBar(toolbar)
@@ -539,7 +539,7 @@ class MainWindow(QMainWindow):
 
         # Draw tools label
         draw_label = QLabel("  Draw: ")
-        draw_label.setStyleSheet("color: #666666; font-size: 12px;")
+        draw_label.setStyleSheet("color: #C2C8D1; font-size: 12px;")
         toolbar.addWidget(draw_label)
 
         # Drawing tools
@@ -580,7 +580,7 @@ class MainWindow(QMainWindow):
         
         # Chart type selector
         self._chart_type_label = QLabel("  Chart: ")
-        self._chart_type_label.setStyleSheet("color: #666666; font-size: 12px;")
+        self._chart_type_label.setStyleSheet("color: #C2C8D1; font-size: 12px;")
         toolbar.addWidget(self._chart_type_label)
         
         chart_types = [
@@ -600,7 +600,7 @@ class MainWindow(QMainWindow):
 
         # Preset management
         preset_label = QLabel("  Preset: ")
-        preset_label.setStyleSheet("color: #666666; font-size: 12px;")
+        preset_label.setStyleSheet("color: #C2C8D1; font-size: 12px;")
         toolbar.addWidget(preset_label)
 
         self._preset_combo = QComboBox()
@@ -614,7 +614,7 @@ class MainWindow(QMainWindow):
                 min-height: 24px;
             }
             QComboBox:hover {
-                border-color: #7EB6FF;
+                border-color: #59B8E3;
             }
             QComboBox::drop-down {
                 border: none;
@@ -682,9 +682,9 @@ class MainWindow(QMainWindow):
 
         self._top_tabs = QTabWidget()
         self._top_tabs.setStyleSheet("""
-            QTabWidget::pane { border: none; background: #F7F7F7; }
-            QTabBar::tab { padding: 6px 10px; margin-right: 2px; color: #666666; }
-            QTabBar::tab:selected { color: #7EB6FF; border-bottom: 2px solid #7EB6FF; }
+            QTabWidget::pane { border: none; background: #2B3440; }
+            QTabBar::tab { padding: 6px 10px; margin-right: 2px; color: #C2C8D1; }
+            QTabBar::tab:selected { color: #59B8E3; border-bottom: 2px solid #59B8E3; }
         """)
         self._top_tabs.addTab(self.summary_panel, "Overview")
         self._top_tabs.addTab(self._profile_bar_container, "Profile")
@@ -830,8 +830,8 @@ class MainWindow(QMainWindow):
         self.statusbar = QStatusBar()
         self.statusbar.setStyleSheet("""
             QStatusBar {
-                background: #F7F7F7;
-                border-top: 1px solid #E6E6E6;
+                background: #2B3440;
+                border-top: 1px solid #3E4A59;
                 padding: 6px 16px;
                 font-size: 12px;
             }
@@ -839,7 +839,7 @@ class MainWindow(QMainWindow):
                 border: none;
             }
             QLabel {
-                color: #222222;
+                color: #E6E9EF;
                 padding: 0 8px;
             }
         """)
