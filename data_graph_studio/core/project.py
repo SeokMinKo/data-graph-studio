@@ -27,7 +27,12 @@ class DataSourceRef:
     @property
     def is_absolute(self) -> bool:
         """절대 경로 여부"""
-        return os.path.isabs(self.path)
+        if os.path.isabs(self.path):
+            return True
+        # Windows drive letter paths (e.g., C:/foo or C:\foo)
+        if len(self.path) >= 3 and self.path[1] == ':' and (self.path[2] == '/' or self.path[2] == '\\'):
+            return True
+        return False
 
     def resolve(self, base_dir: str) -> str:
         """상대 경로를 절대 경로로 변환"""

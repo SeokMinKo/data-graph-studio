@@ -3733,6 +3733,25 @@ class GraphPanel(QWidget):
 
             options['x_title'] = options.get('x_title') or x_col
 
+        # Coerce non-numeric X data (e.g., datetime strings) to numeric for plotting
+        if not x_is_categorical and x_data is not None and len(x_data) > 0:
+            try:
+                if getattr(x_data, "dtype", None) is not None and x_data.dtype.kind in ("U", "S", "O"):
+                    s = pl.Series("x", x_data)
+                    parsed = s.str.strptime(pl.Datetime, strict=False)
+                    if parsed.null_count() < len(parsed):
+                        x_data = parsed.dt.timestamp("ms").to_numpy()
+                        options['x_format'] = options.get('x_format') or 'time'
+                    else:
+                        # Fallback: treat as categorical
+                        x_categorical_labels = self.engine.get_unique_values(x_col, limit=500) if x_col else list(dict.fromkeys(x_data))[:500]
+                        value_to_idx = {v: i for i, v in enumerate(x_categorical_labels)}
+                        x_data = np.array([value_to_idx.get(v, 0) for v in x_data], dtype=np.float64)
+                        x_is_categorical = True
+                        self._x_axis.set_categorical(x_categorical_labels)
+            except Exception:
+                pass
+
         # Y column
         y_formula = ""
         y_categorical_labels = None
