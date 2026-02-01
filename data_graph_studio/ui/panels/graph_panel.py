@@ -3568,6 +3568,7 @@ class GraphPanel(QWidget):
         layout.setSpacing(0)
 
         self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setHandleWidth(2)
 
         # Options Panel (left) - now includes Legend as a tab
         self.options_panel = GraphOptionsPanel(self.state)
@@ -3577,13 +3578,13 @@ class GraphPanel(QWidget):
         center_widget = QWidget()
         center_layout = QVBoxLayout(center_widget)
         center_layout.setContentsMargins(0, 0, 0, 0)
-        center_layout.setSpacing(4)
+        center_layout.setSpacing(2)
 
         # Graph container with Y sliding window
         graph_container = QWidget()
         graph_layout = QHBoxLayout(graph_container)
         graph_layout.setContentsMargins(0, 0, 0, 0)
-        graph_layout.setSpacing(4)
+        graph_layout.setSpacing(2)
 
         # Y-axis sliding window (left of graph)
         self.y_sliding_window = SlidingWindowWidget(orientation='vertical')
