@@ -871,6 +871,14 @@ class DataEngine:
 
         return pl.DataFrame(optimized_cols)
     
+    def _collect_streaming(self, lazy_df: pl.LazyFrame) -> pl.DataFrame:
+        """LazyFrame을 streaming 모드로 수집 (메모리 피크 완화)"""
+        try:
+            return lazy_df.collect(streaming=True)
+        except Exception:
+            # streaming 미지원 연산은 일반 collect로 폴백
+            return lazy_df.collect()
+
     def _create_profile(self, df: pl.DataFrame, load_time: float) -> DataProfile:
         """데이터 프로파일 생성"""
         columns = []
@@ -951,13 +959,19 @@ class DataEngine:
         if operator not in ops:
             raise ValueError(f"Unknown operator: {operator}")
         
-        return self._df.filter(ops[operator])
+        try:
+            return self._collect_streaming(self._df.lazy().filter(ops[operator]))
+        except Exception:
+            return self._df.filter(ops[operator])
     
     def sort(self, columns: List[str], descending: Union[bool, List[bool]] = False) -> pl.DataFrame:
         """정렬"""
         if self._df is None:
             return None
-        return self._df.sort(columns, descending=descending)
+        try:
+            return self._collect_streaming(self._df.lazy().sort(columns, descending=descending))
+        except Exception:
+            return self._df.sort(columns, descending=descending)
     
     def group_aggregate(
         self,
@@ -992,7 +1006,12 @@ class DataEngine:
                 expr = agg_map[agg_func](val_col).alias(f"{val_col}_{agg_func}")
                 agg_exprs.append(expr)
         
-        return self._df.group_by(group_columns).agg(agg_exprs)
+        try:
+            return self._collect_streaming(
+                self._df.lazy().group_by(group_columns).agg(agg_exprs)
+            )
+        except Exception:
+            return self._df.group_by(group_columns).agg(agg_exprs)
     
     def get_statistics(self, column: str) -> Dict[str, Any]:
         """컬럼 통계"""
