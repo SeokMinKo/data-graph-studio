@@ -233,6 +233,12 @@ class DataEngine:
         self._precision_mode: PrecisionMode = precision_mode
         self._precision_columns: Set[str] = set()  # 정밀도 유지 필요 컬럼
 
+        # 대용량 대응 (windowed loading)
+        self._total_rows: int = 0
+        self._window_start: int = 0
+        self._window_size: int = 200_000
+        self._windowed: bool = False
+
         # 멀티 데이터셋 지원
         self._datasets: Dict[str, DatasetInfo] = {}  # dataset_id -> DatasetInfo
         self._active_dataset_id: Optional[str] = None
@@ -261,6 +267,8 @@ class DataEngine:
     @property
     def row_count(self) -> int:
         """총 행 수"""
+        if self._windowed and self._total_rows > 0:
+            return self._total_rows
         return len(self._df) if self._df is not None else 0
     
     @property
@@ -291,6 +299,63 @@ class DataEngine:
                 setattr(self._progress, key, value)
         if self._progress_callback:
             self._progress_callback(self._progress)
+
+    def _should_convert_to_parquet(self, file_type: FileType, file_size: int) -> bool:
+        """대용량 CSV를 Parquet으로 전환할지 여부"""
+        if file_type not in (FileType.CSV, FileType.TSV):
+            return False
+        # 500MB 이상 CSV/TSV는 Parquet 전환
+        return file_size >= 500 * 1024 * 1024
+
+    def _should_use_windowed_loading(self, file_size: int) -> bool:
+        """대용량 windowed loading 적용 여부"""
+        # 300MB 이상 파일은 windowed 모드 우선
+        return file_size >= 300 * 1024 * 1024
+
+    def _prepare_parquet_from_csv(
+        self,
+        path: str,
+        encoding: str,
+        delimiter: str,
+        has_header: bool,
+        skip_rows: int,
+        comment_char: Optional[str]
+    ) -> Optional[str]:
+        """CSV/TSV를 Parquet으로 변환 (streaming)"""
+        parquet_path = f"{path}.parquet"
+
+        try:
+            if os.path.exists(parquet_path):
+                csv_mtime = os.path.getmtime(path)
+                pq_mtime = os.path.getmtime(parquet_path)
+                if pq_mtime >= csv_mtime and os.path.getsize(parquet_path) > 0:
+                    return parquet_path
+
+            self._update_progress(status="converting_to_parquet")
+            lf = pl.scan_csv(
+                path,
+                encoding=encoding,
+                separator=delimiter,
+                has_header=has_header,
+                skip_rows=skip_rows,
+                comment_prefix=comment_char,
+                infer_schema_length=10000,
+                ignore_errors=True
+            )
+            lf.sink_parquet(parquet_path, compression="zstd")
+            return parquet_path
+        except Exception as e:
+            logger.warning(f"Failed to convert to parquet: {e}")
+            return None
+
+    def _load_window_from_lazy(
+        self,
+        lazy_df: pl.LazyFrame,
+        window_start: int,
+        window_size: int
+    ) -> pl.DataFrame:
+        """LazyFrame에서 window 구간만 로드"""
+        return self._collect_streaming(lazy_df.slice(window_start, window_size))
     
     def detect_file_type(self, path: str) -> FileType:
         """파일 형식 자동 감지"""
@@ -441,6 +506,20 @@ class DataEngine:
             loaded_bytes=0
         )
 
+        # 대용량 CSV/TSV는 Parquet 전환
+        if self._should_convert_to_parquet(file_type, file_size):
+            parquet_path = self._prepare_parquet_from_csv(
+                path,
+                encoding=encoding,
+                delimiter=delimiter,
+                has_header=has_header,
+                skip_rows=skip_rows,
+                comment_char=comment_char
+            )
+            if parquet_path:
+                path = parquet_path
+                file_type = FileType.PARQUET
+
         # 비동기 로드
         if async_load:
             self._cancel_loading = False
@@ -482,32 +561,80 @@ class DataEngine:
         start_time = time.time()
 
         try:
-            if file_type == FileType.CSV:
-                self._df = self._load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
-            elif file_type == FileType.TSV:
-                self._df = self._load_csv(path, encoding, "\t", has_header, skip_rows, comment_char)
-            elif file_type in [FileType.TXT, FileType.CUSTOM]:
-                self._df = self._load_text(path, encoding, delimiter, delimiter_type,
-                                           regex_pattern, has_header, skip_rows, comment_char)
-            elif file_type == FileType.ETL:
-                self._df = self._load_etl(path, encoding, delimiter, delimiter_type,
-                                          regex_pattern, has_header, skip_rows, comment_char)
-            elif file_type == FileType.EXCEL:
-                self._df = self._load_excel(path, sheet_name)
-            elif file_type == FileType.PARQUET:
-                self._df = self._load_parquet(path)
-            elif file_type == FileType.JSON:
-                self._df = self._load_json(path)
+            file_size = os.path.getsize(path)
+            self._windowed = False
+            self._total_rows = 0
+            self._window_start = 0
+            self._lazy_df = None
+
+            # 대용량 파일은 Lazy + window 로딩
+            if file_type in (FileType.CSV, FileType.TSV, FileType.PARQUET) and self._should_use_windowed_loading(file_size):
+                if file_type == FileType.CSV:
+                    lazy_df = pl.scan_csv(
+                        path,
+                        encoding=encoding,
+                        separator=delimiter,
+                        has_header=has_header,
+                        skip_rows=skip_rows,
+                        comment_prefix=comment_char,
+                        infer_schema_length=10000,
+                        ignore_errors=True
+                    )
+                elif file_type == FileType.TSV:
+                    lazy_df = pl.scan_csv(
+                        path,
+                        encoding=encoding,
+                        separator="\t",
+                        has_header=has_header,
+                        skip_rows=skip_rows,
+                        comment_prefix=comment_char,
+                        infer_schema_length=10000,
+                        ignore_errors=True
+                    )
+                else:
+                    lazy_df = pl.scan_parquet(path)
+
+                if excluded_columns:
+                    lazy_df = lazy_df.drop(excluded_columns)
+
+                self._lazy_df = lazy_df
+                # 전체 행 수 계산
+                try:
+                    self._total_rows = int(self._lazy_df.select(pl.len()).collect()[0, 0])
+                except Exception:
+                    self._total_rows = 0
+
+                window_size = min(self._window_size, self._total_rows) if self._total_rows > 0 else self._window_size
+                self._df = self._load_window_from_lazy(self._lazy_df, self._window_start, window_size)
+                self._windowed = self._total_rows > window_size if self._total_rows else True
+
             else:
-                raise ValueError(f"Unsupported file type: {file_type}")
+                if file_type == FileType.CSV:
+                    self._df = self._load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
+                elif file_type == FileType.TSV:
+                    self._df = self._load_csv(path, encoding, "\t", has_header, skip_rows, comment_char)
+                elif file_type in [FileType.TXT, FileType.CUSTOM]:
+                    self._df = self._load_text(path, encoding, delimiter, delimiter_type,
+                                               regex_pattern, has_header, skip_rows, comment_char)
+                elif file_type == FileType.ETL:
+                    self._df = self._load_etl(path, encoding, delimiter, delimiter_type,
+                                              regex_pattern, has_header, skip_rows, comment_char)
+                elif file_type == FileType.EXCEL:
+                    self._df = self._load_excel(path, sheet_name)
+                elif file_type == FileType.PARQUET:
+                    self._df = self._load_parquet(path)
+                elif file_type == FileType.JSON:
+                    self._df = self._load_json(path)
+                else:
+                    raise ValueError(f"Unsupported file type: {file_type}")
 
             if self._cancel_loading:
                 self._df = None
                 self._update_progress(status="cancelled")
                 return False
 
-            # Remove excluded columns
-            if excluded_columns and self._df is not None:
+            # Remove excluded columns (non-lazy path)
+            if excluded_columns and self._df is not None and not self._windowed:
                 cols_to_drop = [c for c in excluded_columns if c in self._df.columns]
                 if cols_to_drop:
                     self._df = self._df.drop(cols_to_drop)
@@ -517,26 +644,31 @@ class DataEngine:
                 self._df = self._apply_process_filter(self._df, process_filter)
 
             # 메모리 최적화
-            if optimize_memory:
+            if optimize_memory and self._df is not None:
                 self._update_progress(status="optimizing")
                 self._df = self._optimize_memory(self._df)
 
             # 프로파일 생성
-            self._update_progress(status="profiling")
-            self._profile = self._create_profile(self._df, time.time() - start_time)
+            if self._df is not None:
+                self._update_progress(status="profiling")
+                self._profile = self._create_profile(self._df, time.time() - start_time)
+
+            total_rows = self._total_rows if self._windowed and self._total_rows else (len(self._df) if self._df is not None else 0)
+            loaded_rows = len(self._df) if self._df is not None else 0
 
             # 완료
             self._update_progress(
                 status="complete",
                 loaded_bytes=self._progress.total_bytes,
-                loaded_rows=len(self._df),
-                total_rows=len(self._df),
+                loaded_rows=loaded_rows,
+                total_rows=total_rows,
                 elapsed_seconds=time.time() - start_time
             )
 
             # 로딩 완료 후 메모리 정리
             gc.collect()
-            logger.info(f"File loaded successfully: {len(self._df):,} rows, {len(self._df.columns)} columns")
+            if self._df is not None:
+                logger.info(f"File loaded successfully: {loaded_rows:,} rows, {len(self._df.columns)} columns")
 
             return True
 
@@ -1227,6 +1359,9 @@ class DataEngine:
         self._cache.clear()
         self._precision_columns.clear()
         self._progress = LoadingProgress()
+        self._total_rows = 0
+        self._window_start = 0
+        self._windowed = False
         # 메모리 정리
         gc.collect()
         logger.debug("Data engine cleared and memory collected")
