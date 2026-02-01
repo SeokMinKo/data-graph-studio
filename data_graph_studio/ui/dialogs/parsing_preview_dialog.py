@@ -193,7 +193,7 @@ class ParsingPreviewDialog(QDialog):
                 padding: 0 8px;
             }
             QLabel {
-                color: #4B5563;
+                color: #222222;
                 font-size: 12px;
             }
             QComboBox, QSpinBox, QLineEdit {
@@ -250,11 +250,11 @@ class ParsingPreviewDialog(QDialog):
                 padding: 4px 8px;
             }
             QTableWidget::item:selected {
-                background: #EEF2FF;
-                color: #1F2937;
+                background: #E9F0FF;
+                color: #222222;
             }
             QHeaderView::section {
-                background: #F9FAFB;
+                background: #F7F7F7;
                 border: none;
                 border-bottom: 1px solid #E6E6E6;
                 border-right: 1px solid #E6E6E6;
@@ -265,8 +265,8 @@ class ParsingPreviewDialog(QDialog):
             QTextEdit {
                 border: 1px solid #E6E6E6;
                 border-radius: 6px;
-                background: #1F2937;
-                color: #D1D5DB;
+                background: #FFFFFF;
+                color: #222222;
                 font-family: 'Consolas', 'Monaco', monospace;
                 font-size: 11px;
                 padding: 8px;
@@ -279,7 +279,7 @@ class ParsingPreviewDialog(QDialog):
         
         # Header
         header = QLabel(f"📄 {self.file_name}")
-        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #1F2937;")
+        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #222222;")
         layout.addWidget(header)
         
         # Main content - settings on left, preview on right
