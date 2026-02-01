@@ -204,7 +204,7 @@ class ParsingPreviewDialog(QDialog):
                 min-height: 28px;
             }
             QComboBox:focus, QSpinBox:focus, QLineEdit:focus {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
             QComboBox::drop-down {
                 border: none;
@@ -230,7 +230,7 @@ class ParsingPreviewDialog(QDialog):
                 background: #EFEFEF;
             }
             QPushButton#primary {
-                background: #3A7AFE;
+                background: #7EB6FF;
                 color: white;
                 border: none;
             }
@@ -250,7 +250,7 @@ class ParsingPreviewDialog(QDialog):
                 padding: 4px 8px;
             }
             QTableWidget::item:selected {
-                background: #E9F0FF;
+                background: #EAF2FF;
                 color: #222222;
             }
             QHeaderView::section {
@@ -413,7 +413,7 @@ class ParsingPreviewDialog(QDialog):
                 background: #EFEFEF;
             }
             QProgressBar::chunk {
-                background: #3A7AFE;
+                background: #7EB6FF;
                 border-radius: 4px;
             }
         """)
@@ -922,7 +922,7 @@ class ParsingPreviewDialog(QDialog):
                     font-size: 11px;
                 }
                 QCheckBox:hover {
-                    border-color: #3A7AFE;
+                    border-color: #7EB6FF;
                 }
                 QCheckBox::indicator {
                     width: 14px;

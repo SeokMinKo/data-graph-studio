@@ -45,7 +45,7 @@ class ColorButton(QPushButton):
                 border-radius: 4px;
             }}
             QPushButton:hover {{
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }}
         """)
     
@@ -573,9 +573,9 @@ class GraphOptionsPanel(QFrame):
                 color: #666666;
             }
             QTabBar::tab:selected {
-                color: #3A7AFE;
+                color: #7EB6FF;
                 font-weight: 600;
-                border-bottom: 2px solid #3A7AFE;
+                border-bottom: 2px solid #7EB6FF;
             }
             QGroupBox {
                 background: transparent;
@@ -601,7 +601,7 @@ class GraphOptionsPanel(QFrame):
                 font-size: 11px;
             }
             QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
             QCheckBox {
                 color: #222222;
@@ -622,11 +622,11 @@ class GraphOptionsPanel(QFrame):
                 width: 10px;
                 height: 10px;
                 margin: -4px 0;
-                background: #3A7AFE;
+                background: #7EB6FF;
                 border-radius: 5px;
             }
             QSlider::sub-page:horizontal {
-                background: #3A7AFE;
+                background: #7EB6FF;
                 border-radius: 1px;
             }
         """)
@@ -923,7 +923,7 @@ class GraphOptionsPanel(QFrame):
         max_points_label_layout = QHBoxLayout()
         max_points_label_layout.addWidget(QLabel("Max Points:"))
         self.max_points_label = QLabel("10,000")
-        self.max_points_label.setStyleSheet("font-weight: 600; color: #3A7AFE;")
+        self.max_points_label.setStyleSheet("font-weight: 600; color: #7EB6FF;")
         max_points_label_layout.addWidget(self.max_points_label)
         max_points_label_layout.addStretch()
         max_points_layout.addLayout(max_points_label_layout)
@@ -3294,16 +3294,16 @@ class SlidingWindowWidget(QWidget):
             )
 
             # Draw window frame
-            painter.setPen(QPen(QColor('#3A7AFE'), 2))
+            painter.setPen(QPen(QColor('#7EB6FF'), 2))
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(int(x1), plot_rect.top(), int(x2 - x1), plot_rect.height())
 
             # Draw handles
             handle_width = 6
             painter.fillRect(int(x1 - handle_width // 2), plot_rect.top(),
-                            handle_width, plot_rect.height(), QColor('#3A7AFE'))
+                            handle_width, plot_rect.height(), QColor('#7EB6FF'))
             painter.fillRect(int(x2 - handle_width // 2), plot_rect.top(),
-                            handle_width, plot_rect.height(), QColor('#3A7AFE'))
+                            handle_width, plot_rect.height(), QColor('#7EB6FF'))
         else:
             y1 = plot_rect.top() + (1 - win_end) * plot_rect.height()
             y2 = plot_rect.top() + (1 - win_start) * plot_rect.height()
@@ -3321,16 +3321,16 @@ class SlidingWindowWidget(QWidget):
             )
 
             # Draw window frame
-            painter.setPen(QPen(QColor('#3A7AFE'), 2))
+            painter.setPen(QPen(QColor('#7EB6FF'), 2))
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(plot_rect.left(), int(y1), plot_rect.width(), int(y2 - y1))
 
             # Draw handles
             handle_height = 6
             painter.fillRect(plot_rect.left(), int(y1 - handle_height // 2),
-                            plot_rect.width(), handle_height, QColor('#3A7AFE'))
+                            plot_rect.width(), handle_height, QColor('#7EB6FF'))
             painter.fillRect(plot_rect.left(), int(y2 - handle_height // 2),
-                            plot_rect.width(), handle_height, QColor('#3A7AFE'))
+                            plot_rect.width(), handle_height, QColor('#7EB6FF'))
 
     def _draw_labels(self, painter, rect, plot_rect):
         """Draw axis labels"""
@@ -3360,7 +3360,7 @@ class SlidingWindowWidget(QWidget):
             win_start_x = plot_rect.left() + self._value_to_pos(self._window_min) * plot_rect.width()
             win_end_x = plot_rect.left() + self._value_to_pos(self._window_max) * plot_rect.width()
 
-            painter.setPen(QColor('#3A7AFE'))
+            painter.setPen(QColor('#7EB6FF'))
             painter.drawText(int(win_start_x) - 20, rect.bottom() - 2, fmt(self._window_min))
             painter.drawText(int(win_end_x) - 20, rect.bottom() - 2, fmt(self._window_max))
         else:

@@ -62,9 +62,9 @@ class ComparisonStatsPanel(QWidget):
                 color: #9CA3AF;
             }
             QTabBar::tab:selected {
-                color: #3A7AFE;
+                color: #7EB6FF;
                 font-weight: 600;
-                border-bottom: 2px solid #3A7AFE;
+                border-bottom: 2px solid #7EB6FF;
             }
         """)
         layout.addWidget(self.tab_widget)

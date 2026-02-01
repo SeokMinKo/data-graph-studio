@@ -53,7 +53,7 @@ class FloatWindow(QDialog):
         dock_btn.setToolTip("Return to main window")
         dock_btn.setStyleSheet("""
             QPushButton {
-                background: #3A7AFE;
+                background: #7EB6FF;
                 color: white;
                 border: none;
                 border-radius: 4px;

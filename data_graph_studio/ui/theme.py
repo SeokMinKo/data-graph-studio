@@ -16,7 +16,7 @@ class Theme:
     secondary: str
     
     # Accent Colors (Vibrant)
-    accent: str = "#3A7AFE"       # Indigo
+    accent: str = "#7EB6FF"       # Indigo
     success: str = "#10B981"      # Emerald
     warning: str = "#F59E0B"      # Amber
     error: str = "#EF4444"        # Red
@@ -132,7 +132,7 @@ class ColorPalette:
     def default(cls) -> 'ColorPalette':
         """Modern vibrant palette"""
         return cls([
-            "#3A7AFE",  # Indigo
+            "#7EB6FF",  # Indigo
             "#EC4899",  # Pink
             "#10B981",  # Emerald
             "#F59E0B",  # Amber
@@ -152,7 +152,7 @@ class ColorPalette:
             "#06B6D4",  # Cyan
             "#14B8A6",  # Teal
             "#3B82F6",  # Blue
-            "#3A7AFE",  # Indigo
+            "#7EB6FF",  # Indigo
             "#8B5CF6",  # Violet
             "#0284C7",  # Light Blue
             "#0891B2",  # Cyan Dark
@@ -200,7 +200,7 @@ LIGHT_THEME = Theme(
     name="Light",
     background="#F9FAFB",
     foreground="#111827",
-    primary="#3A7AFE",
+    primary="#7EB6FF",
     secondary="#EC4899",
     surface="#FFFFFF",
     border="#E6E6E6",

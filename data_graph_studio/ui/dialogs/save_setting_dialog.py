@@ -81,7 +81,7 @@ class SaveSettingDialog(QDialog):
                 background: white;
             }
             QLineEdit:focus {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
         """)
         form_layout.addWidget(self._name_edit, 0, 1)
@@ -104,7 +104,7 @@ class SaveSettingDialog(QDialog):
                 font-size: 18px;
             }
             QComboBox:hover {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
         """)
         form_layout.addWidget(self._icon_combo, 1, 1, Qt.AlignLeft)
@@ -125,7 +125,7 @@ class SaveSettingDialog(QDialog):
                 background: white;
             }
             QTextEdit:focus {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
         """)
         form_layout.addWidget(self._desc_edit, 2, 1)
@@ -183,7 +183,7 @@ class SaveSettingDialog(QDialog):
         save_btn = QPushButton("Save")
         save_btn.setStyleSheet("""
             QPushButton {
-                background: #3A7AFE;
+                background: #7EB6FF;
                 border: none;
                 border-radius: 6px;
                 padding: 8px 24px;
@@ -191,7 +191,7 @@ class SaveSettingDialog(QDialog):
                 font-weight: 600;
             }
             QPushButton:hover {
-                background: #3A7AFE;
+                background: #7EB6FF;
             }
             QPushButton:pressed {
                 background: #4338CA;

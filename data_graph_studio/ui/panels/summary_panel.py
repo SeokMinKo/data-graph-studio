@@ -63,7 +63,7 @@ class AnimatedNumber(QLabel):
 class StatCard(QFrame):
     """Compact stat card - minimal design"""
     
-    def __init__(self, icon: str, title: str, value: str = "-", subtitle: str = "", color: str = "#3A7AFE"):
+    def __init__(self, icon: str, title: str, value: str = "-", subtitle: str = "", color: str = "#7EB6FF"):
         super().__init__()
         self.color = color
         
@@ -173,7 +173,7 @@ class StatCard(QFrame):
 class MiniSparkline(QFrame):
     """Mini sparkline chart for trends"""
     
-    def __init__(self, data: list = None, color: str = "#3A7AFE"):
+    def __init__(self, data: list = None, color: str = "#7EB6FF"):
         super().__init__()
         self.data = data or []
         self.color = color
@@ -269,7 +269,7 @@ class SummaryPanel(QWidget):
         # Default stat cards - compact
         self.cards = {}
         self._add_card("file", "📄", "File", "-", color="#0EA5E9")
-        self._add_card("rows", "📋", "Rows", "-", color="#3A7AFE")
+        self._add_card("rows", "📋", "Rows", "-", color="#7EB6FF")
         self._add_card("sampled", "📊", "Sampled", "-", color="#14B8A6")
         self._add_card("columns", "⊞", "Cols", "-", color="#8B5CF6")
         self._add_card("numeric", "#", "Numeric", "-", color="#10B981")
@@ -282,7 +282,7 @@ class SummaryPanel(QWidget):
         scroll.setWidget(self.card_container)
         main_layout.addWidget(scroll)
     
-    def _add_card(self, key: str, icon: str, title: str, value: str = "-", color: str = "#3A7AFE") -> StatCard:
+    def _add_card(self, key: str, icon: str, title: str, value: str = "-", color: str = "#7EB6FF") -> StatCard:
         """Add a stat card"""
         card = StatCard(icon, title, value, "", color)
         self.cards[key] = card
@@ -396,9 +396,9 @@ class SummaryPanel(QWidget):
             
             self.context_label.setText(f"Grouped by: {group_names}")
             self.context_label.setStyleSheet("""
-                color: #3A7AFE;
+                color: #7EB6FF;
                 font-size: 12px;
-                background: #3A7AFE15;
+                background: #7EB6FF15;
                 padding: 4px 12px;
                 border-radius: 12px;
             """)

@@ -326,7 +326,7 @@ class LineGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#3A7AFE"))
+        pen = QPen(QColor("#7EB6FF"))
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#FFFFFF")))
@@ -389,7 +389,7 @@ class CircleGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#3A7AFE"))
+        pen = QPen(QColor("#7EB6FF"))
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#FFFFFF")))
@@ -457,7 +457,7 @@ class RectGraphicsItem(pg.GraphicsObject):
 
     def _draw_handles(self, painter):
         handle_size = 6
-        pen = QPen(QColor("#3A7AFE"))
+        pen = QPen(QColor("#7EB6FF"))
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#FFFFFF")))
@@ -537,7 +537,7 @@ class ColorButton(QPushButton):
                 border-radius: 4px;
             }}
             QPushButton:hover {{
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }}
         """)
 
@@ -600,7 +600,7 @@ class DrawingStyleDialog(QDialog):
         fill_layout.addWidget(self.fill_enabled_check, 0, 0, 1, 2)
 
         fill_layout.addWidget(QLabel("Color:"), 1, 0)
-        self.fill_color_btn = ColorButton(QColor("#3A7AFE"))
+        self.fill_color_btn = ColorButton(QColor("#7EB6FF"))
         fill_layout.addWidget(self.fill_color_btn, 1, 1)
 
         fill_layout.addWidget(QLabel("Opacity:"), 2, 0)

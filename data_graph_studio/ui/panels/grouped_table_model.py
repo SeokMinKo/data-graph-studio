@@ -107,7 +107,7 @@ class GroupedTableModel(QAbstractItemModel):
         
         # Colors for groups
         self._group_colors = [
-            "#3A7AFE", "#EC4899", "#10B981", "#F59E0B", "#3B82F6",
+            "#7EB6FF", "#EC4899", "#10B981", "#F59E0B", "#3B82F6",
             "#EF4444", "#8B5CF6", "#06B6D4", "#84CC16", "#F97316"
         ]
     

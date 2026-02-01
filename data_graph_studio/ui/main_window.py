@@ -497,11 +497,11 @@ class MainWindow(QMainWindow):
                 background: #EFEFEF;
             }
             QToolButton:checked {
-                background: #E9F0FF;
-                color: #3A7AFE;
+                background: #EAF2FF;
+                color: #7EB6FF;
             }
             QToolButton:pressed {
-                background: #DCE6FF;
+                background: #D6E6FF;
             }
         """)
         self.addToolBar(toolbar)
@@ -614,7 +614,7 @@ class MainWindow(QMainWindow):
                 min-height: 24px;
             }
             QComboBox:hover {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
             QComboBox::drop-down {
                 border: none;
@@ -684,7 +684,7 @@ class MainWindow(QMainWindow):
         self._top_tabs.setStyleSheet("""
             QTabWidget::pane { border: none; background: #F7F7F7; }
             QTabBar::tab { padding: 6px 10px; margin-right: 2px; color: #666666; }
-            QTabBar::tab:selected { color: #3A7AFE; border-bottom: 2px solid #3A7AFE; }
+            QTabBar::tab:selected { color: #7EB6FF; border-bottom: 2px solid #7EB6FF; }
         """)
         self._top_tabs.addTab(self.summary_panel, "Overview")
         self._top_tabs.addTab(self._profile_bar_container, "Profile")

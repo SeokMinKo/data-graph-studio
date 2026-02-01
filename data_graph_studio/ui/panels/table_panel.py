@@ -460,12 +460,12 @@ class GroupZone(QFrame):
                 font-size: 11px;
             }
             QListWidget::item:hover {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
                 background: #F8FAFC;
             }
             QListWidget::item:selected {
                 background: #EEF2FF;
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
                 color: #4338CA;
             }
         """)
@@ -925,7 +925,7 @@ class DataTableView(QTableView):
             QTableView {
                 background: #FFFFFF;
                 alternate-background-color: #F7F7F7;
-                selection-background-color: #E9F0FF;
+                selection-background-color: #EAF2FF;
                 selection-color: #222222;
                 gridline-color: #E6E6E6;
                 border: none;
@@ -937,11 +937,11 @@ class DataTableView(QTableView):
                 color: #222222;
             }
             QTableView::item:selected {
-                background: #E9F0FF;
+                background: #EAF2FF;
                 color: #222222;
             }
             QTableView::item:hover {
-                background: #F1F5FF;
+                background: #F3F7FF;
             }
             QHeaderView::section {
                 background: #F7F7F7;
@@ -1312,7 +1312,7 @@ class HiddenColumnsBar(QFrame):
             QPushButton {
                 background: transparent;
                 color: #4338CA;
-                border: 1px solid #3A7AFE;
+                border: 1px solid #7EB6FF;
                 border-radius: 4px;
                 padding: 4px 10px;
                 font-size: 10px;
@@ -1472,7 +1472,7 @@ class TablePanel(QWidget):
                 color: #334155;
             }
             QLineEdit:focus {
-                border: 2px solid #3A7AFE;
+                border: 2px solid #7EB6FF;
                 background: #FAFAFF;
             }
         """)
@@ -1489,8 +1489,8 @@ class TablePanel(QWidget):
         expand_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: #3A7AFE;
-                border: 1px solid #3A7AFE;
+                color: #7EB6FF;
+                border: 1px solid #7EB6FF;
                 border-radius: 5px;
                 padding: 5px 10px;
                 font-size: 10px;
@@ -1505,8 +1505,8 @@ class TablePanel(QWidget):
         collapse_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: #3A7AFE;
-                border: 1px solid #3A7AFE;
+                color: #7EB6FF;
+                border: 1px solid #7EB6FF;
                 border-radius: 5px;
                 padding: 5px 10px;
                 font-size: 10px;
@@ -1698,7 +1698,7 @@ class TablePanel(QWidget):
             group_names = " → ".join(group_cols)
             self.group_info_label.setText(f"Grouped: {group_names}")
             self.group_info_label.setStyleSheet("""
-                color: #3A7AFE;
+                color: #7EB6FF;
                 font-size: 10px;
                 background: #EEF2FF;
                 padding: 3px 8px;

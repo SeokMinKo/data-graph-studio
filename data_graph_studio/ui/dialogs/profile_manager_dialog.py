@@ -193,7 +193,7 @@ class ProfileManagerDialog(QDialog):
             }
             QListWidget::item:selected {
                 background: #EEF2FF;
-                color: #3A7AFE;
+                color: #7EB6FF;
             }
             QListWidget::item:hover {
                 background: #F9FAFB;

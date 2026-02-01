@@ -85,7 +85,7 @@ class SettingButton(QFrame):
             }
             QToolButton:hover {
                 background: #EEF2FF;
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
         """)
         self._float_btn.clicked.connect(self.float_requested.emit)
@@ -104,7 +104,7 @@ class SettingButton(QFrame):
             self.setStyleSheet("""
                 SettingButton {
                     background: #EEF2FF;
-                    border: 2px solid #3A7AFE;
+                    border: 2px solid #7EB6FF;
                     border-radius: 8px;
                 }
                 SettingButton:hover {
@@ -225,8 +225,8 @@ class AddSettingButton(QPushButton):
             }
             QPushButton:hover {
                 background: #EFEFEF;
-                border-color: #3A7AFE;
-                color: #3A7AFE;
+                border-color: #7EB6FF;
+                color: #7EB6FF;
             }
             QPushButton:pressed {
                 background: #E6E6E6;
@@ -292,7 +292,7 @@ class ProfileBar(QFrame):
                 min-height: 20px;
             }
             QComboBox:hover {
-                border-color: #3A7AFE;
+                border-color: #7EB6FF;
             }
             QComboBox::drop-down {
                 border: none;
