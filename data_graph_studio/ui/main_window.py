@@ -163,8 +163,8 @@ class MainWindow(QMainWindow):
         # Setup UI
         self._setup_window()
         self._setup_menubar()
+        self._setup_main_layout()  # Must be before toolbar (toolbar references dataset_manager)
         self._setup_toolbar()
-        self._setup_main_layout()
         self._setup_statusbar()
 
         # Connect signals
