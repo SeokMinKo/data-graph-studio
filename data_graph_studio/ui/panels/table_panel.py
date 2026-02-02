@@ -980,6 +980,9 @@ class DataTableView(QTableView):
             self.selectionModel_connected = True
     
     def _on_header_pressed(self, logical_index: int):
+        # Allow header drag-reorder by default; use Shift+Drag to send to zones
+        if not (QApplication.keyboardModifiers() & Qt.ShiftModifier):
+            return
         model = self.model()
         if model:
             column_name = model.get_column_name(logical_index)
