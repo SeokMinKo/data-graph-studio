@@ -319,6 +319,12 @@ class MainWindow(QMainWindow):
         
         self._graph_element_actions = {}
         
+        float_graph_action = QAction("Float Graph Panel", self)
+        float_graph_action.setStatusTip("Float the graph panel into a separate window")
+        float_graph_action.triggered.connect(lambda: self._float_main_panel("graph"))
+        graph_elements_menu.addAction(float_graph_action)
+        graph_elements_menu.addSeparator()
+        
         legend_action = QAction("Legend", self)
         legend_action.setCheckable(True)
         legend_action.setChecked(True)
@@ -349,10 +355,30 @@ class MainWindow(QMainWindow):
         graph_elements_menu.addAction(axis_labels_action)
         self._graph_element_actions["axis_labels"] = axis_labels_action
 
+        graph_elements_menu.addSeparator()
+        drawing_style_action = QAction("Drawing Style...", self)
+        drawing_style_action.triggered.connect(self.graph_panel.show_drawing_style_dialog)
+        graph_elements_menu.addAction(drawing_style_action)
+
+        delete_drawing_action = QAction("Delete Selected Drawing", self)
+        delete_drawing_action.setShortcut("Delete")
+        delete_drawing_action.triggered.connect(self.graph_panel.delete_selected_drawing)
+        graph_elements_menu.addAction(delete_drawing_action)
+
+        clear_drawings_action = QAction("Clear All Drawings", self)
+        clear_drawings_action.triggered.connect(self.graph_panel.clear_drawings)
+        graph_elements_menu.addAction(clear_drawings_action)
+
         # Table Elements submenu
         table_elements_menu = view_menu.addMenu("&Table Elements")
         
         self._table_element_actions = {}
+        
+        float_table_action = QAction("Float Table Panel", self)
+        float_table_action.setStatusTip("Float the table panel into a separate window")
+        float_table_action.triggered.connect(lambda: self._float_main_panel("table"))
+        table_elements_menu.addAction(float_table_action)
+        table_elements_menu.addSeparator()
         
         row_numbers_action = QAction("Row Numbers", self)
         row_numbers_action.setCheckable(True)
@@ -1494,6 +1520,7 @@ class MainWindow(QMainWindow):
         # 그래프 패널에 컬럼 목록 전달 (X-Axis 드롭다운용)
         self.graph_panel.set_columns(self.engine.columns)
         self.graph_panel.refresh()
+        self.graph_panel.autofit()
         
         self.summary_panel.refresh()
 

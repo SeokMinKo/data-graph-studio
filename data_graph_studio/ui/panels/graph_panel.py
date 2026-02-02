@@ -143,7 +143,7 @@ class ExpandedChartDialog(QDialog):
                 print(f"Error plotting histogram: {e}")
 
     def plot_pie_chart(self, labels: list, values: list, title: str, colors: list = None):
-        """Plot pie chart as bar chart (pyqtgraph doesn't support pie charts natively)"""
+        """Plot pie chart"""
         self.setWindowTitle(title)
         self.plot_widget.clear()
 
@@ -156,8 +156,6 @@ class ExpandedChartDialog(QDialog):
             if total == 0:
                 return
 
-            percentages = [v / total * 100 for v in values]
-
             # Default colors
             if colors is None:
                 default_colors = [
@@ -166,35 +164,36 @@ class ExpandedChartDialog(QDialog):
                 ]
                 colors = [default_colors[i % len(default_colors)] for i in range(len(labels))]
 
-            # Create horizontal bar chart representation
-            x_positions = np.arange(len(labels))
-            bars = pg.BarGraphItem(
-                x=x_positions,
-                height=values,
-                width=0.6,
-                brushes=[pg.mkBrush(c) for c in colors],
-                pens=[pg.mkPen(c, width=1) for c in colors]
-            )
-            self.plot_widget.addItem(bars)
+            # Try real pie chart
+            try:
+                from pyqtgraph.graphicsItems.PieChartItem import PieChartItem
+                pie = PieChartItem(values, brushes=[pg.mkBrush(c) for c in colors])
+                pie.setZValue(10)
+                self.plot_widget.addItem(pie)
+                self.plot_widget.setAspectLocked(True)
+                self.plot_widget.hideAxis('bottom')
+                self.plot_widget.hideAxis('left')
+            except Exception:
+                # Fallback to bar if PieChartItem unavailable
+                x_positions = np.arange(len(labels))
+                bars = pg.BarGraphItem(
+                    x=x_positions,
+                    height=values,
+                    width=0.6,
+                    brushes=[pg.mkBrush(c) for c in colors],
+                    pens=[pg.mkPen(c, width=1) for c in colors]
+                )
+                self.plot_widget.addItem(bars)
 
-            # Set axis labels
-            self.plot_widget.setLabel('left', 'Value (Sum)')
-            self.plot_widget.setLabel('bottom', 'Category')
-
-            # Create custom x-axis labels
-            ax = self.plot_widget.getAxis('bottom')
-            ax.setTicks([[(i, str(label)[:15]) for i, label in enumerate(labels)]])
-
-            # Add percentage labels on top of bars
-            for i, (val, pct) in enumerate(zip(values, percentages)):
-                text = pg.TextItem(f'{pct:.1f}%', anchor=(0.5, 1), color='k')
-                text.setPos(i, val)
+            # Add labels summary on right
+            y0 = 0
+            for i, (label, val) in enumerate(zip(labels, values)):
+                pct = (val / total) * 100
+                text = pg.TextItem(f"{label}: {pct:.1f}%", anchor=(0, 0), color='#E6E9EF')
+                text.setPos(0, y0)
+                text.setZValue(20)
                 self.plot_widget.addItem(text)
-
-            # Add total label
-            total_text = pg.TextItem(f'Total: {total:,.2f}', anchor=(0, 0), color='#4B5563')
-            total_text.setPos(0, max(values) * 1.1)
-            self.plot_widget.addItem(total_text)
+                y0 -= (total * 0.01)
 
         except Exception as e:
             print(f"Error plotting pie chart: {e}")
@@ -318,7 +317,7 @@ class ClickablePlotWidget(pg.PlotWidget):
         dialog.show()  # Non-modal: use show() instead of exec()
 
 
-from ...core.state import AppState, ChartType, ToolMode, ComparisonMode
+from ...core.state import AppState, ChartType, ToolMode, ComparisonMode, AggregationType
 from ...core.data_engine import DataEngine
 from ...core.expression_engine import ExpressionEngine, ExpressionError
 from ...graph.sampling import DataSampler
@@ -552,6 +551,8 @@ class GraphOptionsPanel(QFrame):
         
         self._setup_ui()
         self._apply_style()
+        # Enable sliding window UX by default
+        self._on_sliding_window_changed(Qt.Checked)
     
     def _apply_style(self):
         self.setStyleSheet("""
@@ -791,7 +792,7 @@ class GraphOptionsPanel(QFrame):
         slider_layout = QVBoxLayout(slider_group)
 
         self.sliding_window_check = QCheckBox("Enable Sliding Window")
-        self.sliding_window_check.setChecked(False)
+        self.sliding_window_check.setChecked(True)
         self.sliding_window_check.stateChanged.connect(self._on_sliding_window_changed)
         self.sliding_window_check.setToolTip("Enable navigation minimap for large datasets")
         slider_layout.addWidget(self.sliding_window_check)
@@ -1781,8 +1782,30 @@ class StatPanel(QFrame):
             except:
                 pass
 
+    def _render_pie(self, labels: list, values: list, colors: list):
+        """Render pie chart in the mini widget"""
+        self.pie_widget.clear()
+        if not labels or not values:
+            return
+        try:
+            from pyqtgraph.graphicsItems.PieChartItem import PieChartItem
+            pie = PieChartItem(values, brushes=[pg.mkBrush(c) for c in colors])
+            pie.setZValue(10)
+            self.pie_widget.addItem(pie)
+            self.pie_widget.setAspectLocked(True)
+            self.pie_widget.hideAxis('bottom')
+            self.pie_widget.hideAxis('left')
+        except Exception:
+            # Fallback: bar chart
+            x = np.arange(len(labels))
+            bars = pg.BarGraphItem(
+                x=x, height=values, width=0.6,
+                brushes=[pg.mkBrush(c) for c in colors]
+            )
+            self.pie_widget.addItem(bars)
+
     def _update_pie_chart(self):
-        """Update the pie chart (displayed as bar chart)"""
+        """Update the pie chart"""
         self.pie_widget.clear()
         if self._group_data is None or len(self._group_data) == 0:
             # If no group data, show Y value distribution by quartiles
@@ -1804,13 +1827,8 @@ class StatPanel(QFrame):
                         values = [c1, c2, c3, c4]
                         colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444']
                         
-                        # Mini bar chart
-                        x = np.arange(len(labels))
-                        bars = pg.BarGraphItem(
-                            x=x, height=values, width=0.6,
-                            brushes=[pg.mkBrush(c) for c in colors]
-                        )
-                        self.pie_widget.addItem(bars)
+                        # Mini pie chart
+                        self._render_pie(labels, values, colors)
                         
                         # Store for expansion
                         self.pie_widget.set_pie_data(labels, values, "Y Value Distribution by Quartile", colors)
@@ -1827,13 +1845,8 @@ class StatPanel(QFrame):
                 '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
             ]
             
-            # Mini bar chart representation
-            x = np.arange(len(labels))
-            bars = pg.BarGraphItem(
-                x=x, height=values, width=0.6,
-                brushes=[pg.mkBrush(colors[i % len(colors)]) for i in range(len(labels))]
-            )
-            self.pie_widget.addItem(bars)
+            # Mini pie chart representation
+            self._render_pie(labels, values, [colors[i % len(colors)] for i in range(len(labels))])
             
             # Store for expansion
             self.pie_widget.set_pie_data(labels, values, "Y Groupby Aggregation", colors)
@@ -3697,6 +3710,23 @@ class GraphPanel(QWidget):
                 self.options_panel.set_series(["Data"])
         self.refresh()
 
+    def _aggregate_values(self, values: np.ndarray, agg: AggregationType) -> float:
+        """Aggregate values using selected aggregation type"""
+        if values is None or len(values) == 0:
+            return 0.0
+        clean = values[~np.isnan(values)]
+        if len(clean) == 0:
+            return 0.0
+        if agg == AggregationType.MEAN:
+            return float(np.mean(clean))
+        if agg == AggregationType.COUNT:
+            return float(len(clean))
+        if agg == AggregationType.MIN:
+            return float(np.min(clean))
+        if agg == AggregationType.MAX:
+            return float(np.max(clean))
+        return float(np.sum(clean))
+
     def refresh(self):
         """Refresh graph"""
         if not self.engine.is_loaded:
@@ -3996,16 +4026,15 @@ class GraphPanel(QWidget):
         # Update stats - compute group aggregation for pie chart
         group_data = None
         if groups is not None and len(groups) > 0:
-            # Calculate sum of Y values for each group for pie chart
+            # Calculate aggregated Y values for each group for pie chart
             try:
                 group_data = {}
+                agg_type = AggregationType.SUM
+                if self.state.value_columns:
+                    agg_type = self.state.value_columns[0].aggregation
                 for group_name, mask in groups.items():
                     group_y = y_sampled[mask]
-                    clean_y = group_y[~np.isnan(group_y)]
-                    if len(clean_y) > 0:
-                        group_data[group_name] = float(np.sum(clean_y))
-                    else:
-                        group_data[group_name] = 0.0
+                    group_data[group_name] = self._aggregate_values(group_y, agg_type)
             except Exception:
                 group_data = None
 

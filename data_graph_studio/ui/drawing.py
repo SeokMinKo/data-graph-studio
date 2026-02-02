@@ -56,7 +56,7 @@ class LineStyle(Enum):
 class DrawingStyle:
     """공통 드로잉 스타일"""
     stroke_color: str = "#000000"
-    stroke_width: float = 2.0
+    stroke_width: float = 1.0
     line_style: LineStyle = LineStyle.SOLID
     fill_color: Optional[str] = None
     fill_opacity: float = 0.3
