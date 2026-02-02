@@ -1258,6 +1258,10 @@ class GraphOptionsPanel(QFrame):
         enabled = state == Qt.Checked
         self.x_sliding_window_check.setEnabled(enabled)
         self.y_sliding_window_check.setEnabled(enabled)
+        if not enabled:
+            # Force-disable sub windows when master is off
+            self.x_sliding_window_check.setChecked(False)
+            self.y_sliding_window_check.setChecked(False)
         self.option_changed.emit()
 
     def _on_chart_type_changed(self, index: int):
