@@ -643,7 +643,7 @@ class GraphOptionsPanel(QFrame):
         header_layout.setSpacing(4)
 
         header = QLabel("⚙️ Chart Options")
-        header.setStyleSheet("font-weight: 600; font-size: 13px; color: #111827; padding: 4px;")
+        header.setStyleSheet("font-weight: 600; font-size: 13px; color: #E6E9EF; padding: 4px;")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
@@ -1441,7 +1441,7 @@ class LegendSettingsPanel(QFrame):
         header_layout.setSpacing(4)
 
         header = QLabel("📊 Legend")
-        header.setStyleSheet("font-weight: 600; font-size: 13px; color: #111827; padding: 4px;")
+        header.setStyleSheet("font-weight: 600; font-size: 13px; color: #E6E9EF; padding: 4px;")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
