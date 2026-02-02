@@ -243,6 +243,24 @@ class DataEngine:
         self._datasets: Dict[str, DatasetInfo] = {}  # dataset_id -> DatasetInfo
         self._active_dataset_id: Optional[str] = None
         self._color_index: int = 0  # 다음 데이터셋에 할당할 색상 인덱스
+
+    @staticmethod
+    def _normalize_encoding(encoding: str) -> str:
+        """Normalize encoding names for polars (utf8/utf8-lossy/etc)."""
+        if not encoding:
+            return "utf8"
+        enc = encoding.strip().lower().replace("_", "-")
+        mapping = {
+            "utf-8": "utf8",
+            "utf8": "utf8",
+            "utf-8-sig": "utf8",
+            "utf-16": "utf16",
+            "utf16": "utf16",
+            "latin-1": "iso-8859-1",
+            "latin1": "iso-8859-1",
+            "ascii": "utf8",
+        }
+        return mapping.get(enc, encoding)
     
     @property
     def df(self) -> Optional[pl.DataFrame]:
@@ -592,6 +610,7 @@ class DataEngine:
         start_time = time.time()
 
         try:
+            encoding = self._normalize_encoding(encoding)
             file_size = os.path.getsize(path)
             self._windowed = False
             self._total_rows = 0
