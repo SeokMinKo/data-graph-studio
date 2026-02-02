@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="data-graph-studio",
-    version="0.2.0",
+    use_scm_version=True,
     author="Godol",
     author_email="",
     description="Big Data Visualization Tool",
