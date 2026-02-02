@@ -1126,17 +1126,18 @@ class DataTableView(QTableView):
                 self._header_drag_start = event.pos()
             elif event.type() == QEvent.MouseMove and (event.buttons() & Qt.LeftButton):
                 if self._header_drag_start is not None and self._header_drag_col:
-                    if (event.pos() - self._header_drag_start).manhattanLength() >= QApplication.startDragDistance():
-                        # Start drag only if cursor leaves header area (so reorder still works)
-                        if not self.horizontalHeader().rect().contains(event.pos()):
-                            drag = QDrag(self)
-                            mime = QMimeData()
-                            mime.setText(self._header_drag_col)
-                            mime.setData("application/x-dgs-zone", _build_drag_payload("table", self._header_drag_col, None))
-                            drag.setMimeData(mime)
-                            drag.exec(Qt.MoveAction)
-                            self._header_drag_start = None
-                            return True
+                    distance = (event.pos() - self._header_drag_start).manhattanLength()
+                    # Start drag if moved enough distance - both inside or outside header area
+                    if distance >= QApplication.startDragDistance() * 2:
+                        drag = QDrag(self)
+                        mime = QMimeData()
+                        mime.setText(self._header_drag_col)
+                        mime.setData("application/x-dgs-zone", _build_drag_payload("table", self._header_drag_col, None))
+                        drag.setMimeData(mime)
+                        drag.exec(Qt.CopyAction)
+                        self._header_drag_start = None
+                        self._header_drag_col = None
+                        return True
             elif event.type() == QEvent.MouseButtonRelease:
                 self._header_drag_start = None
         return super().eventFilter(obj, event)
@@ -1197,36 +1198,24 @@ class DataTableView(QTableView):
 
         menu.addSeparator()
 
-        set_as_menu = menu.addMenu("Set as")
-        set_x = QAction("X-Axis", self)
-        set_x.triggered.connect(lambda: self.column_action.emit(f"X:{column_name}"))
+        # Set as submenu
+        set_as_menu = menu.addMenu("📌 Set as...")
+        
+        set_x = QAction("📐 X-Axis", self)
+        set_x.triggered.connect(lambda: self.column_dragged.emit(f"X:{column_name}"))
         set_as_menu.addAction(set_x)
 
-        set_y = QAction("Y-Axis", self)
-        set_y.triggered.connect(lambda: self.column_action.emit(f"V:{column_name}"))
+        set_y = QAction("📊 Y-Axis Value", self)
+        set_y.triggered.connect(lambda: self.column_dragged.emit(f"V:{column_name}"))
         set_as_menu.addAction(set_y)
 
-        set_g = QAction("Groupby", self)
-        set_g.triggered.connect(lambda: self.column_action.emit(f"G:{column_name}"))
+        set_g = QAction("📁 Group By", self)
+        set_g.triggered.connect(lambda: self.column_dragged.emit(f"G:{column_name}"))
         set_as_menu.addAction(set_g)
 
-        set_h = QAction("Hover", self)
-        set_h.triggered.connect(lambda: self.column_action.emit(f"H:{column_name}"))
+        set_h = QAction("💬 Hover Data", self)
+        set_h.triggered.connect(lambda: self.column_dragged.emit(f"H:{column_name}"))
         set_as_menu.addAction(set_h)
-        
-        menu.addSeparator()
-        
-        add_to_x = QAction("📐 Set as X-Axis", self)
-        add_to_x.triggered.connect(lambda: self.column_dragged.emit(f"X:{column_name}"))
-        menu.addAction(add_to_x)
-        
-        add_to_group = QAction("📁 Add to Group", self)
-        add_to_group.triggered.connect(lambda: self.column_dragged.emit(f"G:{column_name}"))
-        menu.addAction(add_to_group)
-        
-        add_to_value = QAction("📊 Add to Values", self)
-        add_to_value.triggered.connect(lambda: self.column_dragged.emit(f"V:{column_name}"))
-        menu.addAction(add_to_value)
         
         menu.exec(self.horizontalHeader().mapToGlobal(pos))
     
