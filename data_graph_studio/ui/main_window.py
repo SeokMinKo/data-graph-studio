@@ -347,15 +347,8 @@ class MainWindow(QMainWindow):
         # ============================================================
         view_menu = menubar.addMenu("&View")
 
-        # Overview (checkbox)
+        # View actions dict (for settings apply compatibility)
         self._view_actions = {}
-        overview_action = QAction("&Overview", self)
-        overview_action.setCheckable(True)
-        overview_action.setChecked(True)
-        overview_action.setStatusTip("Toggle Overview/Summary panel visibility")
-        overview_action.triggered.connect(lambda checked: self._toggle_panel_visibility("summary", checked))
-        view_menu.addAction(overview_action)
-        self._view_actions["summary"] = overview_action
 
         # Graph Elements submenu
         graph_elements_menu = view_menu.addMenu("&Graph Elements")
@@ -784,9 +777,10 @@ class MainWindow(QMainWindow):
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
 
-        # Summary/Profile tabs (상단)
+        # Summary panel (internal use only, not displayed)
         self.summary_panel = SummaryPanel(self.state)
 
+        # Profile bar (internal use only, not displayed)
         self._profile_bar_container = QWidget()
         profile_bar_layout = QVBoxLayout(self._profile_bar_container)
         profile_bar_layout.setContentsMargins(8, 0, 8, 8)
@@ -798,18 +792,7 @@ class MainWindow(QMainWindow):
         self.profile_bar.add_setting_requested.connect(self._on_add_setting_requested)
         profile_bar_layout.addWidget(self.profile_bar)
 
-        self._top_tabs = QTabWidget()
-        self._top_tabs.setStyleSheet("""
-            QTabWidget::pane { border: none; background: #2B3440; }
-            QTabBar::tab { padding: 6px 10px; margin-right: 2px; color: #C2C8D1; }
-            QTabBar::tab:selected { color: #59B8E3; border-bottom: 2px solid #59B8E3; }
-        """)
-        self._top_tabs.addTab(self.summary_panel, "Overview")
-        self._top_tabs.addTab(self._profile_bar_container, "Profile")
-
-        self.main_splitter.addWidget(self._top_tabs)
-
-        # Graph Panel (중간)
+        # Graph Panel (상단)
         self.graph_panel = GraphPanel(self.state, self.engine)
         self.main_splitter.addWidget(self.graph_panel)
 
@@ -839,7 +822,7 @@ class MainWindow(QMainWindow):
             self._dock_main_panel(panel_key)
 
         # Ensure all panels are visible and in correct order
-        panel_widgets = [self._top_tabs, self.graph_panel, self.table_panel]
+        panel_widgets = [self.graph_panel, self.table_panel]
 
         # Verify all panels are in splitter, rebuild if necessary
         current_widgets = [self.main_splitter.widget(i) for i in range(self.main_splitter.count())]
@@ -863,25 +846,20 @@ class MainWindow(QMainWindow):
                 self.main_splitter.addWidget(panel)
                 panel.show()
 
-        # Set sizes - optimized ratios
+        # Set sizes - optimized ratios (50/50 split for graph and table)
         total_height = self.main_splitter.height()
         if total_height == 0:
             total_height = 800  # 기본값
 
-        # More space for graph and table, compact summary and profile bar
         sizes = [
-            80,                          # Summary - compact
-            100,                         # Profile Bar (고정 높이)
-            int(total_height * 0.45),   # Graph - larger
-            int(total_height * 0.45),   # Table - larger
+            int(total_height * 0.5),   # Graph
+            int(total_height * 0.5),   # Table
         ]
         self.main_splitter.setSizes(sizes)
 
     def _get_panel_key(self, panel: QWidget) -> Optional[str]:
         """Get the panel key for a widget"""
-        if panel is self.summary_panel:
-            return "summary"
-        elif panel is self.graph_panel:
+        if panel is self.graph_panel:
             return "graph"
         elif panel is self.table_panel:
             return "table"
@@ -890,7 +868,6 @@ class MainWindow(QMainWindow):
     def _toggle_panel_visibility(self, panel_key: str, visible: bool):
         """Toggle visibility of a panel"""
         panel_map = {
-            "summary": self.summary_panel,
             "graph": self.graph_panel,
             "table": self.table_panel,
         }
