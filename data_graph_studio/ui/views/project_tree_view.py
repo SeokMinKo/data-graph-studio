@@ -77,10 +77,14 @@ class ProjectTreeView(QTreeView):
                 return
 
         if event.key() == Qt.Key_Delete:
-            dataset_id = self._get_dataset_id(index)
-            if dataset_id:
-                self.delete_requested.emit(dataset_id)
+            # Delete profile if selected, not the dataset
+            setting = self._get_setting(index)
+            if setting is not None:
+                self.delete_requested.emit(setting.id)
                 return
+            # Only delete dataset if it's a dataset node (not profile)
+            # This case is handled via context menu, not Delete key
+            return
 
         if event.key() == Qt.Key_N and event.modifiers() & Qt.ControlModifier:
             dataset_id = self._get_dataset_id(index)

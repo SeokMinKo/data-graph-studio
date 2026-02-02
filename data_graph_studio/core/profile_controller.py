@@ -139,7 +139,7 @@ class ProfileController(QObject):
         current = GraphSettingMapper.from_app_state(
             self._state,
             name=setting.name,
-            dataset_id=setting.id,
+            dataset_id=setting.dataset_id,
         )
         return not self._settings_equal(setting, current)
 

@@ -52,7 +52,9 @@ class ProfileModel(QAbstractItemModel):
         if role == Qt.DisplayRole:
             if node.is_dataset:
                 return self._get_dataset_name(node.dataset_id)
-            return f"{node.setting.icon} {node.setting.name}"
+            # Use chart_type_icon instead of non-existent icon property
+            icon = self._chart_type_icon(node.setting.chart_type)
+            return f"{icon} {node.setting.name}"
 
         if role == Qt.UserRole:
             if node.is_dataset:
@@ -146,6 +148,9 @@ class ProfileModel(QAbstractItemModel):
         return dataset_id
 
     def _get_profiles(self, dataset_id: str) -> List[GraphSetting]:
+        # ProfileStore API
+        if hasattr(self._store, "get_by_dataset"):
+            return list(self._store.get_by_dataset(dataset_id))
         if hasattr(self._store, "get_profiles"):
             return list(self._store.get_profiles(dataset_id))
         if hasattr(self._store, "get_settings"):
