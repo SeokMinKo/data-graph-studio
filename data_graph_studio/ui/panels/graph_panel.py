@@ -804,14 +804,14 @@ class GraphOptionsPanel(QFrame):
         # X-axis sliding window checkbox
         self.x_sliding_window_check = QCheckBox("X-Axis Navigator")
         self.x_sliding_window_check.setChecked(True)
-        self.x_sliding_window_check.setEnabled(False)
+        self.x_sliding_window_check.setEnabled(True)  # Enabled by default since master is checked
         self.x_sliding_window_check.stateChanged.connect(self._on_option_changed)
         slider_layout.addWidget(self.x_sliding_window_check)
 
         # Y-axis sliding window checkbox
         self.y_sliding_window_check = QCheckBox("Y-Axis Navigator")
         self.y_sliding_window_check.setChecked(True)
-        self.y_sliding_window_check.setEnabled(False)
+        self.y_sliding_window_check.setEnabled(True)  # Enabled by default since master is checked
         self.y_sliding_window_check.stateChanged.connect(self._on_option_changed)
         slider_layout.addWidget(self.y_sliding_window_check)
 
