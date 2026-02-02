@@ -354,12 +354,12 @@ class ParsingPreviewDialog(QDialog):
         
         self.encoding_combo = QComboBox()
         self.encoding_combo.addItems([
-            "utf-8",
-            "utf-8-sig",
+            "utf8",
+            "utf8-lossy",
             "cp949",
             "euc-kr",
             "latin-1",
-            "utf-16",
+            "utf16",
             "ascii"
         ])
         self.encoding_combo.currentTextChanged.connect(self._on_encoding_changed)
@@ -577,7 +577,7 @@ class ParsingPreviewDialog(QDialog):
             self._load_binary_etl_preview()
             return
 
-        encoding = self.encoding_combo.currentText() if hasattr(self, 'encoding_combo') else "utf-8"
+        encoding = self.encoding_combo.currentText() if hasattr(self, 'encoding_combo') else "utf8"
 
         try:
             with open(self.file_path, 'r', encoding=encoding, errors='replace') as f:
