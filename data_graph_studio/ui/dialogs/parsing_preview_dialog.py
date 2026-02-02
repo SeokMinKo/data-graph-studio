@@ -147,9 +147,27 @@ class ParsingPreviewDialog(QDialog):
             self._is_binary_etl = self._check_binary_etl(file_path)
 
         self._setup_ui()
+        self._apply_dark_style()
         self._load_raw_preview()
         self._detect_settings()
         self._update_preview()
+
+    def _apply_dark_style(self):
+        self.setStyleSheet("""
+            QDialog { background: #0F172A; color: #E2E8F0; }
+            QGroupBox { color: #E2E8F0; border: 1px solid #334155; border-radius: 6px; margin-top: 8px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
+            QLabel { color: #E2E8F0; }
+            QLineEdit, QComboBox, QSpinBox, QTextEdit, QPlainTextEdit { 
+                background: #1E293B; color: #E2E8F0; border: 1px solid #334155; border-radius: 4px; padding: 4px; 
+            }
+            QComboBox::drop-down { border: none; }
+            QTableWidget { background: #0B1120; color: #E2E8F0; gridline-color: #334155; }
+            QHeaderView::section { background: #1E293B; color: #E2E8F0; border: 1px solid #334155; }
+            QCheckBox { color: #E2E8F0; }
+            QScrollArea { background: transparent; }
+            QProgressBar { background: #1E293B; color: #E2E8F0; border: 1px solid #334155; }
+        """)
 
     def _check_binary_etl(self, path: str) -> bool:
         """Check if the ETL file is in binary format"""
