@@ -209,8 +209,8 @@ class SummaryPanel(QWidget):
     
     def _setup_ui(self):
         """Setup compact UI"""
-        self.setMinimumHeight(80)
-        self.setMaximumHeight(100)
+        self.setMinimumHeight(90)
+        self.setMaximumHeight(110)
         
         # Main layout
         main_layout = QVBoxLayout(self)

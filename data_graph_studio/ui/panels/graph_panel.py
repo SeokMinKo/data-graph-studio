@@ -211,8 +211,8 @@ class ExpandedChartDialog(QDialog):
             if len(clean_data) == 0:
                 return
 
-            # Calculate percentiles from 0 to 100
-            percentiles = np.arange(0, 101)
+            # Detailed percentiles
+            percentiles = np.array([0, 1, 2, 3, 4, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.7, 99.9, 99.99, 100])
             percentile_values = np.percentile(clean_data, percentiles)
 
             # Plot line
@@ -220,13 +220,13 @@ class ExpandedChartDialog(QDialog):
             self.plot_widget.plot(percentiles, percentile_values, pen=pen)
 
             # Add key percentile markers
-            key_percentiles = [25, 50, 75]
+            key_percentiles = [25, 50, 75, 90, 95, 99]
             key_values = np.percentile(clean_data, key_percentiles)
 
             scatter = pg.ScatterPlotItem(
                 x=key_percentiles,
                 y=key_values,
-                size=10,
+                size=8,
                 brush=pg.mkBrush('#EF4444'),
                 pen=pg.mkPen('w', width=1)
             )
@@ -237,7 +237,7 @@ class ExpandedChartDialog(QDialog):
             self.plot_widget.setLabel('left', 'Value')
 
             # Stats text
-            stats_text = f"P25: {key_values[0]:.2f}\nP50: {key_values[1]:.2f}\nP75: {key_values[2]:.2f}"
+            stats_text = "\n".join([f"P{p}: {v:.2f}" for p, v in zip(key_percentiles, key_values)])
             text_item = pg.TextItem(stats_text, anchor=(0, 0), color='k')
             text_item.setPos(5, percentile_values[-1] * 0.9)
             self.plot_widget.addItem(text_item)
@@ -1713,8 +1713,8 @@ class StatPanel(QFrame):
         y_group, self.y_hist_widget = create_plot_group("Y Dist")
         graph_grid.addWidget(y_group, 0, 1)
 
-        # Pie Chart
-        pie_group, self.pie_widget = create_plot_group("Pie")
+        # GroupBy Ratio (Pie)
+        pie_group, self.pie_widget = create_plot_group("GroupBy Ratio")
         graph_grid.addWidget(pie_group, 1, 0)
 
         # Percentile
@@ -1864,15 +1864,15 @@ class StatPanel(QFrame):
             if len(clean_y) == 0:
                 return
 
-            # Calculate percentiles (0, 10, 20, ..., 100)
-            percentiles = np.arange(0, 101, 5)  # Every 5% for mini chart
+            # Detailed percentiles
+            percentiles = np.array([0, 1, 2, 3, 4, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.7, 99.9, 99.99, 100])
             values = np.percentile(clean_y, percentiles)
             
             # Line plot
             pen = pg.mkPen(color=(148, 103, 189), width=2)  # Purple
             self.percentile_widget.plot(percentiles, values, pen=pen)
             
-            # Store for expansion (use finer granularity)
+            # Store for expansion
             self.percentile_widget.set_percentile_data(
                 clean_y, "Y Values Percentile Distribution", (148, 103, 189)
             )
@@ -1911,7 +1911,8 @@ class StatPanel(QFrame):
         self._group_data = group_data
         self._update_pie_chart()
     
-    def update_stats(self, stats: Dict[str, Any]):
+    def update_stats(self, stats: Dict[str, Any], percentiles: Dict[str, float] = None,
+                     group_counts: Dict[str, int] = None, group_sums: Dict[str, float] = None):
         if not stats:
             self.stats_label.setText("No data")
             return
@@ -1930,6 +1931,22 @@ class StatPanel(QFrame):
                 lines.append(f"{left_str:<20} {right_str}")
             else:
                 lines.append(left_str)
+
+        # Percentiles
+        if percentiles:
+            lines.append("\nPercentiles")
+            for k, v in percentiles.items():
+                lines.append(f"  {k}: {v:.4f}")
+
+        # Group stats
+        if group_counts or group_sums:
+            lines.append("\nGroupBy Stats")
+            if group_counts:
+                for k, v in group_counts.items():
+                    lines.append(f"  {k} count: {v}")
+            if group_sums:
+                for k, v in group_sums.items():
+                    lines.append(f"  {k} sum: {v:.4f}")
         
         self.stats_label.setText("\n".join(lines))
 
@@ -4051,7 +4068,32 @@ class GraphPanel(QWidget):
         self.stat_panel.update_histograms(x_sampled, y_sampled, group_data)
         if self.state.value_columns:
             stats = self.engine.get_statistics(self.state.value_columns[0].name)
-            self.stat_panel.update_stats(stats)
+
+            # Percentiles for summary
+            percentiles = {}
+            try:
+                clean_y = y_sampled[~np.isnan(y_sampled)]
+                if len(clean_y) > 0:
+                    pct_list = [0, 1, 2, 3, 4, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.7, 99.9, 99.99, 100]
+                    pct_vals = np.percentile(clean_y, pct_list)
+                    percentiles = {f"P{p}": float(v) for p, v in zip(pct_list, pct_vals)}
+            except Exception:
+                percentiles = {}
+
+            # Groupby counts & sums
+            group_counts = {}
+            group_sums = {}
+            if groups is not None and len(groups) > 0:
+                try:
+                    for group_name, mask in groups.items():
+                        group_y = y_sampled[mask]
+                        group_counts[group_name] = int(np.sum(~np.isnan(group_y)))
+                        group_sums[group_name] = float(np.nansum(group_y))
+                except Exception:
+                    group_counts = {}
+                    group_sums = {}
+
+            self.stat_panel.update_stats(stats, percentiles, group_counts, group_sums)
 
         # Update sliding windows with full data for navigation
         # Use original data for navigation, not sampled data
