@@ -568,6 +568,16 @@ class MainWindow(QMainWindow):
         open_btn.triggered.connect(self._on_open_file)
         toolbar.addAction(open_btn)
 
+        save_profile_btn = QAction("💾  Save Profile", self)
+        save_profile_btn.setToolTip(self._format_tooltip("Save Graph Profile", ""))
+        save_profile_btn.triggered.connect(self.dataset_manager._on_save_profile)
+        toolbar.addAction(save_profile_btn)
+
+        load_profile_btn = QAction("📂  Load Profile", self)
+        load_profile_btn.setToolTip(self._format_tooltip("Load Graph Profile", ""))
+        load_profile_btn.triggered.connect(self.dataset_manager._on_load_profile)
+        toolbar.addAction(load_profile_btn)
+
         toolbar.addSeparator()
 
         # Graph tools with modern icons

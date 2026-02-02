@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QListWidget, QListWidgetItem, QFrame, QComboBox,
     QCheckBox, QMenu, QColorDialog, QInputDialog,
     QMessageBox, QSizePolicy, QScrollArea, QGroupBox,
-    QSplitter, QToolButton, QFileDialog
+    QSplitter, QToolButton, QFileDialog, QTreeWidget, QTreeWidgetItem
 )
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QBrush, QAction
@@ -20,6 +20,7 @@ from ...core.state import (
     AppState, ComparisonMode, DatasetMetadata,
     DEFAULT_DATASET_COLORS
 )
+from ...core.profile import Profile, GraphSetting
 
 
 class DatasetItemWidget(QFrame):
@@ -232,6 +233,7 @@ class DatasetManagerPanel(QWidget):
         self.state = state
 
         self._dataset_widgets: Dict[str, DatasetItemWidget] = {}
+        self._dataset_items: Dict[str, QTreeWidgetItem] = {}
 
         self._setup_ui()
         self._connect_signals()
@@ -257,37 +259,53 @@ class DatasetManagerPanel(QWidget):
 
         layout.addLayout(header_layout)
 
-        # 데이터셋 목록 (스크롤 영역)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # 데이터셋/프로파일 트리
+        self.tree = QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.setIndentation(18)
+        self.tree.setStyleSheet("""
+            QTreeWidget {
+                background: #111827;
+                color: #E2E8F0;
+                border: 1px solid #1F2937;
+                border-radius: 6px;
+            }
+            QTreeWidget::item { padding: 6px; }
+            QTreeWidget::item:selected { background: #1F2937; color: #E2E8F0; }
+        """)
+        self.tree.itemClicked.connect(self._on_tree_clicked)
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._on_tree_context_menu)
+        layout.addWidget(self.tree, 1)
 
-        self.list_widget = QWidget()
-        self.list_layout = QVBoxLayout(self.list_widget)
-        self.list_layout.setContentsMargins(0, 0, 0, 0)
-        self.list_layout.setSpacing(6)
-        self.list_layout.addStretch()
-
-        scroll.setWidget(self.list_widget)
-        layout.addWidget(scroll, 1)
-
-        # 추가 버튼
+        # Buttons row
+        btn_row = QHBoxLayout()
         self.add_btn = QPushButton("+ 데이터셋 추가")
         self.add_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
                 border: none;
-                padding: 8px;
+                padding: 6px 8px;
                 border-radius: 4px;
+                font-size: 11px;
             }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
+            QPushButton:hover { background-color: #45a049; }
         """)
         self.add_btn.clicked.connect(self._on_add_click)
-        layout.addWidget(self.add_btn)
+        btn_row.addWidget(self.add_btn)
+
+        self.save_profile_btn = QPushButton("💾 프로파일 저장")
+        self.save_profile_btn.setStyleSheet("font-size: 11px; padding: 6px 8px;")
+        self.save_profile_btn.clicked.connect(self._on_save_profile)
+        btn_row.addWidget(self.save_profile_btn)
+
+        self.load_profile_btn = QPushButton("📂 프로파일 불러오기")
+        self.load_profile_btn.setStyleSheet("font-size: 11px; padding: 6px 8px;")
+        self.load_profile_btn.clicked.connect(self._on_load_profile)
+        btn_row.addWidget(self.load_profile_btn)
+
+        layout.addLayout(btn_row)
 
         # 구분선
         line = QFrame()
@@ -415,6 +433,7 @@ class DatasetManagerPanel(QWidget):
     def _on_dataset_added(self, dataset_id: str):
         """데이터셋 추가됨"""
         self._add_dataset_widget(dataset_id)
+        self._update_tree()
         self._update_count_label()
         self._update_memory_label()
         self._update_compare_button()
@@ -423,6 +442,7 @@ class DatasetManagerPanel(QWidget):
     def _on_dataset_removed(self, dataset_id: str):
         """데이터셋 제거됨"""
         self._remove_dataset_widget(dataset_id)
+        self._update_tree()
         self._update_count_label()
         self._update_memory_label()
         self._update_compare_button()
@@ -440,6 +460,7 @@ class DatasetManagerPanel(QWidget):
             dataset_info = self.engine.get_dataset(dataset_id)
             if metadata and dataset_info:
                 self._dataset_widgets[dataset_id].update_info(metadata, dataset_info)
+        self._update_tree()
 
     def _on_comparison_settings_changed(self):
         """비교 설정 변경됨"""
@@ -468,21 +489,124 @@ class DatasetManagerPanel(QWidget):
         widget.color_changed.connect(self._on_widget_color_changed)
         widget.compare_toggled.connect(self._on_widget_compare_toggled)
 
-        # 스트레치 앞에 삽입
-        self.list_layout.insertWidget(self.list_layout.count() - 1, widget)
+        # 스트레치 앞에 삽입 (legacy UI kept hidden)
         self._dataset_widgets[dataset_id] = widget
 
     def _remove_dataset_widget(self, dataset_id: str):
         """데이터셋 위젯 제거"""
         if dataset_id in self._dataset_widgets:
             widget = self._dataset_widgets[dataset_id]
-            self.list_layout.removeWidget(widget)
             widget.deleteLater()
             del self._dataset_widgets[dataset_id]
+        if dataset_id in self._dataset_items:
+            item = self._dataset_items.pop(dataset_id)
+            idx = self.tree.indexOfTopLevelItem(item)
+            if idx >= 0:
+                self.tree.takeTopLevelItem(idx)
 
     def _on_widget_activated(self, dataset_id: str):
         """위젯 활성화 요청"""
         self.dataset_activated.emit(dataset_id)
+
+    # ---------------- Project Explorer Tree ----------------
+    def _update_tree(self):
+        self.tree.clear()
+        self._dataset_items.clear()
+        for dataset_id, meta in self.state.dataset_metadata.items():
+            proj_text = meta.name
+            proj_item = QTreeWidgetItem([proj_text])
+            proj_item.setData(0, Qt.UserRole, ("dataset", dataset_id))
+            if meta.is_active:
+                proj_item.setExpanded(True)
+                proj_item.setSelected(True)
+            # Add profiles (chart type + name)
+            for setting in self.state.get_dataset_profiles(dataset_id):
+                label = f"{setting.chart_type.upper()} | {setting.name}"
+                child = QTreeWidgetItem([label])
+                child.setData(0, Qt.UserRole, ("profile", dataset_id, setting.id))
+                proj_item.addChild(child)
+            self.tree.addTopLevelItem(proj_item)
+            self._dataset_items[dataset_id] = proj_item
+        self.tree.expandToDepth(0)
+
+    def _on_tree_clicked(self, item: QTreeWidgetItem, column: int):
+        data = item.data(0, Qt.UserRole)
+        if not data:
+            return
+        kind = data[0]
+        if kind == "dataset":
+            dataset_id = data[1]
+            self.dataset_activated.emit(dataset_id)
+        elif kind == "profile":
+            dataset_id, setting_id = data[1], data[2]
+            # Apply profile
+            setting = next((s for s in self.state.get_dataset_profiles(dataset_id) if s.id == setting_id), None)
+            if setting:
+                self.state.apply_graph_setting(setting)
+
+    def _on_tree_context_menu(self, pos):
+        item = self.tree.itemAt(pos)
+        if not item:
+            return
+        data = item.data(0, Qt.UserRole)
+        if not data:
+            return
+        kind = data[0]
+        menu = QMenu(self)
+        if kind == "dataset":
+            dataset_id = data[1]
+            save_act = QAction("💾 Save Profile", self)
+            save_act.triggered.connect(lambda: self._save_profile_for_dataset(dataset_id))
+            menu.addAction(save_act)
+        elif kind == "profile":
+            dataset_id, setting_id = data[1], data[2]
+            rename_act = QAction("✏️ Rename", self)
+            rename_act.triggered.connect(lambda: self._rename_profile(dataset_id, setting_id))
+            menu.addAction(rename_act)
+            del_act = QAction("🗑️ Delete", self)
+            del_act.triggered.connect(lambda: self._delete_profile(dataset_id, setting_id))
+            menu.addAction(del_act)
+        menu.exec(self.tree.mapToGlobal(pos))
+
+    def _save_profile_for_dataset(self, dataset_id: str):
+        name, ok = QInputDialog.getText(self, "Save Profile", "Profile name:")
+        if not ok or not name.strip():
+            return
+        setting = self.state.build_graph_setting_from_state(name.strip())
+        self.state.add_graph_setting_to_dataset(dataset_id, setting)
+        self._update_tree()
+
+    def _rename_profile(self, dataset_id: str, setting_id: str):
+        setting = next((s for s in self.state.get_dataset_profiles(dataset_id) if s.id == setting_id), None)
+        if not setting:
+            return
+        name, ok = QInputDialog.getText(self, "Rename Profile", "New name:", text=setting.name)
+        if ok and name.strip():
+            self.state.rename_graph_setting(dataset_id, setting_id, name.strip())
+            self._update_tree()
+
+    def _delete_profile(self, dataset_id: str, setting_id: str):
+        reply = QMessageBox.question(self, "Delete Profile", "Delete this profile?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.state.remove_graph_setting(dataset_id, setting_id)
+            self._update_tree()
+
+    def _on_save_profile(self):
+        if not self.state.active_dataset_id:
+            return
+        self._save_profile_for_dataset(self.state.active_dataset_id)
+
+    def _on_load_profile(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Load Profile", "", "Data Graph Profile (*.dgp)")
+        if not path or not self.state.active_dataset_id:
+            return
+        try:
+            profile = Profile.load(path)
+            for setting in profile.settings:
+                self.state.add_graph_setting_to_dataset(self.state.active_dataset_id, setting)
+            self._update_tree()
+        except Exception as e:
+            QMessageBox.warning(self, "Load Profile", f"Failed to load profile: {e}")
 
     def _on_widget_removed(self, dataset_id: str):
         """위젯 제거 요청"""

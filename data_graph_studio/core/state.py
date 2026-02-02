@@ -238,6 +238,7 @@ class DatasetState:
     sorts: List[SortCondition] = field(default_factory=list)
     selection: SelectionState = field(default_factory=SelectionState)
     chart_settings: ChartSettings = field(default_factory=ChartSettings)
+    profiles: List['GraphSetting'] = field(default_factory=list)
 
     def clone(self) -> 'DatasetState':
         """상태 복제"""
@@ -254,6 +255,7 @@ class DatasetState:
         self.sorts.clear()
         self.selection.clear()
         self.chart_settings = ChartSettings()
+        self.profiles.clear()
 
 
 @dataclass
@@ -571,6 +573,57 @@ class AppState(QObject):
             if hasattr(self._comparison_settings, key):
                 setattr(self._comparison_settings, key, value)
         self.comparison_settings_changed.emit()
+
+    # ==================== Dataset Profiles ====================
+
+    def add_graph_setting_to_dataset(self, dataset_id: str, setting: 'GraphSetting') -> bool:
+        state = self._dataset_states.get(dataset_id)
+        if not state:
+            return False
+        state.profiles.append(setting)
+        self.dataset_updated.emit(dataset_id)
+        return True
+
+    def remove_graph_setting(self, dataset_id: str, setting_id: str) -> bool:
+        state = self._dataset_states.get(dataset_id)
+        if not state:
+            return False
+        before = len(state.profiles)
+        state.profiles = [s for s in state.profiles if s.id != setting_id]
+        if len(state.profiles) != before:
+            self.dataset_updated.emit(dataset_id)
+            return True
+        return False
+
+    def rename_graph_setting(self, dataset_id: str, setting_id: str, name: str) -> bool:
+        state = self._dataset_states.get(dataset_id)
+        if not state:
+            return False
+        for s in state.profiles:
+            if s.id == setting_id:
+                s.name = name
+                s.update_modified()
+                self.dataset_updated.emit(dataset_id)
+                return True
+        return False
+
+    def get_dataset_profiles(self, dataset_id: str) -> List['GraphSetting']:
+        state = self._dataset_states.get(dataset_id)
+        return state.profiles if state else []
+
+    def build_graph_setting_from_state(self, name: str) -> 'GraphSetting':
+        from .profile import GraphSetting
+        gs = GraphSetting.create_new(name)
+        current = self.get_current_graph_state()
+        gs.chart_type = current.get('chart_type', 'line')
+        gs.x_column = current.get('x_column')
+        gs.group_columns = current.get('group_columns', [])
+        gs.value_columns = current.get('value_columns', [])
+        gs.hover_columns = current.get('hover_columns', [])
+        gs.chart_settings = current.get('chart_settings', {})
+        gs.filters = current.get('filters', [])
+        gs.sorts = current.get('sorts', [])
+        return gs
 
     def _sync_from_dataset_state(self, dataset_id: str):
         """
