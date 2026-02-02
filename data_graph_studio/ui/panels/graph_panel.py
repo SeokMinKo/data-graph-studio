@@ -2196,10 +2196,15 @@ class MainGraph(pg.PlotWidget):
             self.setYRange(y_min, y_max)
         
         # Log scale
-        if options.get('x_log'):
-            self.setLogMode(x=True, y=False)
-        if options.get('y_log'):
-            self.setLogMode(x=self.getPlotItem().getAxis('bottom').logMode, y=True)
+        x_log = bool(options.get('x_log'))
+        y_log = bool(options.get('y_log'))
+        self.setLogMode(x=x_log, y=y_log)
+
+        # Reverse axes
+        x_reverse = bool(options.get('x_reverse'))
+        y_reverse = bool(options.get('y_reverse'))
+        self.getViewBox().invertX(x_reverse)
+        self.getViewBox().invertY(y_reverse)
         
         # Legend visibility and position
         if legend_settings.get('show', True):
@@ -2261,7 +2266,10 @@ class MainGraph(pg.PlotWidget):
                 self._plot_series(
                     x_data[mask], y_data[mask],
                     chart_type, color, group_name,
-                    line_width, marker_size, line_style, marker_symbol, show_points
+                    line_width, marker_size, line_style, marker_symbol,
+                    show_points,
+                    show_labels=options.get('show_labels', False),
+                    smooth=options.get('smooth', False)
                 )
         else:
             color = default_colors[0]
@@ -2274,7 +2282,10 @@ class MainGraph(pg.PlotWidget):
             self._plot_series(
                 x_data, y_data,
                 chart_type, color, None,
-                line_width, marker_size, line_style, marker_symbol, show_points
+                line_width, marker_size, line_style, marker_symbol,
+                show_points,
+                show_labels=options.get('show_labels', False),
+                smooth=options.get('smooth', False)
             )
     
     def _plot_series(
@@ -2288,19 +2299,41 @@ class MainGraph(pg.PlotWidget):
         marker_size: int,
         line_style: Qt.PenStyle,
         marker_symbol: str,
-        show_points: bool
+        show_points: bool,
+        show_labels: bool = False,
+        smooth: bool = False
     ):
         pen = pg.mkPen(color=color, width=line_width, style=line_style)
         brush = pg.mkBrush(color=color)
-        
+
+        # Smooth line (simple moving average)
+        if chart_type == ChartType.LINE and smooth and len(y) > 3:
+            window = min(9, max(3, len(y) // 50))
+            kernel = np.ones(window) / window
+            y = np.convolve(y, kernel, mode='same')
+
         if chart_type == ChartType.LINE:
             item = self.plot(x, y, pen=pen, name=name)
             if show_points and marker_size > 0:
                 scatter = pg.ScatterPlotItem(x, y, size=marker_size, brush=brush, symbol=marker_symbol)
                 self.addItem(scatter)
                 self._scatter_items.append(scatter)
-                
+
+            # Data labels (limited)
+            if show_labels:
+                if not hasattr(self, '_label_items'):
+                    self._label_items = []
+                max_labels = 200
+                for i, (xi, yi) in enumerate(zip(x, y)):
+                    if i >= max_labels:
+                        break
+                    label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color='#E2E8F0')
+                    label.setPos(xi, yi)
+                    self.addItem(label)
+                    self._label_items.append(label)
         elif chart_type == ChartType.SCATTER:
+            if not show_points:
+                return
             scatter = pg.ScatterPlotItem(x, y, size=marker_size, brush=brush, symbol=marker_symbol, name=name)
             self.addItem(scatter)
             self._scatter_items.append(scatter)
@@ -2327,6 +2360,10 @@ class MainGraph(pg.PlotWidget):
             self.removeItem(item)
         for item in self._scatter_items:
             self.removeItem(item)
+        if hasattr(self, '_label_items'):
+            for item in self._label_items:
+                self.removeItem(item)
+            self._label_items.clear()
         self._plot_items.clear()
         self._scatter_items.clear()
         self._data_x = None
