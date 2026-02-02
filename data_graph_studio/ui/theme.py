@@ -243,7 +243,7 @@ class ThemeManager:
             'dark': DARK_THEME,
             'midnight': MIDNIGHT_THEME,
         }
-        self._current: str = 'light'
+        self._current: str = 'midnight'
         self._chart_palette: ColorPalette = ColorPalette.default()
     
     @property

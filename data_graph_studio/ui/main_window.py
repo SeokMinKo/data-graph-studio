@@ -169,6 +169,9 @@ class MainWindow(QMainWindow):
         # Setup IPC server for external control
         self._setup_ipc_server()
 
+        # Apply initial theme (reduce glare, improve readability)
+        self._on_theme_changed("midnight")
+
         # Apply initial state
         self._update_ui_state()
     
@@ -389,7 +392,7 @@ class MainWindow(QMainWindow):
 
         light_theme_action = QAction("Light", self)
         light_theme_action.setCheckable(True)
-        light_theme_action.setChecked(True)
+        light_theme_action.setChecked(False)
         light_theme_action.triggered.connect(lambda: self._on_theme_changed("light"))
         theme_menu.addAction(light_theme_action)
         self._theme_actions["light"] = light_theme_action
@@ -402,6 +405,7 @@ class MainWindow(QMainWindow):
 
         midnight_theme_action = QAction("Midnight", self)
         midnight_theme_action.setCheckable(True)
+        midnight_theme_action.setChecked(True)
         midnight_theme_action.triggered.connect(lambda: self._on_theme_changed("midnight"))
         theme_menu.addAction(midnight_theme_action)
         self._theme_actions["midnight"] = midnight_theme_action
@@ -3159,6 +3163,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self._theme_manager = ThemeManager()
         
         self._theme_manager.set_theme(theme_id)
+        self._current_theme = theme_id
         stylesheet = self._theme_manager.generate_stylesheet()
         QApplication.instance().setStyleSheet(stylesheet)
         

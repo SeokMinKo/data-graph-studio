@@ -128,7 +128,7 @@ class Project:
     calculated_fields: List[Dict] = field(default_factory=list)
 
     # 테마
-    theme: str = "light"
+    theme: str = "midnight"
 
     # 저장 경로
     _path: Optional[str] = None
@@ -183,7 +183,7 @@ class Project:
         project.state = data.get('state', {})
         project.dashboards = data.get('dashboards', [])
         project.calculated_fields = data.get('calculated_fields', [])
-        project.theme = data.get('theme', 'light')
+        project.theme = data.get('theme', 'midnight')
 
         return project
 
