@@ -16,7 +16,13 @@ Usage:
     $ dgs plot data.csv -x Time -y Value -o chart.png
 """
 
-__version__ = "0.2.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("data-graph-studio")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
+
 __author__ = "Godol"
 
 # Python API exports
