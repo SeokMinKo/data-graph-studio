@@ -43,6 +43,10 @@ from .dialogs.multi_file_dialog import open_multi_file_dialog
 from .floatable import FloatWindow
 from .floating_graph import FloatingGraphWindow, FloatingGraphManager
 from ..core.profile import Profile, GraphSetting, ProfileManager
+from ..core.profile_store import ProfileStore
+from ..core.profile_controller import ProfileController
+from .models.profile_model import ProfileModel
+from .views.project_tree_view import ProjectTreeView
 
 
 class DataLoaderThread(QThread):
@@ -133,6 +137,10 @@ class MainWindow(QMainWindow):
         # Core components
         self.engine = DataEngine()
         self.state = AppState()
+        
+        # Profile management (Project Explorer)
+        self.profile_store = ProfileStore()
+        self.profile_controller = ProfileController(self.profile_store, self.state)
 
         # Loading thread
         self._loader_thread: Optional[DataLoaderThread] = None
@@ -728,16 +736,40 @@ class MainWindow(QMainWindow):
         # 최상위 수평 스플리터 (사이드바 | 메인 영역)
         self.root_splitter = QSplitter(Qt.Horizontal)
 
-        # 좌측 사이드바 - DatasetManagerPanel
+        # 좌측 사이드바 - 탭 구조 (Projects + Datasets)
+        self._sidebar_tabs = QTabWidget()
+        self._sidebar_tabs.setMinimumWidth(200)
+        self._sidebar_tabs.setMaximumWidth(400)
+        self._sidebar_tabs.setStyleSheet("""
+            QTabWidget::pane { border: none; background: #111827; }
+            QTabBar::tab { padding: 6px 10px; color: #9CA3AF; background: #1F2937; }
+            QTabBar::tab:selected { color: #E2E8F0; background: #111827; border-bottom: 2px solid #2563EB; }
+        """)
+        
+        # Project Explorer (새로운 트리 뷰)
+        self.profile_model = ProfileModel(self.profile_store, self.state)
+        self.project_tree = ProjectTreeView()
+        self.project_tree.set_model(self.profile_model)
+        self.project_tree.profile_activated.connect(self._on_profile_apply_requested)
+        self.project_tree.project_activated.connect(self._on_dataset_activated)
+        self.project_tree.new_profile_requested.connect(self._on_new_profile_requested)
+        self.project_tree.rename_requested.connect(self._on_profile_rename_requested)
+        self.project_tree.delete_requested.connect(self._on_profile_delete_requested)
+        self.project_tree.duplicate_requested.connect(self._on_profile_duplicate_requested)
+        self.project_tree.export_requested.connect(self._on_profile_export_requested)
+        self.project_tree.import_requested.connect(self._on_profile_import_requested)
+        self._sidebar_tabs.addTab(self.project_tree, "Projects")
+        
+        # Dataset Manager (기존)
         self.dataset_manager = DatasetManagerPanel(self.engine, self.state)
-        self.dataset_manager.setMinimumWidth(200)
-        self.dataset_manager.setMaximumWidth(400)
         self.dataset_manager.dataset_activated.connect(self._on_dataset_activated)
         self.dataset_manager.dataset_removed.connect(self._on_dataset_remove_requested)
         self.dataset_manager.add_dataset_requested.connect(self._on_add_dataset)
         self.dataset_manager.comparison_mode_changed.connect(self._on_comparison_mode_changed)
         self.dataset_manager.comparison_started.connect(self._on_comparison_started)
-        self.root_splitter.addWidget(self.dataset_manager)
+        self._sidebar_tabs.addTab(self.dataset_manager, "Datasets")
+        
+        self.root_splitter.addWidget(self._sidebar_tabs)
 
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
@@ -2473,6 +2505,83 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         """프로파일 관리자 다이얼로그 표시"""
         dialog = ProfileManagerDialog(self.profile_bar.profile_manager, self)
         dialog.exec()
+
+    # ==================== Project Explorer Actions ====================
+
+    def _on_profile_apply_requested(self, profile_id: str):
+        """프로파일 적용 요청 (ProjectTreeView에서)"""
+        if self.profile_controller.apply_profile(profile_id):
+            self.graph_panel.refresh()
+            self.statusbar.showMessage("Profile applied", 2000)
+
+    def _on_new_profile_requested(self, dataset_id: str):
+        """새 프로파일 생성 요청"""
+        name, ok = QInputDialog.getText(
+            self, "New Profile", "Enter profile name:", text="New Profile"
+        )
+        if ok and name.strip():
+            profile_id = self.profile_controller.create_profile(dataset_id, name.strip())
+            if profile_id:
+                self.profile_model.refresh()
+                self.statusbar.showMessage(f"Profile '{name}' created", 2000)
+
+    def _on_profile_rename_requested(self, profile_id: str):
+        """프로파일 이름 변경 요청"""
+        setting = self.profile_store.get(profile_id)
+        if not setting:
+            return
+        name, ok = QInputDialog.getText(
+            self, "Rename Profile", "Enter new name:", text=setting.name
+        )
+        if ok and name.strip():
+            if self.profile_controller.rename_profile(profile_id, name.strip()):
+                self.profile_model.refresh()
+                self.statusbar.showMessage("Profile renamed", 2000)
+
+    def _on_profile_delete_requested(self, profile_id: str):
+        """프로파일 삭제 요청"""
+        setting = self.profile_store.get(profile_id)
+        if not setting:
+            return
+        reply = QMessageBox.question(
+            self, "Delete Profile",
+            f"Delete profile '{setting.name}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            if self.profile_controller.delete_profile(profile_id):
+                self.profile_model.refresh()
+                self.statusbar.showMessage("Profile deleted (Ctrl+Z to undo)", 3000)
+
+    def _on_profile_duplicate_requested(self, profile_id: str):
+        """프로파일 복제 요청"""
+        new_id = self.profile_controller.duplicate_profile(profile_id)
+        if new_id:
+            self.profile_model.refresh()
+            self.statusbar.showMessage("Profile duplicated", 2000)
+
+    def _on_profile_export_requested(self, profile_id: str):
+        """프로파일 내보내기 요청"""
+        setting = self.profile_store.get(profile_id)
+        if not setting:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Profile", f"{setting.name}.dgp", "Data Graph Profile (*.dgp)"
+        )
+        if path:
+            if self.profile_controller.export_profile(profile_id, path):
+                self.statusbar.showMessage(f"Profile exported to {path}", 3000)
+
+    def _on_profile_import_requested(self, dataset_id: str):
+        """프로파일 가져오기 요청"""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Profile", "", "Data Graph Profile (*.dgp)"
+        )
+        if path:
+            profile_id = self.profile_controller.import_profile(dataset_id, path)
+            if profile_id:
+                self.profile_model.refresh()
+                self.statusbar.showMessage("Profile imported", 2000)
 
     # ==================== Multi-Dataset Operations ====================
 
