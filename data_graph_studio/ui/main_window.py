@@ -593,7 +593,7 @@ class MainWindow(QMainWindow):
         # Action buttons
         deselect_btn = QAction("✕  Clear", self)
         deselect_btn.setToolTip(self._format_tooltip("Clear Selection", "Esc"))
-        deselect_btn.triggered.connect(self.state.clear_selection)
+        deselect_btn.triggered.connect(self._on_clear_selection)
         toolbar.addAction(deselect_btn)
 
         delete_drawing_btn = QAction("🗑️  Del Draw", self)
@@ -1651,6 +1651,12 @@ class MainWindow(QMainWindow):
     def _reset_graph_view(self):
         """그래프 뷰 리셋"""
         self.graph_panel.reset_view()
+
+    def _on_clear_selection(self):
+        """Clear selection and highlight"""
+        self.state.clear_selection()
+        if hasattr(self, 'graph_panel') and self.graph_panel is not None:
+            self.graph_panel.main_graph.highlight_selection([])
     
     def _autofit_graph(self):
         """그래프 자동 맞춤"""

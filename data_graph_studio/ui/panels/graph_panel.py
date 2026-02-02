@@ -3657,7 +3657,7 @@ class GraphPanel(QWidget):
         self.main_graph.set_drawing_manager(self._drawing_manager)
     
     def _connect_signals(self):
-        self.state.chart_settings_changed.connect(self.refresh)
+        self.state.chart_settings_changed.connect(self._on_chart_settings_changed)
         self.state.group_zone_changed.connect(self._on_group_changed)
         self.state.value_zone_changed.connect(self.refresh)
         self.state.hover_zone_changed.connect(self.refresh)
@@ -4271,6 +4271,20 @@ class GraphPanel(QWidget):
             # Update options panel with series names
             series_names = [s['name'] for s in all_series_data]
             self.options_panel.set_series(series_names)
+
+    def _on_chart_settings_changed(self):
+        """Sync chart type from state to options panel and refresh"""
+        try:
+            ct = self.state.chart_settings.chart_type
+            if ct and self.options_panel.chart_type_combo.currentData() != ct:
+                idx = self.options_panel.chart_type_combo.findData(ct)
+                if idx >= 0:
+                    self.options_panel.chart_type_combo.blockSignals(True)
+                    self.options_panel.chart_type_combo.setCurrentIndex(idx)
+                    self.options_panel.chart_type_combo.blockSignals(False)
+        except Exception:
+            pass
+        self.refresh()
 
     def _on_selection_changed(self):
         """Handle selection state change - highlight selected points and update stats"""
