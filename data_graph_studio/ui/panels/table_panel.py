@@ -211,6 +211,10 @@ class ChipWidget(QFrame):
 
     def __init__(self, text: str, accent: str, text_color: str = "#1E293B", zone_id: Optional[str] = None, index: Optional[int] = None):
         super().__init__()
+        self._zone_id = zone_id
+        self._name = text
+        self._index = index
+        self._start_pos = None
         self.setStyleSheet(f"""
             QFrame {{
                 background: white;
@@ -249,12 +253,32 @@ class ChipWidget(QFrame):
         remove_btn.clicked.connect(self.remove_clicked.emit)
         layout.addWidget(remove_btn)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._start_pos = event.pos()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton and self._start_pos is not None and self._zone_id:
+            if (event.pos() - self._start_pos).manhattanLength() >= QApplication.startDragDistance():
+                drag = QDrag(self)
+                mime = QMimeData()
+                mime.setText(self._name)
+                mime.setData("application/x-dgs-zone", _build_drag_payload(self._zone_id, self._name, self._index))
+                drag.setMimeData(mime)
+                drag.exec(Qt.MoveAction)
+        super().mouseMoveEvent(event)
+
 
 class ValueChipWidget(QFrame):
     remove_clicked = Signal()
 
     def __init__(self, value_col: ValueColumn, index: int, on_agg_changed, on_formula_changed):
         super().__init__()
+        self._zone_id = "value"
+        self._name = value_col.name
+        self._index = index
+        self._start_pos = None
         accent = value_col.color
         self.setStyleSheet(f"""
             QFrame {{
@@ -351,6 +375,22 @@ class ValueChipWidget(QFrame):
         """)
         remove_btn.clicked.connect(self.remove_clicked.emit)
         layout.addWidget(remove_btn)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._start_pos = event.pos()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton and self._start_pos is not None:
+            if (event.pos() - self._start_pos).manhattanLength() >= QApplication.startDragDistance():
+                drag = QDrag(self)
+                mime = QMimeData()
+                mime.setText(self._name)
+                mime.setData("application/x-dgs-zone", _build_drag_payload(self._zone_id, self._name, self._index))
+                drag.setMimeData(mime)
+                drag.exec(Qt.MoveAction)
+        super().mouseMoveEvent(event)
 
 
 class ChipListWidget(QListWidget):
