@@ -264,6 +264,8 @@ class ComparisonSettings:
     key_column: Optional[str] = None  # 정렬/조인 기준 컬럼
     sync_scroll: bool = True
     sync_zoom: bool = True
+    sync_pan_x: bool = True
+    sync_pan_y: bool = True
     sync_selection: bool = False
     auto_align: bool = True  # 키 컬럼 기준 자동 정렬
 

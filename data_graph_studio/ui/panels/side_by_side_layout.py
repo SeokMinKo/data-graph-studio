@@ -332,7 +332,9 @@ class SideBySideLayout(QWidget):
             return
 
         # 동기화가 꺼져 있으면 무시
-        if not self._sync_scroll and not self._sync_zoom:
+        if (not self._sync_scroll and not self._sync_zoom and
+                not self.state.comparison_settings.sync_pan_x and
+                not self.state.comparison_settings.sync_pan_y):
             return
 
         self._is_syncing = True
@@ -345,10 +347,12 @@ class SideBySideLayout(QWidget):
                 # 동기화 옵션에 따라 범위 설정
                 # _sync_scroll: X축 범위 동기화 (스크롤)
                 # _sync_zoom: Y축 범위 동기화 (줌)
+                sync_x = self._sync_scroll or self.state.comparison_settings.sync_pan_x
+                sync_y = self._sync_zoom or self.state.comparison_settings.sync_pan_y
                 panel.set_view_range(
                     x_range, y_range,
-                    sync_x=self._sync_scroll,
-                    sync_y=self._sync_zoom
+                    sync_x=sync_x,
+                    sync_y=sync_y
                 )
         finally:
             QTimer.singleShot(100, self._reset_sync_flag)
@@ -371,9 +375,11 @@ class SideBySideLayout(QWidget):
         for panel_id, panel in self._panels.items():
             if panel_id == source_id:
                 continue
+            sync_x = self._sync_scroll or self.state.comparison_settings.sync_pan_x
+            sync_y = self._sync_zoom or self.state.comparison_settings.sync_pan_y
             panel.set_view_range(x_range, y_range,
-                                 sync_x=self._sync_scroll,
-                                 sync_y=self._sync_zoom)
+                                 sync_x=sync_x,
+                                 sync_y=sync_y)
 
     def reset_all_views(self):
         """모든 패널의 뷰를 자동 범위로 리셋"""

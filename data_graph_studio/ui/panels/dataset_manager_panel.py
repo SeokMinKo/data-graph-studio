@@ -341,6 +341,17 @@ class DatasetManagerPanel(QWidget):
         self.sync_select_cb.stateChanged.connect(self._on_sync_changed)
         sync_layout.addWidget(self.sync_select_cb)
 
+        # Pan sync (graph)
+        self.sync_pan_x_cb = QCheckBox("X 패닝")
+        self.sync_pan_x_cb.setChecked(True)
+        self.sync_pan_x_cb.stateChanged.connect(self._on_sync_changed)
+        sync_layout.addWidget(self.sync_pan_x_cb)
+
+        self.sync_pan_y_cb = QCheckBox("Y 패닝")
+        self.sync_pan_y_cb.setChecked(True)
+        self.sync_pan_y_cb.stateChanged.connect(self._on_sync_changed)
+        sync_layout.addWidget(self.sync_pan_y_cb)
+
         compare_layout.addLayout(sync_layout)
 
         # 비교 시작 버튼
@@ -390,6 +401,8 @@ class DatasetManagerPanel(QWidget):
         self.state.update_comparison_settings(
             sync_scroll=self.sync_scroll_cb.isChecked(),
             sync_zoom=self.sync_zoom_cb.isChecked(),
+            sync_pan_x=self.sync_pan_x_cb.isChecked(),
+            sync_pan_y=self.sync_pan_y_cb.isChecked(),
             sync_selection=self.sync_select_cb.isChecked()
         )
 
@@ -436,6 +449,8 @@ class DatasetManagerPanel(QWidget):
         )
         self.sync_scroll_cb.setChecked(settings.sync_scroll)
         self.sync_zoom_cb.setChecked(settings.sync_zoom)
+        self.sync_pan_x_cb.setChecked(settings.sync_pan_x)
+        self.sync_pan_y_cb.setChecked(settings.sync_pan_y)
         self.sync_select_cb.setChecked(settings.sync_selection)
         self._update_compare_button()
 
