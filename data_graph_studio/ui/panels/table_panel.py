@@ -1024,6 +1024,7 @@ class DataTableView(QTableView):
     """데이터 테이블 뷰 - Minimal Design"""
     
     column_dragged = Signal(str)
+    column_action = Signal(str)
     rows_selected = Signal(list)
     exclude_value = Signal(str, object)  # column, value
     hide_column = Signal(str)  # column name
