@@ -3753,7 +3753,11 @@ class GraphPanel(QWidget):
         x_is_categorical = False
 
         if not x_col:
-            x_data = np.arange(self.engine.row_count)
+            # In windowed mode, use visible rows for index to avoid length mismatch
+            if self.engine.is_windowed and self.engine.df is not None:
+                x_data = np.arange(len(self.engine.df))
+            else:
+                x_data = np.arange(self.engine.row_count)
             options['x_title'] = options.get('x_title') or 'Index'
         else:
             # Check if X column is categorical

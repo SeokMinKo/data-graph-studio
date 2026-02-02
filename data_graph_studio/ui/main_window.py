@@ -2215,8 +2215,8 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     # ==================== Multi-Dataset Operations ====================
 
     def _on_add_dataset(self):
-        """새 데이터셋 추가"""
-        file_path, _ = QFileDialog.getOpenFileName(
+        """새 데이터셋 추가 (멀티 파일 지원)"""
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self,
             "Add Dataset",
             "",
@@ -2230,8 +2230,30 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             "All Files (*.*)"
         )
 
-        if file_path:
+        if not file_paths:
+            return
+
+        if len(file_paths) == 1:
+            self._add_dataset_from_file(file_paths[0])
+            return
+
+        # Multi-file: load sequentially with progress
+        progress = QProgressDialog(
+            "Loading datasets...", "Cancel", 0, len(file_paths), self
+        )
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+
+        for i, file_path in enumerate(file_paths):
+            if progress.wasCanceled():
+                break
+            progress.setValue(i)
+            progress.setLabelText(f"Loading: {Path(file_path).name}")
+            QApplication.processEvents()
             self._add_dataset_from_file(file_path)
+
+        progress.setValue(len(file_paths))
 
     def _add_dataset_from_file(self, file_path: str):
         """파일에서 데이터셋 추가"""
