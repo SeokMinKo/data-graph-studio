@@ -4067,14 +4067,15 @@ class GraphPanel(QWidget):
         self.y_sliding_window.setVisible(sliding_window_enabled and y_window_enabled)
 
         if sliding_window_enabled:
+            # Use plotted data (sampled) to keep distribution aligned with visible points
             if x_window_enabled and not x_is_categorical:
                 try:
-                    self.x_sliding_window.set_data(x_data.astype(float) if hasattr(x_data, 'astype') else np.array(x_data, dtype=float))
+                    self.x_sliding_window.set_data(x_sampled.astype(float) if hasattr(x_sampled, 'astype') else np.array(x_sampled, dtype=float))
                 except (ValueError, TypeError):
                     pass
             if y_window_enabled and not y_is_categorical:
                 try:
-                    self.y_sliding_window.set_data(y_data.astype(float) if hasattr(y_data, 'astype') else np.array(y_data, dtype=float))
+                    self.y_sliding_window.set_data(y_sampled.astype(float) if hasattr(y_sampled, 'astype') else np.array(y_sampled, dtype=float))
                 except (ValueError, TypeError):
                     pass
 
