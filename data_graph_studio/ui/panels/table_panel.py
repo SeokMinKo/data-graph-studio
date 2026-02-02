@@ -1037,9 +1037,28 @@ class DataTableView(QTableView):
         
         menu.addSeparator()
         
-        hide_col = QAction("🚫 Hide Column", self)
-        hide_col.triggered.connect(lambda: self.hide_column.emit(column_name))
-        menu.addAction(hide_col)
+        exclude_col = QAction("🚫 Exclude Column", self)
+        exclude_col.triggered.connect(lambda: self.hide_column.emit(column_name))
+        menu.addAction(exclude_col)
+
+        menu.addSeparator()
+
+        set_as_menu = menu.addMenu("Set as")
+        set_x = QAction("X-Axis", self)
+        set_x.triggered.connect(lambda: self.column_action.emit(f"X:{column_name}"))
+        set_as_menu.addAction(set_x)
+
+        set_y = QAction("Y-Axis", self)
+        set_y.triggered.connect(lambda: self.column_action.emit(f"V:{column_name}"))
+        set_as_menu.addAction(set_y)
+
+        set_g = QAction("Groupby", self)
+        set_g.triggered.connect(lambda: self.column_action.emit(f"G:{column_name}"))
+        set_as_menu.addAction(set_g)
+
+        set_h = QAction("Hover", self)
+        set_h.triggered.connect(lambda: self.column_action.emit(f"H:{column_name}"))
+        set_as_menu.addAction(set_h)
         
         menu.addSeparator()
         
@@ -1860,6 +1879,9 @@ class TablePanel(QWidget):
         elif action.startswith("V:"):
             column = action[2:]
             self.state.add_value_column(column)
+        elif action.startswith("H:"):
+            column = action[2:]
+            self.state.add_hover_column(column)
     
     def _on_filter_removed(self, index: int):
         """Handle filter removal"""
