@@ -693,10 +693,11 @@ class MainWindow(QMainWindow):
         self._preset_combo.setMinimumWidth(120)
         self._preset_combo.setStyleSheet("""
             QComboBox {
-                border: 1px solid #D1D5DB;
+                border: 1px solid #3E4A59;
                 border-radius: 6px;
                 padding: 4px 8px;
-                background: white;
+                background: #2D3748;
+                color: #E6E9EF;
                 min-height: 24px;
             }
             QComboBox:hover {

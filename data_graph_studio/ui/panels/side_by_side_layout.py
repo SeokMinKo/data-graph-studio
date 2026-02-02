@@ -82,13 +82,13 @@ class MiniGraphWidget(QWidget):
             # PyQtGraph 없으면 플레이스홀더
             placeholder = QLabel("Graph")
             placeholder.setAlignment(Qt.AlignCenter)
-            placeholder.setStyleSheet("background: #f0f0f0; border: 1px solid #ddd;")
+            placeholder.setStyleSheet("background: #2B3440; border: 1px solid #3E4A59; color: #E6E9EF;")
             placeholder.setMinimumHeight(150)
             layout.addWidget(placeholder, 1)
 
         # 통계 요약
         stats_frame = QFrame()
-        stats_frame.setStyleSheet("background: #f8f9fa; border-radius: 4px; padding: 4px;")
+        stats_frame.setStyleSheet("background: #2B3440; border-radius: 4px; padding: 4px;")
         stats_layout = QHBoxLayout(stats_frame)
         stats_layout.setContentsMargins(8, 4, 8, 4)
 
@@ -238,7 +238,7 @@ class SideBySideLayout(QWidget):
 
         # 동기화 옵션
         options_frame = QFrame()
-        options_frame.setStyleSheet("background: #f8f9fa; border-bottom: 1px solid #ddd;")
+        options_frame.setStyleSheet("background: #2B3440; border-bottom: 1px solid #3E4A59;")
         options_layout = QHBoxLayout(options_frame)
         options_layout.setContentsMargins(8, 4, 8, 4)
 

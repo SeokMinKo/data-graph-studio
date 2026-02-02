@@ -63,8 +63,8 @@ class FloatingGraphWindow(QDialog):
         header = QFrame()
         header.setStyleSheet("""
             QFrame {
-                background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
-                border-bottom: 1px solid #E2E8F0;
+                background: linear-gradient(180deg, #2B3440 0%, #1F2937 100%);
+                border-bottom: 1px solid #3E4A59;
             }
         """)
         header_layout = QHBoxLayout(header)
@@ -124,7 +124,7 @@ class FloatingGraphWindow(QDialog):
 
         # 그래프 영역
         self._graph_container = QWidget()
-        self._graph_container.setStyleSheet("background: white;")
+        self._graph_container.setStyleSheet("background: #1E293B;")
         self._graph_layout = QVBoxLayout(self._graph_container)
         self._graph_layout.setContentsMargins(0, 0, 0, 0)
 

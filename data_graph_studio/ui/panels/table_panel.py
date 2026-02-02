@@ -1455,7 +1455,7 @@ class HiddenColumnsBar(QFrame):
     def _apply_style(self):
         self.setStyleSheet("""
             #HiddenColumnsBar {
-                background: #EEF2FF;
+                background: #1E3A5F;
                 border: none;
                 border-radius: 6px;
                 padding: 2px;
@@ -1473,7 +1473,7 @@ class HiddenColumnsBar(QFrame):
         self.main_layout.addWidget(icon)
         
         label = QLabel("Hidden columns:")
-        label.setStyleSheet("font-size: 11px; color: #4338CA; background: transparent;")
+        label.setStyleSheet("font-size: 11px; color: #A5B4FC; background: transparent;")
         self.main_layout.addWidget(label)
         
         # Columns container
@@ -1531,8 +1531,8 @@ class HiddenColumnsBar(QFrame):
         chip = QFrame()
         chip.setStyleSheet("""
             QFrame {
-                background: white;
-                border: 1px solid #C7D2FE;
+                background: #2D3748;
+                border: 1px solid #4A5568;
                 border-radius: 10px;
             }
         """)
@@ -1542,7 +1542,7 @@ class HiddenColumnsBar(QFrame):
         layout.setSpacing(2)
         
         label = QLabel(column[:12] + "..." if len(column) > 12 else column)
-        label.setStyleSheet("font-size: 10px; color: #4338CA; background: transparent;")
+        label.setStyleSheet("font-size: 10px; color: #A5B4FC; background: transparent;")
         label.setToolTip(column)
         layout.addWidget(label)
         
@@ -1676,7 +1676,7 @@ class TablePanel(QWidget):
                 font-size: 10px;
                 font-weight: 500;
             }
-            QPushButton:hover { background: #EEF2FF; }
+            QPushButton:hover { background: #3A4654; }
         """)
         expand_btn.clicked.connect(self._expand_all)
         toolbar.addWidget(expand_btn)
@@ -1692,7 +1692,7 @@ class TablePanel(QWidget):
                 font-size: 10px;
                 font-weight: 500;
             }
-            QPushButton:hover { background: #EEF2FF; }
+            QPushButton:hover { background: #3A4654; }
         """)
         collapse_btn.clicked.connect(self._collapse_all)
         toolbar.addWidget(collapse_btn)
@@ -1897,7 +1897,7 @@ class TablePanel(QWidget):
             self.group_info_label.setStyleSheet("""
                 color: #59B8E3;
                 font-size: 10px;
-                background: #EEF2FF;
+                background: #1E3A5F;
                 padding: 3px 8px;
                 border-radius: 8px;
             """)
@@ -1912,7 +1912,7 @@ class TablePanel(QWidget):
                 self.group_info_label.setStyleSheet("""
                     color: #F59E0B;
                     font-size: 10px;
-                    background: #FEF3C7;
+                    background: #3D2F0A;
                     padding: 3px 8px;
                     border-radius: 8px;
                 """)

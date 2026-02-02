@@ -1399,7 +1399,7 @@ class LegendSettingsPanel(QFrame):
                 padding: 0 2px;
             }
             QComboBox {
-                background: white;
+                background: #2D3748;
                 border: 1px solid #3E4A59;
                 border-radius: 4px;
                 padding: 4px 6px;
@@ -3232,7 +3232,7 @@ class SlidingWindowWidget(QWidget):
 
         self.setStyleSheet("""
             SlidingWindowWidget {
-                background: #F9FAFB;
+                background: #2B3440;
                 border: 1px solid #3E4A59;
                 border-radius: 4px;
             }
