@@ -1669,7 +1669,7 @@ class StatPanel(QFrame):
         header_layout.setSpacing(4)
 
         header = QLabel("📈 Stats")
-        header.setStyleSheet("font-weight: 600; font-size: 11px; color: #E6E9EF;")
+        header.setStyleSheet("font-weight: 600; font-size: 14px; color: #E6E9EF;")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
@@ -1737,7 +1737,7 @@ class StatPanel(QFrame):
         stats_layout.setContentsMargins(4, 4, 4, 4)
 
         self.stats_label = QLabel("No data")
-        self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 9px; color: #C2C8D1;")
+        self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 12px; color: #C2C8D1;")
         self.stats_label.setWordWrap(True)
         stats_layout.addWidget(self.stats_label)
 
@@ -3673,7 +3673,8 @@ class GraphPanel(QWidget):
         layout.setSpacing(0)
 
         self.splitter = QSplitter(Qt.Horizontal)
-        self.splitter.setHandleWidth(2)
+        self.splitter.setHandleWidth(1)
+        self.splitter.setStyleSheet("QSplitter::handle { background: #3E4A59; }")
 
         # Options Panel (left) - now includes Legend as a tab
         self.options_panel = GraphOptionsPanel(self.state)

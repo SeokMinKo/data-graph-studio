@@ -1599,6 +1599,8 @@ class TablePanel(QWidget):
         layout.setSpacing(0)
 
         self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setHandleWidth(1)
+        self.splitter.setStyleSheet("QSplitter::handle { background: #3E4A59; }")
 
         # Left panel: X Zone + Group Zone
         self.left_panel = QWidget()
@@ -1808,7 +1810,7 @@ class TablePanel(QWidget):
         self.splitter.addWidget(self.right_panel)
 
         # Splitter sizes
-        self.splitter.setSizes([310, 500, 360])
+        self.splitter.setSizes([280, 500, 360])
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setStretchFactor(2, 0)
