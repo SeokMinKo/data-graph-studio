@@ -204,6 +204,29 @@ class MainWindow(QMainWindow):
     def _setup_menubar(self):
         """메뉴바 설정 - 새 구조"""
         menubar = self.menuBar()
+        menubar.setStyleSheet("""
+            QMenuBar {
+                background: #2B3440;
+                color: #E6E9EF;
+            }
+            QMenuBar::item {
+                background: transparent;
+                padding: 4px 8px;
+            }
+            QMenuBar::item:selected {
+                background: #3A4654;
+                color: #E6E9EF;
+            }
+            QMenu {
+                background: #1E293B;
+                color: #E2E8F0;
+                border: 1px solid #3E4A59;
+            }
+            QMenu::item:selected {
+                background: #334155;
+                color: #E2E8F0;
+            }
+        """)
 
         # ============================================================
         # File Menu

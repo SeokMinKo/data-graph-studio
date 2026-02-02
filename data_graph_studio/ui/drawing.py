@@ -312,6 +312,7 @@ class LineGraphicsItem(pg.GraphicsObject):
         pen = QPen(QColor(self.drawing.style.stroke_color))
         pen.setWidthF(self.drawing.style.stroke_width)
         pen.setStyle(self.drawing.style.line_style.to_qt())
+        pen.setCosmetic(True)
         painter.setPen(pen)
 
         # Draw line
@@ -366,6 +367,7 @@ class CircleGraphicsItem(pg.GraphicsObject):
         pen = QPen(QColor(self.drawing.style.stroke_color))
         pen.setWidthF(self.drawing.style.stroke_width)
         pen.setStyle(self.drawing.style.line_style.to_qt())
+        pen.setCosmetic(True)
         painter.setPen(pen)
 
         # Set brush (fill)
@@ -433,6 +435,7 @@ class RectGraphicsItem(pg.GraphicsObject):
         pen = QPen(QColor(self.drawing.style.stroke_color))
         pen.setWidthF(self.drawing.style.stroke_width)
         pen.setStyle(self.drawing.style.line_style.to_qt())
+        pen.setCosmetic(True)
         painter.setPen(pen)
 
         # Set brush (fill)

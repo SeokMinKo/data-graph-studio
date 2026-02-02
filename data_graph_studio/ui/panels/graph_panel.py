@@ -2112,6 +2112,8 @@ class MainGraph(pg.PlotWidget):
             # Drawing mode: disable default interactions
             vb.setMouseMode(pg.ViewBox.PanMode)
             vb.setMouseEnabled(x=False, y=False)
+            # Disable OpenGL in drawing mode to ensure custom items render
+            self.enable_opengl(False)
             self.setCursor(Qt.CrossCursor)
         else:
             # Default mode
@@ -3006,6 +3008,10 @@ class MainGraph(pg.PlotWidget):
             width=style.stroke_width,
             style=style.line_style.to_qt()
         )
+        try:
+            pen.setCosmetic(True)
+        except Exception:
+            pass
 
         if self.state.tool_mode == ToolMode.LINE_DRAW:
             # Line preview
