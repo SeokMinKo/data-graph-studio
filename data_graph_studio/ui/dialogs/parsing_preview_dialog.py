@@ -162,9 +162,15 @@ class ParsingPreviewDialog(QDialog):
                 background: #1E293B; color: #E2E8F0; border: 1px solid #334155; border-radius: 4px; padding: 4px; 
             }
             QComboBox::drop-down { border: none; }
-            QTableWidget { background: #0B1120; color: #E2E8F0; gridline-color: #334155; }
+            QTableWidget { background: #0B1120; color: #E2E8F0; gridline-color: #334155; alternate-background-color: #111827; }
+            QTableWidget::item { background: #0B1120; color: #E2E8F0; }
+            QTableWidget::item:alternate { background: #111827; color: #E2E8F0; }
+            QTableWidget::item:selected { background: #1E3A8A; color: #E2E8F0; }
             QHeaderView::section { background: #1E293B; color: #E2E8F0; border: 1px solid #334155; }
             QCheckBox { color: #E2E8F0; }
+            QCheckBox::indicator { width: 12px; height: 12px; }
+            QCheckBox::indicator:unchecked { border: 1px solid #475569; background: #0B1120; }
+            QCheckBox::indicator:checked { border: 1px solid #60A5FA; background: #60A5FA; }
             QScrollArea { background: transparent; }
             QProgressBar { background: #1E293B; color: #E2E8F0; border: 1px solid #334155; }
         """)
