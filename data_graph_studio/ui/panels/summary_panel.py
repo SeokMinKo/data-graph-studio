@@ -77,12 +77,12 @@ class StatCard(QFrame):
     def _setup_style(self):
         self.setStyleSheet(f"""
             #StatCard {{
-                background: white;
-                border: none;
+                background: #1E293B;
+                border: 1px solid #334155;
                 border-radius: 8px;
             }}
             #StatCard:hover {{
-                background: #F9FAFB;
+                background: #243043;
             }}
         """)
     
