@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
     Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
-    QMimeData, QByteArray, QItemSelection, QItemSelectionModel
+    QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QEvent
 )
 from PySide6.QtGui import QDrag, QAction, QDropEvent, QDragEnterEvent
 
@@ -1088,6 +1088,9 @@ class DataTableView(QTableView):
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_menu)
         self.horizontalHeader().sectionPressed.connect(self._on_header_pressed)
         self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
+        self.horizontalHeader().installEventFilter(self)
+        self._header_drag_start = None
+        self._header_drag_col = None
         
         self.selectionModel_connected = False
     
@@ -1098,18 +1101,10 @@ class DataTableView(QTableView):
             self.selectionModel_connected = True
     
     def _on_header_pressed(self, logical_index: int):
-        # Allow header drag-reorder by default; use Shift+Drag to send to zones
-        if not (QApplication.keyboardModifiers() & Qt.ShiftModifier):
-            return
+        # Store for potential drag-to-zone (reorder still handled by header)
         model = self.model()
         if model:
-            column_name = model.get_column_name(logical_index)
-            if column_name:
-                drag = QDrag(self)
-                mime_data = QMimeData()
-                mime_data.setText(column_name)
-                drag.setMimeData(mime_data)
-                drag.exec(Qt.CopyAction)
+            self._header_drag_col = model.get_column_name(logical_index)
 
     def _on_header_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int):
         model = self.model()
@@ -1124,6 +1119,27 @@ class DataTableView(QTableView):
                 order.append(name)
         if order:
             self.column_order_changed.emit(order)
+
+    def eventFilter(self, obj, event):
+        if obj is self.horizontalHeader():
+            if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                self._header_drag_start = event.pos()
+            elif event.type() == QEvent.MouseMove and (event.buttons() & Qt.LeftButton):
+                if self._header_drag_start is not None and self._header_drag_col:
+                    if (event.pos() - self._header_drag_start).manhattanLength() >= QApplication.startDragDistance():
+                        # Start drag only if cursor leaves header area (so reorder still works)
+                        if not self.horizontalHeader().rect().contains(event.pos()):
+                            drag = QDrag(self)
+                            mime = QMimeData()
+                            mime.setText(self._header_drag_col)
+                            mime.setData("application/x-dgs-zone", _build_drag_payload("table", self._header_drag_col, None))
+                            drag.setMimeData(mime)
+                            drag.exec(Qt.MoveAction)
+                            self._header_drag_start = None
+                            return True
+            elif event.type() == QEvent.MouseButtonRelease:
+                self._header_drag_start = None
+        return super().eventFilter(obj, event)
     
     def _on_selection_changed(self, selected, deselected):
         indexes = self.selectionModel().selectedRows()
