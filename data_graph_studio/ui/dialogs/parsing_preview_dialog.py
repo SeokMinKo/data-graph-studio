@@ -167,7 +167,7 @@ class ParsingPreviewDialog(QDialog):
             QTableWidget::item:alternate { background: #111827; color: #E2E8F0; }
             QTableWidget::item:selected { background: #1E3A8A; color: #E2E8F0; }
             QHeaderView::section { background: #1E293B; color: #E2E8F0; border: 1px solid #334155; }
-            QCheckBox { color: #E2E8F0; }
+            QCheckBox { color: #E2E8F0; background: transparent; }
             QCheckBox::indicator { width: 12px; height: 12px; }
             QCheckBox::indicator:unchecked { border: 1px solid #475569; background: #0B1120; }
             QCheckBox::indicator:checked { border: 1px solid #60A5FA; background: #60A5FA; }
@@ -553,6 +553,7 @@ class ParsingPreviewDialog(QDialog):
         self.column_checkbox_layout = QHBoxLayout(self.column_checkbox_container)
         self.column_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         self.column_checkbox_layout.setSpacing(8)
+        self.column_checkbox_container.setStyleSheet("color: #E2E8F0; background: transparent;")
 
         column_scroll.setWidget(self.column_checkbox_container)
         column_group_layout.addWidget(column_scroll)
