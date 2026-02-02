@@ -6,102 +6,81 @@ import os
 import json
 import time
 import uuid
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
+import dataclasses
 
 
-@dataclass
+@dataclass(frozen=True)
 class GraphSetting:
     """단일 그래프 설정"""
     id: str
     name: str
-    icon: str = "📊"
-    description: str = ""
+    dataset_id: str
+    schema_version: int = 1
+    chart_type: str = ""
+    x_column: Optional[str] = None
+    group_columns: Tuple = ()
+    value_columns: Tuple = ()
+    hover_columns: Tuple[str, ...] = ()
+    filters: Tuple = ()
+    sorts: Tuple = ()
+    chart_settings: Dict = None
     created_at: float = field(default_factory=time.time)
     modified_at: float = field(default_factory=time.time)
 
-    # 차트 설정
-    chart_type: str = "line"
-    x_column: Optional[str] = None
+    def __post_init__(self):
+        object.__setattr__(self, "group_columns", tuple(self.group_columns))
+        object.__setattr__(self, "value_columns", tuple(self.value_columns))
+        object.__setattr__(self, "hover_columns", tuple(self.hover_columns))
+        object.__setattr__(self, "filters", tuple(self.filters))
+        object.__setattr__(self, "sorts", tuple(self.sorts))
+        if self.chart_settings is None:
+            object.__setattr__(self, "chart_settings", MappingProxyType({}))
+        elif not isinstance(self.chart_settings, MappingProxyType):
+            object.__setattr__(self, "chart_settings", MappingProxyType(dict(self.chart_settings)))
 
-    # Group Zone 설정
-    group_columns: List[Dict] = field(default_factory=list)
-
-    # Value Zone 설정
-    value_columns: List[Dict] = field(default_factory=list)
-
-    # Hover Zone 설정
-    hover_columns: List[str] = field(default_factory=list)
-
-    # 차트 스타일
-    chart_settings: Dict = field(default_factory=dict)
-
-    # 필터 (선택적)
-    filters: List[Dict] = field(default_factory=list)
-    include_filters: bool = False
-
-    # 정렬 (선택적)
-    sorts: List[Dict] = field(default_factory=list)
-    include_sorts: bool = False
-
-    @classmethod
-    def create_new(cls, name: str, icon: str = "📊") -> 'GraphSetting':
-        """새 설정 생성"""
-        return cls(
-            id=str(uuid.uuid4()),
-            name=name,
-            icon=icon,
-            created_at=time.time(),
-            modified_at=time.time()
-        )
+    def with_name(self, name: str) -> 'GraphSetting':
+        return dataclasses.replace(self, name=name, modified_at=time.time())
 
     def to_dict(self) -> Dict:
-        """딕셔너리로 변환"""
         return {
-            'id': self.id,
-            'name': self.name,
-            'icon': self.icon,
-            'description': self.description,
-            'created_at': self.created_at,
-            'modified_at': self.modified_at,
-            'chart_type': self.chart_type,
-            'x_column': self.x_column,
-            'group_columns': self.group_columns,
-            'value_columns': self.value_columns,
-            'hover_columns': self.hover_columns,
-            'chart_settings': self.chart_settings,
-            'filters': self.filters,
-            'include_filters': self.include_filters,
-            'sorts': self.sorts,
-            'include_sorts': self.include_sorts,
+            "id": self.id,
+            "name": self.name,
+            "dataset_id": self.dataset_id,
+            "schema_version": self.schema_version,
+            "chart_type": self.chart_type,
+            "x_column": self.x_column,
+            "group_columns": list(self.group_columns),
+            "value_columns": list(self.value_columns),
+            "hover_columns": list(self.hover_columns),
+            "filters": list(self.filters),
+            "sorts": list(self.sorts),
+            "chart_settings": dict(self.chart_settings),
+            "created_at": self.created_at,
+            "modified_at": self.modified_at,
         }
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'GraphSetting':
-        """딕셔너리에서 복원"""
         return cls(
-            id=data.get('id', str(uuid.uuid4())),
-            name=data.get('name', 'Untitled'),
-            icon=data.get('icon', '📊'),
-            description=data.get('description', ''),
-            created_at=data.get('created_at', time.time()),
-            modified_at=data.get('modified_at', time.time()),
-            chart_type=data.get('chart_type', 'line'),
-            x_column=data.get('x_column'),
-            group_columns=data.get('group_columns', []),
-            value_columns=data.get('value_columns', []),
-            hover_columns=data.get('hover_columns', []),
-            chart_settings=data.get('chart_settings', {}),
-            filters=data.get('filters', []),
-            include_filters=data.get('include_filters', False),
-            sorts=data.get('sorts', []),
-            include_sorts=data.get('include_sorts', False),
+            id=data["id"],
+            name=data["name"],
+            dataset_id=data["dataset_id"],
+            schema_version=data.get("schema_version", 1),
+            chart_type=data.get("chart_type", ""),
+            x_column=data.get("x_column"),
+            group_columns=tuple(data.get("group_columns", ())),
+            value_columns=tuple(data.get("value_columns", ())),
+            hover_columns=tuple(data.get("hover_columns", ())),
+            filters=tuple(data.get("filters", ())),
+            sorts=tuple(data.get("sorts", ())),
+            chart_settings=data.get("chart_settings", {}),
+            created_at=data.get("created_at", time.time()),
+            modified_at=data.get("modified_at", time.time()),
         )
-
-    def update_modified(self):
-        """수정 시간 업데이트"""
-        self.modified_at = time.time()
 
 
 @dataclass
