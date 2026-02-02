@@ -1480,6 +1480,33 @@ class MainWindow(QMainWindow):
             self.state.set_data_loaded(True, self.engine.row_count)
             self.state.set_column_order(self.engine.columns)
 
+            # 첫 로드 시 데이터셋 목록에 등록
+            if self.engine.dataset_count == 0:
+                import uuid
+                dataset_id = str(uuid.uuid4())[:8]
+                name = Path(self.engine._source.path).name if self.engine._source and self.engine._source.path else "Dataset"
+                from ..core.data_engine import DatasetInfo
+                dataset_info = DatasetInfo(
+                    id=dataset_id,
+                    name=name,
+                    df=self.engine.df,
+                    lazy_df=self.engine._lazy_df,
+                    source=self.engine._source,
+                    profile=self.engine.profile
+                )
+                self.engine._datasets[dataset_id] = dataset_info
+                self.engine._active_dataset_id = dataset_id
+
+                memory_bytes = self.engine.df.estimated_size() if self.engine.df is not None else 0
+                self.state.add_dataset(
+                    dataset_id=dataset_id,
+                    name=name,
+                    file_path=self.engine._source.path if self.engine._source else None,
+                    row_count=self.engine.row_count,
+                    column_count=self.engine.column_count,
+                    memory_bytes=memory_bytes
+                )
+
             # 프로파일 기반 Summary 업데이트
             if self.engine.profile:
                 self._update_summary_from_profile()
@@ -2363,21 +2390,18 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             file_path = getattr(self, '_pending_dataset_path', None)
 
             if dataset_id:
-                # 기존 df를 DatasetInfo로 저장
-                dataset_info = self.engine._datasets.get(self.engine.active_dataset_id)
-                if dataset_info is None:
-                    # 새 DatasetInfo 생성
-                    from ..core.data_engine import DatasetInfo
-                    dataset_info = DatasetInfo(
-                        id=dataset_id,
-                        name=name,
-                        df=self.engine.df,
-                        lazy_df=self.engine._lazy_df,
-                        source=self.engine._source,
-                        profile=self.engine.profile
-                    )
-                    self.engine._datasets[dataset_id] = dataset_info
-                    self.engine._active_dataset_id = dataset_id
+                # 새 DatasetInfo 생성 (항상 새로 등록)
+                from ..core.data_engine import DatasetInfo
+                dataset_info = DatasetInfo(
+                    id=dataset_id,
+                    name=name,
+                    df=self.engine.df,
+                    lazy_df=self.engine._lazy_df,
+                    source=self.engine._source,
+                    profile=self.engine.profile
+                )
+                self.engine._datasets[dataset_id] = dataset_info
+                self.engine._active_dataset_id = dataset_id
 
                 # State에도 추가
                 memory_bytes = self.engine.df.estimated_size() if self.engine.df is not None else 0
