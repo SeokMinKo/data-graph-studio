@@ -634,7 +634,7 @@ class GraphOptionsPanel(QFrame):
     
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(8)
 
         # Header (no float button for internal sections)
@@ -1432,7 +1432,7 @@ class LegendSettingsPanel(QFrame):
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(8)
 
         # Header with float button
