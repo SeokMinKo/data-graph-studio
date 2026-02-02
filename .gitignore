@@ -121,6 +121,7 @@ logs/*.log
 app_*.txt
 test_*.py
 !tests/test_*.py
+!tests/unit/test_*.py
 
 # Keep test data samples
 !test_data/
