@@ -19,7 +19,7 @@ from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
-from ..core.state import AppState, ToolMode, ChartType, ComparisonMode
+from ..core.state import AppState, ToolMode, ChartType, ComparisonMode, AggregationType
 from ..core.comparison_report import ComparisonReport
 from ..core.ipc_server import IPCServer
 from ..core.clipboard_manager import ClipboardManager, DragDropHandler
@@ -168,6 +168,9 @@ class MainWindow(QMainWindow):
 
         # Setup IPC server for external control
         self._setup_ipc_server()
+
+        # Setup auto-recovery (autosave + restore prompt)
+        self._setup_autorecovery()
 
         # Apply initial theme (reduce glare, improve readability)
         self._on_theme_changed("midnight")
@@ -903,6 +906,189 @@ class MainWindow(QMainWindow):
         self._memory_timer.timeout.connect(self._update_memory_status)
         self._memory_timer.start(3000)  # 3초마다 업데이트
         self._update_memory_status()  # 초기값 설정
+
+    def _setup_autorecovery(self):
+        """Setup autosave + recovery prompt"""
+        self._autosave_path = os.path.expanduser("~/.data_graph_studio/autosave.json")
+        os.makedirs(os.path.dirname(self._autosave_path), exist_ok=True)
+
+        # Prompt recovery if autosave exists
+        if os.path.exists(self._autosave_path):
+            try:
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Question)
+                msg.setWindowTitle("Recovery")
+                msg.setText("A previous session was not closed properly.\nRecover the last autosave?")
+                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                if msg.exec() == QMessageBox.Yes:
+                    self._restore_autosave()
+                else:
+                    os.remove(self._autosave_path)
+            except Exception:
+                pass
+
+        # Autosave timer
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setInterval(60 * 1000)  # 1 minute
+        self._autosave_timer.timeout.connect(self._autosave_session)
+        self._autosave_timer.start()
+
+    def _autosave_session(self):
+        """Autosave datasets + graph settings + drawings"""
+        try:
+            if not self.state.is_data_loaded:
+                return
+
+            datasets = []
+            for did, meta in self.state._dataset_metadata.items():
+                datasets.append({
+                    "id": did,
+                    "name": meta.name,
+                    "file_path": meta.file_path
+                })
+
+            payload = {
+                "version": 1,
+                "datasets": datasets,
+                "active_dataset_id": self.state.active_dataset_id,
+                "graph_state": self.state.get_current_graph_state(),
+                "drawings": self.graph_panel.get_drawings_data() if hasattr(self, 'graph_panel') else {},
+                "ts": time.time()
+            }
+
+            with open(self._autosave_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def _restore_autosave(self):
+        """Restore from autosave file"""
+        try:
+            with open(self._autosave_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return
+
+        datasets = data.get("datasets", [])
+        if not datasets:
+            return
+
+        progress = QProgressDialog("Restoring session...", "Cancel", 0, len(datasets), self)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+
+        for i, ds in enumerate(datasets):
+            if progress.wasCanceled():
+                break
+            progress.setValue(i)
+            progress.setLabelText(f"Loading: {Path(ds.get('file_path','')).name}")
+            QApplication.processEvents()
+
+            path = ds.get("file_path")
+            if not path or not os.path.exists(path):
+                continue
+
+            dataset_id = ds.get("id")
+            name = ds.get("name")
+            new_id = self.engine.load_dataset(path, name=name, dataset_id=dataset_id)
+            if new_id:
+                dataset = self.engine.get_dataset(new_id)
+                memory_bytes = dataset.df.estimated_size() if dataset and dataset.df is not None else 0
+                self.state.add_dataset(
+                    dataset_id=new_id,
+                    name=dataset.name if dataset else name,
+                    file_path=path,
+                    row_count=self.engine.row_count,
+                    column_count=self.engine.column_count,
+                    memory_bytes=memory_bytes
+                )
+
+        progress.setValue(len(datasets))
+
+        # Activate dataset
+        active_id = data.get("active_dataset_id")
+        if active_id and self.engine.activate_dataset(active_id):
+            self._on_dataset_activated(active_id)
+        elif self.engine.active_dataset_id:
+            self._on_dataset_activated(self.engine.active_dataset_id)
+
+        # Restore graph settings
+        graph_state = data.get("graph_state", {})
+        if graph_state:
+            self._apply_graph_state(graph_state)
+
+        # Restore drawings
+        drawings = data.get("drawings", {})
+        if drawings and hasattr(self, 'graph_panel'):
+            self.graph_panel.load_drawings_data(drawings)
+
+        # Final refresh
+        self.graph_panel.refresh()
+        self.summary_panel.refresh()
+
+    def _apply_graph_state(self, gs: Dict[str, Any]):
+        """Apply graph state dict to current session"""
+        try:
+            # Chart type
+            if gs.get('chart_type'):
+                self.state.set_chart_type(ChartType(gs['chart_type']))
+
+            # X column
+            self.state.set_x_column(gs.get('x_column'))
+
+            # Group columns
+            self.state.clear_group_zone()
+            for g in gs.get('group_columns', []):
+                name = g.get('name')
+                if name:
+                    self.state.add_group_column(name)
+                    # Set selected values
+                    for gc in self.state.group_columns:
+                        if gc.name == name:
+                            gc.selected_values = set(g.get('selected_values', []))
+
+            # Value columns
+            self.state.clear_value_zone()
+            for v in gs.get('value_columns', []):
+                name = v.get('name')
+                if not name:
+                    continue
+                agg = AggregationType(v.get('aggregation', 'sum'))
+                self.state.add_value_column(name, aggregation=agg)
+                idx = len(self.state.value_columns) - 1
+                self.state.update_value_column(
+                    idx,
+                    color=v.get('color'),
+                    use_secondary_axis=v.get('use_secondary_axis'),
+                    formula=v.get('formula')
+                )
+
+            # Hover columns
+            self.state.clear_hover_columns()
+            for h in gs.get('hover_columns', []):
+                self.state.add_hover_column(h)
+
+            # Chart settings
+            cs = gs.get('chart_settings', {})
+            if cs:
+                self.state.update_chart_settings(
+                    line_width=cs.get('line_width', self.state.chart_settings.line_width),
+                    marker_size=cs.get('marker_size', self.state.chart_settings.marker_size),
+                    fill_opacity=cs.get('fill_opacity', self.state.chart_settings.fill_opacity),
+                    show_data_labels=cs.get('show_data_labels', self.state.chart_settings.show_data_labels),
+                    x_log_scale=cs.get('x_log_scale', self.state.chart_settings.x_log_scale),
+                    y_log_scale=cs.get('y_log_scale', self.state.chart_settings.y_log_scale),
+                    y_min=cs.get('y_min', self.state.chart_settings.y_min),
+                    y_max=cs.get('y_max', self.state.chart_settings.y_max),
+                    y_label=cs.get('y_label', self.state.chart_settings.y_label),
+                    secondary_y_log_scale=cs.get('secondary_y_log_scale', self.state.chart_settings.secondary_y_log_scale),
+                    secondary_y_min=cs.get('secondary_y_min', self.state.chart_settings.secondary_y_min),
+                    secondary_y_max=cs.get('secondary_y_max', self.state.chart_settings.secondary_y_max),
+                    secondary_y_label=cs.get('secondary_y_label', self.state.chart_settings.secondary_y_label),
+                )
+        except Exception:
+            pass
 
     def _setup_ipc_server(self):
         """IPC 서버 설정 - 외부 프로세스에서 앱 제어 가능"""
