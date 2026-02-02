@@ -3237,10 +3237,16 @@ class SlidingWindowWidget(QWidget):
         data_range = self._data_max - self._data_min
         if data_range == 0:
             return 0.5
-        return (value - self._data_min) / data_range
+        norm = (value - self._data_min) / data_range
+        # Vertical axis: invert so min at bottom, max at top
+        if self.orientation == 'vertical':
+            return 1.0 - norm
+        return norm
 
     def _pos_to_value(self, pos: float) -> float:
         """Convert widget position (0-1 normalized) to data value"""
+        if self.orientation == 'vertical':
+            pos = 1.0 - pos
         return self._data_min + pos * (self._data_max - self._data_min)
 
     def paintEvent(self, event):
@@ -3312,7 +3318,8 @@ class SlidingWindowWidget(QWidget):
                 for i, h in enumerate(hist):
                     bar_width = (h / max_hist) * (plot_rect.width() - 4)
                     x = plot_rect.left() + 2
-                    y = plot_rect.top() + i * bar_height
+                    # Invert so low values at bottom, high at top
+                    y = plot_rect.bottom() - (i + 1) * bar_height
                     painter.drawRect(int(x), int(y), int(bar_width), int(bar_height - 1))
         except Exception:
             pass
