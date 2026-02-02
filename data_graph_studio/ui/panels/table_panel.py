@@ -910,6 +910,7 @@ class DataTableView(QTableView):
     rows_selected = Signal(list)
     exclude_value = Signal(str, object)  # column, value
     hide_column = Signal(str)  # column name
+    column_order_changed = Signal(list)
     
     def __init__(self):
         super().__init__()
@@ -967,6 +968,7 @@ class DataTableView(QTableView):
         self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_menu)
         self.horizontalHeader().sectionPressed.connect(self._on_header_pressed)
+        self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
         
         self.selectionModel_connected = False
     
@@ -986,6 +988,20 @@ class DataTableView(QTableView):
                 mime_data.setText(column_name)
                 drag.setMimeData(mime_data)
                 drag.exec(Qt.CopyAction)
+
+    def _on_header_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int):
+        model = self.model()
+        header = self.horizontalHeader()
+        if not model or not header:
+            return
+        order = []
+        for visual in range(header.count()):
+            logical = header.logicalIndex(visual)
+            name = model.get_column_name(logical)
+            if name:
+                order.append(name)
+        if order:
+            self.column_order_changed.emit(order)
     
     def _on_selection_changed(self, selected, deselected):
         indexes = self.selectionModel().selectedRows()
@@ -1665,6 +1681,7 @@ class TablePanel(QWidget):
         self.table_view.exclude_value.connect(self._on_exclude_value)
         self.table_view.hide_column.connect(self._on_hide_column)
         self.table_view.column_dragged.connect(self._on_column_action)
+        self.table_view.column_order_changed.connect(self._on_column_order_changed)
         self.state.selection_changed.connect(self._on_state_selection_changed)
         self.state.group_zone_changed.connect(self._on_group_zone_changed)
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
@@ -1676,6 +1693,14 @@ class TablePanel(QWidget):
     def _on_hover_zone_changed(self):
         """Hover zone changed - trigger refresh if needed"""
         pass  # Hover data is managed by GraphPanel
+
+    def _on_column_order_changed(self, order: List[str]):
+        """Update column order in state and refresh model"""
+        if not order:
+            return
+        self.state.set_column_order(order)
+        # Refresh table to apply new order
+        self._update_table_model(self.engine.df if self.engine.is_loaded else None)
 
     def set_data(self, df: Optional[pl.DataFrame]):
         # 기존 캐시 클리어
@@ -1694,7 +1719,14 @@ class TablePanel(QWidget):
             self.group_info_label.setText("")
             return
 
-        # Apply hidden columns filter
+        # Apply column order + hidden columns
+        order = self.state.get_column_order() or []
+        if order:
+            ordered_cols = [c for c in order if c in df.columns]
+            # Append any new columns not in order
+            ordered_cols += [c for c in df.columns if c not in ordered_cols]
+            df = df.select(ordered_cols)
+
         hidden_cols = self.state._hidden_columns
         if hidden_cols:
             visible_cols = [col for col in df.columns if col not in hidden_cols]
