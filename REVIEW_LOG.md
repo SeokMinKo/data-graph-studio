@@ -1,97 +1,122 @@
 # PRD Review Log
 
-## Round 1
-Date: 2026-02-02 21:55 KST
-
-### 🧠 Behavior Reviewer
-**Status**: ❌ REJECT
-
-**주요 피드백**:
-1. Dataset vs Project 용어 모호
-2. Active project 정의 없음 (무엇이 활성화?)
-3. Selection model 없음 (단일/다중 선택, 키보드 네비게이션)
-4. Profile apply 시 unsaved changes 덮어쓰기 경고 없음
-5. Name validation 규칙 없음 (빈 이름, 중복, 최대 길이)
-6. Delete 후 active profile 처리 미정의
-7. Duplicate 대상/네이밍 규칙 없음
-8. Export/Import 대상(단일/다중) 불명확
-9. Toolbar Save/Load vs Export/Import 구분 불명확
-10. Error handling 전무
-11. 키보드 접근성 없음
-12. Undo/Redo 정책 없음
-
-### 🏗️ Structure Reviewer
-**Status**: ❌ REJECT
-
-**주요 피드백**:
-1. DatasetState에 profiles 추가 → 상태 객체 비대화
-2. GraphSetting의 Dict/List[Dict] → 타입 불명확
-3. DatasetState ↔ GraphSetting 매핑 계약 없음
-4. AppState가 CRUD까지 담당 → God object 경향
-5. 런타임 모델 = 직렬화 포맷 → 유연성 저하
-6. 버전/마이그레이션 전략 없음
-7. QTreeWidget은 모델-뷰 분리 불리
-8. ID 중복/생성 규칙 없음
-9. 이름 충돌 정책 없음
-10. Timestamp 업데이트 규칙 없음
-
-### 🎨 UI Reviewer
-**Status**: ❌ REJECT
-
-**주요 피드백**:
-1. 📁 아이콘이 파일명과 불일치 (폴더 아이콘 + 파일명)
-2. 한/영 혼용 UI
-3. "+ 새 프로파일"이 트리 아이템처럼 보임 → 액션과 구분 필요
-4. 이모지 아이콘 OS별 렌더링 차이
-5. 상태 정의 부족 (focused, disabled, loading 등)
-6. Single click = apply → 실수 위험
-7. 클릭 영역 명확화 필요 (아이콘 vs 라벨)
-8. Active project vs Selected profile 시각적 구분 없음
-9. 키보드 접근성 없음
-10. 긴 이름 처리 없음 (ellipsis/tooltip)
-11. 빈/에러 상태 UI 없음
-12. WCAG 색상 대비 규정 없음
-
-### 🔍 Overall Reviewer
-**Status**: ❌ REJECT
-
-**주요 피드백**:
-1. 목표 모호 (어떤 IDE 패턴?)
-2. 성공 기준 측정 불가
-3. 데이터 모델 관계 정의 없음
-4. CRUD edge cases 미정의
-5. 파일 포맷 버저닝 없음
-6. Import 충돌 처리 없음
-7. 마이그레이션 계획 없음
-8. 테스트 시나리오 부실
-9. 접근성/성능 요구사항 없음
-10. 용어/로컬라이제이션 정책 없음
-
-### ⚡ Algorithm Reviewer
-**Status**: ❌ REJECT
-
-**주요 피드백**:
-1. _update_tree()가 O(N) 전체 재구성 → 비효율
-2. QTreeWidget은 진정한 가상화 아님
-3. Signal cascade → 다중 UI 업데이트
-4. 재진입 방지 없음
-5. 직렬화 포맷 버전 없음
-6. Deep copy 필요 → 메모리/성능 문제
-7. 대용량 nested data 처리 미정의
-8. 메모리 중복 (3중 복사 가능성)
-9. 비동기 I/O 처리 없음
-10. NFR 테스트 기준 모호
+## Feature: 새 프로젝트 마법사 (New Project Wizard)
 
 ---
 
-## Actions for Round 2
-PRD 전면 수정 필요:
-1. 용어 정의 명확화 (Dataset=Project)
-2. 모든 상태/인터랙션 정의
-3. 에러 핸들링 추가
-4. 이름 충돌/validation 규칙
-5. 키보드 접근성
-6. 아키텍처 개선 (ProfileManager 분리)
-7. 성능 최적화 전략 (incremental update)
-8. 버저닝/마이그레이션
-9. 측정 가능한 성공 기준
+## Round 1
+Date: 2026-02-02 23:14 KST
+
+### Behavior Reviewer
+**Status**: ❌ REJECT
+**Feedback**:
+1. 마법사 없이 열기 옵션 미정의
+2. Step 2 필수값 불명확
+3. 마법사 취소 시 cleanup 미정의
+4. ETL 변환 중 취소 동작 미정의
+5. Step 간 뒤로가기 시 데이터 유지 여부 불명확
+
+### Structure Reviewer
+**Status**: ❌ REJECT
+**Feedback**:
+1. 파싱 로직 중복 위험 - 공통 모듈 분리 필요
+2. ParsingSettings 위치 불명확
+3. Step 간 데이터 전달 방식 미정의
+4. GraphSetting 생성 시점 불명확
+5. Project 클래스와의 연결 미정의
+
+### UI Reviewer
+**Status**: ❌ REJECT
+**Feedback**:
+1. Step Progress Indicator 누락
+2. 대용량 데이터 로딩 UX 미정의
+3. 마법사 없이 열기 UI 위치 미정의
+4. 에러 상태 UI 미정의
+5. Step 2 미리보기 차트 확대 옵션 필요
+
+### Overall Reviewer
+**Status**: ❌ REJECT
+**Feedback**:
+1. 프로젝트 익스플로러 컴포넌트 불명확
+2. 비기능 요구사항(NFR) 누락
+3. 데이터 모델 섹션 누락
+4. 기존 기능과의 호환성 미정의
+
+### Algorithm Reviewer
+**Status**: ❌ REJECT
+**Feedback**:
+1. 대용량 파일 파싱 전략 미정의
+2. Step 2 실시간 미리보기 성능 미정의
+3. 인코딩 자동 감지 알고리즘 불명확
+4. 메모리 관리 미정의
+
+### Actions Taken
+- PRD v1.1로 수정
+- 마법사 없이 열기: Ctrl+Shift+O 추가
+- NFR 섹션 추가 (성능, 에러처리, 접근성, 디바운싱)
+- Step 간 데이터 전달 방식 명시 (QWizard page 참조)
+- 대용량 파일 처리 전략 추가 (샘플링, 스트리밍)
+- ProjectTreeView 명시
+- 에러 상태 UI 추가
+- Step Progress Indicator 추가
+
+---
+
+## Round 2
+Date: 2026-02-02 23:17 KST
+
+### Behavior Reviewer
+**Status**: ✅ AGREE
+**Feedback**:
+- 모든 동작 시나리오가 명확히 정의됨
+- 마법사 없이 열기 (Ctrl+Shift+O) 추가됨
+- 필수값 검증 로직 명시됨
+- 취소 시 cleanup 명시됨
+- Step 간 설정 유지 명시됨
+
+### Structure Reviewer
+**Status**: ✅ AGREE
+**Feedback**:
+- 공통 모듈 분리 계획 명시 (parsing.py, parsing_utils.py)
+- Step 간 데이터 전달 방식 명확 (QWizard page 참조)
+- 기존 컴포넌트 활용 계획 명시
+- 마이그레이션 단계 상세
+
+### UI Reviewer
+**Status**: ✅ AGREE
+**Feedback**:
+- Step Progress Indicator 추가됨
+- 프로그레스 바 추가됨
+- 에러 상태 UI 추가됨
+- 차트 확대 버튼 추가됨
+- 필수 항목 표시 추가됨
+
+### Overall Reviewer
+**Status**: ✅ AGREE
+**Feedback**:
+- NFR 섹션 추가됨 (성능, 에러처리, 접근성)
+- ProjectTreeView 명확히 지정됨
+- 테스트 케이스 확장됨
+- 마이그레이션 계획 상세
+
+### Algorithm Reviewer
+**Status**: ✅ AGREE
+**Feedback**:
+- 대용량 파일 전략 명시 (샘플링, 스트리밍)
+- 디바운싱 300ms 명시
+- 메모리 관리 명시 (취소/완료 시 해제)
+- 미리보기 샘플링 (100행, 10,000행)
+
+### Actions Taken
+- N/A (모든 리뷰어 AGREE)
+
+---
+
+## Summary
+
+| Round | Behavior | Structure | UI | Overall | Algorithm | Result |
+|-------|----------|-----------|-----|---------|-----------|--------|
+| 1 | ❌ | ❌ | ❌ | ❌ | ❌ | REJECTED |
+| 2 | ✅ | ✅ | ✅ | ✅ | ✅ | **APPROVED** |
+
+**PRD APPROVED** - 구현 단계로 진행 가능

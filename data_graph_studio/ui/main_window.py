@@ -36,7 +36,8 @@ from .panels.dataset_manager_panel import DatasetManagerPanel
 from .panels.side_by_side_layout import SideBySideLayout
 from .panels.comparison_stats_panel import ComparisonStatsPanel
 from .panels.overlay_stats_widget import OverlayStatsWidget
-from .dialogs.parsing_preview_dialog import ParsingPreviewDialog, ParsingSettings
+from .dialogs.parsing_preview_dialog import ParsingPreviewDialog
+from ..core.parsing import ParsingSettings
 from .dialogs.save_setting_dialog import SaveSettingDialog
 from .dialogs.profile_manager_dialog import ProfileManagerDialog
 from .dialogs.multi_file_dialog import open_multi_file_dialog
@@ -47,6 +48,7 @@ from ..core.profile_store import ProfileStore
 from ..core.profile_controller import ProfileController
 from .models.profile_model import ProfileModel
 from .views.project_tree_view import ProjectTreeView
+from .wizards.new_project_wizard import NewProjectWizard
 
 
 class DataLoaderThread(QThread):
@@ -241,17 +243,24 @@ class MainWindow(QMainWindow):
         # ============================================================
         file_menu = menubar.addMenu("&File")
 
-        # Open Data
+        # Open Data (with wizard)
         open_data_action = QAction("Open &Data...", self)
         open_data_action.setShortcut(QKeySequence.Open)
-        open_data_action.setStatusTip("Open data file - CSV, Excel, Parquet, JSON (Ctrl+O)")
+        open_data_action.setStatusTip("Open data file with New Project Wizard (Ctrl+O)")
         open_data_action.triggered.connect(self._on_open_file)
         file_menu.addAction(open_data_action)
 
+        # Open Data Without Wizard
+        open_no_wizard_action = QAction("Open Without &Wizard...", self)
+        open_no_wizard_action.setShortcut("Ctrl+Shift+O")
+        open_no_wizard_action.setStatusTip("Open data file without wizard - quick mode (Ctrl+Shift+O)")
+        open_no_wizard_action.triggered.connect(self._on_open_file_without_wizard)
+        file_menu.addAction(open_no_wizard_action)
+
         # Open Settings
         open_settings_action = QAction("Open &Settings...", self)
-        open_settings_action.setShortcut("Ctrl+Shift+O")
-        open_settings_action.setStatusTip("Load a saved settings/profile file")
+        open_settings_action.setShortcut("Ctrl+Alt+O")
+        open_settings_action.setStatusTip("Load a saved settings/profile file (Ctrl+Alt+O)")
         open_settings_action.triggered.connect(self._on_open_settings)
         file_menu.addAction(open_settings_action)
 
@@ -578,12 +587,12 @@ class MainWindow(QMainWindow):
 
         save_profile_btn = QAction("💾  Save Profile", self)
         save_profile_btn.setToolTip(self._format_tooltip("Save Graph Profile", ""))
-        save_profile_btn.triggered.connect(self.dataset_manager._on_save_profile)
+        save_profile_btn.triggered.connect(lambda: self.dataset_manager._on_save_profile())
         toolbar.addAction(save_profile_btn)
 
         load_profile_btn = QAction("📂  Load Profile", self)
         load_profile_btn.setToolTip(self._format_tooltip("Load Graph Profile", ""))
-        load_profile_btn.triggered.connect(self.dataset_manager._on_load_profile)
+        load_profile_btn.triggered.connect(lambda: self.dataset_manager._on_load_profile())
         toolbar.addAction(load_profile_btn)
 
         toolbar.addSeparator()
@@ -760,14 +769,15 @@ class MainWindow(QMainWindow):
         self.project_tree.import_requested.connect(self._on_profile_import_requested)
         self._sidebar_tabs.addTab(self.project_tree, "Projects")
         
-        # Dataset Manager (기존)
+        # Dataset Manager (내부용 - 탭에서 제거됨, 기능은 유지)
         self.dataset_manager = DatasetManagerPanel(self.engine, self.state)
         self.dataset_manager.dataset_activated.connect(self._on_dataset_activated)
         self.dataset_manager.dataset_removed.connect(self._on_dataset_remove_requested)
         self.dataset_manager.add_dataset_requested.connect(self._on_add_dataset)
         self.dataset_manager.comparison_mode_changed.connect(self._on_comparison_mode_changed)
         self.dataset_manager.comparison_started.connect(self._on_comparison_started)
-        self._sidebar_tabs.addTab(self.dataset_manager, "Datasets")
+        # NOTE: Datasets 탭 제거됨 - Projects 탭만 사용
+        # self._sidebar_tabs.addTab(self.dataset_manager, "Datasets")
         
         self.root_splitter.addWidget(self._sidebar_tabs)
 
@@ -1490,10 +1500,38 @@ class MainWindow(QMainWindow):
     # ==================== Actions ====================
     
     def _on_open_file(self):
-        """파일 열기 다이얼로그"""
+        """파일 열기 다이얼로그 - 새 프로젝트 마법사 사용"""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open Data File",
+            "",
+            "All Supported (*.csv *.tsv *.txt *.log *.dat *.etl *.xlsx *.xls *.parquet *.json *.dgs);;"
+            "Project Files (*.dgs);;"
+            "CSV/TSV (*.csv *.tsv);;"
+            "Text Files (*.txt *.log *.dat);;"
+            "ETL Files (*.etl);;"
+            "Excel (*.xlsx *.xls);;"
+            "Parquet (*.parquet);;"
+            "JSON (*.json);;"
+            "All Files (*.*)"
+        )
+        
+        if file_path:
+            ext = Path(file_path).suffix.lower()
+            
+            # .dgs 프로젝트 파일은 바로 로드 (마법사 스킵)
+            if ext == '.dgs':
+                self._load_project_file(file_path)
+                return
+            
+            # 새 프로젝트 마법사 실행
+            self._show_new_project_wizard(file_path)
+    
+    def _on_open_file_without_wizard(self):
+        """파일 열기 (마법사 없이) - Ctrl+Shift+O"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open Data File (Without Wizard)",
             "",
             "All Supported (*.csv *.tsv *.txt *.log *.dat *.etl *.xlsx *.xls *.parquet *.json);;"
             "CSV/TSV (*.csv *.tsv);;"
@@ -1506,7 +1544,46 @@ class MainWindow(QMainWindow):
         )
         
         if file_path:
+            # 기존 파싱 미리보기 다이얼로그 사용
             self._show_parsing_preview(file_path)
+    
+    def _show_new_project_wizard(self, file_path: str):
+        """새 프로젝트 마법사 표시"""
+        # 대용량 파일 경고 체크
+        if not self._check_large_file_warning(file_path):
+            return
+        
+        wizard = NewProjectWizard(file_path, self)
+        wizard.project_created.connect(self._on_wizard_project_created)
+        wizard.exec()
+    
+    def _on_wizard_project_created(self, result: dict):
+        """마법사에서 프로젝트 생성 완료 시 호출"""
+        parsing_settings = result.get('parsing_settings')
+        graph_setting = result.get('graph_setting')
+        project_name = result.get('project_name')
+        preview_df = result.get('preview_df')
+        
+        if parsing_settings is None:
+            return
+        
+        # 파일 로드
+        self._load_file_with_settings(parsing_settings.file_path, parsing_settings)
+        
+        # 그래프 설정 적용
+        if graph_setting:
+            # 현재 데이터셋에 프로파일 추가
+            active_id = self.engine.active_dataset_id
+            if active_id:
+                self.profile_store.add_setting(active_id, graph_setting)
+                self.profile_model.refresh()
+                # 프로파일 적용
+                self.profile_controller.apply_setting(graph_setting)
+    
+    def _load_project_file(self, file_path: str):
+        """프로젝트 파일 (.dgs) 로드"""
+        # 기존 프로젝트 로드 로직 사용
+        self._load_project(file_path)
 
     def _on_open_multiple_files(self):
         """다중 파일 열기 다이얼로그"""
