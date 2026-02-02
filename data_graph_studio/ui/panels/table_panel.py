@@ -1005,7 +1005,8 @@ class DataTableView(QTableView):
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
-                background: white;
+                background: #1E293B;
+                color: #E2E8F0;
                 border: 1px solid #3E4A59;
                 border-radius: 8px;
                 padding: 4px;
@@ -1013,10 +1014,11 @@ class DataTableView(QTableView):
             QMenu::item {
                 padding: 8px 16px;
                 border-radius: 4px;
+                color: #E2E8F0;
             }
             QMenu::item:selected {
-                background: #EEF2FF;
-                color: #4338CA;
+                background: #334155;
+                color: #E2E8F0;
             }
             QMenu::separator {
                 height: 1px;
@@ -1074,7 +1076,8 @@ class DataTableView(QTableView):
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
-                background: white;
+                background: #1E293B;
+                color: #E2E8F0;
                 border: 1px solid #3E4A59;
                 border-radius: 8px;
                 padding: 4px;
@@ -1082,10 +1085,11 @@ class DataTableView(QTableView):
             QMenu::item {
                 padding: 8px 16px;
                 border-radius: 4px;
+                color: #E2E8F0;
             }
             QMenu::item:selected {
-                background: #EEF2FF;
-                color: #4338CA;
+                background: #334155;
+                color: #E2E8F0;
             }
             QMenu::separator {
                 height: 1px;

@@ -2641,6 +2641,13 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
     def _on_dataset_activated(self, dataset_id: str):
         """데이터셋 활성화 요청"""
+        # Save current dataset state before switching
+        try:
+            if self.state.active_dataset_id:
+                self.state._sync_to_dataset_state(self.state.active_dataset_id)
+        except Exception:
+            pass
+
         if self.engine.activate_dataset(dataset_id):
             self.state.activate_dataset(dataset_id)
 
