@@ -4350,7 +4350,35 @@ class GraphPanel(QWidget):
         self.main_graph.reset_view()
     
     def autofit(self):
-        self.main_graph.autoRange()
+        """Auto-fit view with margin based on current data"""
+        try:
+            x = getattr(self.main_graph, "_data_x", None)
+            y = getattr(self.main_graph, "_data_y", None)
+            if x is None or y is None or len(x) == 0 or len(y) == 0:
+                self.main_graph.autoRange()
+                return
+
+            # Convert and filter finite values
+            x_arr = np.asarray(x, dtype=float)
+            y_arr = np.asarray(y, dtype=float)
+            finite = np.isfinite(x_arr) & np.isfinite(y_arr)
+            if not np.any(finite):
+                self.main_graph.autoRange()
+                return
+
+            x_min, x_max = np.min(x_arr[finite]), np.max(x_arr[finite])
+            y_min, y_max = np.min(y_arr[finite]), np.max(y_arr[finite])
+
+            # Margin: 5% of range (min 1.0)
+            x_range = max(x_max - x_min, 1.0)
+            y_range = max(y_max - y_min, 1.0)
+            x_pad = x_range * 0.05
+            y_pad = y_range * 0.05
+
+            self.main_graph.setXRange(x_min - x_pad, x_max + x_pad, padding=0)
+            self.main_graph.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
+        except Exception:
+            self.main_graph.autoRange()
     
     def export_image(self, path: str):
         exporter = pg.exporters.ImageExporter(self.main_graph.plotItem)
