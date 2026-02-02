@@ -910,6 +910,7 @@ class DataTableView(QTableView):
     rows_selected = Signal(list)
     exclude_value = Signal(str, object)  # column, value
     hide_column = Signal(str)  # column name
+    exclude_column = Signal(str)  # column name (drop from data)
     column_order_changed = Signal(list)
     
     def __init__(self):
@@ -1054,7 +1055,7 @@ class DataTableView(QTableView):
         menu.addSeparator()
         
         exclude_col = QAction("🚫 Exclude Column", self)
-        exclude_col.triggered.connect(lambda: self.hide_column.emit(column_name))
+        exclude_col.triggered.connect(lambda: self.exclude_column.emit(column_name))
         menu.addAction(exclude_col)
 
         menu.addSeparator()
@@ -1444,10 +1445,11 @@ class TablePanel(QWidget):
     file_dropped = Signal(str)
     window_changed = Signal()
 
-    def __init__(self, state: AppState, engine: DataEngine):
+    def __init__(self, state: AppState, engine: DataEngine, graph_panel=None):
         super().__init__()
         self.state = state
         self.engine = engine
+        self.graph_panel = graph_panel
 
         self.setAcceptDrops(True)
 
@@ -1680,6 +1682,7 @@ class TablePanel(QWidget):
         self.table_view.rows_selected.connect(self._on_rows_selected)
         self.table_view.exclude_value.connect(self._on_exclude_value)
         self.table_view.hide_column.connect(self._on_hide_column)
+        self.table_view.exclude_column.connect(self._on_exclude_column)
         self.table_view.column_dragged.connect(self._on_column_action)
         self.table_view.column_order_changed.connect(self._on_column_order_changed)
         self.state.selection_changed.connect(self._on_state_selection_changed)
@@ -1899,6 +1902,50 @@ class TablePanel(QWidget):
         self.state.toggle_column_visibility(column)
         self._update_hidden_bar()
         self._update_table_model()
+
+    def _on_exclude_column(self, column: str):
+        """Handle exclude (drop) column from data"""
+        if not self.engine.is_loaded or not column:
+            return
+        # Confirm destructive action
+        reply = QMessageBox.question(
+            self, "Exclude Column",
+            f"Remove column '{column}' from the active dataset?\n\nThis cannot be undone (reload to restore).",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            # Drop from active dataset df
+            df = self.engine.df
+            if df is None or column not in df.columns:
+                return
+            self.engine._df = df.drop(column)
+            # Update active dataset in engine
+            if self.engine.active_dataset_id and self.engine.active_dataset_id in self.engine._datasets:
+                ds = self.engine._datasets[self.engine.active_dataset_id]
+                ds.df = self.engine._df
+                ds.lazy_df = None
+            # Clean state references
+            if self.state.x_column == column:
+                self.state.set_x_column(None)
+            # Remove from groups/values/hover
+            self.state._group_columns = [g for g in self.state.group_columns if g.name != column]
+            self.state._value_columns = [v for v in self.state.value_columns if v.name != column]
+            if column in self.state.hover_columns:
+                self.state.remove_hover_column(column)
+            # Hidden/column order cleanup
+            if column in self.state._hidden_columns:
+                self.state._hidden_columns.remove(column)
+            if column in self.state.get_column_order():
+                self.state.set_column_order([c for c in self.state.get_column_order() if c != column])
+
+            # Refresh UI
+            self._update_table_model(self.engine.df)
+            self.graph_panel.refresh() if hasattr(self, 'graph_panel') else None
+        except Exception as e:
+            QMessageBox.warning(self, "Exclude Column", f"Failed to exclude column: {e}")
     
     def _on_column_action(self, action: str):
         """Handle column actions from context menu"""

@@ -739,7 +739,7 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.graph_panel)
 
         # Table Panel (하단)
-        self.table_panel = TablePanel(self.state, self.engine)
+        self.table_panel = TablePanel(self.state, self.engine, self.graph_panel)
         self.main_splitter.addWidget(self.table_panel)
 
         # 메인 스플리터를 root_splitter에 추가
