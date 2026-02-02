@@ -49,7 +49,7 @@ class SaveSettingDialog(QDialog):
             QLabel {
                 font-size: 16px;
                 font-weight: 600;
-                color: #111827;
+                color: #E6E9EF;
                 padding: 8px 0;
             }
         """)
@@ -150,11 +150,11 @@ class SaveSettingDialog(QDialog):
         options_layout.addWidget(options_header)
 
         self._include_filters_cb = QCheckBox("Include current filters")
-        self._include_filters_cb.setStyleSheet("color: #4B5563;")
+        self._include_filters_cb.setStyleSheet("color: #C2C8D1;")
         options_layout.addWidget(self._include_filters_cb)
 
         self._include_sorts_cb = QCheckBox("Include current sort order")
-        self._include_sorts_cb.setStyleSheet("color: #4B5563;")
+        self._include_sorts_cb.setStyleSheet("color: #C2C8D1;")
         options_layout.addWidget(self._include_sorts_cb)
 
         layout.addWidget(options_frame)

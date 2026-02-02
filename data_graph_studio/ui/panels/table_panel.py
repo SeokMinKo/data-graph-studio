@@ -298,7 +298,7 @@ class ValueChipWidget(QFrame):
         layout.addWidget(DragHandleLabel("value", value_col.name, index))
 
         name_label = QLabel(f"● {value_col.name}")
-        name_label.setStyleSheet("font-weight: 600; font-size: 11px; color: #1E293B; background: transparent;")
+        name_label.setStyleSheet("font-weight: 600; font-size: 11px; color: #E6E9EF; background: transparent;")
         name_label.setToolTip(value_col.name)
         layout.addWidget(name_label)
 
@@ -697,7 +697,7 @@ class GroupZone(QFrame):
         header.setStyleSheet("""
             font-weight: 600;
             font-size: 13px;
-            color: #1E293B;
+            color: #E6E9EF;
             background: transparent;
         """)
         header_layout.addWidget(header)

@@ -120,7 +120,7 @@ class FloatableSectionHeader(QFrame):
             QLabel {
                 font-weight: 600;
                 font-size: 13px;
-                color: #111827;
+                color: #E6E9EF;
                 padding: 4px;
                 background: transparent;
             }

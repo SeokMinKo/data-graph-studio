@@ -58,7 +58,7 @@ class SettingItem(QFrame):
         # 이름 + 기본 설정 표시
         name_layout = QHBoxLayout()
         name_label = QLabel(self._setting.name)
-        name_label.setStyleSheet("font-weight: 600; color: #111827; font-size: 13px; background: transparent;")
+        name_label.setStyleSheet("font-weight: 600; color: #E6E9EF; font-size: 13px; background: transparent;")
         name_layout.addWidget(name_label)
 
         if self._is_default:
@@ -176,7 +176,7 @@ class ProfileManagerDialog(QDialog):
 
         # 프로파일 헤더
         profile_header = QLabel("📁 Profiles")
-        profile_header.setStyleSheet("font-weight: 600; font-size: 14px; color: #111827; background: transparent;")
+        profile_header.setStyleSheet("font-weight: 600; font-size: 14px; color: #E6E9EF; background: transparent;")
         left_layout.addWidget(profile_header)
 
         # 프로파일 리스트
@@ -230,7 +230,7 @@ class ProfileManagerDialog(QDialog):
 
         # 설정 헤더
         self._settings_header = QLabel("Select a profile")
-        self._settings_header.setStyleSheet("font-weight: 600; font-size: 14px; color: #111827; background: transparent;")
+        self._settings_header.setStyleSheet("font-weight: 600; font-size: 14px; color: #E6E9EF; background: transparent;")
         right_layout.addWidget(self._settings_header)
 
         # 설정 스크롤 영역

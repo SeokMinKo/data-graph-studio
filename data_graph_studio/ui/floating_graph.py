@@ -77,7 +77,7 @@ class FloatingGraphWindow(QDialog):
             QLabel {
                 font-size: 14px;
                 font-weight: 600;
-                color: #1F2937;
+                color: #E6E9EF;
                 background: transparent;
             }
         """)
@@ -91,7 +91,7 @@ class FloatingGraphWindow(QDialog):
         self._sync_cb.setToolTip("Synchronize selection with main window")
         self._sync_cb.setStyleSheet("""
             QCheckBox {
-                color: #4B5563;
+                color: #C2C8D1;
                 font-size: 12px;
                 background: transparent;
             }
