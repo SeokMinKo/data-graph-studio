@@ -357,16 +357,16 @@ class MainWindow(QMainWindow):
 
         graph_elements_menu.addSeparator()
         drawing_style_action = QAction("Drawing Style...", self)
-        drawing_style_action.triggered.connect(self.graph_panel.show_drawing_style_dialog)
+        drawing_style_action.triggered.connect(self._on_drawing_style)
         graph_elements_menu.addAction(drawing_style_action)
 
         delete_drawing_action = QAction("Delete Selected Drawing", self)
         delete_drawing_action.setShortcut("Delete")
-        delete_drawing_action.triggered.connect(self.graph_panel.delete_selected_drawing)
+        delete_drawing_action.triggered.connect(self._on_delete_drawing)
         graph_elements_menu.addAction(delete_drawing_action)
 
         clear_drawings_action = QAction("Clear All Drawings", self)
-        clear_drawings_action.triggered.connect(self.graph_panel.clear_drawings)
+        clear_drawings_action.triggered.connect(self._on_clear_drawings)
         graph_elements_menu.addAction(clear_drawings_action)
 
         # Table Elements submenu
@@ -3459,6 +3459,18 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         if hasattr(self.graph_panel, 'set_axis_labels_visible'):
             self.graph_panel.set_axis_labels_visible(checked)
         self.statusbar.showMessage(f"Axis labels {'shown' if checked else 'hidden'}", 2000)
+
+    def _on_drawing_style(self):
+        if hasattr(self, 'graph_panel') and self.graph_panel is not None:
+            self.graph_panel.show_drawing_style_dialog()
+
+    def _on_delete_drawing(self):
+        if hasattr(self, 'graph_panel') and self.graph_panel is not None:
+            self.graph_panel.delete_selected_drawing()
+
+    def _on_clear_drawings(self):
+        if hasattr(self, 'graph_panel') and self.graph_panel is not None:
+            self.graph_panel.clear_drawings()
 
     # ============================================================
     # New Menu Action Methods (View Menu - Table Elements)
