@@ -689,6 +689,8 @@ class GraphOptionsPanel(QFrame):
         x_layout.addWidget(QLabel("Format:"), 1, 0)
         self.x_format_combo = QComboBox()
         self.x_format_combo.setEditable(True)
+        if self.x_format_combo.lineEdit():
+            self.x_format_combo.lineEdit().setPlaceholderText("e.g. 0.00\" MB\"")
         self.x_format_combo.addItems([
             "Auto",
             "Number (#,##0)",
@@ -738,6 +740,8 @@ class GraphOptionsPanel(QFrame):
         y_layout.addWidget(QLabel("Format:"), 1, 0)
         self.y_format_combo = QComboBox()
         self.y_format_combo.setEditable(True)
+        if self.y_format_combo.lineEdit():
+            self.y_format_combo.lineEdit().setPlaceholderText("e.g. 0.00\" MB\"")
         self.y_format_combo.addItems([
             "Auto",
             "Number (#,##0)",
@@ -2338,6 +2342,17 @@ class MainGraph(pg.PlotWidget):
             self.addItem(scatter)
             self._scatter_items.append(scatter)
             item = scatter
+            if show_labels:
+                if not hasattr(self, '_label_items'):
+                    self._label_items = []
+                max_labels = 200
+                for i, (xi, yi) in enumerate(zip(x, y)):
+                    if i >= max_labels:
+                        break
+                    label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color='#E2E8F0')
+                    label.setPos(xi, yi)
+                    self.addItem(label)
+                    self._label_items.append(label)
             
         elif chart_type == ChartType.BAR:
             width = (x.max() - x.min()) / len(x) * 0.8 if len(x) > 1 else 0.8
