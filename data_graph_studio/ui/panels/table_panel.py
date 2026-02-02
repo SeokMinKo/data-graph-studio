@@ -3,12 +3,13 @@ Table Panel - 테이블 뷰 + X Zone + Group Zone + Value Zone
 """
 
 from typing import Optional, List, Dict, Any
+import json
 import polars as pl
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
     QTableView, QHeaderView, QAbstractItemView, QMenu,
-    QLineEdit, QComboBox, QPushButton, QScrollArea,
+    QLineEdit, QComboBox, QPushButton,
     QSplitter, QSizePolicy, QApplication, QListWidget,
     QListWidgetItem, QGroupBox, QSlider
 )
@@ -136,61 +137,285 @@ class PolarsTableModel(QAbstractTableModel):
         return self._actual_row_count
 
 
-class DraggableListWidget(QListWidget):
-    """드래그 가능한 리스트 위젯"""
-    
-    item_dropped = Signal(str)
-    item_removed = Signal(str)
-    order_changed = Signal(list)
-    
-    def __init__(self, accept_drop: bool = True, single_item: bool = False):
+def _parse_drag_payload(mime_data: QMimeData) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {"zone": None, "name": None, "index": None}
+    if mime_data.hasFormat("application/x-dgs-zone"):
+        try:
+            raw = bytes(mime_data.data("application/x-dgs-zone")).decode("utf-8")
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                payload.update(data)
+        except Exception:
+            pass
+    if not payload.get("name") and mime_data.hasText():
+        payload["name"] = mime_data.text()
+    return payload
+
+
+def _build_drag_payload(zone: str, name: str, index: Optional[int] = None) -> QByteArray:
+    data: Dict[str, Any] = {"zone": zone, "name": name}
+    if index is not None:
+        data["index"] = index
+    return QByteArray(json.dumps(data).encode("utf-8"))
+
+
+def _remove_from_source(state: AppState, payload: Dict[str, Any], target_zone: str):
+    source = payload.get("zone")
+    if not source or source == target_zone:
+        return
+    name = payload.get("name")
+    index = payload.get("index")
+    if source == "x":
+        if state.x_column == name:
+            state.set_x_column(None)
+    elif source == "group":
+        if name:
+            state.remove_group_column(name)
+    elif source == "hover":
+        if name:
+            state.remove_hover_column(name)
+    elif source == "value":
+        if index is not None:
+            state.remove_value_column(index)
+
+
+class DragHandleLabel(QLabel):
+    def __init__(self, zone_id: str, name: str, index: Optional[int] = None):
+        super().__init__("⋮⋮")
+        self.zone_id = zone_id
+        self.name = name
+        self.index = index
+        self._start_pos = None
+        self.setStyleSheet("font-size: 10px; color: #94A3B8; background: transparent;")
+        self.setCursor(Qt.OpenHandCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._start_pos = event.pos()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton and self._start_pos is not None:
+            if (event.pos() - self._start_pos).manhattanLength() >= QApplication.startDragDistance():
+                drag = QDrag(self)
+                mime = QMimeData()
+                mime.setText(self.name)
+                mime.setData("application/x-dgs-zone", _build_drag_payload(self.zone_id, self.name, self.index))
+                drag.setMimeData(mime)
+                drag.exec(Qt.MoveAction)
+        super().mouseMoveEvent(event)
+
+
+class ChipWidget(QFrame):
+    remove_clicked = Signal()
+
+    def __init__(self, text: str, accent: str, text_color: str = "#1E293B", zone_id: Optional[str] = None, index: Optional[int] = None):
         super().__init__()
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: white;
+                border: 1px solid {accent}80;
+                border-radius: 10px;
+            }}
+        """)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 2, 4, 2)
+        layout.setSpacing(4)
+
+        if zone_id:
+            layout.addWidget(DragHandleLabel(zone_id, text, index))
+
+        label = QLabel(text)
+        label.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {text_color}; background: transparent;")
+        label.setToolTip(text)
+        layout.addWidget(label, 1)
+
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(16, 16)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #94A3B8;
+                border: none;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #FEE2E2;
+                color: #EF4444;
+                border-radius: 8px;
+            }
+        """)
+        remove_btn.clicked.connect(self.remove_clicked.emit)
+        layout.addWidget(remove_btn)
+
+
+class ValueChipWidget(QFrame):
+    remove_clicked = Signal()
+
+    def __init__(self, value_col: ValueColumn, index: int, on_agg_changed, on_formula_changed):
+        super().__init__()
+        accent = value_col.color
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: white;
+                border: 1px solid {accent}40;
+                border-radius: 10px;
+            }}
+            QFrame:hover {{
+                border-color: {accent}80;
+                background: {accent}08;
+            }}
+        """)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(6)
+
+        layout.addWidget(DragHandleLabel("value", value_col.name, index))
+
+        name_label = QLabel(f"● {value_col.name}")
+        name_label.setStyleSheet("font-weight: 600; font-size: 11px; color: #1E293B; background: transparent;")
+        name_label.setToolTip(value_col.name)
+        layout.addWidget(name_label)
+
+        agg_combo = QComboBox()
+        agg_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {accent}15;
+                border: 1px solid {accent}30;
+                border-radius: 5px;
+                padding: 3px 6px;
+                color: {accent};
+                font-weight: 600;
+                font-size: 10px;
+                min-width: 70px;
+            }}
+            QComboBox:hover {{
+                border-color: {accent};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 16px;
+            }}
+        """)
+        for agg in AggregationType:
+            agg_combo.addItem(agg.value.upper(), agg)
+        agg_combo.setCurrentText(value_col.aggregation.value.upper())
+        agg_combo.currentIndexChanged.connect(
+            lambda idx, combo=agg_combo: on_agg_changed(index, combo.currentData())
+        )
+        layout.addWidget(agg_combo)
+
+        formula_edit = QLineEdit()
+        formula_edit.setPlaceholderText("f(y) = ...")
+        formula_edit.setText(value_col.formula or "")
+        formula_edit.setStyleSheet(f"""
+            QLineEdit {{
+                background: #F9FAFB;
+                border: 1px solid {accent}30;
+                border-radius: 4px;
+                padding: 3px 6px;
+                font-size: 10px;
+                color: #E6E9EF;
+                min-width: 80px;
+            }}
+            QLineEdit:focus {{
+                border-color: {accent};
+                background: white;
+            }}
+        """)
+        formula_edit.setToolTip(
+            "Y값에 적용할 수식을 입력하세요.\n"
+            "예시: y*2, y+100, LOG(y), SQRT(y), ABS(y)"
+        )
+        formula_edit.editingFinished.connect(
+            lambda edit=formula_edit: on_formula_changed(index, edit.text())
+        )
+        layout.addWidget(formula_edit, 1)
+
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(16, 16)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #94A3B8;
+                border: none;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #FEE2E2;
+                color: #EF4444;
+                border-radius: 8px;
+            }
+        """)
+        remove_btn.clicked.connect(self.remove_clicked.emit)
+        layout.addWidget(remove_btn)
+
+
+class ChipListWidget(QListWidget):
+    """Chip/tag style list with drag/drop between zones."""
+
+    item_dropped = Signal(str, dict)
+    order_changed = Signal(list)
+
+    def __init__(self, zone_id: str, accept_drop: bool = True, single_item: bool = False, allow_reorder: bool = False):
+        super().__init__()
+        self.zone_id = zone_id
         self.single_item = single_item
+        self.allow_reorder = allow_reorder
         self.setDragEnabled(True)
         self.setAcceptDrops(accept_drop)
         self.setDropIndicatorShown(True)
         self.setDragDropMode(QAbstractItemView.DragDrop if accept_drop else QAbstractItemView.DragOnly)
-        self.setDefaultDropAction(Qt.MoveAction)
+        self.setDefaultDropAction(Qt.MoveAction if allow_reorder else Qt.CopyAction)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText():
+        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
-    
+
+    def startDrag(self, supportedActions):
+        item = self.currentItem()
+        if not item:
+            return
+        name = item.data(Qt.UserRole) or item.text()
+        payload = _build_drag_payload(self.zone_id, name, index=self.row(item))
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setText(name)
+        mime.setData("application/x-dgs-zone", payload)
+        drag.setMimeData(mime)
+        drag.exec(Qt.MoveAction)
+
     def dropEvent(self, event: QDropEvent):
-        if event.mimeData().hasText():
-            column_name = event.mimeData().text()
-            
-            # Single item mode: replace existing
-            if self.single_item and self.count() > 0:
-                old_name = self.item(0).text()
-                self.clear()
-                self.item_removed.emit(old_name)
-            
-            self.item_dropped.emit(column_name)
-            event.acceptProposedAction()
-        else:
+        payload = _parse_drag_payload(event.mimeData())
+        name = payload.get("name")
+        if not name:
             super().dropEvent(event)
-            self.order_changed.emit([self.item(i).text() for i in range(self.count())])
-    
-    def add_column(self, name: str):
-        # 중복 체크
-        for i in range(self.count()):
-            if self.item(i).text() == name:
-                return
-        
-        item = QListWidgetItem(name)
-        item.setFlags(item.flags() | Qt.ItemIsDragEnabled)
+            return
+
+        if payload.get("zone") == self.zone_id:
+            if self.allow_reorder:
+                super().dropEvent(event)
+                self.order_changed.emit([self.item(i).data(Qt.UserRole) or self.item(i).text() for i in range(self.count())])
+            event.acceptProposedAction()
+            return
+
+        self.item_dropped.emit(name, payload)
+        event.acceptProposedAction()
+
+    def add_chip(self, name: str, widget: QWidget):
+        item = QListWidgetItem()
+        item.setData(Qt.UserRole, name)
+        item.setSizeHint(widget.sizeHint())
         self.addItem(item)
-    
-    def remove_selected(self):
-        current = self.currentItem()
-        if current:
-            name = current.text()
-            self.takeItem(self.row(current))
-            self.item_removed.emit(name)
+        self.setItemWidget(item, widget)
+
+    def clear_chips(self):
+        self.clear()
 
 
 # ==================== X-Axis Zone ====================
@@ -254,8 +479,8 @@ class XAxisZone(QFrame):
         """)
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
-        
-        # Current X column display
+
+        # Chip drop area
         self.x_column_frame = QFrame()
         self.x_column_frame.setStyleSheet("""
             QFrame {
@@ -266,20 +491,32 @@ class XAxisZone(QFrame):
             }
         """)
         x_layout = QVBoxLayout(self.x_column_frame)
-        x_layout.setContentsMargins(10, 10, 10, 10)
-        
-        self.x_label = QLabel("(Index)")
-        self.x_label.setAlignment(Qt.AlignCenter)
-        self.x_label.setStyleSheet("""
+        x_layout.setContentsMargins(6, 6, 6, 6)
+        x_layout.setSpacing(4)
+
+        self.placeholder_label = QLabel("(Index)")
+        self.placeholder_label.setAlignment(Qt.AlignCenter)
+        self.placeholder_label.setStyleSheet("""
             color: #94A3B8;
             font-size: 12px;
             font-style: italic;
             background: transparent;
         """)
-        x_layout.addWidget(self.x_label)
-        
+        x_layout.addWidget(self.placeholder_label)
+
+        self.list_widget = ChipListWidget(zone_id="x", accept_drop=True, single_item=True)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background: transparent;
+                border: none;
+                outline: none;
+            }
+        """)
+        self.list_widget.item_dropped.connect(self._on_chip_dropped)
+        x_layout.addWidget(self.list_widget)
+
         layout.addWidget(self.x_column_frame)
-        
+
         # Clear button
         clear_btn = QPushButton("✕ Use Index")
         clear_btn.setStyleSheet("""
@@ -299,13 +536,17 @@ class XAxisZone(QFrame):
         """)
         clear_btn.clicked.connect(self._clear_x_column)
         layout.addWidget(clear_btn)
-        
+
         layout.addStretch()
     
     def _connect_signals(self):
         # Listen for x_column changes from state
         self.state.chart_settings_changed.connect(self._sync_from_state)
     
+    def _on_chip_dropped(self, column_name: str, payload: Dict[str, Any]):
+        self._set_x_column(column_name)
+        _remove_from_source(self.state, payload, "x")
+
     def _set_x_column(self, column_name: str):
         """Set X column"""
         self.state.set_x_column(column_name)
@@ -318,15 +559,13 @@ class XAxisZone(QFrame):
     
     def _update_display(self, column_name: Optional[str]):
         """Update the display"""
+        self.list_widget.clear_chips()
         if column_name:
-            self.x_label.setText(f"📊 {column_name}")
-            self.x_label.setStyleSheet("""
-                color: #047857;
-                font-size: 12px;
-                font-weight: 600;
-                font-style: normal;
-                background: transparent;
-            """)
+            chip = ChipWidget(column_name, accent="#10B981", text_color="#047857", zone_id="x")
+            chip.remove_clicked.connect(self._clear_x_column)
+            self.list_widget.add_chip(column_name, chip)
+            self.placeholder_label.hide()
+            self.list_widget.show()
             self.x_column_frame.setStyleSheet("""
                 QFrame {
                     background: #ECFDF5;
@@ -336,13 +575,9 @@ class XAxisZone(QFrame):
                 }
             """)
         else:
-            self.x_label.setText("(Index)")
-            self.x_label.setStyleSheet("""
-                color: #94A3B8;
-                font-size: 12px;
-                font-style: italic;
-                background: transparent;
-            """)
+            self.placeholder_label.setText("(Index)")
+            self.placeholder_label.show()
+            self.list_widget.hide()
             self.x_column_frame.setStyleSheet("""
                 QFrame {
                     background: white;
@@ -357,7 +592,7 @@ class XAxisZone(QFrame):
         self._update_display(self.state.x_column)
     
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText():
+        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
             self.x_column_frame.setStyleSheet("""
                 QFrame {
@@ -372,9 +607,9 @@ class XAxisZone(QFrame):
         self._update_display(self.state.x_column)
     
     def dropEvent(self, event: QDropEvent):
-        if event.mimeData().hasText():
-            column_name = event.mimeData().text()
-            self._set_x_column(column_name)
+        payload = _parse_drag_payload(event.mimeData())
+        if payload.get("name"):
+            self._on_chip_dropped(payload["name"], payload)
             event.acceptProposedAction()
 
 
@@ -441,40 +676,20 @@ class GroupZone(QFrame):
         layout.addWidget(help_label)
         
         # List widget
-        self.list_widget = DraggableListWidget(accept_drop=True)
-        self.list_widget.setMaximumHeight(120)
+        self.list_widget = ChipListWidget(zone_id="group", accept_drop=True, allow_reorder=True)
+        self.list_widget.setMaximumHeight(130)
         self.list_widget.setStyleSheet("""
             QListWidget {
                 background: transparent;
                 border: none;
                 outline: none;
             }
-            QListWidget::item {
-                background: white;
-                border: 1px solid #E2E8F0;
-                border-radius: 6px;
-                padding: 8px 10px;
-                margin: 2px 0;
-                color: #334155;
-                font-weight: 500;
-                font-size: 11px;
-            }
-            QListWidget::item:hover {
-                border-color: #59B8E3;
-                background: #F8FAFC;
-            }
-            QListWidget::item:selected {
-                background: #EEF2FF;
-                border-color: #59B8E3;
-                color: #4338CA;
-            }
         """)
         self.list_widget.item_dropped.connect(self._on_column_dropped)
-        self.list_widget.item_removed.connect(self._on_column_removed)
         self.list_widget.order_changed.connect(self._on_order_changed)
         layout.addWidget(self.list_widget, 1)
-        
-        # Remove button
+
+        # Clear button
         remove_btn = QPushButton("✕ Clear")
         remove_btn.setStyleSheet("""
             QPushButton {
@@ -491,34 +706,34 @@ class GroupZone(QFrame):
                 border-color: #EF4444;
             }
         """)
-        remove_btn.clicked.connect(self.list_widget.remove_selected)
+        remove_btn.clicked.connect(self.state.clear_group_zone)
         layout.addWidget(remove_btn)
     
     def _connect_signals(self):
         self.state.group_zone_changed.connect(self._sync_from_state)
     
-    def _on_column_dropped(self, column_name: str):
+    def _on_column_dropped(self, column_name: str, payload: Dict[str, Any]):
         self.state.add_group_column(column_name)
-    
-    def _on_column_removed(self, column_name: str):
-        self.state.remove_group_column(column_name)
+        _remove_from_source(self.state, payload, "group")
     
     def _on_order_changed(self, new_order: List[str]):
         self.state.reorder_group_columns(new_order)
     
     def _sync_from_state(self):
-        self.list_widget.clear()
-        for group_col in self.state.group_columns:
-            self.list_widget.add_column(group_col.name)
+        self.list_widget.clear_chips()
+        for idx, group_col in enumerate(self.state.group_columns):
+            chip = ChipWidget(group_col.name, accent="#CBD5F5", text_color="#1E293B", zone_id="group", index=idx)
+            chip.remove_clicked.connect(lambda checked=False, name=group_col.name: self.state.remove_group_column(name))
+            self.list_widget.add_chip(group_col.name, chip)
     
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText():
+        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
     
     def dropEvent(self, event: QDropEvent):
-        if event.mimeData().hasText():
-            column_name = event.mimeData().text()
-            self._on_column_dropped(column_name)
+        payload = _parse_drag_payload(event.mimeData())
+        if payload.get("name"):
+            self._on_column_dropped(payload["name"], payload)
             event.acceptProposedAction()
 
 
@@ -584,149 +799,31 @@ class ValueZone(QFrame):
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
         
-        # Scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        
-        self.value_container = QWidget()
-        self.value_container.setStyleSheet("background: transparent;")
-        self.value_layout = QVBoxLayout(self.value_container)
-        self.value_layout.setContentsMargins(0, 4, 0, 4)
-        self.value_layout.setSpacing(6)
-        self.value_layout.addStretch()
-        
-        scroll.setWidget(self.value_container)
-        layout.addWidget(scroll, 1)
+        # Chip list
+        self.list_widget = ChipListWidget(zone_id="value", accept_drop=True)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background: transparent;
+                border: none;
+                outline: none;
+            }
+        """)
+        self.list_widget.item_dropped.connect(self._on_column_dropped)
+        layout.addWidget(self.list_widget, 1)
     
     def _connect_signals(self):
         self.state.value_zone_changed.connect(self._sync_from_state)
     
-    def _add_value_card(self, value_col: ValueColumn, index: int):
-        """Add value card"""
-        card = QFrame()
-        card.setObjectName("ValueCard")
-        card.setStyleSheet(f"""
-            #ValueCard {{
-                background: white;
-                border: 1px solid {value_col.color}40;
-                border-left: 3px solid {value_col.color};
-                border-radius: 8px;
-            }}
-            #ValueCard:hover {{
-                background: {value_col.color}08;
-                border-color: {value_col.color}60;
-            }}
-        """)
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(10, 8, 10, 8)
-        card_layout.setSpacing(6)
-
-        # Header: name + remove
-        header_row = QHBoxLayout()
-        header_row.setSpacing(4)
-
-        name_label = QLabel(f"● {value_col.name[:12]}{'...' if len(value_col.name) > 12 else ''}")
-        name_label.setStyleSheet(f"font-weight: 600; font-size: 11px; color: #1E293B; background: transparent;")
-        name_label.setToolTip(value_col.name)
-        header_row.addWidget(name_label, 1)
-
-        remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(20, 20)
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #94A3B8;
-                border: none;
-                border-radius: 10px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #FEE2E2;
-                color: #EF4444;
-            }
-        """)
-        remove_btn.clicked.connect(lambda checked=False, i=index: self._remove_value(i))
-        header_row.addWidget(remove_btn)
-
-        card_layout.addLayout(header_row)
-
-        # Aggregation selector
-        agg_combo = QComboBox()
-        agg_combo.setStyleSheet(f"""
-            QComboBox {{
-                background: {value_col.color}15;
-                border: 1px solid {value_col.color}30;
-                border-radius: 5px;
-                padding: 4px 8px;
-                color: {value_col.color};
-                font-weight: 500;
-                font-size: 10px;
-            }}
-            QComboBox:hover {{
-                border-color: {value_col.color};
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 18px;
-            }}
-        """)
-        for agg in AggregationType:
-            agg_combo.addItem(agg.value.upper(), agg)
-        agg_combo.setCurrentText(value_col.aggregation.value.upper())
-        agg_combo.currentIndexChanged.connect(
-            lambda idx, i=index, combo=agg_combo: self._on_agg_changed(i, combo.currentData())
+    def _add_value_chip(self, value_col: ValueColumn, index: int):
+        """Add value chip"""
+        chip = ValueChipWidget(
+            value_col,
+            index,
+            on_agg_changed=self._on_agg_changed,
+            on_formula_changed=self._on_formula_changed
         )
-        card_layout.addWidget(agg_combo)
-
-        # Formula input field
-        formula_layout = QHBoxLayout()
-        formula_layout.setSpacing(4)
-
-        formula_label = QLabel("f(y):")
-        formula_label.setStyleSheet("font-size: 10px; color: #C2C8D1; background: transparent;")
-        formula_label.setToolTip("Y값에 적용할 수식 (예: y*2, y+100, LOG(y))")
-        formula_layout.addWidget(formula_label)
-
-        formula_edit = QLineEdit()
-        formula_edit.setPlaceholderText("y*2, LOG(y)...")
-        formula_edit.setText(value_col.formula or "")
-        formula_edit.setStyleSheet(f"""
-            QLineEdit {{
-                background: #F9FAFB;
-                border: 1px solid {value_col.color}30;
-                border-radius: 4px;
-                padding: 3px 6px;
-                font-size: 10px;
-                color: #E6E9EF;
-            }}
-            QLineEdit:focus {{
-                border-color: {value_col.color};
-                background: white;
-            }}
-        """)
-        formula_edit.setToolTip(
-            "Y값에 적용할 수식을 입력하세요.\n"
-            "예시:\n"
-            "  y*2      - 2배\n"
-            "  y+100    - 100 더하기\n"
-            "  y/1000   - 1000으로 나누기\n"
-            "  LOG(y)   - 로그 변환\n"
-            "  SQRT(y)  - 제곱근\n"
-            "  ABS(y)   - 절댓값\n"
-            "  y^2      - 제곱"
-        )
-        formula_edit.editingFinished.connect(
-            lambda i=index, edit=formula_edit: self._on_formula_changed(i, edit.text())
-        )
-        formula_layout.addWidget(formula_edit, 1)
-
-        card_layout.addLayout(formula_layout)
-
-        self.value_layout.insertWidget(self.value_layout.count() - 1, card)
+        chip.remove_clicked.connect(lambda checked=False, i=index: self._remove_value(i))
+        self.list_widget.add_chip(value_col.name, chip)
     
     def _on_agg_changed(self, index: int, agg: AggregationType):
         self.state.update_value_column(index, aggregation=agg)
@@ -737,24 +834,24 @@ class ValueZone(QFrame):
 
     def _remove_value(self, index: int):
         self.state.remove_value_column(index)
+
+    def _on_column_dropped(self, column_name: str, payload: Dict[str, Any]):
+        self.state.add_value_column(column_name)
+        _remove_from_source(self.state, payload, "value")
     
     def _sync_from_state(self):
-        while self.value_layout.count() > 1:
-            item = self.value_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
+        self.list_widget.clear_chips()
         for i, value_col in enumerate(self.state.value_columns):
-            self._add_value_card(value_col, i)
+            self._add_value_chip(value_col, i)
     
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText():
+        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
     
     def dropEvent(self, event: QDropEvent):
-        if event.mimeData().hasText():
-            column_name = event.mimeData().text()
-            self.state.add_value_column(column_name)
+        payload = _parse_drag_payload(event.mimeData())
+        if payload.get("name"):
+            self._on_column_dropped(payload["name"], payload)
             event.acceptProposedAction()
 
 
@@ -821,36 +918,16 @@ class HoverZone(QFrame):
         layout.addWidget(help_label)
 
         # List widget for hover columns
-        self.list_widget = DraggableListWidget(accept_drop=True)
-        self.list_widget.setMaximumHeight(100)
+        self.list_widget = ChipListWidget(zone_id="hover", accept_drop=True)
+        self.list_widget.setMaximumHeight(120)
         self.list_widget.setStyleSheet("""
             QListWidget {
                 background: transparent;
                 border: none;
                 outline: none;
             }
-            QListWidget::item {
-                background: white;
-                border: 1px solid #FACC15;
-                border-radius: 6px;
-                padding: 6px 8px;
-                margin: 2px 0;
-                color: #713F12;
-                font-weight: 500;
-                font-size: 11px;
-            }
-            QListWidget::item:hover {
-                border-color: #EAB308;
-                background: #FEFCE8;
-            }
-            QListWidget::item:selected {
-                background: #FEF08A;
-                border-color: #EAB308;
-                color: #713F12;
-            }
         """)
         self.list_widget.item_dropped.connect(self._on_column_dropped)
-        self.list_widget.item_removed.connect(self._on_column_removed)
         layout.addWidget(self.list_widget, 1)
 
         # Clear button
@@ -876,28 +953,28 @@ class HoverZone(QFrame):
     def _connect_signals(self):
         self.state.hover_zone_changed.connect(self._sync_from_state)
 
-    def _on_column_dropped(self, column_name: str):
+    def _on_column_dropped(self, column_name: str, payload: Dict[str, Any]):
         self.state.add_hover_column(column_name)
-
-    def _on_column_removed(self, column_name: str):
-        self.state.remove_hover_column(column_name)
+        _remove_from_source(self.state, payload, "hover")
 
     def _clear_all(self):
         self.state.clear_hover_columns()
 
     def _sync_from_state(self):
-        self.list_widget.clear()
-        for col in self.state.hover_columns:
-            self.list_widget.add_column(col)
+        self.list_widget.clear_chips()
+        for idx, col in enumerate(self.state.hover_columns):
+            chip = ChipWidget(col, accent="#FACC15", text_color="#713F12", zone_id="hover", index=idx)
+            chip.remove_clicked.connect(lambda checked=False, name=col: self.state.remove_hover_column(name))
+            self.list_widget.add_chip(col, chip)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText():
+        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent):
-        if event.mimeData().hasText():
-            column_name = event.mimeData().text()
-            self._on_column_dropped(column_name)
+        payload = _parse_drag_payload(event.mimeData())
+        if payload.get("name"):
+            self._on_column_dropped(payload["name"], payload)
             event.acceptProposedAction()
 
 
