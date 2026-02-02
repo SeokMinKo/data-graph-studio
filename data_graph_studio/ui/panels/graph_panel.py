@@ -2458,8 +2458,11 @@ class MainGraph(pg.PlotWidget):
         if legend_settings:
             self._update_legend_settings(legend_settings)
 
-        # Auto-range to fit all data
-        self.autoRange()
+        # Auto-range to fit all data with margin
+        try:
+            self.getViewBox().autoRange(padding=0.05)
+        except Exception:
+            self.autoRange()
 
     def _update_legend_settings(self, settings: Dict):
         """Update legend based on settings"""
@@ -2481,7 +2484,10 @@ class MainGraph(pg.PlotWidget):
             self.legend.hide()
 
     def reset_view(self):
-        self.autoRange()
+        try:
+            self.getViewBox().autoRange(padding=0.05)
+        except Exception:
+            self.autoRange()
         self.setLogMode(x=False, y=False)
     
     def _on_mouse_clicked(self, event):
