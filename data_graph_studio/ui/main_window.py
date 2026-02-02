@@ -737,6 +737,10 @@ class MainWindow(QMainWindow):
 
         # 최상위 수평 스플리터 (사이드바 | 메인 영역)
         self.root_splitter = QSplitter(Qt.Horizontal)
+        self.root_splitter.setHandleWidth(1)
+        self.root_splitter.setStyleSheet("""
+            QSplitter::handle { background: #3E4A59; }
+        """)
 
         # 좌측 사이드바 - 탭 구조 (Projects + Datasets)
         self._sidebar_tabs = QTabWidget()
@@ -776,6 +780,10 @@ class MainWindow(QMainWindow):
 
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
+        self.main_splitter.setHandleWidth(1)
+        self.main_splitter.setStyleSheet("""
+            QSplitter::handle { background: #3E4A59; }
+        """)
 
         # Summary panel (internal use only, not displayed)
         self.summary_panel = SummaryPanel(self.state)
