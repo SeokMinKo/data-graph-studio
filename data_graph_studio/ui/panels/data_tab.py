@@ -62,10 +62,9 @@ def _make_separator() -> QFrame:
 
 def _make_section_header(
     title: str,
-    on_all: object = None,
     on_none: object = None,
 ) -> QHBoxLayout:
-    """Return an HBoxLayout with *title* label and [All] / [None] buttons."""
+    """Return an HBoxLayout with *title* label and [None] button."""
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(4)
@@ -74,14 +73,6 @@ def _make_section_header(
     label.setObjectName("sectionHeader")
     row.addWidget(label)
     row.addStretch()
-
-    if on_all is not None:
-        btn_all = QPushButton("All")
-        btn_all.setObjectName("smallButton")
-        btn_all.setFixedHeight(20)
-        btn_all.setMaximumWidth(36)
-        btn_all.clicked.connect(on_all)
-        row.addWidget(btn_all)
 
     if on_none is not None:
         btn_none = QPushButton("None")
@@ -287,7 +278,11 @@ class DataTab(QWidget):
         self._main_layout.addWidget(x_header)
 
         self._x_combo = QComboBox()
+        self._x_combo.setEditable(True)
+        self._x_combo.setInsertPolicy(QComboBox.NoInsert)
         self._x_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        if self._x_combo.lineEdit():
+            self._x_combo.lineEdit().setPlaceholderText("🔍 Search column...")
         self._x_combo.currentIndexChanged.connect(self._on_x_combo_changed)
         self._main_layout.addWidget(self._x_combo)
 
@@ -297,10 +292,16 @@ class DataTab(QWidget):
         self._main_layout.addLayout(
             _make_section_header(
                 "Y-Axis (Values)",
-                on_all=self._select_all_y,
                 on_none=self._select_none_y,
             )
         )
+
+        self._y_search = QLineEdit()
+        self._y_search.setPlaceholderText("🔍 Search columns...")
+        self._y_search.setFixedHeight(22)
+        self._y_search.setClearButtonEnabled(True)
+        self._y_search.textChanged.connect(self._filter_y_items)
+        self._main_layout.addWidget(self._y_search)
 
         self._y_scroll = QScrollArea()
         self._y_scroll.setWidgetResizable(True)
@@ -322,10 +323,16 @@ class DataTab(QWidget):
         self._main_layout.addLayout(
             _make_section_header(
                 "Group By",
-                on_all=self._select_all_group,
                 on_none=self._select_none_group,
             )
         )
+
+        self._group_search = QLineEdit()
+        self._group_search.setPlaceholderText("🔍 Search columns...")
+        self._group_search.setFixedHeight(22)
+        self._group_search.setClearButtonEnabled(True)
+        self._group_search.textChanged.connect(self._filter_group_items)
+        self._main_layout.addWidget(self._group_search)
 
         self._group_scroll = QScrollArea()
         self._group_scroll.setWidgetResizable(True)
@@ -347,10 +354,16 @@ class DataTab(QWidget):
         self._main_layout.addLayout(
             _make_section_header(
                 "Hover Columns",
-                on_all=self._select_all_hover,
                 on_none=self._select_none_hover,
             )
         )
+
+        self._hover_search = QLineEdit()
+        self._hover_search.setPlaceholderText("🔍 Search columns...")
+        self._hover_search.setFixedHeight(22)
+        self._hover_search.setClearButtonEnabled(True)
+        self._hover_search.textChanged.connect(self._filter_hover_items)
+        self._main_layout.addWidget(self._hover_search)
 
         self._hover_scroll = QScrollArea()
         self._hover_scroll.setWidgetResizable(True)
@@ -773,25 +786,6 @@ class DataTab(QWidget):
     # ======================================================================
 
     @Slot()
-    def _select_all_y(self) -> None:
-        self._syncing = True
-        self.setUpdatesEnabled(False)
-        try:
-            self._state.begin_batch_update()
-            for col, item in self._y_items.items():
-                if not item.is_checked():
-                    item.block_signals(True)
-                    item.set_checked(True)
-                    item.block_signals(False)
-                    item.detail_widget.setVisible(True)
-                    if not any(vc.name == col for vc in self._state.value_columns):
-                        self._state.add_value_column(col)
-            self._state.end_batch_update()
-        finally:
-            self.setUpdatesEnabled(True)
-            self._syncing = False
-
-    @Slot()
     def _select_none_y(self) -> None:
         self._syncing = True
         self.setUpdatesEnabled(False)
@@ -809,25 +803,6 @@ class DataTab(QWidget):
             self.setUpdatesEnabled(True)
             self._syncing = False
 
-    @Slot()
-    def _select_all_group(self) -> None:
-        self._syncing = True
-        self.setUpdatesEnabled(False)
-        try:
-            self._state.begin_batch_update()
-            for col, cb in self._group_checks.items():
-                if not cb.isChecked():
-                    cb.blockSignals(True)
-                    cb.setChecked(True)
-                    cb.blockSignals(False)
-                    if not any(gc.name == col for gc in self._state.group_columns):
-                        self._state.add_group_column(col)
-            self._state.end_batch_update()
-        finally:
-            self.setUpdatesEnabled(True)
-            self._syncing = False
-
-    @Slot()
     def _select_none_group(self) -> None:
         self._syncing = True
         self.setUpdatesEnabled(False)
@@ -841,25 +816,6 @@ class DataTab(QWidget):
             self.setUpdatesEnabled(True)
             self._syncing = False
 
-    @Slot()
-    def _select_all_hover(self) -> None:
-        self._syncing = True
-        self.setUpdatesEnabled(False)
-        try:
-            self._state.begin_batch_update()
-            for col, cb in self._hover_checks.items():
-                if not cb.isChecked():
-                    cb.blockSignals(True)
-                    cb.setChecked(True)
-                    cb.blockSignals(False)
-                    if col not in self._state.hover_columns:
-                        self._state.add_hover_column(col)
-            self._state.end_batch_update()
-        finally:
-            self.setUpdatesEnabled(True)
-            self._syncing = False
-
-    @Slot()
     def _select_none_hover(self) -> None:
         self._syncing = True
         self.setUpdatesEnabled(False)
@@ -872,3 +828,28 @@ class DataTab(QWidget):
         finally:
             self.setUpdatesEnabled(True)
             self._syncing = False
+
+    # ==================================================================
+    # Column search / filter
+    # ==================================================================
+
+    @Slot(str)
+    def _filter_y_items(self, text: str) -> None:
+        """Y-Axis 체크박스 목록 필터링"""
+        query = text.strip().lower()
+        for col, item in self._y_items.items():
+            item.setVisible(query == "" or query in col.lower())
+
+    @Slot(str)
+    def _filter_group_items(self, text: str) -> None:
+        """Group By 체크박스 목록 필터링"""
+        query = text.strip().lower()
+        for col, cb in self._group_checks.items():
+            cb.setVisible(query == "" or query in col.lower())
+
+    @Slot(str)
+    def _filter_hover_items(self, text: str) -> None:
+        """Hover 체크박스 목록 필터링"""
+        query = text.strip().lower()
+        for col, cb in self._hover_checks.items():
+            cb.setVisible(query == "" or query in col.lower())
