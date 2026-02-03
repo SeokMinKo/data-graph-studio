@@ -61,26 +61,14 @@ class FloatingGraphWindow(QDialog):
 
         # 헤더 바
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background: linear-gradient(180deg, #2B3440 0%, #1F2937 100%);
-                border-bottom: 1px solid #3E4A59;
-            }
-        """)
+        header.setObjectName("floatingHeader")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(12, 8, 12, 8)
         header_layout.setSpacing(12)
 
         # 설정 이름
         title_label = QLabel(f"{self._setting.icon} {self._setting.name}")
-        title_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                color: #E6E9EF;
-                background: transparent;
-            }
-        """)
+        title_label.setObjectName("floatingTitle")
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
@@ -89,34 +77,28 @@ class FloatingGraphWindow(QDialog):
         self._sync_cb = QCheckBox("🔗 Sync Selection")
         self._sync_cb.setChecked(True)
         self._sync_cb.setToolTip("Synchronize selection with main window")
-        self._sync_cb.setStyleSheet("""
-            QCheckBox {
-                color: #C2C8D1;
-                font-size: 12px;
-                background: transparent;
-            }
-        """)
+        self._sync_cb.setObjectName("syncCheckbox")
         self._sync_cb.stateChanged.connect(self._on_sync_changed)
         header_layout.addWidget(self._sync_cb)
 
         # 구분선
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet("background: #D1D5DB;")
+        sep.setObjectName("headerSeparator")
         header_layout.addWidget(sep)
 
         # 액션 버튼들
         copy_btn = QToolButton()
         copy_btn.setText("📋")
         copy_btn.setToolTip("Copy to clipboard")
-        copy_btn.setStyleSheet(self._btn_style())
+        copy_btn.setObjectName("headerButton")
         copy_btn.clicked.connect(self._on_copy)
         header_layout.addWidget(copy_btn)
 
         export_btn = QToolButton()
         export_btn.setText("💾")
         export_btn.setToolTip("Export as image")
-        export_btn.setStyleSheet(self._btn_style())
+        export_btn.setObjectName("headerButton")
         export_btn.clicked.connect(self._on_export)
         header_layout.addWidget(export_btn)
 
@@ -124,7 +106,7 @@ class FloatingGraphWindow(QDialog):
 
         # 그래프 영역
         self._graph_container = QWidget()
-        self._graph_container.setStyleSheet("background: #1E293B;")
+        self._graph_container.setObjectName("floatingGraphContainer")
         self._graph_layout = QVBoxLayout(self._graph_container)
         self._graph_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -135,40 +117,17 @@ class FloatingGraphWindow(QDialog):
 
         # 푸터 상태바
         footer = QFrame()
-        footer.setStyleSheet("""
-            QFrame {
-                background: #2B3440;
-                border-top: 1px solid #3E4A59;
-            }
-        """)
+        footer.setObjectName("floatingFooter")
         footer_layout = QHBoxLayout(footer)
         footer_layout.setContentsMargins(12, 6, 12, 6)
 
         self._status_label = QLabel("Ready")
-        self._status_label.setStyleSheet("color: #C2C8D1; font-size: 11px; background: transparent;")
+        self._status_label.setObjectName("floatingStatus")
         footer_layout.addWidget(self._status_label)
 
         footer_layout.addStretch()
 
         layout.addWidget(footer)
-
-    def _btn_style(self) -> str:
-        return """
-            QToolButton {
-                background: transparent;
-                border: 1px solid #D1D5DB;
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-size: 14px;
-            }
-            QToolButton:hover {
-                background: #3A4654;
-                border-color: #9CA3AF;
-            }
-            QToolButton:pressed {
-                background: #3E4A59;
-            }
-        """
 
     def _create_graph_panel(self):
         """그래프 패널 생성"""
@@ -185,7 +144,7 @@ class FloatingGraphWindow(QDialog):
             # 그래프 패널 생성 실패 시 플레이스홀더 표시
             placeholder = QLabel(f"Failed to create graph: {e}")
             placeholder.setAlignment(Qt.AlignCenter)
-            placeholder.setStyleSheet("color: #EF4444;")
+            placeholder.setObjectName("errorLabel")
             self._graph_layout.addWidget(placeholder)
 
     def _connect_signals(self):

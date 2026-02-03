@@ -29,18 +29,7 @@ class SettingItem(QFrame):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setStyleSheet("""
-            SettingItem {
-                background: white;
-                border: 1px solid #3E4A59;
-                border-radius: 8px;
-                padding: 8px;
-            }
-            SettingItem:hover {
-                background: #F9FAFB;
-                border-color: #D1D5DB;
-            }
-        """)
+        self.setObjectName("settingItem")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)
@@ -48,7 +37,7 @@ class SettingItem(QFrame):
 
         # 아이콘
         icon_label = QLabel(self._setting.icon)
-        icon_label.setStyleSheet("font-size: 24px; background: transparent;")
+        icon_label.setObjectName("settingIcon")
         layout.addWidget(icon_label)
 
         # 정보 영역
@@ -58,18 +47,12 @@ class SettingItem(QFrame):
         # 이름 + 기본 설정 표시
         name_layout = QHBoxLayout()
         name_label = QLabel(self._setting.name)
-        name_label.setStyleSheet("font-weight: 600; color: #E6E9EF; font-size: 13px; background: transparent;")
+        name_label.setObjectName("settingName")
         name_layout.addWidget(name_label)
 
         if self._is_default:
             default_badge = QLabel("⭐ Default")
-            default_badge.setStyleSheet("""
-                background: #FEF3C7;
-                color: #92400E;
-                font-size: 10px;
-                padding: 2px 6px;
-                border-radius: 4px;
-            """)
+            default_badge.setObjectName("defaultBadge")
             name_layout.addWidget(default_badge)
 
         name_layout.addStretch()
@@ -83,7 +66,7 @@ class SettingItem(QFrame):
             details += f", {len(self._setting.value_columns)} value(s)"
 
         detail_label = QLabel(details)
-        detail_label.setStyleSheet("color: #C2C8D1; font-size: 11px; background: transparent;")
+        detail_label.setObjectName("settingDetail")
         info_layout.addWidget(detail_label)
 
         layout.addLayout(info_layout, 1)
@@ -96,40 +79,25 @@ class SettingItem(QFrame):
             default_btn = QToolButton()
             default_btn.setText("⭐")
             default_btn.setToolTip("Set as default")
-            default_btn.setStyleSheet(self._btn_style())
+            default_btn.setObjectName("actionButton")
             default_btn.clicked.connect(self.set_default_requested.emit)
             action_layout.addWidget(default_btn)
 
         edit_btn = QToolButton()
         edit_btn.setText("✏️")
         edit_btn.setToolTip("Edit")
-        edit_btn.setStyleSheet(self._btn_style())
+        edit_btn.setObjectName("actionButton")
         edit_btn.clicked.connect(self.edit_requested.emit)
         action_layout.addWidget(edit_btn)
 
         delete_btn = QToolButton()
         delete_btn.setText("🗑️")
         delete_btn.setToolTip("Delete")
-        delete_btn.setStyleSheet(self._btn_style())
+        delete_btn.setObjectName("actionButton")
         delete_btn.clicked.connect(self.delete_requested.emit)
         action_layout.addWidget(delete_btn)
 
         layout.addLayout(action_layout)
-
-    def _btn_style(self) -> str:
-        return """
-            QToolButton {
-                background: transparent;
-                border: 1px solid transparent;
-                border-radius: 4px;
-                padding: 4px;
-                font-size: 14px;
-            }
-            QToolButton:hover {
-                background: #3A4654;
-                border-color: #D1D5DB;
-            }
-        """
 
     @property
     def setting(self) -> GraphSetting:
@@ -164,41 +132,19 @@ class ProfileManagerDialog(QDialog):
 
         # 왼쪽: 프로파일 목록
         left_panel = QFrame()
-        left_panel.setStyleSheet("""
-            QFrame {
-                background: #F9FAFB;
-                border-right: 1px solid #3E4A59;
-            }
-        """)
+        left_panel.setObjectName("dialogPanelLeft")
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.setSpacing(8)
 
         # 프로파일 헤더
         profile_header = QLabel("📁 Profiles")
-        profile_header.setStyleSheet("font-weight: 600; font-size: 14px; color: #E6E9EF; background: transparent;")
+        profile_header.setObjectName("sectionHeader")
         left_layout.addWidget(profile_header)
 
         # 프로파일 리스트
         self._profile_list = QListWidget()
-        self._profile_list.setStyleSheet("""
-            QListWidget {
-                background: white;
-                border: 1px solid #3E4A59;
-                border-radius: 8px;
-            }
-            QListWidget::item {
-                padding: 8px 12px;
-                border-bottom: 1px solid #3A4654;
-            }
-            QListWidget::item:selected {
-                background: #EEF2FF;
-                color: #59B8E3;
-            }
-            QListWidget::item:hover {
-                background: #F9FAFB;
-            }
-        """)
+        # Style handled by global theme stylesheet
         self._profile_list.currentItemChanged.connect(self._on_profile_selected)
         left_layout.addWidget(self._profile_list, 1)
 
@@ -207,12 +153,12 @@ class ProfileManagerDialog(QDialog):
         profile_actions.setSpacing(8)
 
         new_profile_btn = QPushButton("➕ New")
-        new_profile_btn.setStyleSheet(self._action_btn_style())
+        new_profile_btn.setObjectName("smallButton")
         new_profile_btn.clicked.connect(self._on_new_profile)
         profile_actions.addWidget(new_profile_btn)
 
         import_btn = QPushButton("📂 Import")
-        import_btn.setStyleSheet(self._action_btn_style())
+        import_btn.setObjectName("smallButton")
         import_btn.clicked.connect(self._on_import_profile)
         profile_actions.addWidget(import_btn)
 
@@ -223,25 +169,20 @@ class ProfileManagerDialog(QDialog):
 
         # 오른쪽: 설정 목록
         right_panel = QFrame()
-        right_panel.setStyleSheet("background: white;")
+        right_panel.setObjectName("dialogPanel")
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(12, 12, 12, 12)
         right_layout.setSpacing(8)
 
         # 설정 헤더
         self._settings_header = QLabel("Select a profile")
-        self._settings_header.setStyleSheet("font-weight: 600; font-size: 14px; color: #E6E9EF; background: transparent;")
+        self._settings_header.setObjectName("sectionHeader")
         right_layout.addWidget(self._settings_header)
 
         # 설정 스크롤 영역
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background: transparent;
-                border: none;
-            }
-        """)
+        # Style handled by global theme stylesheet
 
         self._settings_container = QWidget()
         self._settings_layout = QVBoxLayout(self._settings_container)
@@ -257,24 +198,12 @@ class ProfileManagerDialog(QDialog):
         settings_actions.setSpacing(8)
 
         export_btn = QPushButton("💾 Export Profile")
-        export_btn.setStyleSheet(self._action_btn_style())
+        export_btn.setObjectName("smallButton")
         export_btn.clicked.connect(self._on_export_profile)
         settings_actions.addWidget(export_btn)
 
         delete_profile_btn = QPushButton("🗑️ Delete Profile")
-        delete_profile_btn.setStyleSheet("""
-            QPushButton {
-                background: #FEE2E2;
-                border: 1px solid #FECACA;
-                border-radius: 6px;
-                padding: 6px 12px;
-                color: #991B1B;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: #FECACA;
-            }
-        """)
+        delete_profile_btn.setObjectName("deleteButton")
         delete_profile_btn.clicked.connect(self._on_delete_profile)
         settings_actions.addWidget(delete_profile_btn)
 
@@ -290,51 +219,18 @@ class ProfileManagerDialog(QDialog):
 
         # 하단 버튼
         footer = QFrame()
-        footer.setStyleSheet("""
-            QFrame {
-                background: #F9FAFB;
-                border-top: 1px solid #3E4A59;
-            }
-        """)
+        footer.setObjectName("dialogFooter")
         footer_layout = QHBoxLayout(footer)
         footer_layout.setContentsMargins(16, 12, 16, 12)
 
         footer_layout.addStretch()
 
         close_btn = QPushButton("Close")
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background: #3A4654;
-                border: 1px solid #D1D5DB;
-                border-radius: 6px;
-                padding: 8px 24px;
-                color: #E6E9EF;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background: #3E4A59;
-            }
-        """)
+        close_btn.setObjectName("secondaryButton")
         close_btn.clicked.connect(self.close)
         footer_layout.addWidget(close_btn)
 
         layout.addWidget(footer)
-
-    def _action_btn_style(self) -> str:
-        return """
-            QPushButton {
-                background: #3A4654;
-                border: 1px solid #3E4A59;
-                border-radius: 6px;
-                padding: 6px 12px;
-                color: #E6E9EF;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: #3E4A59;
-                border-color: #D1D5DB;
-            }
-        """
 
     def _refresh_profiles(self):
         """프로파일 목록 새로고침"""

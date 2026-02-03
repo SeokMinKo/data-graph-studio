@@ -37,13 +37,7 @@ class FloatWindow(QDialog):
 
         # Header bar
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
-                border-bottom: 1px solid #E2E8F0;
-                padding: 4px 8px;
-            }
-        """)
+        header.setObjectName("floatWindowHeader")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(8, 4, 8, 4)
         header_layout.setSpacing(8)
@@ -51,23 +45,7 @@ class FloatWindow(QDialog):
         # Dock button
         dock_btn = QPushButton("⬅ Dock")
         dock_btn.setToolTip("Return to main window")
-        dock_btn.setStyleSheet("""
-            QPushButton {
-                background: #59B8E3;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 12px;
-                font-size: 11px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background: #4338CA;
-            }
-            QPushButton:pressed {
-                background: #3730A3;
-            }
-        """)
+        dock_btn.setObjectName("dockButton")
         dock_btn.clicked.connect(self._on_dock_clicked)
         header_layout.addWidget(dock_btn)
 
@@ -103,12 +81,6 @@ class FloatableSectionHeader(QFrame):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setStyleSheet("""
-            QFrame {
-                background: transparent;
-            }
-        """)
-
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 4)
         layout.setSpacing(6)
@@ -116,15 +88,7 @@ class FloatableSectionHeader(QFrame):
         # Title with icon
         title_text = f"{self._icon} {self._title}" if self._icon else self._title
         self.title_label = QLabel(title_text)
-        self.title_label.setStyleSheet("""
-            QLabel {
-                font-weight: 600;
-                font-size: 13px;
-                color: #E6E9EF;
-                padding: 4px;
-                background: transparent;
-            }
-        """)
+        self.title_label.setObjectName("sectionTitle")
         layout.addWidget(self.title_label)
 
         layout.addStretch()
@@ -134,23 +98,7 @@ class FloatableSectionHeader(QFrame):
         self.float_btn.setToolTip("Float as separate window")
         self.float_btn.setFixedSize(24, 24)
         self.float_btn.setCursor(Qt.PointingHandCursor)
-        self.float_btn.setStyleSheet("""
-            QPushButton {
-                background: #3A4654;
-                border: 1px solid #3E4A59;
-                border-radius: 4px;
-                font-size: 12px;
-                color: #C2C8D1;
-            }
-            QPushButton:hover {
-                background: #3E4A59;
-                border-color: #D1D5DB;
-                color: #E6E9EF;
-            }
-            QPushButton:pressed {
-                background: #D1D5DB;
-            }
-        """)
+        self.float_btn.setObjectName("floatButton")
         self.float_btn.clicked.connect(self.float_clicked.emit)
         layout.addWidget(self.float_btn)
 
@@ -216,26 +164,13 @@ class FloatableSection(QFrame):
     def _create_placeholder(self) -> QWidget:
         """Float 상태일 때 보여줄 플레이스홀더"""
         placeholder = QFrame()
-        placeholder.setStyleSheet("""
-            QFrame {
-                background: #F9FAFB;
-                border: 2px dashed #D1D5DB;
-                border-radius: 8px;
-            }
-        """)
+        placeholder.setObjectName("floatPlaceholder")
 
         layout = QVBoxLayout(placeholder)
         layout.setAlignment(Qt.AlignCenter)
 
         label = QLabel(f"📤 {self._title}\n\nFloating as separate window\n\nClick 'Dock' to return")
-        label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 12px;
-                text-align: center;
-                background: transparent;
-            }
-        """)
+        label.setObjectName("floatPlaceholderLabel")
         label.setAlignment(Qt.AlignCenter)
         layout.addWidget(label)
 
@@ -333,20 +268,4 @@ class FloatButton(QPushButton):
         self.setToolTip("Float as separate window")
         self.setFixedSize(22, 22)
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: 1px solid #3E4A59;
-                border-radius: 4px;
-                font-size: 11px;
-                color: #9CA3AF;
-            }
-            QPushButton:hover {
-                background: #3A4654;
-                border-color: #D1D5DB;
-                color: #C2C8D1;
-            }
-            QPushButton:pressed {
-                background: #3E4A59;
-            }
-        """)
+        self.setObjectName("floatButton")

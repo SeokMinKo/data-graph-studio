@@ -314,7 +314,7 @@ class DragHandleLabel(QLabel):
         self.name = name
         self.index = index
         self._start_pos = None
-        self.setStyleSheet("font-size: 10px; color: #94A3B8; background: transparent;")
+        self.setObjectName("dragHandle")
         self.setCursor(Qt.OpenHandCursor)
 
     def mousePressEvent(self, event):
@@ -343,13 +343,7 @@ class ChipWidget(QFrame):
         self._name = text
         self._index = index
         self._start_pos = None
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: white;
-                border: 1px solid {accent}80;
-                border-radius: 10px;
-            }}
-        """)
+        self.setObjectName("chipWidget")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 2, 4, 2)
         layout.setSpacing(4)
@@ -358,26 +352,13 @@ class ChipWidget(QFrame):
             layout.addWidget(DragHandleLabel(zone_id, text, index))
 
         label = QLabel(text)
-        label.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {text_color}; background: transparent;")
+        label.setObjectName("chipLabel")
         label.setToolTip(text)
         layout.addWidget(label, 1)
 
         remove_btn = QPushButton("×")
         remove_btn.setFixedSize(16, 16)
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #94A3B8;
-                border: none;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #FEE2E2;
-                color: #EF4444;
-                border-radius: 8px;
-            }
-        """)
+        remove_btn.setObjectName("chipRemoveBtn")
         remove_btn.clicked.connect(self.remove_clicked.emit)
         layout.addWidget(remove_btn)
 
@@ -408,17 +389,7 @@ class ValueChipWidget(QFrame):
         self._index = index
         self._start_pos = None
         accent = value_col.color
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: white;
-                border: 1px solid {accent}40;
-                border-radius: 10px;
-            }}
-            QFrame:hover {{
-                border-color: {accent}80;
-                background: {accent}08;
-            }}
-        """)
+        self.setObjectName("valueChipWidget")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(6)
@@ -426,30 +397,11 @@ class ValueChipWidget(QFrame):
         layout.addWidget(DragHandleLabel("value", value_col.name, index))
 
         name_label = QLabel(f"● {value_col.name}")
-        name_label.setStyleSheet("font-weight: 600; font-size: 11px; color: #E6E9EF; background: transparent;")
+        name_label.setObjectName("valueNameLabel")
         name_label.setToolTip(value_col.name)
         layout.addWidget(name_label)
 
         agg_combo = QComboBox()
-        agg_combo.setStyleSheet(f"""
-            QComboBox {{
-                background: {accent}15;
-                border: 1px solid {accent}30;
-                border-radius: 5px;
-                padding: 3px 6px;
-                color: {accent};
-                font-weight: 600;
-                font-size: 10px;
-                min-width: 70px;
-            }}
-            QComboBox:hover {{
-                border-color: {accent};
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 16px;
-            }}
-        """)
         for agg in AggregationType:
             agg_combo.addItem(agg.value.upper(), agg)
         agg_combo.setCurrentText(value_col.aggregation.value.upper())
@@ -461,21 +413,6 @@ class ValueChipWidget(QFrame):
         formula_edit = QLineEdit()
         formula_edit.setPlaceholderText("f(y) = ...")
         formula_edit.setText(value_col.formula or "")
-        formula_edit.setStyleSheet(f"""
-            QLineEdit {{
-                background: #F9FAFB;
-                border: 1px solid {accent}30;
-                border-radius: 4px;
-                padding: 3px 6px;
-                font-size: 10px;
-                color: #E6E9EF;
-                min-width: 80px;
-            }}
-            QLineEdit:focus {{
-                border-color: {accent};
-                background: white;
-            }}
-        """)
         formula_edit.setToolTip(
             "Y값에 적용할 수식을 입력하세요.\n"
             "예시: y*2, y+100, LOG(y), SQRT(y), ABS(y)"
@@ -487,20 +424,7 @@ class ValueChipWidget(QFrame):
 
         remove_btn = QPushButton("×")
         remove_btn.setFixedSize(16, 16)
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #94A3B8;
-                border: none;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #FEE2E2;
-                color: #EF4444;
-                border-radius: 8px;
-            }
-        """)
+        remove_btn.setObjectName("chipRemoveBtn")
         remove_btn.clicked.connect(self.remove_clicked.emit)
         layout.addWidget(remove_btn)
 
@@ -777,13 +701,7 @@ class GroupZone(QFrame):
         # List widget
         self.list_widget = ChipListWidget(zone_id="group", accept_drop=True, allow_reorder=True)
         self.list_widget.setMaximumHeight(130)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background: transparent;
-                border: none;
-                outline: none;
-            }
-        """)
+        self.list_widget.setObjectName("chipList")
         self.list_widget.item_dropped.connect(self._on_column_dropped)
         self.list_widget.order_changed.connect(self._on_order_changed)
         layout.addWidget(self.list_widget, 1)
@@ -1118,29 +1036,6 @@ class DataTableView(QTableView):
             return
         
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background: #1E293B;
-                color: #E2E8F0;
-                border: 1px solid #3E4A59;
-                border-radius: 8px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 8px 16px;
-                border-radius: 4px;
-                color: #E2E8F0;
-            }
-            QMenu::item:selected {
-                background: #334155;
-                color: #E2E8F0;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #3E4A59;
-                margin: 4px 8px;
-            }
-        """)
         
         sort_asc = QAction("↑ Sort Ascending", self)
         sort_asc.triggered.connect(lambda: self.sortByColumn(logical_index, Qt.AscendingOrder))
@@ -1196,29 +1091,6 @@ class DataTableView(QTableView):
             return
         
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background: #1E293B;
-                color: #E2E8F0;
-                border: 1px solid #3E4A59;
-                border-radius: 8px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 8px 16px;
-                border-radius: 4px;
-                color: #E2E8F0;
-            }
-            QMenu::item:selected {
-                background: #334155;
-                color: #E2E8F0;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #3E4A59;
-                margin: 4px 8px;
-            }
-        """)
         
         # Filter options
         if cell_value:
@@ -1255,18 +1127,7 @@ class FilterBar(QFrame):
         self.state = state
         self.setObjectName("FilterBar")
         self._setup_ui()
-        self._apply_style()
         self._connect_signals()
-    
-    def _apply_style(self):
-        self.setStyleSheet("""
-            #FilterBar {
-                background: #FEF3C7;
-                border: none;
-                border-radius: 6px;
-                padding: 2px;
-            }
-        """)
     
     def _setup_ui(self):
         self.main_layout = QHBoxLayout(self)
@@ -1275,7 +1136,7 @@ class FilterBar(QFrame):
         
         # Filter icon
         icon = QLabel("🔍")
-        icon.setStyleSheet("font-size: 14px; background: transparent;")
+        icon.setObjectName("cardIcon")
         self.main_layout.addWidget(icon)
         
         # Filters container
@@ -1287,20 +1148,7 @@ class FilterBar(QFrame):
         
         # Clear all button
         clear_btn = QPushButton("Clear All")
-        clear_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #B45309;
-                border: 1px solid #F59E0B;
-                border-radius: 4px;
-                padding: 4px 10px;
-                font-size: 10px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background: #FDE68A;
-            }
-        """)
+        clear_btn.setObjectName("warningButton")
         clear_btn.clicked.connect(self.clear_all.emit)
         self.main_layout.addWidget(clear_btn)
         
@@ -1332,14 +1180,7 @@ class FilterBar(QFrame):
     def _create_filter_chip(self, filter_cond, index: int) -> QWidget:
         """Create a filter chip widget"""
         chip = QFrame()
-        chip.setStyleSheet(f"""
-            QFrame {{
-                background: {'#FEF3C7' if filter_cond.enabled else '#3A4654'};
-                border: 1px solid {'#F59E0B' if filter_cond.enabled else '#D1D5DB'};
-                border-radius: 12px;
-                padding: 2px;
-            }}
-        """)
+        chip.setObjectName("chipWidget")
         
         layout = QHBoxLayout(chip)
         layout.setContentsMargins(8, 2, 4, 2)
@@ -1358,28 +1199,13 @@ class FilterBar(QFrame):
             val_str = val_str[:15] + "..."
         
         label = QLabel(f"{filter_cond.column} {op} \"{val_str}\"")
-        label.setStyleSheet(f"""
-            font-size: 11px;
-            color: {'#92400E' if filter_cond.enabled else '#C2C8D1'};
-            background: transparent;
-        """)
+        label.setObjectName("chipLabel")
         layout.addWidget(label)
         
         # Remove button
         remove_btn = QPushButton("×")
         remove_btn.setFixedSize(18, 18)
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #9CA3AF;
-                border: none;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                color: #EF4444;
-            }
-        """)
+        remove_btn.setObjectName("chipRemoveBtn")
         remove_btn.clicked.connect(lambda: self.filter_removed.emit(index))
         layout.addWidget(remove_btn)
         
@@ -1399,17 +1225,6 @@ class HiddenColumnsBar(QFrame):
         self.state = state
         self.setObjectName("HiddenColumnsBar")
         self._setup_ui()
-        self._apply_style()
-    
-    def _apply_style(self):
-        self.setStyleSheet("""
-            #HiddenColumnsBar {
-                background: #1E3A5F;
-                border: none;
-                border-radius: 6px;
-                padding: 2px;
-            }
-        """)
     
     def _setup_ui(self):
         self.main_layout = QHBoxLayout(self)
@@ -1418,11 +1233,11 @@ class HiddenColumnsBar(QFrame):
         
         # Icon
         icon = QLabel("👁")
-        icon.setStyleSheet("font-size: 14px; background: transparent;")
+        icon.setObjectName("cardIcon")
         self.main_layout.addWidget(icon)
         
         label = QLabel("Hidden columns:")
-        label.setStyleSheet("font-size: 11px; color: #A5B4FC; background: transparent;")
+        label.setObjectName("profileLabel")
         self.main_layout.addWidget(label)
         
         # Columns container
@@ -1434,20 +1249,7 @@ class HiddenColumnsBar(QFrame):
         
         # Show all button
         show_all_btn = QPushButton("Show All")
-        show_all_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #4338CA;
-                border: 1px solid #59B8E3;
-                border-radius: 4px;
-                padding: 4px 10px;
-                font-size: 10px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background: #E0E7FF;
-            }
-        """)
+        show_all_btn.setObjectName("smallButton")
         show_all_btn.clicked.connect(self.show_all.emit)
         self.main_layout.addWidget(show_all_btn)
         
@@ -1473,40 +1275,25 @@ class HiddenColumnsBar(QFrame):
         
         if len(hidden_columns) > 5:
             more = QLabel(f"+{len(hidden_columns) - 5} more")
-            more.setStyleSheet("font-size: 10px; color: #C2C8D1; background: transparent;")
+            more.setObjectName("hintLabel")
             self.columns_layout.addWidget(more)
     
     def _create_column_chip(self, column: str) -> QWidget:
         chip = QFrame()
-        chip.setStyleSheet("""
-            QFrame {
-                background: #2D3748;
-                border: 1px solid #4A5568;
-                border-radius: 10px;
-            }
-        """)
+        chip.setObjectName("chipWidget")
         
         layout = QHBoxLayout(chip)
         layout.setContentsMargins(6, 2, 4, 2)
         layout.setSpacing(2)
         
         label = QLabel(column[:12] + "..." if len(column) > 12 else column)
-        label.setStyleSheet("font-size: 10px; color: #A5B4FC; background: transparent;")
+        label.setObjectName("chipLabel")
         label.setToolTip(column)
         layout.addWidget(label)
         
         show_btn = QPushButton("👁")
         show_btn.setFixedSize(16, 16)
-        show_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: none;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background: #E0E7FF;
-            }
-        """)
+        show_btn.setObjectName("chipRemoveBtn")
         show_btn.setToolTip(f"Show {column}")
         show_btn.clicked.connect(lambda: self.show_column.emit(column))
         layout.addWidget(show_btn)
@@ -1549,7 +1336,7 @@ class TablePanel(QWidget):
 
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setHandleWidth(1)
-        self.splitter.setStyleSheet("QSplitter::handle { background: #3E4A59; }")
+        self.splitter.setObjectName("themeSplitter")
 
         # Left panel: X Zone + Group Zone
         self.left_panel = QWidget()
@@ -1592,47 +1379,19 @@ class TablePanel(QWidget):
         
         # Search input container (for clear button overlay)
         search_container = QFrame()
-        search_container.setStyleSheet("QFrame { background: transparent; border: none; }")
         search_container_layout = QHBoxLayout(search_container)
         search_container_layout.setContentsMargins(0, 0, 0, 0)
         search_container_layout.setSpacing(0)
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 Search data...")
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                background: white;
-                border: 1px solid #E2E8F0;
-                border-radius: 8px;
-                padding: 8px 14px;
-                padding-right: 30px;
-                font-size: 12px;
-                color: #334155;
-            }
-            QLineEdit:focus {
-                border: 2px solid #59B8E3;
-                background: #FAFAFF;
-            }
-        """)
+        self.search_input.setObjectName("searchInput")
         search_container_layout.addWidget(self.search_input)
         
         # Clear button (inside search input)
         self.search_clear_btn = QPushButton("×")
         self.search_clear_btn.setFixedSize(20, 20)
-        self.search_clear_btn.setStyleSheet("""
-            QPushButton {
-                background: #E2E8F0;
-                color: #64748B;
-                border: none;
-                border-radius: 10px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #CBD5E1;
-                color: #334155;
-            }
-        """)
+        self.search_clear_btn.setObjectName("searchClearBtn")
         self.search_clear_btn.setToolTip("Clear search")
         self.search_clear_btn.clicked.connect(self._clear_search)
         self.search_clear_btn.hide()  # Hidden when empty
@@ -1642,14 +1401,7 @@ class TablePanel(QWidget):
         
         # Search result count label
         self.search_result_label = QLabel("")
-        self.search_result_label.setStyleSheet("""
-            QLabel {
-                color: #64748B;
-                font-size: 11px;
-                padding: 0 8px;
-                background: transparent;
-            }
-        """)
+        self.search_result_label.setObjectName("searchResultLabel")
         self.search_result_label.setMinimumWidth(80)
         search_layout.addWidget(self.search_result_label)
         
@@ -1670,34 +1422,12 @@ class TablePanel(QWidget):
         toolbar.setSpacing(6)
         
         expand_btn = QPushButton("▼ Expand")
-        expand_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #59B8E3;
-                border: 1px solid #59B8E3;
-                border-radius: 5px;
-                padding: 5px 10px;
-                font-size: 10px;
-                font-weight: 500;
-            }
-            QPushButton:hover { background: #3A4654; }
-        """)
+        expand_btn.setObjectName("smallButton")
         expand_btn.clicked.connect(self._expand_all)
         toolbar.addWidget(expand_btn)
         
         collapse_btn = QPushButton("▶ Collapse")
-        collapse_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #59B8E3;
-                border: 1px solid #59B8E3;
-                border-radius: 5px;
-                padding: 5px 10px;
-                font-size: 10px;
-                font-weight: 500;
-            }
-            QPushButton:hover { background: #3A4654; }
-        """)
+        collapse_btn.setObjectName("smallButton")
         collapse_btn.clicked.connect(self._collapse_all)
         toolbar.addWidget(collapse_btn)
         
@@ -1705,28 +1435,7 @@ class TablePanel(QWidget):
         self.limit_marking_btn = QPushButton("🔗 Limit to Marking")
         self.limit_marking_btn.setCheckable(True)
         self.limit_marking_btn.setChecked(False)
-        self.limit_marking_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #C2C8D1;
-                border: 1px solid #D1D5DB;
-                border-radius: 5px;
-                padding: 5px 10px;
-                font-size: 10px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background: #FEF3C7;
-                border-color: #F59E0B;
-                color: #92400E;
-            }
-            QPushButton:checked {
-                background: #FEF3C7;
-                border-color: #F59E0B;
-                color: #92400E;
-                font-weight: 600;
-            }
-        """)
+        self.limit_marking_btn.setObjectName("limitMarkingBtn")
         self.limit_marking_btn.setToolTip("Show only marked/selected rows in table")
         self.limit_marking_btn.clicked.connect(self._on_limit_marking_toggled)
         toolbar.addWidget(self.limit_marking_btn)
@@ -1767,7 +1476,7 @@ class TablePanel(QWidget):
         window_layout.addWidget(self.window_next_btn)
 
         self.window_label = QLabel("")
-        self.window_label.setStyleSheet("color: #C2C8D1; font-size: 10px;")
+        self.window_label.setObjectName("windowLabel")
         window_layout.addWidget(self.window_label)
 
         self._window_debounce = QTimer(self)
@@ -1781,7 +1490,7 @@ class TablePanel(QWidget):
         toolbar.addStretch()
         
         self.group_info_label = QLabel("")
-        self.group_info_label.setStyleSheet("color: #C2C8D1; font-size: 10px;")
+        self.group_info_label.setObjectName("groupInfoLabel")
         toolbar.addWidget(self.group_info_label)
         
         table_layout.addLayout(toolbar)
@@ -1898,13 +1607,9 @@ class TablePanel(QWidget):
             
             group_names = " → ".join(group_cols)
             self.group_info_label.setText(f"Grouped: {group_names}")
-            self.group_info_label.setStyleSheet("""
-                color: #59B8E3;
-                font-size: 10px;
-                background: #1E3A5F;
-                padding: 3px 8px;
-                border-radius: 8px;
-            """)
+            self.group_info_label.setProperty("state", "grouped")
+            self.group_info_label.style().unpolish(self.group_info_label)
+            self.group_info_label.style().polish(self.group_info_label)
         else:
             self.table_model.set_dataframe(df)
             self.table_view.setModel(self.table_model)
@@ -1913,15 +1618,14 @@ class TablePanel(QWidget):
             displayed_rows = self.table_model.rowCount()
             if actual_rows > displayed_rows:
                 self.group_info_label.setText(f"Showing {displayed_rows:,} of {actual_rows:,} rows")
-                self.group_info_label.setStyleSheet("""
-                    color: #F59E0B;
-                    font-size: 10px;
-                    background: #3D2F0A;
-                    padding: 3px 8px;
-                    border-radius: 8px;
-                """)
+                self.group_info_label.setProperty("state", "warning")
+                self.group_info_label.style().unpolish(self.group_info_label)
+                self.group_info_label.style().polish(self.group_info_label)
             else:
                 self.group_info_label.setText("")
+                self.group_info_label.setProperty("state", "")
+                self.group_info_label.style().unpolish(self.group_info_label)
+                self.group_info_label.style().polish(self.group_info_label)
 
         header = self.table_view.horizontalHeader()
         for i in range(min(10, self.table_view.model().columnCount())):
@@ -1966,24 +1670,12 @@ class TablePanel(QWidget):
             count = len(result)
             if count == 0:
                 self.search_result_label.setText("No results")
-                self.search_result_label.setStyleSheet("""
-                    QLabel {
-                        color: #EF4444;
-                        font-size: 11px;
-                        padding: 0 8px;
-                        background: transparent;
-                    }
-                """)
+                self.search_result_label.setProperty("state", "notfound")
             else:
                 self.search_result_label.setText(f"{count:,} results")
-                self.search_result_label.setStyleSheet("""
-                    QLabel {
-                        color: #10B981;
-                        font-size: 11px;
-                        padding: 0 8px;
-                        background: transparent;
-                    }
-                """)
+                self.search_result_label.setProperty("state", "found")
+            self.search_result_label.style().unpolish(self.search_result_label)
+            self.search_result_label.style().polish(self.search_result_label)
         
         self._update_table_model(result)
     

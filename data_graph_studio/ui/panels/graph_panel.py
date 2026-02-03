@@ -360,7 +360,7 @@ class GraphOptionsPanel(QFrame):
         max_points_label_layout = QHBoxLayout()
         max_points_label_layout.addWidget(QLabel("Max Points:"))
         self.max_points_label = QLabel("10,000")
-        self.max_points_label.setStyleSheet("font-weight: 600; color: #59B8E3;")
+        self.max_points_label.setObjectName("maxPointsLabel")
         max_points_label_layout.addWidget(self.max_points_label)
         max_points_label_layout.addStretch()
         max_points_layout.addLayout(max_points_label_layout)
@@ -518,7 +518,6 @@ class GraphOptionsPanel(QFrame):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setMinimumHeight(150)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         self.series_container = QWidget()
         self.series_list_layout = QVBoxLayout(self.series_container)
@@ -533,12 +532,12 @@ class GraphOptionsPanel(QFrame):
         btn_layout = QHBoxLayout()
 
         show_all_btn = QPushButton("Show All")
-        show_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        show_all_btn.setObjectName("smallButton")
         show_all_btn.clicked.connect(self._show_all_series)
         btn_layout.addWidget(show_all_btn)
 
         hide_all_btn = QPushButton("Hide All")
-        hide_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        hide_all_btn.setObjectName("smallButton")
         hide_all_btn.clicked.connect(self._hide_all_series)
         btn_layout.addWidget(hide_all_btn)
 
@@ -859,7 +858,6 @@ class LegendSettingsPanel(QFrame):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setMinimumHeight(150)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         
         self.series_container = QWidget()
         self.series_list_layout = QVBoxLayout(self.series_container)
@@ -2612,7 +2610,7 @@ class GraphPanel(QWidget):
 
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setHandleWidth(1)
-        self.splitter.setStyleSheet("QSplitter::handle { background: #3E4A59; }")
+        self.splitter.setObjectName("themeSplitter")
 
         # Options Panel (left) - now includes Legend as a tab
         self.options_panel = GraphOptionsPanel(self.state)

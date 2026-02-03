@@ -214,29 +214,7 @@ class MainWindow(QMainWindow):
     def _setup_menubar(self):
         """메뉴바 설정 - 새 구조"""
         menubar = self.menuBar()
-        menubar.setStyleSheet("""
-            QMenuBar {
-                background: #2B3440;
-                color: #E6E9EF;
-            }
-            QMenuBar::item {
-                background: transparent;
-                padding: 4px 8px;
-            }
-            QMenuBar::item:selected {
-                background: #3A4654;
-                color: #E6E9EF;
-            }
-            QMenu {
-                background: #1E293B;
-                color: #E2E8F0;
-                border: 1px solid #3E4A59;
-            }
-            QMenu::item:selected {
-                background: #334155;
-                color: #E2E8F0;
-            }
-        """)
+        # Style handled by global theme stylesheet
 
         # ============================================================
         # File Menu
@@ -538,38 +516,7 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar("Main Toolbar")
         toolbar.setMovable(False)
         toolbar.setIconSize(QSize(16, 16))
-        toolbar.setStyleSheet("""
-            QToolBar {
-                background: #2B3440;
-                border: none;
-                border-bottom: 1px solid #3E4A59;
-                padding: 4px 8px;
-                spacing: 2px;
-            }
-            QToolBar::separator {
-                width: 1px;
-                background: #3E4A59;
-                margin: 4px 8px;
-            }
-            QToolButton {
-                background: transparent;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 8px;
-                font-size: 12px;
-                color: #E6E9EF;
-            }
-            QToolButton:hover {
-                background: #3A4654;
-            }
-            QToolButton:checked {
-                background: #3A4E63;
-                color: #59B8E3;
-            }
-            QToolButton:pressed {
-                background: #365069;
-            }
-        """)
+        # Style handled by global theme stylesheet
         self.addToolBar(toolbar)
         
         # Open file button with modern style
@@ -615,7 +562,7 @@ class MainWindow(QMainWindow):
 
         # Draw tools label
         draw_label = QLabel("  Draw: ")
-        draw_label.setStyleSheet("color: #C2C8D1; font-size: 12px;")
+        draw_label.setObjectName("toolbarLabel")
         toolbar.addWidget(draw_label)
 
         # Drawing tools
@@ -666,7 +613,7 @@ class MainWindow(QMainWindow):
         
         # Chart type selector
         self._chart_type_label = QLabel("  Chart: ")
-        self._chart_type_label.setStyleSheet("color: #C2C8D1; font-size: 12px;")
+        self._chart_type_label.setObjectName("toolbarLabel")
         toolbar.addWidget(self._chart_type_label)
         
         chart_types = [
@@ -686,25 +633,12 @@ class MainWindow(QMainWindow):
 
         # Preset management
         preset_label = QLabel("  Preset: ")
-        preset_label.setStyleSheet("color: #C2C8D1; font-size: 12px;")
+        preset_label.setObjectName("toolbarLabel")
         toolbar.addWidget(preset_label)
 
         self._preset_combo = QComboBox()
         self._preset_combo.setMinimumWidth(120)
-        self._preset_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #3E4A59;
-                border-radius: 6px;
-                padding: 4px 8px;
-                background: #2D3748;
-                color: #E6E9EF;
-                min-height: 24px;
-            }
-            QComboBox:hover {
-                border-color: #59B8E3;
-            }
-            QComboBox::drop-down {
-                border: none;
+        # Style handled by global theme stylesheet
                 width: 20px;
             }
         """)
@@ -739,19 +673,13 @@ class MainWindow(QMainWindow):
         # 최상위 수평 스플리터 (사이드바 | 메인 영역)
         self.root_splitter = QSplitter(Qt.Horizontal)
         self.root_splitter.setHandleWidth(1)
-        self.root_splitter.setStyleSheet("""
-            QSplitter::handle { background: #3E4A59; }
-        """)
+        self.root_splitter.setObjectName("themeSplitter")
 
         # 좌측 사이드바 - 탭 구조 (Projects + Datasets)
         self._sidebar_tabs = QTabWidget()
         self._sidebar_tabs.setMinimumWidth(100)
         self._sidebar_tabs.setMaximumWidth(250)
-        self._sidebar_tabs.setStyleSheet("""
-            QTabWidget::pane { border: none; background: #111827; }
-            QTabBar::tab { padding: 6px 10px; color: #9CA3AF; background: #1F2937; }
-            QTabBar::tab:selected { color: #E2E8F0; background: #111827; border-bottom: 2px solid #2563EB; }
-        """)
+        # Style handled by global theme stylesheet
         
         # Project Explorer (새로운 트리 뷰)
         self.profile_model = ProfileModel(self.profile_store, self.state)
@@ -782,9 +710,7 @@ class MainWindow(QMainWindow):
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
         self.main_splitter.setHandleWidth(1)
-        self.main_splitter.setStyleSheet("""
-            QSplitter::handle { background: #3E4A59; }
-        """)
+        self.main_splitter.setObjectName("themeSplitter")
 
         # Summary panel (internal use only, not displayed)
         self.summary_panel = SummaryPanel(self.state)
@@ -932,26 +858,12 @@ class MainWindow(QMainWindow):
     def _setup_statusbar(self):
         """Modern status bar setup"""
         self.statusbar = QStatusBar()
-        self.statusbar.setStyleSheet("""
-            QStatusBar {
-                background: #2B3440;
-                border-top: 1px solid #3E4A59;
-                padding: 6px 16px;
-                font-size: 12px;
-            }
-            QStatusBar::item {
-                border: none;
-            }
-            QLabel {
-                color: #E6E9EF;
-                padding: 0 8px;
-            }
-        """)
+        # Style handled by global theme stylesheet
         self.setStatusBar(self.statusbar)
 
         # Status labels with icons
         self._status_data_label = QLabel("📋 No data loaded")
-        self._status_data_label.setStyleSheet("color: #9CA3AF;")
+        self._status_data_label.setObjectName("hintLabel")
 
         self._status_selection_label = QLabel("")
         self._status_memory_label = QLabel("💾 --")
@@ -1311,7 +1223,7 @@ class MainWindow(QMainWindow):
                 emoji = "🟢"
 
             self._status_memory_label.setText(f"{emoji} {proc_str} ({sys_pct:.0f}%)")
-            self._status_memory_label.setStyleSheet(f"color: {color}; font-weight: 500;")
+            # Memory status color is dynamic, keep minimal styling
             self._status_memory_label.setToolTip(
                 f"Process Memory: {proc_str}\n"
                 f"System Memory: {sys_pct:.1f}% used\n"
@@ -1342,17 +1254,11 @@ class MainWindow(QMainWindow):
         # Create placeholders
         for key, title in [("summary", "📊 Overview"), ("graph", "📈 Graph"), ("table", "📋 Table")]:
             placeholder = QFrame()
-            placeholder.setStyleSheet("""
-                QFrame {
-                    background: #F9FAFB;
-                    border: 2px dashed #D1D5DB;
-                    border-radius: 8px;
-                }
-            """)
+            placeholder.setObjectName("floatPlaceholder")
             layout = QVBoxLayout(placeholder)
             layout.setAlignment(Qt.AlignCenter)
             label = QLabel(f"📤 {title}\n\nFloating as separate window\n\nClick 'Dock' to return")
-            label.setStyleSheet("color: #9CA3AF; font-size: 12px; background: transparent;")
+            label.setObjectName("floatPlaceholderLabel")
             label.setAlignment(Qt.AlignCenter)
             layout.addWidget(label)
             placeholder.hide()
@@ -1466,10 +1372,12 @@ class MainWindow(QMainWindow):
         # Update status bar
         if has_data:
             self._status_data_label.setText(f"📋 {self.state.total_rows:,} rows")
-            self._status_data_label.setStyleSheet("color: #10B981; font-weight: 500;")
+            self._status_data_label.setObjectName("successLabel")
         else:
             self._status_data_label.setText("📋 Drag & drop a file to start")
-            self._status_data_label.setStyleSheet("color: #9CA3AF;")
+            self._status_data_label.setObjectName("hintLabel")
+        self._status_data_label.style().unpolish(self._status_data_label)
+        self._status_data_label.style().polish(self._status_data_label)
     
     def _update_selection_status(self):
         """선택 상태 업데이트"""

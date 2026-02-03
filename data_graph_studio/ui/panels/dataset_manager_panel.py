@@ -66,13 +66,13 @@ class DatasetItemWidget(QFrame):
 
         # 이름
         self.name_label = QLabel(self.metadata.name)
-        self.name_label.setStyleSheet("font-weight: bold;")
+        self.name_label.setObjectName("datasetName")
         self.name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         top_layout.addWidget(self.name_label)
 
         # 활성 표시
         self.active_label = QLabel("●")
-        self.active_label.setStyleSheet("color: #2ca02c; font-size: 12px;")
+        self.active_label.setObjectName("datasetActiveLabel")
         self.active_label.setVisible(self.metadata.is_active)
         top_layout.addWidget(self.active_label)
 
@@ -87,7 +87,7 @@ class DatasetItemWidget(QFrame):
         self.remove_btn = QToolButton()
         self.remove_btn.setText("×")
         self.remove_btn.setFixedSize(20, 20)
-        self.remove_btn.setStyleSheet("color: #d62728;")
+        self.remove_btn.setObjectName("datasetRemoveBtn")
         self.remove_btn.clicked.connect(self._on_remove_click)
         top_layout.addWidget(self.remove_btn)
 
@@ -100,19 +100,19 @@ class DatasetItemWidget(QFrame):
         # 행 수
         rows_text = f"{self.dataset_info.row_count:,}" if self.dataset_info else "0"
         self.rows_label = QLabel(f"📊 {rows_text} rows")
-        self.rows_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
+        self.rows_label.setObjectName("datasetStat")
         info_layout.addWidget(self.rows_label)
 
         # 컬럼 수
         cols_text = f"{self.dataset_info.column_count}" if self.dataset_info else "0"
         self.cols_label = QLabel(f"× {cols_text} cols")
-        self.cols_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
+        self.cols_label.setObjectName("datasetStat")
         info_layout.addWidget(self.cols_label)
 
         # 메모리
         memory_mb = self.metadata.memory_bytes / (1024 * 1024)
         self.memory_label = QLabel(f"💾 {memory_mb:.1f} MB")
-        self.memory_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
+        self.memory_label.setObjectName("datasetStat")
         info_layout.addWidget(self.memory_label)
 
         info_layout.addStretch()
@@ -126,26 +126,13 @@ class DatasetItemWidget(QFrame):
 
     def _update_style(self):
         """선택 상태에 따른 스타일 업데이트"""
+        self.setObjectName("datasetItem")
         if self.metadata.is_active:
-            self.setStyleSheet("""
-                DatasetItemWidget {
-                    background-color: #3A4E63;
-                    border: 2px solid #59B8E3;
-                    border-radius: 4px;
-                }
-            """)
+            self.setProperty("active", "true")
         else:
-            self.setStyleSheet("""
-                DatasetItemWidget {
-                    background-color: #2F3946;
-                    border: 1px solid #3E4A59;
-                    border-radius: 4px;
-                }
-                DatasetItemWidget:hover {
-                    background-color: #3A4654;
-                    border-color: #59B8E3;
-                }
-            """)
+            self.setProperty("active", "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def set_active(self, active: bool):
         """활성 상태 설정"""
