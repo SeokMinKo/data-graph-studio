@@ -1207,6 +1207,11 @@ class StatPanel(QFrame):
                 brushes=[pg.mkBrush(c) for c in colors]
             )
             self.pie_widget.addItem(bars)
+            # Set X-axis labels to group names
+            self.pie_widget.showAxis('bottom')
+            ax = self.pie_widget.getAxis('bottom')
+            ticks = [(i, str(lbl)) for i, lbl in enumerate(labels)]
+            ax.setTicks([ticks])
 
     def _update_pie_chart(self):
         """Update the pie chart"""

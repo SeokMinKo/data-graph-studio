@@ -163,6 +163,10 @@ class ExpandedChartDialog(QDialog):
                     pens=[pg.mkPen(c, width=1) for c in colors]
                 )
                 self.plot_widget.addItem(bars)
+                # Set X-axis labels to group names
+                ax = self.plot_widget.getAxis('bottom')
+                ticks = [(i, str(lbl)) for i, lbl in enumerate(labels)]
+                ax.setTicks([ticks])
 
             y0 = 0
             for i, (label, val) in enumerate(zip(labels, values)):
