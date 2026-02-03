@@ -102,10 +102,9 @@ def _is_numeric_dtype(dtype_str: str) -> bool:
 # ---------------------------------------------------------------------------
 
 class _YAxisItemWidget(QWidget):
-    """Single Y-Axis column entry with checkbox, agg combo, formula toggle."""
+    """Single Y-Axis column entry with checkbox and formula toggle."""
 
     checked_changed = Signal(str, bool)       # column_name, checked
-    agg_changed = Signal(str, object)          # column_name, AggregationType
     formula_changed = Signal(str, str)         # column_name, formula_text
 
     def __init__(self, column_name: str, parent: QWidget | None = None):
@@ -117,42 +116,29 @@ class _YAxisItemWidget(QWidget):
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(2, 1, 2, 1)
         layout.setSpacing(2)
 
-        # Row 1 – checkbox
+        # Row 1 – checkbox + formula toggle
+        row1 = QHBoxLayout()
+        row1.setSpacing(4)
+
         self.checkbox = QCheckBox(self.column_name)
         self.checkbox.stateChanged.connect(self._on_check_state)
-        layout.addWidget(self.checkbox)
-
-        # Row 2 – agg combo + formula toggle (hidden by default)
-        self.detail_widget = QWidget()
-        detail_layout = QHBoxLayout(self.detail_widget)
-        detail_layout.setContentsMargins(20, 0, 0, 0)  # indent under checkbox
-        detail_layout.setSpacing(4)
-
-        self.agg_combo = QComboBox()
-        self.agg_combo.setFixedHeight(22)
-        self.agg_combo.setMinimumWidth(60)
-        self.agg_combo.setMaximumWidth(80)
-        for label, agg in _AGG_ITEMS:
-            self.agg_combo.addItem(label, agg)
-        self.agg_combo.currentIndexChanged.connect(self._on_agg_changed)
-        detail_layout.addWidget(self.agg_combo)
+        row1.addWidget(self.checkbox, 1)
 
         self.formula_toggle = QToolButton()
         self.formula_toggle.setText("▶ f(y)")
         self.formula_toggle.setCheckable(True)
         self.formula_toggle.setChecked(False)
-        self.formula_toggle.setFixedHeight(22)
+        self.formula_toggle.setMinimumHeight(20)
         self.formula_toggle.clicked.connect(self._on_formula_toggled)
-        detail_layout.addWidget(self.formula_toggle)
+        self.formula_toggle.setVisible(False)
+        row1.addWidget(self.formula_toggle)
 
-        detail_layout.addStretch()
-        layout.addWidget(self.detail_widget)
-        self.detail_widget.setVisible(False)
+        layout.addLayout(row1)
 
-        # Row 3 – formula input (hidden by default)
+        # Row 2 – formula input (hidden by default)
         self.formula_widget = QWidget()
         formula_layout = QHBoxLayout(self.formula_widget)
         formula_layout.setContentsMargins(20, 0, 0, 0)
@@ -160,27 +146,25 @@ class _YAxisItemWidget(QWidget):
 
         self.formula_edit = QLineEdit()
         self.formula_edit.setPlaceholderText("f(y)=...  e.g. y*2, LOG(y)")
-        self.formula_edit.setFixedHeight(22)
+        self.formula_edit.setMinimumHeight(24)
         self.formula_edit.editingFinished.connect(self._on_formula_finished)
         formula_layout.addWidget(self.formula_edit)
         layout.addWidget(self.formula_widget)
         self.formula_widget.setVisible(False)
 
+        # detail_widget kept as alias for compat (visibility toggling)
+        self.detail_widget = self.formula_toggle
+
     # -- Slots ---------------------------------------------------------------
 
     def _on_check_state(self, state: int) -> None:
         checked = state == Qt.Checked.value if hasattr(Qt.Checked, 'value') else state == int(Qt.Checked)
-        self.detail_widget.setVisible(checked)
+        self.formula_toggle.setVisible(checked)
         if not checked:
             self.formula_widget.setVisible(False)
             self.formula_toggle.setChecked(False)
             self.formula_toggle.setText("▶ f(y)")
         self.checked_changed.emit(self.column_name, checked)
-
-    def _on_agg_changed(self, _index: int) -> None:
-        agg = self.agg_combo.currentData()
-        if agg is not None:
-            self.agg_changed.emit(self.column_name, agg)
 
     def _on_formula_toggled(self, checked: bool) -> None:
         self.formula_widget.setVisible(checked)
@@ -198,10 +182,8 @@ class _YAxisItemWidget(QWidget):
         return self.checkbox.isChecked()
 
     def set_aggregation(self, agg: AggregationType) -> None:
-        for i in range(self.agg_combo.count()):
-            if self.agg_combo.itemData(i) is agg:
-                self.agg_combo.setCurrentIndex(i)
-                return
+        """Kept for compat — aggregation now managed in Group By section."""
+        pass
 
     def set_formula(self, formula: str) -> None:
         self.formula_edit.setText(formula)
@@ -213,7 +195,6 @@ class _YAxisItemWidget(QWidget):
     def block_signals(self, block: bool) -> None:
         """Block / unblock all child signals."""
         self.checkbox.blockSignals(block)
-        self.agg_combo.blockSignals(block)
         self.formula_edit.blockSignals(block)
 
 
@@ -333,6 +314,21 @@ class DataTab(QWidget):
         self._group_search.setClearButtonEnabled(True)
         self._group_search.textChanged.connect(self._filter_group_items)
         self._main_layout.addWidget(self._group_search)
+
+        # Aggregation type for grouped data
+        agg_row = QHBoxLayout()
+        agg_row.setSpacing(4)
+        agg_label = QLabel("Aggregation:")
+        agg_label.setStyleSheet("font-size: 11px;")
+        agg_row.addWidget(agg_label)
+
+        self._agg_combo = QComboBox()
+        self._agg_combo.setMinimumHeight(24)
+        for label, agg in _AGG_ITEMS:
+            self._agg_combo.addItem(label, agg)
+        self._agg_combo.currentIndexChanged.connect(self._on_global_agg_changed)
+        agg_row.addWidget(self._agg_combo, 1)
+        self._main_layout.addLayout(agg_row)
 
         self._group_scroll = QScrollArea()
         self._group_scroll.setWidgetResizable(True)
@@ -724,6 +720,21 @@ class DataTab(QWidget):
                     if vc.name == column_name:
                         self._state.remove_value_column(i)
                         break
+        finally:
+            self._syncing = False
+
+    @Slot(int)
+    def _on_global_agg_changed(self, _index: int) -> None:
+        """Group By 섹션의 전역 Aggregation 변경 → 모든 value column에 적용"""
+        if self._syncing:
+            return
+        agg = self._agg_combo.currentData()
+        if agg is None:
+            return
+        self._syncing = True
+        try:
+            for i, vc in enumerate(self._state.value_columns):
+                self._state.update_value_column(i, aggregation=agg)
         finally:
             self._syncing = False
 
