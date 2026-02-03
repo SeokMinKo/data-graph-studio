@@ -979,6 +979,7 @@ class DataTableView(QTableView):
         self.horizontalHeader().installEventFilter(self)
         self._header_drag_start = None
         self._header_drag_col = None
+        self._header_ctrl_pressed = False
         
         self.selectionModel_connected = False
     
@@ -1012,10 +1013,11 @@ class DataTableView(QTableView):
         if obj is self.horizontalHeader():
             if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
                 self._header_drag_start = event.pos()
+                self._header_ctrl_pressed = bool(event.modifiers() & Qt.ControlModifier)
             elif event.type() == QEvent.MouseMove and (event.buttons() & Qt.LeftButton):
-                if self._header_drag_start is not None and self._header_drag_col:
+                # Ctrl+드래그: 컬럼을 Zone(X-Axis, Y-Axis, Group, Hover)으로 드래그
+                if self._header_ctrl_pressed and self._header_drag_start is not None and self._header_drag_col:
                     distance = (event.pos() - self._header_drag_start).manhattanLength()
-                    # Start drag if moved enough distance - both inside or outside header area
                     if distance >= QApplication.startDragDistance():
                         drag = QDrag(self)
                         mime = QMimeData()
@@ -1025,9 +1027,11 @@ class DataTableView(QTableView):
                         drag.exec(Qt.CopyAction)
                         self._header_drag_start = None
                         self._header_drag_col = None
+                        self._header_ctrl_pressed = False
                         return True
             elif event.type() == QEvent.MouseButtonRelease:
                 self._header_drag_start = None
+                self._header_ctrl_pressed = False
         return super().eventFilter(obj, event)
     
     def _on_selection_changed(self, selected, deselected):
