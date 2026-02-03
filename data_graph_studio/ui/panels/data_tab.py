@@ -105,6 +105,7 @@ class _YAxisItemWidget(QWidget):
     """Single Y-Axis column entry with checkbox and formula toggle."""
 
     checked_changed = Signal(str, bool)       # column_name, checked
+    agg_changed = Signal(str, object)         # column_name, AggregationType
     formula_changed = Signal(str, str)         # column_name, formula_text
 
     def __init__(self, column_name: str, parent: QWidget | None = None):
