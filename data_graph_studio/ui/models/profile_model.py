@@ -36,7 +36,10 @@ class ProfileModel(QAbstractItemModel):
         if not isinstance(node, _ProfileNode) or not node.is_dataset:
             return 0
 
-        return len(self._get_profiles(node.dataset_id))
+        try:
+            return len(self._get_profiles(node.dataset_id))
+        except (AttributeError, TypeError):
+            return 0
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 1
@@ -47,6 +50,11 @@ class ProfileModel(QAbstractItemModel):
 
         node = index.internalPointer()
         if not isinstance(node, _ProfileNode):
+            return None
+
+        try:
+            _ = node.dataset_id  # stale pointer 체크
+        except (AttributeError, TypeError):
             return None
 
         if role == Qt.DisplayRole:

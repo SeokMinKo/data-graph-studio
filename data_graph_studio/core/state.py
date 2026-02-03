@@ -320,6 +320,10 @@ class AppState(QObject):
     def __init__(self):
         super().__init__()
 
+        # Batch update (signal batching)
+        self._batch_depth: int = 0
+        self._batch_pending_signals: List[str] = []
+
         # 데이터 상태
         self._data_loaded: bool = False
         self._total_rows: int = 0
@@ -373,6 +377,26 @@ class AppState(QObject):
         self._active_dataset_id: Optional[str] = None
         self._comparison_settings: ComparisonSettings = ComparisonSettings()
         self._dataset_color_index: int = 0  # 다음 데이터셋에 할당할 색상 인덱스
+
+    # ==================== Batch Update ====================
+
+    def begin_batch_update(self):
+        """시그널 일괄 발행을 위한 배치 시작"""
+        self._batch_depth += 1
+
+    def end_batch_update(self):
+        """배치 종료 시 보류된 시그널 발행"""
+        self._batch_depth = max(0, self._batch_depth - 1)
+        if self._batch_depth == 0:
+            # 보류된 시그널 한 번씩만 발행
+            emitted = set()
+            for sig_name in self._batch_pending_signals:
+                if sig_name not in emitted:
+                    sig = getattr(self, sig_name, None)
+                    if sig is not None:
+                        sig.emit()
+                    emitted.add(sig_name)
+            self._batch_pending_signals.clear()
 
     # ==================== Multi-Dataset Comparison ====================
 
