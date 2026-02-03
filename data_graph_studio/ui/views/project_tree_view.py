@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QPalette
 from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem, QStyle
 
 from ..models.profile_model import ProfileModel
@@ -28,9 +28,9 @@ class _ChartIconDelegate(QStyledItemDelegate):
 
             # 텍스트 색상 설정 (선택 상태에 따라)
             if option.state & QStyle.State_Selected:
-                painter.setPen(option.palette.color(option.palette.HighlightedText))
+                painter.setPen(option.palette.color(QPalette.ColorRole.HighlightedText))
             else:
-                painter.setPen(option.palette.color(option.palette.Text))
+                painter.setPen(option.palette.color(QPalette.ColorRole.Text))
 
             # 아이콘 영역
             icon_rect = option.rect.adjusted(2, 0, 0, 0)
