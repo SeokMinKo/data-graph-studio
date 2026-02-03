@@ -271,6 +271,11 @@ class ComparisonSettings:
     sync_selection: bool = False
     auto_align: bool = True  # 키 컬럼 기준 자동 정렬
 
+    # Profile comparison fields (PRD §6.1)
+    comparison_target: str = "dataset"  # "dataset" | "profile"
+    comparison_profile_ids: List[str] = field(default_factory=list)  # 프로파일 비교 시 대상 ID
+    comparison_dataset_id: str = ""  # 프로파일 비교 시 대상 데이터셋 ID
+
 
 class AppState(QObject):
     """
@@ -547,13 +552,29 @@ class AppState(QObject):
 
     def set_comparison_mode(self, mode: ComparisonMode):
         """비교 모드 설정"""
+        # FR-8: entering dataset comparison clears profile comparison
+        was_profile = self._comparison_settings.comparison_target == "profile"
+        if was_profile:
+            self._comparison_settings.comparison_target = "dataset"
+            self._comparison_settings.comparison_profile_ids.clear()
+            self._comparison_settings.comparison_dataset_id = ""
+
         if self._comparison_settings.mode != mode:
             self._comparison_settings.mode = mode
             self.comparison_mode_changed.emit(mode.value)
             self.comparison_settings_changed.emit()
+        elif was_profile:
+            # Mode didn't change but we cleared profile comparison
+            self.comparison_settings_changed.emit()
 
     def set_comparison_datasets(self, dataset_ids: List[str]):
         """비교 대상 데이터셋 설정"""
+        # FR-8: entering dataset comparison clears profile comparison
+        if self._comparison_settings.comparison_target == "profile":
+            self._comparison_settings.comparison_target = "dataset"
+            self._comparison_settings.comparison_profile_ids.clear()
+            self._comparison_settings.comparison_dataset_id = ""
+
         # 유효한 ID만 필터링
         valid_ids = [did for did in dataset_ids if did in self._dataset_states]
         self._comparison_settings.comparison_datasets = valid_ids
@@ -597,6 +618,59 @@ class AppState(QObject):
             if hasattr(self._comparison_settings, key):
                 setattr(self._comparison_settings, key, value)
         self.comparison_settings_changed.emit()
+
+    # ==================== Profile Comparison (PRD §6.1) ====================
+
+    @property
+    def is_profile_comparison_active(self) -> bool:
+        """프로파일 비교 모드 활성 여부"""
+        return (
+            self._comparison_settings.comparison_target == "profile"
+            and len(self._comparison_settings.comparison_profile_ids) >= 2
+            and self._comparison_settings.mode != ComparisonMode.SINGLE
+        )
+
+    def set_profile_comparison(self, dataset_id: str, profile_ids: List[str]):
+        """
+        프로파일 비교 모드 진입.
+
+        FR-8: 데이터셋 비교가 활성이면 자동 해제.
+        """
+        # FR-8 — clear dataset comparison
+        self._comparison_settings.comparison_datasets.clear()
+
+        # Set profile comparison fields
+        self._comparison_settings.comparison_target = "profile"
+        self._comparison_settings.comparison_dataset_id = dataset_id
+        self._comparison_settings.comparison_profile_ids = list(profile_ids)
+
+        # If currently SINGLE, default to SIDE_BY_SIDE
+        mode_changed = False
+        if self._comparison_settings.mode == ComparisonMode.SINGLE:
+            self._comparison_settings.mode = ComparisonMode.SIDE_BY_SIDE
+            mode_changed = True
+
+        if mode_changed:
+            self.comparison_mode_changed.emit(self._comparison_settings.mode.value)
+        self.comparison_settings_changed.emit()
+
+    def clear_profile_comparison(self):
+        """
+        프로파일 비교 모드 종료 → SINGLE 모드 복귀.
+        """
+        was_active = self.is_profile_comparison_active
+
+        self._comparison_settings.comparison_target = "dataset"
+        self._comparison_settings.comparison_profile_ids.clear()
+        self._comparison_settings.comparison_dataset_id = ""
+
+        mode_changed = self._comparison_settings.mode != ComparisonMode.SINGLE
+        self._comparison_settings.mode = ComparisonMode.SINGLE
+
+        if was_active or mode_changed:
+            if mode_changed:
+                self.comparison_mode_changed.emit(ComparisonMode.SINGLE.value)
+            self.comparison_settings_changed.emit()
 
     # ==================== Dataset Profiles ====================
 

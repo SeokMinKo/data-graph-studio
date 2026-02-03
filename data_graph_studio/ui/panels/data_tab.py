@@ -41,9 +41,9 @@ _AGG_ITEMS: List[tuple[str, AggregationType]] = [
     ("LAST", AggregationType.LAST),
 ]
 
-_YAXIS_MAX_HEIGHT = 200
-_GROUP_MAX_HEIGHT = 120
-_HOVER_MAX_HEIGHT = 120
+_YAXIS_MAX_HEIGHT = 150
+_GROUP_MAX_HEIGHT = 100
+_HOVER_MAX_HEIGHT = 100
 
 
 # ---------------------------------------------------------------------------
@@ -63,8 +63,8 @@ def _make_separator() -> QFrame:
 def _make_section_header(
     title: str,
     on_none: object = None,
-) -> QHBoxLayout:
-    """Return an HBoxLayout with *title* label and [None] button."""
+) -> tuple:
+    """Return (QHBoxLayout, btn_none | None) with *title* label and [None] button."""
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(4)
@@ -74,6 +74,7 @@ def _make_section_header(
     row.addWidget(label)
     row.addStretch()
 
+    btn_none = None
     if on_none is not None:
         btn_none = QPushButton("None")
         btn_none.setObjectName("smallButton")
@@ -82,7 +83,7 @@ def _make_section_header(
         btn_none.clicked.connect(on_none)
         row.addWidget(btn_none)
 
-    return row
+    return row, btn_none
 
 
 def _is_numeric_dtype(dtype_str: str) -> bool:
@@ -250,6 +251,7 @@ class DataTab(QWidget):
         scroll.setFrameShape(QFrame.NoFrame)
 
         container = QWidget()
+        container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         self._main_layout = QVBoxLayout(container)
         self._main_layout.setContentsMargins(6, 6, 6, 6)
         self._main_layout.setSpacing(8)
@@ -271,12 +273,11 @@ class DataTab(QWidget):
         self._main_layout.addWidget(_make_separator())
 
         # --- Y-Axis (Values) ------------------------------------------------
-        self._main_layout.addLayout(
-            _make_section_header(
-                "Y-Axis (Values)",
-                on_none=self._select_none_y,
-            )
+        y_row, self._y_badge = _make_section_header(
+            "Y-Axis (Values)",
+            on_none=self._select_none_y,
         )
+        self._main_layout.addLayout(y_row)
 
         self._y_search = QLineEdit()
         self._y_search.setPlaceholderText("🔍 Search columns...")
@@ -302,12 +303,11 @@ class DataTab(QWidget):
         self._main_layout.addWidget(_make_separator())
 
         # --- Group By -------------------------------------------------------
-        self._main_layout.addLayout(
-            _make_section_header(
-                "Group By",
-                on_none=self._select_none_group,
-            )
+        g_row, self._group_badge = _make_section_header(
+            "Group By",
+            on_none=self._select_none_group,
         )
+        self._main_layout.addLayout(g_row)
 
         self._group_search = QLineEdit()
         self._group_search.setPlaceholderText("🔍 Search columns...")
@@ -367,12 +367,11 @@ class DataTab(QWidget):
         self._main_layout.addWidget(_make_separator())
 
         # --- Hover Columns --------------------------------------------------
-        self._main_layout.addLayout(
-            _make_section_header(
-                "Hover Columns",
-                on_none=self._select_none_hover,
-            )
+        h_row, self._hover_badge = _make_section_header(
+            "Hover Columns",
+            on_none=self._select_none_hover,
         )
+        self._main_layout.addLayout(h_row)
 
         self._hover_search = QLineEdit()
         self._hover_search.setPlaceholderText("🔍 Search columns...")
@@ -623,6 +622,30 @@ class DataTab(QWidget):
             cb.setChecked(col in hover_set)
             cb.blockSignals(False)
 
+        self._update_badges()
+
+    # ======================================================================
+    # Badge helpers
+    # ======================================================================
+
+    def _update_badges(self) -> None:
+        """Update the None/count badge text for Y-Axis, Group By, Hover."""
+        # Y-Axis
+        n_y = len([w for w in self._y_items.values() if w.is_checked()])
+        if self._y_badge:
+            self._y_badge.setText(f"{n_y}개" if n_y > 0 else "None")
+            self._y_badge.setMaximumWidth(42 if n_y == 0 else 48)
+        # Group
+        n_g = len([cb for cb in self._group_checks.values() if cb.isChecked()])
+        if self._group_badge:
+            self._group_badge.setText(f"{n_g}개" if n_g > 0 else "None")
+            self._group_badge.setMaximumWidth(42 if n_g == 0 else 48)
+        # Hover
+        n_h = len([cb for cb in self._hover_checks.values() if cb.isChecked()])
+        if self._hover_badge:
+            self._hover_badge.setText(f"{n_h}개" if n_h > 0 else "None")
+            self._hover_badge.setMaximumWidth(42 if n_h == 0 else 48)
+
     # ======================================================================
     # Slots – state signals → UI refresh
     # ======================================================================
@@ -671,6 +694,7 @@ class DataTab(QWidget):
                     item.formula_widget.setVisible(False)
                     item.formula_toggle.setChecked(False)
                     item.formula_toggle.setText("▶ f(y)")
+            self._update_badges()
         finally:
             self.setUpdatesEnabled(True)
             self._syncing = False
@@ -686,6 +710,7 @@ class DataTab(QWidget):
                 cb.blockSignals(True)
                 cb.setChecked(col in group_names)
                 cb.blockSignals(False)
+            self._update_badges()
         finally:
             self._syncing = False
 
@@ -700,6 +725,7 @@ class DataTab(QWidget):
                 cb.blockSignals(True)
                 cb.setChecked(col in hover_set)
                 cb.blockSignals(False)
+            self._update_badges()
         finally:
             self._syncing = False
 
@@ -840,6 +866,7 @@ class DataTab(QWidget):
                 item.formula_toggle.setChecked(False)
                 item.formula_toggle.setText("▶ f(y)")
             self._state.clear_value_zone()
+            self._update_badges()
         finally:
             self.setUpdatesEnabled(True)
             self._syncing = False
@@ -853,6 +880,7 @@ class DataTab(QWidget):
                 cb.setChecked(False)
                 cb.blockSignals(False)
             self._state.clear_group_zone()
+            self._update_badges()
         finally:
             self.setUpdatesEnabled(True)
             self._syncing = False
@@ -866,6 +894,7 @@ class DataTab(QWidget):
                 cb.setChecked(False)
                 cb.blockSignals(False)
             self._state.clear_hover_columns()
+            self._update_badges()
         finally:
             self.setUpdatesEnabled(True)
             self._syncing = False

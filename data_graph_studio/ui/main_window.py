@@ -47,7 +47,11 @@ from .floating_graph import FloatingGraphWindow, FloatingGraphManager
 from ..core.profile import Profile, GraphSetting, ProfileManager
 from ..core.profile_store import ProfileStore
 from ..core.profile_controller import ProfileController
+from ..core.profile_comparison_controller import ProfileComparisonController
 from .models.profile_model import ProfileModel
+from .panels.profile_side_by_side import ProfileSideBySideLayout
+from .panels.profile_overlay import ProfileOverlayRenderer
+from .panels.profile_difference import ProfileDifferenceRenderer
 from .views.project_tree_view import ProjectTreeView
 from .wizards.new_project_wizard import NewProjectWizard
 
@@ -144,6 +148,9 @@ class MainWindow(QMainWindow):
         # Profile management (Project Explorer)
         self.profile_store = ProfileStore()
         self.profile_controller = ProfileController(self.profile_store, self.state)
+        self.profile_comparison_controller = ProfileComparisonController(
+            self.profile_store, self.profile_controller, self.state,
+        )
 
         # Loading thread
         self._loader_thread: Optional[DataLoaderThread] = None
@@ -157,6 +164,7 @@ class MainWindow(QMainWindow):
         self._comparison_stats_panel: Optional[ComparisonStatsPanel] = None
         self._current_comparison_view: Optional[QWidget] = None
         self._overlay_stats_widget: Optional[OverlayStatsWidget] = None
+        self._profile_comparison_view: Optional[QWidget] = None
 
         # Floating graph manager
         self._floating_graph_manager: Optional[FloatingGraphManager] = None
@@ -669,13 +677,13 @@ class MainWindow(QMainWindow):
 
         # 최상위 수평 스플리터 (사이드바 | 메인 영역)
         self.root_splitter = QSplitter(Qt.Horizontal)
-        self.root_splitter.setHandleWidth(1)
+        self.root_splitter.setHandleWidth(2)
         self.root_splitter.setObjectName("themeSplitter")
 
         # 좌측 사이드바 - 탭 구조 (Projects + Datasets)
         self._sidebar_tabs = QTabWidget()
         self._sidebar_tabs.setMinimumWidth(100)
-        self._sidebar_tabs.setMaximumWidth(250)
+        self._sidebar_tabs.setMaximumWidth(350)
         # Style handled by global theme stylesheet
         
         # Project Explorer (새로운 트리 뷰)
@@ -706,7 +714,7 @@ class MainWindow(QMainWindow):
 
         # 메인 스플리터 (수직)
         self.main_splitter = QSplitter(Qt.Vertical)
-        self.main_splitter.setHandleWidth(1)
+        self.main_splitter.setHandleWidth(2)
         self.main_splitter.setObjectName("themeSplitter")
 
         # Summary panel (internal use only, not displayed)
@@ -722,6 +730,7 @@ class MainWindow(QMainWindow):
         self.profile_bar.setting_clicked.connect(self._on_profile_setting_clicked)
         self.profile_bar.setting_double_clicked.connect(self._on_profile_setting_double_clicked)
         self.profile_bar.add_setting_requested.connect(self._on_add_setting_requested)
+        self.profile_bar.compare_requested.connect(self._on_compare_profiles_requested)
         profile_bar_layout.addWidget(self.profile_bar)
 
         # Graph Panel (상단)
@@ -736,7 +745,7 @@ class MainWindow(QMainWindow):
         self.root_splitter.addWidget(self.main_splitter)
 
         # root_splitter 비율 설정 (사이드바: 메인 = 150 : 나머지)
-        self.root_splitter.setSizes([150, 1000])
+        self.root_splitter.setSizes([200, 1000])
 
         # 초기 비율 설정
         self._reset_layout()
@@ -1075,6 +1084,31 @@ class MainWindow(QMainWindow):
         self._ipc_server.register_handler('get_summary', self._ipc_get_summary)
         self._ipc_server.register_handler('execute', self._ipc_execute)
         
+        # Zone control handlers
+        self._ipc_server.register_handler('set_x_column', self._ipc_set_x_column)
+        self._ipc_server.register_handler('set_value_columns', self._ipc_set_value_columns)
+        self._ipc_server.register_handler('set_group_columns', self._ipc_set_group_columns)
+        self._ipc_server.register_handler('set_hover_columns', self._ipc_set_hover_columns)
+        self._ipc_server.register_handler('clear_all_zones', self._ipc_clear_all_zones)
+        self._ipc_server.register_handler('get_zones', self._ipc_get_zones)
+        
+        # UI control handlers
+        self._ipc_server.register_handler('set_theme', self._ipc_set_theme)
+        self._ipc_server.register_handler('refresh', self._ipc_refresh)
+        self._ipc_server.register_handler('get_screenshot', self._ipc_get_screenshot)
+        self._ipc_server.register_handler('set_agg', self._ipc_set_agg)
+
+        # Profile comparison handlers
+        self._ipc_server.register_handler('list_profiles', self._ipc_list_profiles)
+        self._ipc_server.register_handler('create_profile', self._ipc_create_profile)
+        self._ipc_server.register_handler('apply_profile', self._ipc_apply_profile)
+        self._ipc_server.register_handler('delete_profile', self._ipc_delete_profile)
+        self._ipc_server.register_handler('duplicate_profile', self._ipc_duplicate_profile)
+        self._ipc_server.register_handler('start_profile_comparison', self._ipc_start_profile_comparison)
+        self._ipc_server.register_handler('stop_profile_comparison', self._ipc_stop_profile_comparison)
+        self._ipc_server.register_handler('get_profile_comparison_state', self._ipc_get_profile_comparison_state)
+        self._ipc_server.register_handler('set_comparison_sync', self._ipc_set_comparison_sync)
+
         # 서버 시작
         self._ipc_server.start()
     
@@ -1134,8 +1168,21 @@ class MainWindow(QMainWindow):
         
         dataset_id = self.engine.load_dataset(path)
         if dataset_id:
+            # Register dataset in state (for Project Explorer)
+            dataset = self.engine.get_dataset(dataset_id)
+            if dataset:
+                self.state.add_dataset(
+                    dataset_id=dataset_id,
+                    name=dataset.name if dataset.name else Path(path).stem,
+                    file_path=path,
+                    row_count=dataset.row_count if hasattr(dataset, 'row_count') else self.engine.row_count,
+                    column_count=dataset.column_count if hasattr(dataset, 'column_count') else self.engine.column_count,
+                    memory_bytes=dataset.memory_bytes if hasattr(dataset, 'memory_bytes') else 0,
+                )
             self.state.set_data_loaded(True, self.engine.row_count)
             self.table_panel.set_data(self.engine.df)
+            # Activate dataset in project explorer
+            self._on_dataset_activated(dataset_id)
             # Summary 업데이트
             self._update_summary_from_profile()
             return {'success': True, 'dataset_id': dataset_id}
@@ -1199,6 +1246,284 @@ class MainWindow(QMainWindow):
         }
         return eval(code, {'__builtins__': {}}, local_vars)
 
+    # ==================== IPC Zone Control Handlers ====================
+
+    def _ipc_set_x_column(self, column: str) -> dict:
+        """X 컬럼 설정. '(Index)'이면 None으로 설정."""
+        try:
+            if column == "(Index)":
+                self.state.set_x_column(None)
+            else:
+                # Validate column exists
+                if self.state.is_data_loaded and column not in self.engine.columns:
+                    raise ValueError(f"Column not found: {column}")
+                self.state.set_x_column(column)
+            return {"success": True, "x_column": self.state.x_column}
+        except Exception as e:
+            raise ValueError(f"Failed to set x column: {e}")
+
+    def _ipc_set_value_columns(self, columns: list) -> dict:
+        """Value zone 설정. clear 후 각 컬럼 추가."""
+        try:
+            # Validate columns exist
+            if self.state.is_data_loaded:
+                available = set(self.engine.columns)
+                invalid = [c for c in columns if c not in available]
+                if invalid:
+                    raise ValueError(f"Columns not found: {invalid}")
+
+            self.state.clear_value_zone()
+            for col in columns:
+                self.state.add_value_column(col)
+
+            return {
+                "success": True,
+                "value_columns": [vc.name for vc in self.state.value_columns],
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to set value columns: {e}")
+
+    def _ipc_set_group_columns(self, columns: list) -> dict:
+        """Group zone 설정. clear 후 각 컬럼 추가."""
+        try:
+            if self.state.is_data_loaded:
+                available = set(self.engine.columns)
+                invalid = [c for c in columns if c not in available]
+                if invalid:
+                    raise ValueError(f"Columns not found: {invalid}")
+
+            self.state.clear_group_zone()
+            for col in columns:
+                self.state.add_group_column(col)
+
+            return {
+                "success": True,
+                "group_columns": [gc.name for gc in self.state.group_columns],
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to set group columns: {e}")
+
+    def _ipc_set_hover_columns(self, columns: list) -> dict:
+        """Hover zone 설정. clear 후 각 컬럼 추가."""
+        try:
+            if self.state.is_data_loaded:
+                available = set(self.engine.columns)
+                invalid = [c for c in columns if c not in available]
+                if invalid:
+                    raise ValueError(f"Columns not found: {invalid}")
+
+            self.state.clear_hover_columns()
+            for col in columns:
+                self.state.add_hover_column(col)
+
+            return {
+                "success": True,
+                "hover_columns": list(self.state.hover_columns),
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to set hover columns: {e}")
+
+    def _ipc_clear_all_zones(self) -> dict:
+        """모든 zone 비우기."""
+        try:
+            self.state.set_x_column(None)
+            self.state.clear_value_zone()
+            self.state.clear_group_zone()
+            self.state.clear_hover_columns()
+            return {"success": True}
+        except Exception as e:
+            raise ValueError(f"Failed to clear zones: {e}")
+
+    def _ipc_get_zones(self) -> dict:
+        """현재 각 zone의 상태 반환."""
+        state = self.state
+        return {
+            "x_column": state.x_column,
+            "value_columns": [
+                {"name": vc.name, "aggregation": vc.aggregation.value}
+                for vc in state.value_columns
+            ],
+            "group_columns": [
+                {"name": gc.name}
+                for gc in state.group_columns
+            ],
+            "hover_columns": list(state.hover_columns),
+            "chart_type": state._chart_settings.chart_type.value if hasattr(state, '_chart_settings') else None,
+        }
+
+    def _ipc_set_theme(self, theme_id: str) -> dict:
+        """테마 변경. light, dark, midnight 중 하나."""
+        valid_themes = ("light", "dark", "midnight")
+        if theme_id not in valid_themes:
+            raise ValueError(f"Invalid theme_id: {theme_id}. Must be one of {valid_themes}")
+        self._on_theme_changed(theme_id)
+        return {"success": True, "theme": theme_id}
+
+    def _ipc_refresh(self) -> dict:
+        """GraphPanel 강제 리프레시."""
+        try:
+            self.graph_panel.refresh()
+            return {"success": True}
+        except Exception as e:
+            raise ValueError(f"Failed to refresh: {e}")
+
+    def _ipc_get_screenshot(self, path: str = "/tmp/dgs_screenshot.png") -> dict:
+        """앱 윈도우를 캡처해서 지정된 경로에 저장."""
+        try:
+            pixmap = self.grab()
+            pixmap.save(path)
+            return {
+                "success": True,
+                "path": path,
+                "width": pixmap.width(),
+                "height": pixmap.height(),
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to take screenshot: {e}")
+
+    def _ipc_set_agg(self, agg1: str, agg2: str = None) -> dict:
+        """Value column의 aggregation 타입 변경.
+
+        agg1은 첫 번째 value column에, agg2는 두 번째 value column에 적용.
+        값은 'SUM', 'MEAN', 'MEDIAN', 'MIN', 'MAX', 'COUNT', 'STD', 'VAR', 'FIRST', 'LAST'.
+        """
+        try:
+            vcs = self.state.value_columns
+            if not vcs:
+                raise ValueError("No value columns configured")
+
+            agg1_type = AggregationType(agg1.lower())
+            self.state.update_value_column(0, aggregation=agg1_type)
+
+            if agg2 is not None and len(vcs) >= 2:
+                agg2_type = AggregationType(agg2.lower())
+                self.state.update_value_column(1, aggregation=agg2_type)
+
+            return {
+                "success": True,
+                "value_columns": [
+                    {"name": vc.name, "aggregation": vc.aggregation.value}
+                    for vc in self.state.value_columns
+                ],
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to set aggregation: {e}")
+
+    # ==================== IPC Profile Comparison Handlers ====================
+
+    def _ipc_list_profiles(self, dataset_id: str = None) -> list:
+        """List all profiles (GraphSettings) for a dataset."""
+        did = dataset_id or self.state.active_dataset_id
+        if not did:
+            raise ValueError("No active dataset")
+        settings = self.profile_store.get_by_dataset(did)
+        return [
+            {
+                "id": s.id,
+                "name": s.name,
+                "dataset_id": s.dataset_id,
+                "chart_type": s.chart_type,
+                "x_column": s.x_column,
+                "value_columns": list(s.value_columns),
+            }
+            for s in settings
+        ]
+
+    def _ipc_create_profile(self, name: str, dataset_id: str = None) -> dict:
+        """Create a new profile from current state."""
+        did = dataset_id or self.state.active_dataset_id
+        if not did:
+            raise ValueError("No active dataset")
+        profile_id = self.profile_controller.create_profile(did, name)
+        if profile_id is None:
+            raise RuntimeError("Failed to create profile")
+        setting = self.profile_store.get(profile_id)
+        return {"id": setting.id, "name": setting.name}
+
+    def _ipc_apply_profile(self, profile_id: str) -> dict:
+        """Apply a profile to the current view."""
+        ok = self.profile_controller.apply_profile(profile_id)
+        if not ok:
+            raise ValueError(f"Failed to apply profile: {profile_id}")
+        return {"ok": True}
+
+    def _ipc_delete_profile(self, profile_id: str) -> dict:
+        """Delete a profile."""
+        ok = self.profile_controller.delete_profile(profile_id)
+        if not ok:
+            raise ValueError(f"Failed to delete profile: {profile_id}")
+        return {"ok": True}
+
+    def _ipc_duplicate_profile(self, profile_id: str) -> dict:
+        """Duplicate a profile."""
+        new_id = self.profile_controller.duplicate_profile(profile_id)
+        if new_id is None:
+            raise ValueError(f"Failed to duplicate profile: {profile_id}")
+        setting = self.profile_store.get(new_id)
+        return {"id": setting.id, "name": setting.name}
+
+    def _ipc_start_profile_comparison(self, profile_ids: list, mode: str = "side_by_side") -> dict:
+        """Start comparing profiles via ProfileComparisonController."""
+        comp_mode = {
+            "side_by_side": ComparisonMode.SIDE_BY_SIDE,
+            "overlay": ComparisonMode.OVERLAY,
+            "difference": ComparisonMode.DIFFERENCE,
+        }.get(mode)
+        if comp_mode is None:
+            raise ValueError(f"Invalid comparison mode: {mode}")
+
+        # Determine dataset_id from the first profile
+        if not profile_ids:
+            raise ValueError("At least 2 profiles required for comparison")
+        first = self.profile_store.get(profile_ids[0])
+        if first is None:
+            raise ValueError(f"Profile not found: {profile_ids[0]}")
+        dataset_id = first.dataset_id
+
+        ok = self.profile_comparison_controller.start_comparison(
+            dataset_id, profile_ids, comp_mode,
+        )
+        if not ok:
+            raise ValueError("Profile comparison validation failed")
+
+        return {"ok": True, "mode": mode}
+
+    def _ipc_stop_profile_comparison(self) -> dict:
+        """Stop comparison, return to single view."""
+        self.profile_comparison_controller.stop_comparison()
+        return {"ok": True}
+
+    def _ipc_get_profile_comparison_state(self) -> dict:
+        """Get current comparison status."""
+        pcc = self.profile_comparison_controller
+        cs = self.state.comparison_settings
+        return {
+            "active": pcc.is_active,
+            "mode": pcc.current_mode.value,
+            "target": cs.comparison_target,
+            "profile_ids": list(pcc.current_profiles),
+            "dataset_id": pcc.dataset_id,
+            "sync_x": cs.sync_pan_x,
+            "sync_y": cs.sync_pan_y,
+            "sync_selection": cs.sync_selection,
+        }
+
+    def _ipc_set_comparison_sync(
+        self,
+        sync_x: bool = None,
+        sync_y: bool = None,
+        sync_selection: bool = None,
+    ) -> dict:
+        """Toggle sync options."""
+        if sync_x is not None:
+            self.state._comparison_settings.sync_pan_x = sync_x
+        if sync_y is not None:
+            self.state._comparison_settings.sync_pan_y = sync_y
+        if sync_selection is not None:
+            self.state._comparison_settings.sync_selection = sync_selection
+        self.state.comparison_settings_changed.emit()
+        return {"ok": True}
+
     def _update_memory_status(self):
         """상태바 메모리 사용량 업데이트"""
         try:
@@ -1240,6 +1565,14 @@ class MainWindow(QMainWindow):
         # Panel signals - route through preview dialog
         self.table_panel.file_dropped.connect(self._show_parsing_preview)
         self.table_panel.window_changed.connect(self._on_window_changed)
+
+        # Profile comparison controller signals
+        self.profile_comparison_controller.comparison_started.connect(
+            self._on_profile_comparison_started
+        )
+        self.profile_comparison_controller.comparison_ended.connect(
+            self._on_profile_comparison_ended
+        )
 
     def _setup_float_handlers(self):
         """메인 패널들의 Float 버튼 핸들러 설정"""
@@ -2537,6 +2870,28 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 self.state.add_setting(setting)
                 self.statusbar.showMessage(f"Setting '{setting.name}' saved", 3000)
 
+    def _on_compare_profiles_requested(self):
+        """Compare Profiles 버튼 클릭 — 비교 다이얼로그 표시."""
+        from .dialogs.profile_comparison_dialog import ProfileComparisonDialog
+
+        dataset_id = self.state.active_dataset_id or ""
+        profiles = self.profile_store.get_by_dataset(dataset_id) if dataset_id else []
+
+        if len(profiles) < 2:
+            QMessageBox.information(
+                self,
+                "Compare Profiles",
+                "Create at least 2 profiles for the current dataset to compare.",
+            )
+            return
+
+        dialog = ProfileComparisonDialog(profiles, self)
+        if dialog.exec() == QDialog.Accepted:
+            ids = dialog.selected_profile_ids
+            mode = dialog.selected_mode
+            if len(ids) >= 2:
+                self.profile_comparison_controller.start_comparison(dataset_id, ids, mode)
+
     def _show_profile_manager(self):
         """프로파일 관리자 다이얼로그 표시"""
         dialog = ProfileManagerDialog(self.profile_bar.profile_manager, self)
@@ -2853,6 +3208,9 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             if self.engine.profile:
                 self._update_summary_from_profile()
 
+            # Project Explorer 트리 갱신
+            self.profile_model.refresh()
+
             # 상태바 메시지
             metadata = self.state.get_dataset_metadata(dataset_id)
             if metadata:
@@ -3159,6 +3517,61 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         """단일 뷰 모드로 복귀"""
         self._remove_comparison_view()
         self.graph_panel.refresh()
+
+    # ==================== Profile Comparison Views ====================
+
+    def _on_profile_comparison_started(self, mode_value: str, profile_ids: list):
+        """Handle profile comparison started — create appropriate renderer."""
+        self._remove_comparison_view()
+
+        dataset_id = self.profile_comparison_controller.dataset_id
+
+        try:
+            mode = ComparisonMode(mode_value)
+        except ValueError:
+            mode = ComparisonMode.SIDE_BY_SIDE
+
+        if mode == ComparisonMode.SIDE_BY_SIDE:
+            view = ProfileSideBySideLayout(
+                dataset_id, self.engine, self.state, self.profile_store,
+            )
+            view.exit_requested.connect(self.profile_comparison_controller.stop_comparison)
+            view.set_profiles(profile_ids)
+            # FR-10: wire delete/rename from controller to layout
+            self.profile_comparison_controller.panel_removed.connect(view.on_profile_deleted)
+            self.profile_controller.profile_renamed.connect(view.on_profile_renamed)
+
+        elif mode == ComparisonMode.OVERLAY:
+            view = ProfileOverlayRenderer(
+                dataset_id, self.engine, self.state, self.profile_store,
+            )
+            view.exit_requested.connect(self.profile_comparison_controller.stop_comparison)
+            view.set_profiles(profile_ids)
+
+        elif mode == ComparisonMode.DIFFERENCE:
+            if len(profile_ids) != 2:
+                return
+            view = ProfileDifferenceRenderer(
+                dataset_id, self.engine, self.state, self.profile_store,
+            )
+            view.exit_requested.connect(self.profile_comparison_controller.stop_comparison)
+            view.set_profiles(profile_ids[0], profile_ids[1])
+
+        else:
+            return
+
+        self._profile_comparison_view = view
+        self._show_comparison_view(view)
+        self.statusbar.showMessage(
+            f"Profile comparison ({mode_value}): {len(profile_ids)} profiles", 3000,
+        )
+
+    def _on_profile_comparison_ended(self):
+        """Handle profile comparison ended — restore graph panel."""
+        self._remove_comparison_view()
+        self._profile_comparison_view = None
+        self.graph_panel.refresh()
+        self.statusbar.showMessage("Profile comparison ended", 2000)
 
     def closeEvent(self, event):
         """창 닫기 이벤트"""

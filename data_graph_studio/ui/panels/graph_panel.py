@@ -1126,7 +1126,7 @@ class StatPanel(QFrame):
         stats_scroll.setMaximumHeight(200)
         stats_scroll.setStyleSheet("background: transparent; border: none;")
 
-        self.stats_label = QLabel("No data")
+        self.stats_label = QLabel("Load data to see statistics")
         self.stats_label.setObjectName("statsLabel")
         self.stats_label.setWordWrap(True)
         self.stats_label.setTextInteractionFlags(
@@ -1327,8 +1327,12 @@ class StatPanel(QFrame):
     
     def update_stats(self, stats: Dict[str, Any], percentiles: Dict[str, float] = None,
                      group_counts: Dict[str, int] = None, group_sums: Dict[str, float] = None):
+        if stats is None:
+            self.stats_label.setText("Load data to see statistics")
+            return
         if not stats:
-            self.stats_label.setText("No data")
+            # stats is empty dict {} — data is loaded but no columns selected
+            self.stats_label.setText("Select data columns to view statistics")
             return
         
         lines = []
@@ -1386,6 +1390,10 @@ class MainGraph(pg.PlotWidget):
 
         super().__init__(axisItems={'bottom': self._x_axis, 'left': self._y_axis})
         self.state = state
+
+        # Ensure Y-axis label is not clipped
+        self._y_axis.setWidth(60)
+        self.getPlotItem().getViewBox().setDefaultPadding(0.05)
 
         self.setBackground('w')
         self.showGrid(x=True, y=True, alpha=0.3)
@@ -1599,8 +1607,8 @@ class MainGraph(pg.PlotWidget):
         # Apply options
         x_label = options.get('x_title', 'X')
         y_label = options.get('y_title', 'Y')
-        self.setLabel('bottom', x_label)
-        self.setLabel('left', y_label)
+        self.setLabel('bottom', x_label, **{'font-size': '14px', 'color': '#E2E8F0'})
+        self.setLabel('left', y_label, **{'font-size': '14px', 'color': '#E2E8F0'})
         
         # Grid
         grid_x = options.get('grid_x', True)
@@ -1875,9 +1883,9 @@ class MainGraph(pg.PlotWidget):
         x_title = options.get('x_title', '')
         y_title = options.get('y_title', '')
         if x_title:
-            self.setLabel('bottom', x_title)
+            self.setLabel('bottom', x_title, **{'font-size': '14px', 'color': '#E2E8F0'})
         if y_title:
-            self.setLabel('left', y_title)
+            self.setLabel('left', y_title, **{'font-size': '14px', 'color': '#E2E8F0'})
 
         # Set log scale if specified
         x_log = options.get('x_log', False)
@@ -3573,7 +3581,7 @@ class GraphPanel(QWidget):
     def clear(self):
         self.main_graph.clear_plot()
         self.stat_panel.update_histograms(None, None)
-        self.stat_panel.update_stats({})
+        self.stat_panel.update_stats(None)
     
     def set_columns(self, columns: List[str]):
         """컬럼 목록 설정 (범례 초기화용)"""

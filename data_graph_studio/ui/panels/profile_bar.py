@@ -243,6 +243,7 @@ class ProfileBar(QFrame):
     profile_load_requested = Signal()
     profile_save_requested = Signal()
     profile_new_requested = Signal()
+    compare_requested = Signal()           # Compare Profiles 요청
 
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
@@ -326,6 +327,14 @@ class ProfileBar(QFrame):
         new_btn.setStyleSheet(self._action_btn_style())
         new_btn.clicked.connect(self._on_new_profile)
         header_layout.addWidget(new_btn)
+
+        compare_btn = QToolButton()
+        compare_btn.setText("⚖")
+        compare_btn.setToolTip("Compare profiles")
+        compare_btn.setFixedSize(28, 28)
+        compare_btn.setStyleSheet(self._action_btn_style())
+        compare_btn.clicked.connect(self.compare_requested.emit)
+        header_layout.addWidget(compare_btn)
 
         header_layout.addStretch()
 

@@ -240,17 +240,77 @@ MIDNIGHT_THEME = Theme(
     accent="#22D3EE",
 )
 
+# Tailwind CSS Theme — Slate + Indigo, clean utility-first aesthetic
+TAILWIND_THEME = Theme(
+    name="Tailwind",
+    background="#F8FAFC",        # slate-50
+    foreground="#0F172A",        # slate-900
+    primary="#6366F1",           # indigo-500
+    secondary="#EC4899",         # pink-500
+    accent="#8B5CF6",            # violet-500
+    success="#22C55E",           # green-500
+    warning="#F59E0B",           # amber-500
+    error="#EF4444",             # red-500
+    info="#06B6D4",              # cyan-500
+    surface="#FFFFFF",           # white
+    surface_hover="#F1F5F9",     # slate-100
+    surface_active="#E2E8F0",    # slate-200
+    border="#CBD5E1",            # slate-300
+    border_light="#E2E8F0",      # slate-200
+    hover="#EEF2FF",             # indigo-50
+    selected="#E0E7FF",          # indigo-100
+    focused="#6366F140",         # indigo-500/25
+    text_primary="#0F172A",      # slate-900
+    text_secondary="#475569",    # slate-600
+    text_muted="#94A3B8",        # slate-400
+    text_disabled="#CBD5E1",     # slate-300
+    shadow_color="rgba(15, 23, 42, 0.06)",  # slate-900/6
+    gradient_start="#6366F1",    # indigo-500
+    gradient_end="#8B5CF6",      # violet-500
+)
+
+# Tailwind Dark Theme — Slate dark + Indigo accents
+TAILWIND_DARK_THEME = Theme(
+    name="Tailwind Dark",
+    background="#020617",        # slate-950
+    foreground="#F8FAFC",        # slate-50
+    primary="#818CF8",           # indigo-400
+    secondary="#F472B6",         # pink-400
+    accent="#A78BFA",            # violet-400
+    success="#4ADE80",           # green-400
+    warning="#FBBF24",           # amber-400
+    error="#F87171",             # red-400
+    info="#22D3EE",              # cyan-400
+    surface="#0F172A",           # slate-900
+    surface_hover="#1E293B",     # slate-800
+    surface_active="#334155",    # slate-700
+    border="#334155",            # slate-700
+    border_light="#1E293B",      # slate-800
+    hover="#1E1B4B",             # indigo-950
+    selected="#312E81",          # indigo-900
+    focused="#818CF840",         # indigo-400/25
+    text_primary="#F8FAFC",      # slate-50
+    text_secondary="#94A3B8",    # slate-400
+    text_muted="#64748B",        # slate-500
+    text_disabled="#334155",     # slate-700
+    shadow_color="rgba(0, 0, 0, 0.30)",
+    gradient_start="#818CF8",    # indigo-400
+    gradient_end="#A78BFA",      # violet-400
+)
+
 
 class ThemeManager:
     """Modern Theme Manager with animations support"""
     
-    BUILTIN_THEMES = {'light', 'dark', 'midnight'}
+    BUILTIN_THEMES = {'light', 'dark', 'midnight', 'tailwind', 'tailwind-dark'}
     
     def __init__(self):
         self._themes: Dict[str, Theme] = {
             'light': LIGHT_THEME,
             'dark': DARK_THEME,
             'midnight': MIDNIGHT_THEME,
+            'tailwind': TAILWIND_THEME,
+            'tailwind-dark': TAILWIND_DARK_THEME,
         }
         self._current: str = 'midnight'
         self._chart_palette: ColorPalette = ColorPalette.default()
@@ -298,7 +358,7 @@ class ThemeManager:
         return f"""
             /* ============ Global Reset ============ */
             * {{
-                font-family: 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+                font-family: 'Helvetica Neue', 'Arial';
                 font-size: 13px;
             }}
             
@@ -415,6 +475,7 @@ class ThemeManager:
                 padding: 8px 12px;
                 selection-background-color: {t.primary};
                 selection-color: white;
+                placeholder-text-color: {t.text_secondary};
             }}
             
             QLineEdit:hover, QTextEdit:hover {{
@@ -439,6 +500,7 @@ class ThemeManager:
                 border-radius: 8px;
                 padding: 8px 12px;
                 min-height: 20px;
+                placeholder-text-color: {t.text_secondary};
             }}
             
             QComboBox:hover {{
@@ -515,13 +577,13 @@ class ThemeManager:
             }}
             
             QScrollBar::handle:vertical {{
-                background-color: {t.border};
+                background-color: {t.text_muted};
                 border-radius: 5px;
                 min-height: 30px;
             }}
             
             QScrollBar::handle:vertical:hover {{
-                background-color: {t.text_secondary};
+                background-color: {t.primary};
             }}
             
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
@@ -535,13 +597,13 @@ class ThemeManager:
             }}
             
             QScrollBar::handle:horizontal {{
-                background-color: {t.border};
+                background-color: {t.text_muted};
                 border-radius: 5px;
                 min-width: 30px;
             }}
             
             QScrollBar::handle:horizontal:hover {{
-                background-color: {t.text_secondary};
+                background-color: {t.primary};
             }}
             
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
@@ -554,7 +616,7 @@ class ThemeManager:
             }}
             
             QSplitter::handle:hover {{
-                background-color: {t.primary}40;
+                background-color: {t.primary}80;
             }}
             
             QSplitter::handle:vertical {{
@@ -672,6 +734,15 @@ class ThemeManager:
             QCheckBox {{
                 spacing: 8px;
                 color: {t.foreground};
+            }}
+            
+            QCheckBox:checked {{
+                color: {t.foreground};
+                font-weight: 600;
+            }}
+            
+            QCheckBox:unchecked {{
+                color: {t.text_muted};
             }}
             
             QCheckBox::indicator {{
@@ -813,9 +884,23 @@ class ThemeManager:
             }}
             
             /* ============ Panel Backgrounds ============ */
-            #GraphOptionsPanel, #LegendPanel, #StatPanel {{
+            #GraphOptionsPanel {{
                 background-color: {t.surface};
                 border: {"1px solid #E5E7EB" if t.is_light() else "none"};
+                border-right: 1px solid {t.border};
+                border-radius: 8px;
+            }}
+            
+            #LegendPanel {{
+                background-color: {t.surface};
+                border: {"1px solid #E5E7EB" if t.is_light() else "none"};
+                border-radius: 8px;
+            }}
+            
+            #StatPanel {{
+                background-color: {t.surface};
+                border: {"1px solid #E5E7EB" if t.is_light() else "none"};
+                border-left: 1px solid {t.border};
                 border-radius: 8px;
             }}
             
@@ -837,7 +922,6 @@ class ThemeManager:
             }}
             
             #statsLabel {{
-                font-family: 'Consolas', 'Monaco', monospace;
                 font-size: 12px;
                 color: {t.text_secondary};
                 background: transparent;
@@ -1264,12 +1348,13 @@ class ThemeManager:
             /* ============ Chip Widget ============ */
             #chipWidget {{
                 background-color: {t.surface};
-                border: 1px solid {t.border};
+                border: 1px solid {t.text_secondary};
                 border-radius: 10px;
             }}
             
             #chipWidget:hover {{
-                background-color: {t.surface_hover};
+                background-color: {t.surface_active};
+                border-color: {t.primary};
             }}
             
             #chipLabel {{
@@ -1585,6 +1670,7 @@ class ThemeManager:
                 border-radius: 8px;
                 padding: 8px 12px;
                 padding-right: 32px;
+                placeholder-text-color: {t.text_secondary};
             }}
             
             #searchInput:focus {{
@@ -1655,7 +1741,7 @@ class ThemeManager:
             
             /* ============ Splitter ============ */
             #themeSplitter::handle {{
-                background-color: {t.border};
+                background-color: {t.text_muted if not t.is_light() else t.border};
             }}
             
             /* ============ Toolbar Labels ============ */

@@ -331,18 +331,44 @@ class FormattedAxisItem(pg.AxisItem):
     def set_categorical(self, labels: list):
         self._categorical_labels = labels
         self._is_categorical = True if labels else False
+        if labels and self.orientation == 'bottom':
+            self.setStyle(tickTextOffset=15, autoExpandTextSpace=True)
+            # Set explicit ticks to prevent pyqtgraph from generating intermediate ticks
+            ticks = [(i, self._truncate_label(str(lbl))) for i, lbl in enumerate(labels)]
+            self.setTicks([ticks, []])  # Major ticks only, no minor ticks
 
     def clear_categorical(self):
         self._categorical_labels = None
         self._is_categorical = False
+        self.setTicks(None)  # Reset to automatic tick generation
+
+    @staticmethod
+    def _truncate_label(text: str, max_len: int = 8) -> str:
+        """Truncate long label with ellipsis"""
+        if len(text) > max_len:
+            return text[:max_len - 1] + "…"
+        return text
 
     def tickStrings(self, values, scale, spacing):
         if self._is_categorical and self._categorical_labels:
+            num_labels = len(self._categorical_labels)
+            num_visible = len(values)
+            # Determine skip interval: if too many labels, show every Nth
+            skip = 1
+            if num_visible > 20:
+                skip = max(1, num_visible // 15)
+            # Determine max label length based on density
+            max_len = 8 if num_labels <= 15 else 6
+
             strings = []
-            for v in values:
+            for i, v in enumerate(values):
                 idx = int(round(v))
-                if 0 <= idx < len(self._categorical_labels):
-                    strings.append(str(self._categorical_labels[idx]))
+                if 0 <= idx < num_labels:
+                    if skip > 1 and (i % skip != 0):
+                        strings.append("")
+                    else:
+                        label = str(self._categorical_labels[idx])
+                        strings.append(self._truncate_label(label, max_len))
                 else:
                     strings.append("")
             return strings

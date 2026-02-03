@@ -1512,6 +1512,14 @@ class TablePanel(QWidget):
             self.grouped_model._row_cache = []
         self._update_table_model(df)
         self._update_window_controls()
+        # Enable/disable search bar based on data availability
+        has_data = df is not None and len(df) > 0
+        self.search_input.setEnabled(has_data)
+        if not has_data:
+            self.search_input.setPlaceholderText("No data loaded")
+            self.search_input.clear()
+        else:
+            self.search_input.setPlaceholderText("🔍 Search in table... (Ctrl+F)")
     
     def _update_table_model(self, df: Optional[pl.DataFrame] = None):
         if df is None:

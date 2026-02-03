@@ -92,7 +92,7 @@ def main():
         
         # 기본 폰트
         font = QFont()
-        font.setFamily("Segoe UI")
+        font.setFamily("Helvetica Neue")
         font.setPointSize(10)
         app.setFont(font)
         

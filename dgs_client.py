@@ -88,7 +88,68 @@ def main():
             print("Usage: python dgs_client.py exec <code>")
             return 1
         result = send_command('execute', code=sys.argv[2])
-    
+
+    # ==================== Profile Comparison ====================
+
+    elif cmd == 'list-profiles':
+        kwargs = {}
+        if len(sys.argv) > 2:
+            kwargs['dataset_id'] = sys.argv[2]
+        result = send_command('list_profiles', **kwargs)
+
+    elif cmd == 'create-profile':
+        if len(sys.argv) < 3:
+            print("Usage: python dgs_client.py create-profile <name> [dataset_id]")
+            return 1
+        kwargs = {'name': sys.argv[2]}
+        if len(sys.argv) > 3:
+            kwargs['dataset_id'] = sys.argv[3]
+        result = send_command('create_profile', **kwargs)
+
+    elif cmd == 'apply-profile':
+        if len(sys.argv) < 3:
+            print("Usage: python dgs_client.py apply-profile <profile_id>")
+            return 1
+        result = send_command('apply_profile', profile_id=sys.argv[2])
+
+    elif cmd == 'delete-profile':
+        if len(sys.argv) < 3:
+            print("Usage: python dgs_client.py delete-profile <profile_id>")
+            return 1
+        result = send_command('delete_profile', profile_id=sys.argv[2])
+
+    elif cmd == 'duplicate-profile':
+        if len(sys.argv) < 3:
+            print("Usage: python dgs_client.py duplicate-profile <profile_id>")
+            return 1
+        result = send_command('duplicate_profile', profile_id=sys.argv[2])
+
+    elif cmd == 'start-comparison':
+        if len(sys.argv) < 4:
+            print("Usage: python dgs_client.py start-comparison <mode> <profile_id1> <profile_id2> [...]")
+            print("Modes: side_by_side, overlay, difference")
+            return 1
+        mode = sys.argv[2]
+        profile_ids = sys.argv[3:]
+        result = send_command('start_profile_comparison', profile_ids=profile_ids, mode=mode)
+
+    elif cmd == 'stop-comparison':
+        result = send_command('stop_profile_comparison')
+
+    elif cmd == 'comparison-state':
+        result = send_command('get_profile_comparison_state')
+
+    elif cmd == 'set-sync':
+        kwargs = {}
+        for arg in sys.argv[2:]:
+            key, _, val = arg.partition('=')
+            if key in ('sync_x', 'sync_y', 'sync_selection'):
+                kwargs[key] = val.lower() in ('true', '1', 'yes')
+        if not kwargs:
+            print("Usage: python dgs_client.py set-sync sync_x=true sync_y=false sync_selection=true")
+            return 1
+        result = send_command('set_comparison_sync', **kwargs)
+
     else:
         print(f"Unknown command: {cmd}")
         print(__doc__)
