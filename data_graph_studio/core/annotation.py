@@ -6,7 +6,7 @@ PRD Section 6.4, Feature 5 (3.5.x)
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
 

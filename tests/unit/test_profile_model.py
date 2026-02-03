@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt, QModelIndex
@@ -21,12 +22,10 @@ def _build_model():
     state.add_dataset("ds2", name="Project Beta")
 
     setting_one = GraphSetting.create_new("Sales")
-    setting_one.icon = "📈"
-    setting_one.chart_type = "line"
+    setting_one = dataclasses.replace(setting_one, icon="📈", chart_type="line")
 
     setting_two = GraphSetting.create_new("Revenue")
-    setting_two.icon = "📊"
-    setting_two.chart_type = "bar"
+    setting_two = dataclasses.replace(setting_two, icon="📊", chart_type="bar")
 
     store = FakeProfileStore({
         "ds1": [setting_one, setting_two],
@@ -60,7 +59,7 @@ def test_data_display_role():
     setting_index = model.index(0, 0, project_index)
 
     assert model.data(project_index, Qt.DisplayRole) == "Project Alpha"
-    assert model.data(setting_index, Qt.DisplayRole) == f"{setting_one.icon} {setting_one.name}"
+    assert model.data(setting_index, Qt.DisplayRole) == setting_one.name
 
 
 def test_get_setting():

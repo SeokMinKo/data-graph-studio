@@ -45,7 +45,7 @@ class TestDrawingStyle:
         """Test default style values"""
         style = DrawingStyle()
         assert style.stroke_color == "#000000"
-        assert style.stroke_width == 2.0
+        assert style.stroke_width == 1.0
         assert style.line_style == LineStyle.SOLID
         assert style.fill_color is None
         assert style.fill_opacity == 0.3

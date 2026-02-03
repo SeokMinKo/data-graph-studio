@@ -8,7 +8,6 @@ profile comparison mode (§8.1).
 
 from __future__ import annotations
 
-import copy
 import time
 from typing import Any, Dict, Optional
 
@@ -153,7 +152,7 @@ class DashboardController:
         before = self._layout.deep_copy()
 
         # Temporarily remove to check new span
-        old_rs, old_cs = cell.row_span, cell.col_span
+        _old_rs, _old_cs = cell.row_span, cell.col_span
         self._layout.cells.remove(cell)
         new_cell = DashboardCell(
             row=row, col=col, row_span=row_span, col_span=col_span,

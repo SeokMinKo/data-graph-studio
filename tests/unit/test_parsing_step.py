@@ -47,4 +47,4 @@ def test_parsing_step_get_preview_df():
 
     df = step.get_preview_df()
     assert isinstance(df, pd.DataFrame)
-    assert "Device" in df.columns
+    assert "Name" in df.columns

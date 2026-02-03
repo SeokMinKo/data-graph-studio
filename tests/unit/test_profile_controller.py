@@ -72,7 +72,8 @@ def test_apply_profile_updates_state():
     assert controller.apply_profile("setting-1") is True
     assert state._chart_settings.chart_type == ChartType.SCATTER
     assert state._x_column == "x"
-    assert state._group_columns == [{"name": "g1"}]
+    assert len(state._group_columns) == 1
+    assert state._group_columns[0].name == "g1"
     assert applied == ["setting-1"]
 
 

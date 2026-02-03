@@ -1312,7 +1312,7 @@ class AppState(QObject):
             self._value_columns.append(vc)
 
         # Hover Zone 복원
-        self._hover_columns = setting.hover_columns.copy()
+        self._hover_columns = list(setting.hover_columns)
 
         # 차트 설정 복원
         cs = setting.chart_settings

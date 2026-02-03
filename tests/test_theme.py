@@ -102,7 +102,7 @@ class TestThemeManager:
         theme = manager.current_theme
         
         assert theme is not None
-        assert theme.name in ['Light', 'Dark']
+        assert theme.name in ['Light', 'Dark', 'Midnight']
     
     def test_set_theme(self, manager):
         """테마 설정"""

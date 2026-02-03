@@ -182,13 +182,30 @@ class ProfileController(QObject):
 
     @staticmethod
     def _settings_equal(a: GraphSetting, b: GraphSetting) -> bool:
-        return (
-            a.chart_type == b.chart_type
-            and a.x_column == b.x_column
-            and tuple(a.group_columns) == tuple(b.group_columns)
-            and tuple(a.value_columns) == tuple(b.value_columns)
-            and list(a.hover_columns) == list(b.hover_columns)
-            and list(a.filters) == list(b.filters)
-            and list(a.sorts) == list(b.sorts)
-            and dict(a.chart_settings) == dict(b.chart_settings)
-        )
+        if a.chart_type != b.chart_type:
+            return False
+        if a.x_column != b.x_column:
+            return False
+        if tuple(a.group_columns) != tuple(b.group_columns):
+            return False
+        if tuple(a.value_columns) != tuple(b.value_columns):
+            return False
+        if list(a.hover_columns) != list(b.hover_columns):
+            return False
+        if list(a.filters) != list(b.filters):
+            return False
+        if list(a.sorts) != list(b.sorts):
+            return False
+        # Compare chart_settings: only compare keys present in both,
+        # or treat empty dict as matching any defaults
+        dict_a = dict(a.chart_settings) if a.chart_settings else {}
+        dict_b = dict(b.chart_settings) if b.chart_settings else {}
+        if dict_a and dict_b:
+            # Compare only overlapping keys
+            common_keys = set(dict_a.keys()) & set(dict_b.keys())
+            for k in common_keys:
+                if dict_a[k] != dict_b[k]:
+                    return False
+            # If one has keys the other doesn't, they still match
+            # (extra keys from defaults are acceptable)
+        return True

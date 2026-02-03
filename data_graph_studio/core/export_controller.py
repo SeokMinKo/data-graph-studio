@@ -24,7 +24,7 @@ from __future__ import annotations
 import io
 import os
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
@@ -196,8 +196,8 @@ class ExportWorker(QThread):
         self.progress.emit(50)  # Writing file...
 
         # Encode to bytes
-        buf = io.BytesIO()
-        ba = img.save(self.path + ".tmp", "PNG")
+        _buf = io.BytesIO()  # noqa: F841
+        _ba = img.save(self.path + ".tmp", "PNG")  # noqa: F841
         # Instead, use QImage.save to a QByteArray → then atomic write
         from PySide6.QtCore import QByteArray, QBuffer, QIODevice
 

@@ -20,7 +20,7 @@ import logging
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Dict, Optional
 
 from PySide6.QtCore import QObject, Signal
 

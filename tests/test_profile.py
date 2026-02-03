@@ -28,10 +28,14 @@ class TestGraphSetting:
 
     def test_to_dict(self):
         """딕셔너리 변환 테스트"""
+        import dataclasses
         setting = GraphSetting.create_new("Test", "📊")
-        setting.chart_type = "bar"
-        setting.x_column = "date"
-        setting.value_columns = [{"name": "sales", "aggregation": "sum"}]
+        setting = dataclasses.replace(
+            setting,
+            chart_type="bar",
+            x_column="date",
+            value_columns=({"name": "sales", "aggregation": "sum"},),
+        )
 
         data = setting.to_dict()
 
@@ -68,10 +72,10 @@ class TestGraphSetting:
         setting = GraphSetting.create_new("Test")
         original_time = setting.modified_at
 
-        time.sleep(0.01)  # 시간 차이를 위한 대기
-        setting.update_modified()
+        time.sleep(0.02)  # 시간 차이를 위한 대기
+        updated = setting.update_modified()
 
-        assert setting.modified_at > original_time
+        assert updated.modified_at > original_time
 
 
 class TestProfile:
@@ -161,11 +165,11 @@ class TestProfile:
 
     def test_to_json_and_from_json(self):
         """JSON 직렬화/역직렬화 테스트"""
+        import dataclasses
         profile = Profile.create_new("JSON Test")
         profile.description = "Test description"
         setting = GraphSetting.create_new("Test Setting", "📈")
-        setting.chart_type = "line"
-        setting.x_column = "date"
+        setting = dataclasses.replace(setting, chart_type="line", x_column="date")
         profile.add_setting(setting)
         profile.default_setting_id = setting.id
 
@@ -195,11 +199,15 @@ class TestProfile:
 
     def test_check_compatibility(self):
         """호환성 검사 테스트"""
+        import dataclasses
         profile = Profile.create_new("Test")
         setting = GraphSetting.create_new("Setting")
-        setting.x_column = "date"
-        setting.group_columns = [{"name": "category"}]
-        setting.value_columns = [{"name": "sales"}, {"name": "profit"}]
+        setting = dataclasses.replace(setting, x_column="date")
+        setting = dataclasses.replace(
+            setting,
+            group_columns=({"name": "category"},),
+            value_columns=({"name": "sales"}, {"name": "profit"}),
+        )
         profile.add_setting(setting)
 
         # 일부 컬럼만 있는 데이터
@@ -355,16 +363,20 @@ class TestAppStateProfile:
 
     def test_apply_graph_setting(self):
         """GraphSetting 적용 테스트"""
+        import dataclasses
         state = AppState()
 
         setting = GraphSetting.create_new("Test")
-        setting.chart_type = "scatter"
-        setting.x_column = "time"
-        setting.group_columns = [{"name": "category", "selected_values": [], "order": 0}]
-        setting.value_columns = [
-            {"name": "value", "aggregation": "mean", "color": "#ff0000", "use_secondary_axis": False, "order": 0, "formula": ""}
-        ]
-        setting.chart_settings = {"line_width": 3, "marker_size": 8}
+        setting = dataclasses.replace(
+            setting,
+            chart_type="scatter",
+            x_column="time",
+            group_columns=({"name": "category", "selected_values": [], "order": 0},),
+            value_columns=(
+                {"name": "value", "aggregation": "mean", "color": "#ff0000", "use_secondary_axis": False, "order": 0, "formula": ""},
+            ),
+            chart_settings={"line_width": 3, "marker_size": 8},
+        )
 
         state.apply_graph_setting(setting)
 

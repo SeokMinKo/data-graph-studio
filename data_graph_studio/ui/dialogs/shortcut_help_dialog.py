@@ -5,13 +5,12 @@ ShortcutHelpDialog — FR-7.2: 단축키 도움말 다이얼로그
 Cmd+/ 또는 메뉴에서 호출.
 """
 
-from typing import Dict, List, Optional
+from typing import Optional
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget,
     QTreeWidgetItem, QPushButton, QHeaderView, QWidget
 )
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QFont
 
 from ...core.shortcut_controller import ShortcutController

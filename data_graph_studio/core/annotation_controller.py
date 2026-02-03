@@ -19,9 +19,9 @@ from .annotation import Annotation, MAX_ANNOTATION_TEXT_LENGTH
 
 # UndoManager는 다른 에이전트가 구현 중 — optional import
 try:
-    from .undo_manager import UndoManager, UndoAction, UndoActionType
+    from .undo_manager import UndoStack, UndoAction, UndoActionType
 except ImportError:  # pragma: no cover
-    UndoManager = None  # type: ignore[assignment,misc]
+    UndoStack = None  # type: ignore[assignment,misc]
     UndoAction = None  # type: ignore[assignment,misc]
     UndoActionType = None  # type: ignore[assignment,misc]
 

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import ast
 import re
-import math
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import polars as pl
