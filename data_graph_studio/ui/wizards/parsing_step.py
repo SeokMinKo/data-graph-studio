@@ -561,11 +561,17 @@ class ParsingStep(QWizardPage):
                         item.setForeground(excluded_fg)
                     self.preview_table.setItem(i, j, item)
 
-            self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         finally:
             self.preview_table.setUpdatesEnabled(True)
 
-        self._preview_df = pd.DataFrame(data, columns=headers)
+        # 컬럼 너비를 내용 기준으로 한 번만 조정 후 Interactive 모드 유지
+        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.preview_table.resizeColumnsToContents()
+
+        try:
+            self._preview_df = pd.DataFrame(data, columns=headers)
+        except Exception:
+            self._preview_df = pd.DataFrame()
         self._parsing_success = True
         self.progress_bar.setValue(100)
         self.progress_bar.setFormat("Ready (%p%)")
