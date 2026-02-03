@@ -182,7 +182,7 @@ class GraphSetupStep(QWizardPage):
 
         return GraphSetting(
             id=str(uuid.uuid4()),
-            name="Default Graph",
+            name="Profile_1",
             dataset_id=dataset_id,
             chart_type=self.chart_type_combo.currentText(),
             x_column=x_col,
