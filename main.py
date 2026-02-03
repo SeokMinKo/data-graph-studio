@@ -17,6 +17,13 @@ from datetime import datetime
 if sys.platform == 'win32':
     os.environ.setdefault('QT_QPA_PLATFORM', 'windows:fontengine=freetype')
 
+# macOS: Qt 접근성 서브시스템 비활성화
+# QAccessibleTree::indexFromLogical 에서 ProjectTreeView 빈 모델 접근 시 segfault 방지
+# Ref: https://bugreports.qt.io/browse/QTBUG-104white (PySide6 + QTreeView accessibility crash)
+if sys.platform == 'darwin':
+    os.environ.setdefault('QT_MAC_WANTS_LAYER', '1')
+    os.environ.setdefault('QT_ACCESSIBILITY', '0')
+
 # 로깅 설정
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 os.makedirs(log_dir, exist_ok=True)

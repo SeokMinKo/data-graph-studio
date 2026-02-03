@@ -236,8 +236,15 @@ class MiniGraphWidget(QWidget):
     # ------------------------------------------------------------------
 
     def refresh(self):
-        """새로고침"""
-        self._setup_ui()
+        """새로고침 — clear and replot (safe re-render)."""
+        try:
+            if self.plot_widget is not None:
+                self.plot_widget.clear()
+                metadata = self.state.get_dataset_metadata(self.dataset_id)
+                color = metadata.color if metadata else '#1f77b4'
+                self._plot_data(color)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # ViewSyncManager duck-typing interface

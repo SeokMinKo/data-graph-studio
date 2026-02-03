@@ -3,10 +3,27 @@ from __future__ import annotations
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QPainter, QPalette
+from PySide6.QtGui import QPainter, QPalette, QAccessible
 from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem, QStyle
 
 from ..models.profile_model import ProfileModel
+
+
+class _SafeAccessibleTreeView(QTreeView):
+    """QTreeView subclass that suppresses accessibility crashes.
+
+    macOS accessibility (QAccessibleTree::indexFromLogical) can segfault when
+    the model is empty or being reset.  Workaround: install a null model so
+    the accessibility subsystem sees rowCount()==0 from the start.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Install an empty model immediately so Qt accessibility never queries
+        # an uninitialized tree.  The real model replaces it via set_model().
+        from PySide6.QtGui import QStandardItemModel
+        self._placeholder_model = QStandardItemModel(0, 1, self)
+        self.setModel(self._placeholder_model)
 
 
 class _ChartIconDelegate(QStyledItemDelegate):
@@ -49,7 +66,7 @@ class _ChartIconDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
-class ProjectTreeView(QTreeView):
+class ProjectTreeView(_SafeAccessibleTreeView):
     # Signals
     profile_activated = Signal(str)  # profile_id
     profile_selected = Signal(str)  # profile_id
@@ -74,6 +91,9 @@ class ProjectTreeView(QTreeView):
     def set_model(self, model: ProfileModel):
         self._model = model
         self.setModel(model)
+        # Discard placeholder now that real model is installed
+        if hasattr(self, '_placeholder_model'):
+            self._placeholder_model = None
         if self.selectionModel():
             self.selectionModel().selectionChanged.connect(self._on_selection_changed)
 

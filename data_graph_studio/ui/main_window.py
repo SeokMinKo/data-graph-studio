@@ -892,17 +892,18 @@ class MainWindow(QMainWindow):
         os.makedirs(os.path.dirname(self._autosave_path), exist_ok=True)
 
         # Prompt recovery if autosave exists
+        # Skip if autosave is stale (>24h) to avoid blocking on repeated crashes
         if os.path.exists(self._autosave_path):
             try:
-                msg = QMessageBox(self)
-                msg.setIcon(QMessageBox.Question)
-                msg.setWindowTitle("Recovery")
-                msg.setText("A previous session was not closed properly.\nRecover the last autosave?")
-                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                if msg.exec() == QMessageBox.Yes:
-                    self._restore_autosave()
-                else:
+                import time as _time
+                age = _time.time() - os.path.getmtime(self._autosave_path)
+                if age > 86400:  # >24h → discard silently
                     os.remove(self._autosave_path)
+                else:
+                    # Use QTimer.singleShot to show dialog AFTER event loop starts
+                    # so IPC server is already running and accessible
+                    from PySide6.QtCore import QTimer as _QTimer
+                    _QTimer.singleShot(500, self._prompt_recovery)
             except Exception:
                 pass
 
@@ -911,6 +912,23 @@ class MainWindow(QMainWindow):
         self._autosave_timer.setInterval(60 * 1000)  # 1 minute
         self._autosave_timer.timeout.connect(self._autosave_session)
         self._autosave_timer.start()
+
+    def _prompt_recovery(self):
+        """Show recovery dialog (deferred via QTimer so IPC is already up)."""
+        if not os.path.exists(self._autosave_path):
+            return
+        try:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Question)
+            msg.setWindowTitle("Recovery")
+            msg.setText("A previous session was not closed properly.\nRecover the last autosave?")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            if msg.exec() == QMessageBox.Yes:
+                self._restore_autosave()
+            else:
+                os.remove(self._autosave_path)
+        except Exception:
+            pass
 
     def _autosave_session(self):
         """Autosave datasets + graph settings + drawings"""
@@ -1244,7 +1262,8 @@ class MainWindow(QMainWindow):
             'graph_panel': self.graph_panel,
             'summary_panel': self.summary_panel,
         }
-        return eval(code, {'__builtins__': {}}, local_vars)
+        import builtins as _builtins
+        return eval(code, {'__builtins__': _builtins}, local_vars)
 
     # ==================== IPC Zone Control Handlers ====================
 
