@@ -638,10 +638,6 @@ class MainWindow(QMainWindow):
 
         self._preset_combo = QComboBox()
         self._preset_combo.setMinimumWidth(120)
-        # Style handled by global theme stylesheet
-                width: 20px;
-            }
-        """)
         self._preset_combo.setToolTip("Load saved preset")
         self._preset_combo.currentTextChanged.connect(self._on_preset_selected)
         toolbar.addWidget(self._preset_combo)

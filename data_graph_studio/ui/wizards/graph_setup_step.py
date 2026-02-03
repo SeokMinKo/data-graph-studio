@@ -329,19 +329,34 @@ class GraphSetupStep(QWizardPage):
     @staticmethod
     def _extract_series(df, column: str) -> Optional[np.ndarray]:
         try:
+            # Get raw series first
             if hasattr(df, "to_pandas"):
-                series = df[column].to_pandas()
-                return series.to_numpy(dtype=float)
-            if hasattr(df, "__class__") and df.__class__.__name__.lower().startswith("dataframe"):
-                # pandas DataFrame
-                return df[column].to_numpy(dtype=float)
-            # polars DataFrame
-            if hasattr(df, "__getitem__"):
+                raw = df[column].to_pandas()
+            elif hasattr(df, "__class__") and df.__class__.__name__.lower().startswith("dataframe"):
+                raw = df[column]
+            elif hasattr(df, "__getitem__"):
                 series = df[column]
-                if hasattr(series, "to_numpy"):
-                    return series.to_numpy().astype(float)
                 if hasattr(series, "to_list"):
-                    return np.array(series.to_list(), dtype=float)
+                    raw_list = series.to_list()
+                    try:
+                        return np.array(raw_list, dtype=float)
+                    except (ValueError, TypeError):
+                        return np.arange(len(raw_list), dtype=float)
+                return None
+            else:
+                return None
+            
+            # Try numeric conversion
+            try:
+                import pandas as pd
+                numeric = pd.to_numeric(raw, errors='coerce')
+                result = numeric.to_numpy(dtype=float)
+                # If all NaN, use index instead
+                if np.all(np.isnan(result)):
+                    return np.arange(len(raw), dtype=float)
+                return result
+            except Exception:
+                return np.arange(len(raw), dtype=float)
         except Exception:
             return None
         return None
