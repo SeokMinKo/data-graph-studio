@@ -33,6 +33,7 @@ class PolarsTableModel(QAbstractTableModel):
     - 컬럼 기반 캐싱 (Polars는 컬럼 지향이므로)
     - 직접 인덱스 접근으로 iter_rows() 회피
     - 필요한 데이터만 로드
+    - 정렬 인덱스 기반 접근 (메모리 효율)
     """
 
     # 테이블에 표시할 최대 행 수 (성능 보장)
@@ -41,18 +42,28 @@ class PolarsTableModel(QAbstractTableModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._df: Optional[pl.DataFrame] = None
+        self._original_df: Optional[pl.DataFrame] = None  # 정렬 전 원본
         self._visible_columns: List[str] = []
         self._row_count = 0
         self._actual_row_count = 0  # 실제 데이터 행 수
         # 컬럼 기반 캐시: column_index -> list of values
         self._column_cache: Dict[int, list] = {}
         self._cache_valid = False
+        # 정렬 상태
+        self._sort_column: Optional[int] = None
+        self._sort_order: Optional[Qt.SortOrder] = None
+        self._sort_indices: Optional[pl.Series] = None  # 원본 인덱스 매핑
 
     def set_dataframe(self, df: Optional[pl.DataFrame]):
         self.beginResetModel()
         self._df = df
+        self._original_df = df  # 원본 저장
         self._column_cache.clear()
         self._cache_valid = False
+        # 정렬 상태 초기화
+        self._sort_column = None
+        self._sort_order = None
+        self._sort_indices = None
         if df is not None:
             self._visible_columns = df.columns
             self._actual_row_count = len(df)
@@ -122,7 +133,14 @@ class PolarsTableModel(QAbstractTableModel):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
                 if 0 <= section < len(self._visible_columns):
-                    return self._visible_columns[section]
+                    col_name = self._visible_columns[section]
+                    # 정렬 아이콘 추가
+                    if self._sort_column == section:
+                        if self._sort_order == Qt.AscendingOrder:
+                            return f"{col_name} ▲"
+                        else:
+                            return f"{col_name} ▼"
+                    return col_name
             else:
                 return str(section + 1)
         return None
@@ -135,6 +153,116 @@ class PolarsTableModel(QAbstractTableModel):
     def get_actual_row_count(self) -> int:
         """실제 데이터 행 수 (표시 제한과 무관)"""
         return self._actual_row_count
+
+    # ==================== 정렬 기능 ====================
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder):
+        """컬럼 기준 정렬
+
+        Args:
+            column: 정렬할 컬럼 인덱스
+            order: Qt.AscendingOrder 또는 Qt.DescendingOrder
+        """
+        if self._original_df is None:
+            return
+
+        if column < 0 or column >= len(self._visible_columns):
+            return
+
+        col_name = self._visible_columns[column]
+
+        self.beginResetModel()
+        try:
+            # 원본 데이터에 row_index 추가
+            df_with_idx = self._original_df.with_row_index("__original_idx__")
+
+            # 정렬 수행
+            descending = (order == Qt.DescendingOrder)
+            sorted_df = df_with_idx.sort(
+                col_name,
+                descending=descending,
+                nulls_last=True
+            )
+
+            # 원본 인덱스 저장 (Int32로 메모리 효율화)
+            self._sort_indices = sorted_df["__original_idx__"].cast(pl.Int32)
+
+            # 정렬된 DataFrame 저장 (인덱스 컬럼 제거)
+            self._df = sorted_df.drop("__original_idx__")
+
+            # 캐시 무효화
+            self._column_cache.clear()
+
+            # 정렬 상태 저장
+            self._sort_column = column
+            self._sort_order = order
+
+        except Exception as e:
+            # 정렬 실패 시 원본 유지
+            print(f"Sort error: {e}")
+            self._df = self._original_df
+            self._sort_column = None
+            self._sort_order = None
+            self._sort_indices = None
+
+        self.endResetModel()
+
+    def clear_sort(self):
+        """정렬 초기화 (원본 순서로 복원)"""
+        if self._original_df is None:
+            return
+
+        self.beginResetModel()
+        self._df = self._original_df
+        self._column_cache.clear()
+        self._sort_column = None
+        self._sort_order = None
+        self._sort_indices = None
+        self.endResetModel()
+
+    def get_sort_column(self) -> Optional[int]:
+        """현재 정렬된 컬럼 인덱스 반환"""
+        return self._sort_column
+
+    def get_sort_order(self) -> Optional[Qt.SortOrder]:
+        """현재 정렬 순서 반환"""
+        return self._sort_order
+
+    def get_original_row_index(self, sorted_row: int) -> Optional[int]:
+        """정렬된 행 인덱스에서 원본 행 인덱스 반환
+
+        Args:
+            sorted_row: 정렬된 테이블에서의 행 인덱스
+
+        Returns:
+            원본 DataFrame에서의 행 인덱스
+        """
+        if self._sort_indices is None:
+            return sorted_row  # 정렬 안 된 경우 그대로 반환
+
+        if 0 <= sorted_row < len(self._sort_indices):
+            return int(self._sort_indices[sorted_row])
+
+        return None
+
+    def get_sorted_row_index(self, original_row: int) -> Optional[int]:
+        """원본 행 인덱스에서 정렬된 행 인덱스 반환
+
+        Args:
+            original_row: 원본 DataFrame에서의 행 인덱스
+
+        Returns:
+            정렬된 테이블에서의 행 인덱스
+        """
+        if self._sort_indices is None:
+            return original_row
+
+        # 역 매핑 (선형 검색, 필요시 최적화 가능)
+        try:
+            indices_list = self._sort_indices.to_list()
+            return indices_list.index(original_row)
+        except ValueError:
+            return None
 
 
 def _parse_drag_payload(mime_data: QMimeData) -> Dict[str, Any]:
@@ -1625,9 +1753,17 @@ class TablePanel(QWidget):
         self.hidden_bar.show_all.connect(self._on_show_all_columns)
         table_layout.addWidget(self.hidden_bar)
         
-        # Search bar
+        # Search bar with debouncing, clear button, and result count
         search_layout = QHBoxLayout()
         search_layout.setContentsMargins(0, 0, 0, 6)
+        search_layout.setSpacing(8)
+        
+        # Search input container (for clear button overlay)
+        search_container = QFrame()
+        search_container.setStyleSheet("QFrame { background: transparent; border: none; }")
+        search_container_layout = QHBoxLayout(search_container)
+        search_container_layout.setContentsMargins(0, 0, 0, 0)
+        search_container_layout.setSpacing(0)
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 Search data...")
@@ -1637,6 +1773,7 @@ class TablePanel(QWidget):
                 border: 1px solid #E2E8F0;
                 border-radius: 8px;
                 padding: 8px 14px;
+                padding-right: 30px;
                 font-size: 12px;
                 color: #334155;
             }
@@ -1645,10 +1782,56 @@ class TablePanel(QWidget):
                 background: #FAFAFF;
             }
         """)
-        self.search_input.textChanged.connect(self._on_search)
-        search_layout.addWidget(self.search_input)
+        search_container_layout.addWidget(self.search_input)
+        
+        # Clear button (inside search input)
+        self.search_clear_btn = QPushButton("×")
+        self.search_clear_btn.setFixedSize(20, 20)
+        self.search_clear_btn.setStyleSheet("""
+            QPushButton {
+                background: #E2E8F0;
+                color: #64748B;
+                border: none;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #CBD5E1;
+                color: #334155;
+            }
+        """)
+        self.search_clear_btn.setToolTip("Clear search")
+        self.search_clear_btn.clicked.connect(self._clear_search)
+        self.search_clear_btn.hide()  # Hidden when empty
+        search_container_layout.addWidget(self.search_clear_btn)
+        
+        search_layout.addWidget(search_container, 1)
+        
+        # Search result count label
+        self.search_result_label = QLabel("")
+        self.search_result_label.setStyleSheet("""
+            QLabel {
+                color: #64748B;
+                font-size: 11px;
+                padding: 0 8px;
+                background: transparent;
+            }
+        """)
+        self.search_result_label.setMinimumWidth(80)
+        search_layout.addWidget(self.search_result_label)
         
         table_layout.addLayout(search_layout)
+        
+        # Search debounce timer (300ms)
+        self._search_debounce_timer = QTimer(self)
+        self._search_debounce_timer.setSingleShot(True)
+        self._search_debounce_timer.setInterval(300)
+        self._search_debounce_timer.timeout.connect(self._execute_search)
+        self._pending_search_text = ""
+        
+        # Connect search input to debounced search
+        self.search_input.textChanged.connect(self._on_search_text_changed)
         
         # Toolbar
         toolbar = QHBoxLayout()
@@ -1918,13 +2101,72 @@ class TablePanel(QWidget):
             self.grouped_model.set_data(None)
         self.group_info_label.setText("")
     
-    def _on_search(self, text: str):
-        if not text or not self.engine.is_loaded:
+    def _on_search_text_changed(self, text: str):
+        """Handle search text change with debouncing"""
+        self._pending_search_text = text
+        
+        # Show/hide clear button
+        if text:
+            self.search_clear_btn.show()
+        else:
+            self.search_clear_btn.hide()
+            self.search_result_label.setText("")
+        
+        # Start debounce timer
+        self._search_debounce_timer.start()
+    
+    def _execute_search(self):
+        """Execute search after debounce delay"""
+        text = self._pending_search_text
+        
+        if not self.engine.is_loaded:
+            return
+        
+        if not text:
             self._update_table_model(self.engine.df)
+            self.search_result_label.setText("")
             return
         
         result = self.engine.search(text)
+        
+        # Update result count
+        if result is not None:
+            count = len(result)
+            if count == 0:
+                self.search_result_label.setText("No results")
+                self.search_result_label.setStyleSheet("""
+                    QLabel {
+                        color: #EF4444;
+                        font-size: 11px;
+                        padding: 0 8px;
+                        background: transparent;
+                    }
+                """)
+            else:
+                self.search_result_label.setText(f"{count:,} results")
+                self.search_result_label.setStyleSheet("""
+                    QLabel {
+                        color: #10B981;
+                        font-size: 11px;
+                        padding: 0 8px;
+                        background: transparent;
+                    }
+                """)
+        
         self._update_table_model(result)
+    
+    def _clear_search(self):
+        """Clear search input and restore full data"""
+        self.search_input.clear()
+        self.search_clear_btn.hide()
+        self.search_result_label.setText("")
+        self._search_debounce_timer.stop()
+        if self.engine.is_loaded:
+            self._update_table_model(self.engine.df)
+    
+    def _on_search(self, text: str):
+        """Legacy search handler (kept for compatibility)"""
+        self._on_search_text_changed(text)
     
     def _on_rows_selected(self, rows: List[int]):
         if self.grouped_model and self.state.group_columns:
