@@ -2555,6 +2555,26 @@ class MainGraph(pg.PlotWidget):
         self._is_drawing = False
         self._drawing_start = None
 
+    def apply_theme(self, is_light: bool):
+        """Apply theme colors to main graph"""
+        bg_color = '#F8FAFC' if is_light else '#1E293B'
+        grid_color = '#E5E7EB' if is_light else '#374151'
+        text_color = '#111827' if is_light else '#F1F5F9'
+        
+        self.setBackground(bg_color)
+        
+        # Update axis colors
+        for axis_name in ['bottom', 'left']:
+            axis = self.getAxis(axis_name)
+            if axis:
+                axis.setPen(pg.mkPen(grid_color))
+                axis.setTextPen(pg.mkPen(text_color))
+        
+        # Update sampling label color
+        if hasattr(self, '_sampling_label'):
+            label_color = '#6B7280' if is_light else '#C2C8D1'
+            self._sampling_label.setColor(label_color)
+
 
 # ==================== Graph Panel ====================
 

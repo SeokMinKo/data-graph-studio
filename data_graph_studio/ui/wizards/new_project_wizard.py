@@ -51,3 +51,38 @@ class NewProjectWizard(QWizard):
         """마법사 취소 시 cleanup"""
         self._preview_df = None
         super().cleanupPage(page_id)
+    
+    def accept(self) -> None:
+        """마법사 완료 (Finish 버튼)"""
+        # 각 단계에서 설정 수집
+        parsing_page = self.page(0)
+        graph_page = self.page(1)
+        finish_page = self.page(2)
+        
+        parsing_settings = None
+        graph_setting = None
+        preview_df = None
+        project_name = None
+        
+        if parsing_page and hasattr(parsing_page, "get_parsing_settings"):
+            parsing_settings = parsing_page.get_parsing_settings()
+        
+        if parsing_page and hasattr(parsing_page, "get_preview_df"):
+            preview_df = parsing_page.get_preview_df()
+        
+        if graph_page and hasattr(graph_page, "get_graph_setting"):
+            graph_setting = graph_page.get_graph_setting()
+        
+        if finish_page and hasattr(finish_page, "get_project_name"):
+            project_name = finish_page.get_project_name()
+        
+        # 시그널 발생
+        result = {
+            'parsing_settings': parsing_settings,
+            'graph_setting': graph_setting,
+            'preview_df': preview_df,
+            'project_name': project_name,
+        }
+        self.project_created.emit(result)
+        
+        super().accept()

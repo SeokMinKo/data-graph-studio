@@ -315,13 +315,13 @@ class ThemeManager:
             /* ============ Cards & Surfaces ============ */
             QFrame {{
                 background-color: {t.surface};
-                border: none;
+                border: {"1px solid #E5E7EB" if t.is_light() else "none"};
                 border-radius: 8px;
             }}
             
             QFrame[frameShape="4"] {{  /* StyledPanel */
                 background-color: {t.surface};
-                border: none;
+                border: {"1px solid #D1D5DB" if t.is_light() else "none"};
                 border-radius: 8px;
                 padding: 4px;
             }}
@@ -739,6 +739,35 @@ class ThemeManager:
                 border-bottom: 2px solid {t.primary};
             }}
             
+            /* ============ Wizard ============ */
+            QWizard {{
+                background-color: {t.background};
+            }}
+            
+            QWizard > QWidget {{
+                background-color: {t.background};
+            }}
+            
+            QWizard QLabel#qt_wizard_title {{
+                background-color: {"#F3F4F6" if t.is_light() else t.surface};
+                color: {t.foreground};
+                font-size: 16px;
+                font-weight: 600;
+                padding: 16px 24px;
+                border-bottom: {"1px solid #E5E7EB" if t.is_light() else f"1px solid {t.border}"};
+            }}
+            
+            QWizard QLabel#qt_wizard_subtitle {{
+                background-color: {"#F3F4F6" if t.is_light() else t.surface};
+                color: {t.text_secondary};
+                padding: 8px 24px 16px 24px;
+            }}
+            
+            QWizard QWidget#qt_wizard_header {{
+                background-color: {"#F3F4F6" if t.is_light() else t.surface};
+                border-bottom: {"1px solid #E5E7EB" if t.is_light() else f"1px solid {t.border}"};
+            }}
+            
             /* ============ Tooltips ============ */
             QToolTip {{
                 background-color: {t.surface};
@@ -786,7 +815,7 @@ class ThemeManager:
             /* ============ Panel Backgrounds ============ */
             #GraphOptionsPanel, #LegendPanel, #StatPanel {{
                 background-color: {t.surface};
-                border: none;
+                border: {"1px solid #E5E7EB" if t.is_light() else "none"};
                 border-radius: 8px;
             }}
             

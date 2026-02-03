@@ -3676,10 +3676,15 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         stylesheet = self._theme_manager.generate_stylesheet()
         QApplication.instance().setStyleSheet(stylesheet)
         
-        # Apply theme to stat panel mini-graphs
+        # Apply theme to graph panel components
         is_light = self._theme_manager.current_theme.is_light()
-        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
-            self.graph_panel.stat_panel.apply_theme(is_light)
+        if hasattr(self, 'graph_panel'):
+            # Main graph
+            if hasattr(self.graph_panel, 'main_graph'):
+                self.graph_panel.main_graph.apply_theme(is_light)
+            # Stat panel mini-graphs
+            if hasattr(self.graph_panel, 'stat_panel'):
+                self.graph_panel.stat_panel.apply_theme(is_light)
         
         self.statusbar.showMessage(f"Theme changed to {theme_id.title()}", 3000)
 
