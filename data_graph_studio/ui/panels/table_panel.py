@@ -597,7 +597,8 @@ class XAxisZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("XAxisZone")
-        self.setFixedWidth(150)
+        self.setMinimumWidth(120)
+        self.setMaximumWidth(150)
         self.setAcceptDrops(True)
         
         self._setup_ui()
@@ -733,7 +734,8 @@ class GroupZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GroupZone")
-        self.setFixedWidth(140)
+        self.setMinimumWidth(100)
+        self.setMaximumWidth(140)
         self.setAcceptDrops(True)
         
         self._setup_ui()
@@ -1552,8 +1554,8 @@ class TablePanel(QWidget):
         # Left panel: X Zone + Group Zone
         self.left_panel = QWidget()
         left_layout = QHBoxLayout(self.left_panel)
-        left_layout.setContentsMargins(4, 4, 4, 4)
-        left_layout.setSpacing(6)
+        left_layout.setContentsMargins(0, 4, 0, 4)
+        left_layout.setSpacing(4)
 
         # X Zone
         self.x_zone = XAxisZone(self.state)
