@@ -301,19 +301,19 @@ class DataTab(QWidget):
         self._main_layout.addWidget(_make_separator())
 
         # --- Group By -------------------------------------------------------
-        self._main_layout.addLayout(
-            _make_section_header(
-                "Group By",
-                on_none=self._select_none_group,
-            )
-        )
+        group_header = QLabel("Group By")
+        group_header.setObjectName("sectionHeader")
+        self._main_layout.addWidget(group_header)
 
-        self._group_search = QLineEdit()
-        self._group_search.setPlaceholderText("🔍 Search columns...")
-        self._group_search.setFixedHeight(22)
-        self._group_search.setClearButtonEnabled(True)
-        self._group_search.textChanged.connect(self._filter_group_items)
-        self._main_layout.addWidget(self._group_search)
+        self._group_combo = QComboBox()
+        self._group_combo.setEditable(True)
+        self._group_combo.setInsertPolicy(QComboBox.NoInsert)
+        self._group_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._group_combo.setMinimumHeight(24)
+        if self._group_combo.lineEdit():
+            self._group_combo.lineEdit().setPlaceholderText("🔍 Search column...")
+        self._group_combo.currentIndexChanged.connect(self._on_group_combo_changed)
+        self._main_layout.addWidget(self._group_combo)
 
         # Aggregation type for grouped data
         agg_row = QHBoxLayout()
@@ -329,20 +329,6 @@ class DataTab(QWidget):
         self._agg_combo.currentIndexChanged.connect(self._on_global_agg_changed)
         agg_row.addWidget(self._agg_combo, 1)
         self._main_layout.addLayout(agg_row)
-
-        self._group_scroll = QScrollArea()
-        self._group_scroll.setWidgetResizable(True)
-        self._group_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._group_scroll.setMaximumHeight(_GROUP_MAX_HEIGHT)
-        self._group_scroll.setFrameShape(QFrame.NoFrame)
-
-        self._group_container = QWidget()
-        self._group_layout = QVBoxLayout(self._group_container)
-        self._group_layout.setContentsMargins(0, 0, 0, 0)
-        self._group_layout.setSpacing(2)
-        self._group_layout.addStretch()
-        self._group_scroll.setWidget(self._group_container)
-        self._main_layout.addWidget(self._group_scroll)
 
         self._main_layout.addWidget(_make_separator())
 
@@ -513,12 +499,13 @@ class DataTab(QWidget):
             self._y_layout.insertWidget(self._y_layout.count() - 1, item)
 
     def _rebuild_group_list(self) -> None:
-        self._clear_group_checks()
+        self._group_combo.blockSignals(True)
+        self._group_combo.clear()
+        self._group_combo.addItem("(None)", None)
         for col in self._all_columns:
-            cb = QCheckBox(col)
-            cb.stateChanged.connect(functools.partial(self._on_group_checked, col))
-            self._group_checks[col] = cb
-            self._group_layout.insertWidget(self._group_layout.count() - 1, cb)
+            self._group_combo.addItem(col, col)
+        self._group_combo.setCurrentIndex(0)
+        self._group_combo.blockSignals(False)
 
     def _rebuild_hover_list(self) -> None:
         self._clear_hover_checks()
@@ -537,9 +524,9 @@ class DataTab(QWidget):
         self._y_items.clear()
 
     def _clear_group_checks(self) -> None:
-        for cb in self._group_checks.values():
-            cb.setParent(None)
-            cb.deleteLater()
+        self._group_combo.blockSignals(True)
+        self._group_combo.clear()
+        self._group_combo.blockSignals(False)
         self._group_checks.clear()
 
     def _clear_hover_checks(self) -> None:
@@ -661,11 +648,15 @@ class DataTab(QWidget):
             return
         self._syncing = True
         try:
-            group_names = {gc.name for gc in self._state.group_columns}
-            for col, cb in self._group_checks.items():
-                cb.blockSignals(True)
-                cb.setChecked(col in group_names)
-                cb.blockSignals(False)
+            self._group_combo.blockSignals(True)
+            if self._state.group_columns:
+                col = self._state.group_columns[0].name
+                idx = self._group_combo.findData(col)
+                if idx >= 0:
+                    self._group_combo.setCurrentIndex(idx)
+            else:
+                self._group_combo.setCurrentIndex(0)  # (None)
+            self._group_combo.blockSignals(False)
         finally:
             self._syncing = False
 
@@ -764,7 +755,22 @@ class DataTab(QWidget):
 
     # -- Group By ------------------------------------------------------------
 
+    @Slot(int)
+    def _on_group_combo_changed(self, _index: int) -> None:
+        """Group By 콤보박스 변경"""
+        if self._syncing:
+            return
+        col = self._group_combo.currentData()
+        self._syncing = True
+        try:
+            self._state.clear_group_zone()
+            if col is not None:
+                self._state.add_group_column(col)
+        finally:
+            self._syncing = False
+
     def _on_group_checked(self, column_name: str, state: int) -> None:
+        """Legacy — kept for compat."""
         if self._syncing:
             return
         self._syncing = True
@@ -816,15 +822,12 @@ class DataTab(QWidget):
 
     def _select_none_group(self) -> None:
         self._syncing = True
-        self.setUpdatesEnabled(False)
         try:
-            for cb in self._group_checks.values():
-                cb.blockSignals(True)
-                cb.setChecked(False)
-                cb.blockSignals(False)
+            self._group_combo.blockSignals(True)
+            self._group_combo.setCurrentIndex(0)  # (None)
+            self._group_combo.blockSignals(False)
             self._state.clear_group_zone()
         finally:
-            self.setUpdatesEnabled(True)
             self._syncing = False
 
     def _select_none_hover(self) -> None:
@@ -853,10 +856,8 @@ class DataTab(QWidget):
 
     @Slot(str)
     def _filter_group_items(self, text: str) -> None:
-        """Group By 체크박스 목록 필터링"""
-        query = text.strip().lower()
-        for col, cb in self._group_checks.items():
-            cb.setVisible(query == "" or query in col.lower())
+        """Legacy — Group By is now a combo box with built-in search."""
+        pass
 
     @Slot(str)
     def _filter_hover_items(self, text: str) -> None:
