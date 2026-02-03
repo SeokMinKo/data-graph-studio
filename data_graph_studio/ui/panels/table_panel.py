@@ -987,9 +987,6 @@ class DataTableView(QTableView):
         self.horizontalHeader().sectionPressed.connect(self._on_header_pressed)
         self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
         self.horizontalHeader().installEventFilter(self)
-        self._header_drag_start = None
-        self._header_drag_col = None
-        self._header_ctrl_pressed = False
         
         self.selectionModel_connected = False
     
@@ -1000,10 +997,8 @@ class DataTableView(QTableView):
             self.selectionModel_connected = True
     
     def _on_header_pressed(self, logical_index: int):
-        # Store for potential drag-to-zone (reorder still handled by header)
-        model = self.model()
-        if model:
-            self._header_drag_col = model.get_column_name(logical_index)
+        # Store column name for context menu / reorder
+        pass
 
     def _on_header_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int):
         model = self.model()
@@ -1020,28 +1015,7 @@ class DataTableView(QTableView):
             self.column_order_changed.emit(order)
 
     def eventFilter(self, obj, event):
-        if obj is self.horizontalHeader():
-            if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-                self._header_drag_start = event.pos()
-                self._header_ctrl_pressed = bool(event.modifiers() & Qt.ControlModifier)
-            elif event.type() == QEvent.MouseMove and (event.buttons() & Qt.LeftButton):
-                # Ctrl+드래그: 컬럼을 Zone(X-Axis, Y-Axis, Group, Hover)으로 드래그
-                if self._header_ctrl_pressed and self._header_drag_start is not None and self._header_drag_col:
-                    distance = (event.pos() - self._header_drag_start).manhattanLength()
-                    if distance >= QApplication.startDragDistance():
-                        drag = QDrag(self)
-                        mime = QMimeData()
-                        mime.setText(self._header_drag_col)
-                        mime.setData("application/x-dgs-zone", _build_drag_payload("table", self._header_drag_col, None))
-                        drag.setMimeData(mime)
-                        drag.exec(Qt.CopyAction)
-                        self._header_drag_start = None
-                        self._header_drag_col = None
-                        self._header_ctrl_pressed = False
-                        return True
-            elif event.type() == QEvent.MouseButtonRelease:
-                self._header_drag_start = None
-                self._header_ctrl_pressed = False
+        # Ctrl+drag to zones removed (zones moved to Data tab in Chart Options)
         return super().eventFilter(obj, event)
     
     def _on_selection_changed(self, selected, deselected):
@@ -1329,14 +1303,13 @@ class HiddenColumnsBar(QFrame):
 
 class TablePanel(QWidget):
     """
-    Table Panel
+    Table Panel - Data table with full width (zones removed to Data tab in Chart Options).
 
     구조:
-    ┌──────────┬──────────┬─────────────────────┬────────────┬──────────┐
-    │  X Zone  │  Group   │     Data Table      │   Values   │  Hover   │
-    │ (150px)  │  Zone    │                     │   Zone     │  Zone    │
-    │          │ (150px)  │                     │  (180px)   │ (150px)  │
-    └──────────┴──────────┴─────────────────────┴────────────┴──────────┘
+    ┌─────────────────────────────────────────────────────────┐
+    │                      Data Table                         │
+    │                  (전체 너비 활용)                          │
+    └─────────────────────────────────────────────────────────┘
     """
 
     file_dropped = Signal(str)
@@ -1354,31 +1327,11 @@ class TablePanel(QWidget):
         self._connect_signals()
     
     def _setup_ui(self):
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self.splitter = QSplitter(Qt.Horizontal)
-        self.splitter.setHandleWidth(1)
-        self.splitter.setObjectName("themeSplitter")
-
-        # Left panel: X Zone + Group Zone
-        self.left_panel = QWidget()
-        left_layout = QHBoxLayout(self.left_panel)
-        left_layout.setContentsMargins(0, 4, 0, 4)
-        left_layout.setSpacing(4)
-
-        # X Zone
-        self.x_zone = XAxisZone(self.state)
-        left_layout.addWidget(self.x_zone)
-
-        # Group Zone
-        self.group_zone = GroupZone(self.state)
-        left_layout.addWidget(self.group_zone)
-
-        self.splitter.addWidget(self.left_panel)
-        
-        # Table area (center)
+        # Table area (full width - zones removed to Data tab)
         table_container = QWidget()
         table_layout = QVBoxLayout(table_container)
         table_layout.setContentsMargins(4, 4, 4, 4)
@@ -1528,31 +1481,7 @@ class TablePanel(QWidget):
         
         table_layout.addWidget(self.table_view)
 
-        self.splitter.addWidget(table_container)
-
-        # Right panel: Value Zone + Hover Zone
-        self.right_panel = QWidget()
-        right_layout = QHBoxLayout(self.right_panel)
-        right_layout.setContentsMargins(4, 4, 4, 4)
-        right_layout.setSpacing(6)
-
-        # Value Zone
-        self.value_zone = ValueZone(self.state)
-        right_layout.addWidget(self.value_zone)
-
-        # Hover Zone
-        self.hover_zone = HoverZone(self.state)
-        right_layout.addWidget(self.hover_zone)
-
-        self.splitter.addWidget(self.right_panel)
-
-        # Splitter sizes
-        self.splitter.setSizes([280, 500, 360])
-        self.splitter.setStretchFactor(0, 0)
-        self.splitter.setStretchFactor(1, 1)
-        self.splitter.setStretchFactor(2, 0)
-
-        layout.addWidget(self.splitter)
+        layout.addWidget(table_container)
     
     def _connect_signals(self):
         self.table_view.rows_selected.connect(self._on_rows_selected)
@@ -1565,13 +1494,8 @@ class TablePanel(QWidget):
         self.state.group_zone_changed.connect(self._on_group_zone_changed)
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
         self.state.filter_changed.connect(self._on_filter_changed)
-        self.state.hover_zone_changed.connect(self._on_hover_zone_changed)
         self.state.limit_to_marking_changed.connect(self._on_limit_to_marking_changed)
         self.state.selection_changed.connect(self._on_selection_for_limit_marking)
-
-    def _on_hover_zone_changed(self):
-        """Hover zone changed - trigger refresh if needed"""
-        pass  # Hover data is managed by GraphPanel
 
     def _on_column_order_changed(self, order: List[str]):
         """Update column order in state and refresh model"""
@@ -1866,19 +1790,30 @@ class TablePanel(QWidget):
             QMessageBox.warning(self, "Exclude Column", f"Failed to exclude column: {e}")
     
     def _on_column_action(self, action: str):
-        """Handle column actions from context menu"""
+        """Handle column actions from header context menu (Set as X/Y/Group/Hover)"""
+        feedback = ""
         if action.startswith("X:"):
             column = action[2:]
             self.state.set_x_column(column)
+            feedback = f"Set '{column}' as X-Axis"
         elif action.startswith("G:"):
             column = action[2:]
             self.state.add_group_column(column)
+            feedback = f"Added '{column}' to Group By"
         elif action.startswith("V:"):
             column = action[2:]
             self.state.add_value_column(column)
+            feedback = f"Added '{column}' to Y-Axis"
         elif action.startswith("H:"):
             column = action[2:]
             self.state.add_hover_column(column)
+            feedback = f"Added '{column}' to Hover"
+        
+        # Show statusbar feedback
+        if feedback:
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusbar'):
+                main_window.statusbar.showMessage(feedback, 3000)
     
     def _on_filter_removed(self, index: int):
         """Handle filter removal"""

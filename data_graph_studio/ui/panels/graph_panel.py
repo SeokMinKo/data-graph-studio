@@ -20,6 +20,7 @@ from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter, QBrush
 from ..floatable import FloatableSection, FloatButton, FloatWindow
 from .sliding_window import SlidingWindowWidget
 from .graph_widgets import ColorButton, ExpandedChartDialog, ClickablePlotWidget, FormattedAxisItem
+from .data_tab import DataTab
 
 from ...core.state import AppState, ChartType, ToolMode, ComparisonMode, AggregationType
 from ...core.data_engine import DataEngine
@@ -46,8 +47,8 @@ class GraphOptionsPanel(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GraphOptionsPanel")
-        self.setMinimumWidth(200)
-        self.setMaximumWidth(240)
+        self.setMinimumWidth(260)
+        self.setMaximumWidth(320)
         
         self._setup_ui()
         self._apply_style()
@@ -79,6 +80,10 @@ class GraphOptionsPanel(QFrame):
         # Tabs
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
+
+        # Tab 0: Data (X/Y/Group/Hover configuration)
+        self._data_tab = DataTab(self.state)
+        self.tabs.addTab(self._data_tab, "Data")
 
         # Tab 1: Chart (includes chart type)
         self.tabs.addTab(self._create_chart_tab(), "Chart")
@@ -729,6 +734,17 @@ class GraphOptionsPanel(QFrame):
 
         # Return custom format string as-is (for Excel-style formats)
         return text
+
+    # ==================== Data Tab Delegation ====================
+
+    @property
+    def data_tab(self) -> DataTab:
+        """Access the Data tab widget."""
+        return self._data_tab
+
+    def set_columns(self, columns: List[str], engine: DataEngine) -> None:
+        """Forward column info to the Data tab after a dataset load."""
+        self._data_tab.set_columns(columns, engine)
 
     def get_chart_options(self) -> Dict[str, Any]:
         """현재 차트 옵션 반환 (스타일링/포맷팅만)"""

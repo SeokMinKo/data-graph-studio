@@ -1828,6 +1828,13 @@ class MainWindow(QMainWindow):
         
         # 그래프 패널에 컬럼 목록 전달 (X-Axis 드롭다운용)
         self.graph_panel.set_columns(self.engine.columns)
+        
+        # Data 탭에 컬럼 목록 전달 (X/Y/Group/Hover 설정용)
+        if hasattr(self.graph_panel.options_panel, 'data_tab'):
+            self.graph_panel.options_panel.data_tab.set_columns(
+                self.engine.columns, self.engine
+            )
+        
         self.graph_panel.refresh()
         self.graph_panel.autofit()
         
@@ -1844,6 +1851,10 @@ class MainWindow(QMainWindow):
         self.table_panel.clear()
         self.graph_panel.clear()
         self.summary_panel.clear()
+        
+        # Data 탭 클리어
+        if hasattr(self.graph_panel.options_panel, 'data_tab'):
+            self.graph_panel.options_panel.data_tab.clear()
     
     def _update_summary_from_profile(self):
         """프로파일에서 Summary 업데이트"""
@@ -2828,6 +2839,13 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             # 패널 업데이트
             self.table_panel.set_data(self.engine.df)
             self.graph_panel.set_columns(self.engine.columns)
+            
+            # Data 탭에 컬럼 목록 전달
+            if hasattr(self.graph_panel.options_panel, 'data_tab'):
+                self.graph_panel.options_panel.data_tab.set_columns(
+                    self.engine.columns, self.engine
+                )
+            
             self.graph_panel.refresh()
             self.summary_panel.refresh()
 
@@ -3288,6 +3306,12 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 # UI 업데이트
                 self.table_panel.set_data(df)
                 self.graph_panel.set_columns(df.columns)
+                
+                # Data 탭에 컬럼 목록 전달
+                if hasattr(self.graph_panel.options_panel, 'data_tab'):
+                    self.graph_panel.options_panel.data_tab.set_columns(
+                        df.columns, self.engine
+                    )
                 
                 self.statusBar().showMessage(f"✓ {message}", 5000)
                 
