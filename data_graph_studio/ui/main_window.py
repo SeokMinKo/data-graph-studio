@@ -1774,7 +1774,7 @@ class MainWindow(QMainWindow):
                 self.profile_model.refresh()
                 
                 # 그래프 설정 적용
-                self.profile_controller.apply_setting(graph_setting)
+                self.profile_controller.apply_profile(graph_setting.id)
                 
                 logger.info(f"Wizard result applied: {graph_setting.name}")
     
