@@ -1277,9 +1277,14 @@ class StatPanel(QFrame):
             percentiles = np.array([0, 1, 2, 3, 4, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.7, 99.9, 99.99, 100])
             values = np.percentile(clean_y, percentiles)
             
-            # Line plot
+            # Line plot with markers
             pen = pg.mkPen(color=(148, 103, 189), width=2)  # Purple
-            self.percentile_widget.plot(percentiles, values, pen=pen)
+            self.percentile_widget.plot(
+                percentiles, values, pen=pen,
+                symbol='o', symbolSize=5,
+                symbolBrush=pg.mkBrush(148, 103, 189),
+                symbolPen=pg.mkPen('w', width=0.5)
+            )
             
             # Store for expansion
             self.percentile_widget.set_percentile_data(

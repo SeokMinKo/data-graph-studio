@@ -197,25 +197,33 @@ class ExpandedChartDialog(QDialog):
             percentile_values = np.percentile(clean_data, percentiles)
 
             pen = pg.mkPen(color=color[:3], width=2)
-            self.plot_widget.plot(percentiles, percentile_values, pen=pen)
+            # Line with markers on all percentile points
+            self.plot_widget.plot(
+                percentiles, percentile_values, pen=pen,
+                symbol='o', symbolSize=7,
+                symbolBrush=pg.mkBrush(color[:3]),
+                symbolPen=pg.mkPen('w', width=1)
+            )
 
+            # Highlight key percentiles with red markers
             key_percentiles = [25, 50, 75, 90, 95, 99]
             key_values = np.percentile(clean_data, key_percentiles)
 
             scatter = pg.ScatterPlotItem(
                 x=key_percentiles,
                 y=key_values,
-                size=8,
+                size=10,
                 brush=pg.mkBrush('#EF4444'),
-                pen=pg.mkPen('w', width=1)
+                pen=pg.mkPen('w', width=1.5)
             )
             self.plot_widget.addItem(scatter)
 
             self.plot_widget.setLabel('bottom', 'Percentile')
             self.plot_widget.setLabel('left', 'Value')
 
-            stats_text = "\n".join([f"P{p}: {v:.2f}" for p, v in zip(key_percentiles, key_values)])
-            text_item = pg.TextItem(stats_text, anchor=(0, 0), color='k')
+            # Show all percentile values in stats text
+            stats_text = "\n".join([f"P{p:g}: {v:.2f}" for p, v in zip(percentiles, percentile_values)])
+            text_item = pg.TextItem(stats_text, anchor=(0, 0), color='#E6E9EF')
             text_item.setPos(5, percentile_values[-1] * 0.9)
             self.plot_widget.addItem(text_item)
 
