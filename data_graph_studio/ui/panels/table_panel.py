@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
     Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
-    QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QEvent
+    QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QEvent, QSize
 )
 from PySide6.QtGui import QDrag, QAction, QDropEvent, QDragEnterEvent
 
@@ -344,6 +344,7 @@ class ChipWidget(QFrame):
         self._index = index
         self._start_pos = None
         self.setObjectName("chipWidget")
+        self.setFixedHeight(28)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 2, 4, 2)
         layout.setSpacing(4)
@@ -354,6 +355,8 @@ class ChipWidget(QFrame):
         label = QLabel(text)
         label.setObjectName("chipLabel")
         label.setToolTip(text)
+        label.setMaximumWidth(120)
+        label.setStyleSheet("font-size: 11px;")
         layout.addWidget(label, 1)
 
         remove_btn = QPushButton("×")
@@ -390,18 +393,24 @@ class ValueChipWidget(QFrame):
         self._start_pos = None
         accent = value_col.color
         self.setObjectName("valueChipWidget")
+        self.setFixedHeight(32)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
-        layout.setSpacing(6)
+        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setSpacing(4)
 
         layout.addWidget(DragHandleLabel("value", value_col.name, index))
 
         name_label = QLabel(f"● {value_col.name}")
         name_label.setObjectName("valueNameLabel")
         name_label.setToolTip(value_col.name)
+        name_label.setMaximumWidth(90)
+        name_label.setStyleSheet("font-size: 11px;")
         layout.addWidget(name_label)
 
         agg_combo = QComboBox()
+        agg_combo.setFixedWidth(70)
+        agg_combo.setFixedHeight(22)
+        agg_combo.setStyleSheet("font-size: 11px;")
         for agg in AggregationType:
             agg_combo.addItem(agg.value.upper(), agg)
         agg_combo.setCurrentText(value_col.aggregation.value.upper())
@@ -413,6 +422,9 @@ class ValueChipWidget(QFrame):
         formula_edit = QLineEdit()
         formula_edit.setPlaceholderText("f(y) = ...")
         formula_edit.setText(value_col.formula or "")
+        formula_edit.setMaximumWidth(100)
+        formula_edit.setFixedHeight(22)
+        formula_edit.setStyleSheet("font-size: 11px;")
         formula_edit.setToolTip(
             "Y값에 적용할 수식을 입력하세요.\n"
             "예시: y*2, y+100, LOG(y), SQRT(y), ABS(y)"
@@ -459,6 +471,7 @@ class ChipListWidget(QListWidget):
         self.setDragEnabled(True)
         self.setAcceptDrops(accept_drop)
         self.setDropIndicatorShown(True)
+        self.setSpacing(2)
         self.setDragDropMode(QAbstractItemView.DragDrop if accept_drop else QAbstractItemView.DragOnly)
         self.setDefaultDropAction(Qt.MoveAction if allow_reorder else Qt.CopyAction)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -502,7 +515,10 @@ class ChipListWidget(QListWidget):
     def add_chip(self, name: str, widget: QWidget):
         item = QListWidgetItem()
         item.setData(Qt.UserRole, name)
-        item.setSizeHint(widget.sizeHint())
+        # Use widget's maximum height if explicitly constrained, otherwise 32px
+        max_h = widget.maximumHeight()
+        h = max_h if max_h < 16777215 else max(widget.sizeHint().height(), 32)
+        item.setSizeHint(QSize(-1, h + 4))
         self.addItem(item)
         self.setItemWidget(item, widget)
 
@@ -566,8 +582,8 @@ class XAxisZone(QFrame):
         self.x_column_frame.setObjectName("dropZone")
         self.x_column_frame.setProperty("zone", "x")
         x_layout = QVBoxLayout(self.x_column_frame)
-        x_layout.setContentsMargins(6, 6, 6, 6)
-        x_layout.setSpacing(4)
+        x_layout.setContentsMargins(4, 4, 4, 4)
+        x_layout.setSpacing(2)
 
         self.placeholder_label = QLabel("(Index)")
         self.placeholder_label.setAlignment(Qt.AlignCenter)
