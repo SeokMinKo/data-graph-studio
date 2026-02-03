@@ -584,10 +584,13 @@ class ProfileBar(QFrame):
         if profile:
             original = profile.get_setting(setting_id)
             if original:
-                import copy
-                new_setting = GraphSetting.from_dict(original.to_dict())
-                new_setting.id = GraphSetting.create_new("").id
-                new_setting.name = f"{original.name} (copy)"
+                import uuid
+                from dataclasses import replace
+                new_setting = replace(
+                    original,
+                    id=str(uuid.uuid4()),
+                    name=f"{original.name} (copy)",
+                )
                 self._state.add_setting(new_setting)
 
     def _on_delete_setting(self, setting_id: str):
@@ -615,10 +618,14 @@ class ProfileBar(QFrame):
                     text=setting.name
                 )
                 if ok and name.strip():
-                    setting.name = name.strip()
-                    setting.update_modified()
+                    new_setting = setting.with_name(name.strip())
+                    # Replace in profile's settings list
+                    for i, s in enumerate(profile.settings):
+                        if s.id == setting_id:
+                            profile.settings[i] = new_setting
+                            break
                     if setting_id in self._setting_buttons:
-                        self._setting_buttons[setting_id].update_setting(setting)
+                        self._setting_buttons[setting_id].update_setting(new_setting)
 
     @property
     def profile_manager(self) -> ProfileManager:

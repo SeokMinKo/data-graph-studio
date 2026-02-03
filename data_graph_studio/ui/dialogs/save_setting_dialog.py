@@ -217,6 +217,7 @@ class SaveSettingDialog(QDialog):
 
     def _on_save(self):
         """저장"""
+        import dataclasses
         name = self._name_edit.text().strip()
         if not name:
             self._name_edit.setFocus()
@@ -228,20 +229,24 @@ class SaveSettingDialog(QDialog):
         include_sorts = self._include_sorts_cb.isChecked()
 
         if self._existing:
-            # 기존 설정 업데이트
-            self._existing.name = name
-            self._existing.icon = icon
-            self._existing.description = description
-            self._existing.include_filters = include_filters
-            self._existing.include_sorts = include_sorts
-            self._existing.update_modified()
-            self._result_setting = self._existing
+            # 기존 설정 업데이트 (frozen이므로 replace 사용)
+            self._result_setting = dataclasses.replace(
+                self._existing,
+                name=name,
+                icon=icon,
+                description=description,
+                include_filters=include_filters,
+                include_sorts=include_sorts,
+            )
         else:
             # 새 설정 생성
             self._result_setting = GraphSetting.create_new(name, icon)
-            self._result_setting.description = description
-            self._result_setting.include_filters = include_filters
-            self._result_setting.include_sorts = include_sorts
+            self._result_setting = dataclasses.replace(
+                self._result_setting,
+                description=description,
+                include_filters=include_filters,
+                include_sorts=include_sorts,
+            )
 
         self.accept()
 

@@ -168,13 +168,30 @@ class FloatingGraphWindow(QDialog):
     def _on_main_selection_changed(self):
         """메인 창 선택 변경 (Sync ON인 경우)"""
         if self._sync_selection and self._graph_panel:
-            self._graph_panel.highlight_selection()
+            selected = list(self._state.selection.selected_rows)
+            if hasattr(self._graph_panel, 'main_graph'):
+                self._graph_panel.main_graph.highlight_selection(selected)
 
     def _on_copy(self):
         """클립보드에 복사"""
-        if self._graph_panel:
-            self._graph_panel.copy_to_clipboard()
-            self._status_label.setText("Copied to clipboard")
+        if self._graph_panel and hasattr(self._graph_panel, 'main_graph'):
+            try:
+                from pyqtgraph.exporters import ImageExporter
+                import tempfile
+                import os
+                from PySide6.QtGui import QImage
+                exporter = ImageExporter(self._graph_panel.main_graph.plotItem)
+                exporter.parameters()['width'] = 1920
+                temp_path = os.path.join(tempfile.gettempdir(), 'dgs_float_chart.png')
+                exporter.export(temp_path)
+                image = QImage(temp_path)
+                if not image.isNull():
+                    QApplication.clipboard().setImage(image)
+                    self._status_label.setText("Copied to clipboard")
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except Exception as e:
+                self._status_label.setText(f"Copy failed: {e}")
 
     def _on_export(self):
         """이미지로 내보내기"""

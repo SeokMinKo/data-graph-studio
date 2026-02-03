@@ -28,6 +28,10 @@ class GraphSetting:
     filters: Tuple = ()
     sorts: Tuple = ()
     chart_settings: Dict = None
+    include_filters: bool = False
+    include_sorts: bool = False
+    icon: str = "📊"
+    description: str = ""
     created_at: float = field(default_factory=time.time)
     modified_at: float = field(default_factory=time.time)
 
@@ -42,8 +46,22 @@ class GraphSetting:
         elif not isinstance(self.chart_settings, MappingProxyType):
             object.__setattr__(self, "chart_settings", MappingProxyType(dict(self.chart_settings)))
 
+    @classmethod
+    def create_new(cls, name: str, icon: str = "📊", dataset_id: str = "") -> 'GraphSetting':
+        """새 GraphSetting 생성"""
+        return cls(
+            id=str(uuid.uuid4()),
+            name=name,
+            dataset_id=dataset_id,
+            icon=icon,
+        )
+
     def with_name(self, name: str) -> 'GraphSetting':
         return dataclasses.replace(self, name=name, modified_at=time.time())
+
+    def update_modified(self) -> 'GraphSetting':
+        """수정 시간 업데이트한 새 인스턴스 반환 (frozen이므로 replace 사용)"""
+        return dataclasses.replace(self, modified_at=time.time())
 
     def to_dict(self) -> Dict:
         return {
@@ -59,6 +77,10 @@ class GraphSetting:
             "filters": list(self.filters),
             "sorts": list(self.sorts),
             "chart_settings": dict(self.chart_settings),
+            "include_filters": self.include_filters,
+            "include_sorts": self.include_sorts,
+            "icon": self.icon,
+            "description": self.description,
             "created_at": self.created_at,
             "modified_at": self.modified_at,
         }
@@ -68,7 +90,7 @@ class GraphSetting:
         return cls(
             id=data["id"],
             name=data["name"],
-            dataset_id=data["dataset_id"],
+            dataset_id=data.get("dataset_id", ""),
             schema_version=data.get("schema_version", 1),
             chart_type=data.get("chart_type", ""),
             x_column=data.get("x_column"),
@@ -78,6 +100,10 @@ class GraphSetting:
             filters=tuple(data.get("filters", ())),
             sorts=tuple(data.get("sorts", ())),
             chart_settings=data.get("chart_settings", {}),
+            include_filters=data.get("include_filters", False),
+            include_sorts=data.get("include_sorts", False),
+            icon=data.get("icon", "📊"),
+            description=data.get("description", ""),
             created_at=data.get("created_at", time.time()),
             modified_at=data.get("modified_at", time.time()),
         )

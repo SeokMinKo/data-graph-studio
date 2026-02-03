@@ -6,6 +6,7 @@ import os
 import gc
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Dict, Optional, List, Any
 
@@ -1468,8 +1469,24 @@ class MainWindow(QMainWindow):
     
     def _load_project_file(self, file_path: str):
         """프로젝트 파일 (.dgs) 로드"""
-        # 기존 프로젝트 로드 로직 사용
-        self._load_project(file_path)
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                project_data = json.load(f)
+            
+            # 프로젝트 데이터에서 파일 경로 추출
+            data_file = project_data.get('data_file')
+            if data_file and os.path.exists(data_file):
+                self._show_new_project_wizard(data_file)
+            else:
+                QMessageBox.warning(
+                    self, "Load Project",
+                    f"Project file loaded but data file not found:\n{data_file or '(not specified)'}"
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Load Project Error",
+                f"Failed to load project file:\n{e}"
+            )
 
     def _on_open_multiple_files(self):
         """다중 파일 열기 다이얼로그"""
@@ -2317,7 +2334,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         """Get current chart and view settings for saving"""
         settings = {
             'version': '1.0',
-            'chart_type': self.state.chart_type.value if self.state.chart_type else None,
+            'chart_type': self.state.chart_settings.chart_type.value if self.state.chart_settings.chart_type else None,
             'tool_mode': self.state.tool_mode.value if self.state.tool_mode else None,
         }
 
@@ -2474,22 +2491,26 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         if dialog.exec() == QDialog.Accepted:
             setting = dialog.get_setting()
             if setting:
-                # 현재 그래프 상태를 설정에 저장
+                # 현재 그래프 상태를 설정에 저장 (frozen이므로 replace 사용)
+                from dataclasses import replace
                 graph_state = self.state.get_current_graph_state()
-                setting.chart_type = graph_state['chart_type']
-                setting.x_column = graph_state['x_column']
-                setting.group_columns = graph_state['group_columns']
-                setting.value_columns = graph_state['value_columns']
-                setting.hover_columns = graph_state['hover_columns']
-                setting.chart_settings = graph_state['chart_settings']
-
-                if dialog.get_include_filters():
-                    setting.filters = graph_state['filters']
-                    setting.include_filters = True
-
-                if dialog.get_include_sorts():
-                    setting.sorts = graph_state['sorts']
-                    setting.include_sorts = True
+                
+                include_filters = dialog.get_include_filters()
+                include_sorts = dialog.get_include_sorts()
+                
+                setting = replace(
+                    setting,
+                    chart_type=graph_state['chart_type'],
+                    x_column=graph_state['x_column'],
+                    group_columns=tuple(graph_state['group_columns']),
+                    value_columns=tuple(graph_state['value_columns']),
+                    hover_columns=tuple(graph_state['hover_columns']),
+                    chart_settings=graph_state['chart_settings'],
+                    filters=tuple(graph_state['filters']) if include_filters else setting.filters,
+                    sorts=tuple(graph_state['sorts']) if include_sorts else setting.sorts,
+                    include_filters=include_filters,
+                    include_sorts=include_sorts,
+                )
 
                 # 프로파일에 추가
                 self.state.add_setting(setting)
@@ -3180,10 +3201,10 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             
             if file_type == 'project':
                 # 프로젝트 파일 로드
-                self._load_project(file_path)
+                self._load_project_file(file_path)
             elif file_type == 'profile':
                 # 프로필 적용
-                self._load_profile(file_path)
+                self._on_load_profile_menu()
             else:
                 # 데이터 파일 로드 (마법사 사용)
                 self._show_new_project_wizard(file_path)
@@ -3249,8 +3270,6 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 
                 # 엔진에 직접 설정
                 self.engine._df = df
-                self.engine._columns = df.columns
-                self.engine._row_count = len(df)
                 
                 # 상태 업데이트
                 self.state.set_data_loaded(True, len(df))
@@ -3270,12 +3289,12 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     def _copy_graph_to_clipboard(self):
         """그래프를 이미지로 클립보드에 복사"""
         try:
-            if self.graph_panel and self.graph_panel.graph:
+            if self.graph_panel and hasattr(self.graph_panel, 'main_graph') and self.graph_panel.main_graph:
                 # PyQtGraph에서 이미지 캡처
                 exporter = None
                 try:
                     from pyqtgraph.exporters import ImageExporter
-                    exporter = ImageExporter(self.graph_panel.graph.plotItem)
+                    exporter = ImageExporter(self.graph_panel.main_graph.plotItem)
                     exporter.parameters()['width'] = 1920
                     
                     # QImage로 내보내기
@@ -3714,7 +3733,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         current_path = getattr(self.engine, '_current_file_path', None)
         if current_path:
             try:
-                self.engine.df.to_csv(current_path, index=False)
+                self.engine.df.write_csv(current_path)
                 self.statusbar.showMessage(f"Data saved to {current_path}", 3000)
             except Exception as e:
                 QMessageBox.warning(self, "Save Data", f"Failed to save: {e}")
@@ -3735,11 +3754,11 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         if file_path:
             try:
                 if file_path.endswith('.xlsx'):
-                    self.engine.df.to_excel(file_path, index=False)
+                    self.engine.df.write_excel(file_path)
                 elif file_path.endswith('.parquet'):
-                    self.engine.df.to_parquet(file_path, index=False)
+                    self.engine.df.write_parquet(file_path)
                 else:
-                    self.engine.df.to_csv(file_path, index=False)
+                    self.engine.df.write_csv(file_path)
                 self.engine._current_file_path = file_path
                 self.statusbar.showMessage(f"Data saved to {file_path}", 3000)
             except Exception as e:
@@ -3950,9 +3969,9 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             )
             if reply == QMessageBox.Yes:
                 try:
-                    self.engine.df.drop(columns=[column], inplace=True)
+                    self.engine._df = self.engine.df.drop(column)
                     self.table_panel.set_data(self.engine.df)
-                    self.graph_panel.update_graph()
+                    self.graph_panel.refresh()
                     self.statusbar.showMessage(f"Column '{column}' removed", 3000)
                 except Exception as e:
                     QMessageBox.warning(self, "Remove Field", f"Failed to remove column: {e}")

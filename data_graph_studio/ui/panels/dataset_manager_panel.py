@@ -559,7 +559,7 @@ class DatasetManagerPanel(QWidget):
         name, ok = QInputDialog.getText(self, "Save Profile", "Profile name:")
         if not ok or not name.strip():
             return
-        setting = self.state.build_graph_setting_from_state(name.strip())
+        setting = self.state.build_graph_setting_from_state(name.strip(), dataset_id=dataset_id)
         self.state.add_graph_setting_to_dataset(dataset_id, setting)
         self._update_tree()
 
@@ -661,7 +661,6 @@ class DatasetManagerPanel(QWidget):
         """전체 새로고침"""
         # 기존 위젯 모두 제거
         for widget in self._dataset_widgets.values():
-            self.list_layout.removeWidget(widget)
             widget.deleteLater()
         self._dataset_widgets.clear()
 
@@ -669,6 +668,8 @@ class DatasetManagerPanel(QWidget):
         for dataset_id in self.state.dataset_metadata.keys():
             self._add_dataset_widget(dataset_id)
 
+        # 트리 뷰 갱신
+        self._update_tree()
         self._update_count_label()
         self._update_memory_label()
         self._update_compare_button()

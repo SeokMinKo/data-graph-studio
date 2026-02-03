@@ -623,10 +623,9 @@ class AppState(QObject):
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
-        for s in state.profiles:
+        for i, s in enumerate(state.profiles):
             if s.id == setting_id:
-                s.name = name
-                s.update_modified()
+                state.profiles[i] = s.with_name(name)
                 self.dataset_updated.emit(dataset_id)
                 return True
         return False
@@ -635,18 +634,22 @@ class AppState(QObject):
         state = self._dataset_states.get(dataset_id)
         return state.profiles if state else []
 
-    def build_graph_setting_from_state(self, name: str) -> 'GraphSetting':
+    def build_graph_setting_from_state(self, name: str, dataset_id: str = "") -> 'GraphSetting':
         from .profile import GraphSetting
-        gs = GraphSetting.create_new(name)
         current = self.get_current_graph_state()
-        gs.chart_type = current.get('chart_type', 'line')
-        gs.x_column = current.get('x_column')
-        gs.group_columns = current.get('group_columns', [])
-        gs.value_columns = current.get('value_columns', [])
-        gs.hover_columns = current.get('hover_columns', [])
-        gs.chart_settings = current.get('chart_settings', {})
-        gs.filters = current.get('filters', [])
-        gs.sorts = current.get('sorts', [])
+        gs = GraphSetting(
+            id=str(uuid.uuid4()),
+            name=name,
+            dataset_id=dataset_id,
+            chart_type=current.get('chart_type', 'line'),
+            x_column=current.get('x_column'),
+            group_columns=tuple(current.get('group_columns', [])),
+            value_columns=tuple(current.get('value_columns', [])),
+            hover_columns=tuple(current.get('hover_columns', [])),
+            chart_settings=current.get('chart_settings', {}),
+            filters=tuple(current.get('filters', [])),
+            sorts=tuple(current.get('sorts', [])),
+        )
         return gs
 
     def _sync_from_dataset_state(self, dataset_id: str):
