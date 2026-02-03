@@ -1418,11 +1418,8 @@ class DataEngine:
             return None
 
         if columns is None:
-            # 문자열 컬럼만 (최대 max_columns개)
-            columns = [
-                col for col in self._df.columns
-                if self._df[col].dtype in [pl.Utf8, pl.Categorical]
-            ][:max_columns]
+            # 모든 컬럼 검색 (최대 max_columns개) - 숫자도 문자열로 변환해서 검색
+            columns = self._df.columns[:max_columns]
 
         if not columns:
             return self._df.head(0)  # 빈 결과

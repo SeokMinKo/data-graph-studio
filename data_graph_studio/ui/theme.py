@@ -52,39 +52,39 @@ class Theme:
     def __post_init__(self):
         is_light = self.is_light()
         
-        # Surface colors
+        # Surface colors (light: bright, dark: dark)
         if not self.surface:
-            self.surface = "#323D4A" if is_light else "#1F2937"
+            self.surface = "#FFFFFF" if is_light else "#1F2937"
         if not self.surface_hover:
-            self.surface_hover = "#F9FAFB" if is_light else "#E6E9EF"
+            self.surface_hover = "#F9FAFB" if is_light else "#374151"
         if not self.surface_active:
-            self.surface_active = "#3A4654" if is_light else "#4B5563"
+            self.surface_active = "#F3F4F6" if is_light else "#4B5563"
         
-        # Borders
+        # Borders (light: light gray, dark: dark gray)
         if not self.border:
-            self.border = "#3E4A59" if is_light else "#E6E9EF"
+            self.border = "#E5E7EB" if is_light else "#374151"
         if not self.border_light:
-            self.border_light = "#3A4654" if is_light else "#1F2937"
+            self.border_light = "#F3F4F6" if is_light else "#1F2937"
         
-        # Interactive
+        # Interactive (light: light hover, dark: dark hover)
         if not self.hover:
-            self.hover = "#3A4654" if is_light else "#E6E9EF"
+            self.hover = "#F3F4F6" if is_light else "#374151"
         if not self.selected:
-            self.selected = self.primary + "20"  # 12% opacity
+            self.selected = "#EFF6FF" if is_light else (self.primary + "20")
         if not self.focused:
             self.focused = self.primary + "30"
         
-        # Text
+        # Text (light: dark text, dark: light text)
         if not self.text_primary:
             self.text_primary = self.foreground
         if not self.text_secondary:
-            self.text_secondary = "#C2C8D1" if is_light else "#9CA3AF"
+            self.text_secondary = "#6B7280" if is_light else "#9CA3AF"
         if not self.text_muted:
-            self.text_muted = "#9CA3AF" if is_light else "#C2C8D1"
+            self.text_muted = "#9CA3AF" if is_light else "#6B7280"
         if not self.text_disabled:
             self.text_disabled = "#D1D5DB" if is_light else "#4B5563"
         
-        # Shadow
+        # Shadow (light: subtle, dark: stronger)
         if not self.shadow_color:
             self.shadow_color = "rgba(0, 0, 0, 0.08)" if is_light else "rgba(0, 0, 0, 0.25)"
         
@@ -195,15 +195,24 @@ class ColorPalette:
 
 # ==================== Built-in Themes ====================
 
-# Light Theme - Clean & Minimal
+# Light Theme - OpenAI Codex Style
 LIGHT_THEME = Theme(
     name="Light",
-    background="#F9FAFB",
+    background="#FFFFFF",
     foreground="#111827",
-    primary="#59B8E3",
-    secondary="#EC4899",
-    surface="#323D4A",
-    border="#3E4A59",
+    primary="#3B82F6",
+    secondary="#8B5CF6",
+    surface="#FFFFFF",
+    surface_hover="#F9FAFB",
+    surface_active="#F3F4F6",
+    border="#E5E7EB",
+    border_light="#F3F4F6",
+    hover="#F3F4F6",
+    selected="#EFF6FF",
+    text_primary="#111827",
+    text_secondary="#6B7280",
+    text_muted="#9CA3AF",
+    text_disabled="#D1D5DB",
     accent="#8B5CF6",
 )
 
@@ -772,6 +781,341 @@ class ThemeManager:
             
             QSlider::handle:horizontal:hover {{
                 background-color: {t.accent};
+            }}
+            
+            /* ============ Panel Backgrounds ============ */
+            #GraphOptionsPanel, #LegendPanel, #StatPanel {{
+                background-color: {t.surface};
+                border: none;
+                border-radius: 8px;
+            }}
+            
+            /* ============ Section Headers ============ */
+            #sectionHeader {{
+                font-weight: 600;
+                font-size: 13px;
+                color: {t.foreground};
+                padding: 4px;
+                background: transparent;
+            }}
+            
+            /* ============ Hint & Stats Labels ============ */
+            #hintLabel {{
+                font-size: 10px;
+                color: {t.text_muted};
+                font-style: italic;
+                background: transparent;
+            }}
+            
+            #statsLabel {{
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 12px;
+                color: {t.text_secondary};
+                background: transparent;
+            }}
+            
+            #seriesNameLabel {{
+                font-size: 11px;
+                color: {t.foreground};
+                background: transparent;
+            }}
+            
+            /* ============ Small Buttons ============ */
+            #smallButton {{
+                font-size: 10px;
+                padding: 4px 8px;
+            }}
+            
+            /* ============ Stat Cards ============ */
+            #StatCard {{
+                background-color: {t.surface};
+                border: 1px solid {t.border};
+                border-radius: 8px;
+            }}
+            
+            #StatCard:hover {{
+                background-color: {t.surface_hover};
+            }}
+            
+            #cardIcon {{
+                font-size: 12px;
+                background: transparent;
+            }}
+            
+            #cardTitle {{
+                color: {t.text_secondary};
+                font-size: 10px;
+                font-weight: 500;
+                background: transparent;
+                border: none;
+            }}
+            
+            #cardValue {{
+                color: {t.foreground};
+                font-size: 18px;
+                font-weight: 600;
+                background: transparent;
+                border: none;
+            }}
+            
+            #cardSubtitle {{
+                color: {t.text_secondary};
+                font-size: 9px;
+                background: transparent;
+                border: none;
+            }}
+            
+            #cardSubtitle[trend="positive"] {{
+                color: {t.success};
+                font-weight: 500;
+            }}
+            
+            #cardSubtitle[trend="negative"] {{
+                color: {t.error};
+                font-weight: 500;
+            }}
+            
+            #cardSubtitle[trend="neutral"] {{
+                color: {t.text_muted};
+            }}
+            
+            /* ============ Context Label ============ */
+            #contextLabel {{
+                color: {t.text_secondary};
+                font-size: 11px;
+                background: transparent;
+                padding: 2px 8px;
+                border-radius: 8px;
+            }}
+            
+            #contextLabel[state="selection"] {{
+                color: {t.success};
+                background-color: {t.surface_hover};
+                padding: 4px 12px;
+                border-radius: 12px;
+            }}
+            
+            #contextLabel[state="grouped"] {{
+                color: {t.accent};
+                background-color: {t.surface_hover};
+                padding: 4px 12px;
+                border-radius: 12px;
+            }}
+            
+            /* ============ Drop Zones ============ */
+            #XAxisZone {{
+                background-color: {"#F0FDF4" if t.is_light() else t.surface};
+                border: none;
+                border-radius: 8px;
+            }}
+            
+            #GroupZone {{
+                background-color: {"#F8FAFC" if t.is_light() else t.surface};
+                border: none;
+                border-radius: 8px;
+            }}
+            
+            #ValueZone {{
+                background-color: {"#FAF5FF" if t.is_light() else t.surface};
+                border: none;
+                border-radius: 8px;
+            }}
+            
+            #HoverZone {{
+                background-color: {"#FEFCE8" if t.is_light() else t.surface};
+                border: none;
+                border-radius: 8px;
+            }}
+            
+            #zoneIcon {{
+                font-size: 16px;
+                background: transparent;
+            }}
+            
+            #zoneHeader {{
+                font-weight: 600;
+                font-size: 13px;
+                background: transparent;
+                color: {t.foreground};
+            }}
+            
+            #zoneHeader[zone="x"] {{
+                color: {"#047857" if t.is_light() else t.success};
+            }}
+            
+            #zoneHeader[zone="group"] {{
+                color: {t.foreground};
+            }}
+            
+            #zoneHeader[zone="value"] {{
+                color: {"#581C87" if t.is_light() else "#A78BFA"};
+            }}
+            
+            #zoneHeader[zone="hover"] {{
+                color: {"#854D0E" if t.is_light() else t.warning};
+            }}
+            
+            #zoneHelp {{
+                font-size: 10px;
+                background: transparent;
+                color: {t.text_secondary};
+            }}
+            
+            #zoneHelp[zone="x"] {{
+                color: {"#059669" if t.is_light() else t.success};
+            }}
+            
+            #zoneHelp[zone="group"] {{
+                color: {t.text_secondary};
+            }}
+            
+            #zoneHelp[zone="value"] {{
+                color: {"#9333EA" if t.is_light() else "#A78BFA"};
+            }}
+            
+            #zoneHelp[zone="hover"] {{
+                color: {"#A16207" if t.is_light() else t.warning};
+            }}
+            
+            #dropZone {{
+                background-color: {t.surface};
+                border: 2px dashed {t.border};
+                border-radius: 8px;
+                min-height: 50px;
+            }}
+            
+            #dropZone[state="filled"] {{
+                background-color: {t.selected};
+                border: 2px solid {t.success};
+            }}
+            
+            #dropZone[state="dragover"] {{
+                background-color: {t.surface_hover};
+                border: 2px solid {t.success};
+            }}
+            
+            #placeholder {{
+                color: {t.text_muted};
+                font-size: 12px;
+                font-style: italic;
+                background: transparent;
+            }}
+            
+            #chipList {{
+                background: transparent;
+                border: none;
+                outline: none;
+            }}
+            
+            /* ============ Zone Buttons ============ */
+            #zoneClearBtn {{
+                background: transparent;
+                color: {t.success};
+                border: 1px solid {t.success};
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-weight: 500;
+                font-size: 11px;
+            }}
+            
+            #zoneClearBtn:hover {{
+                background-color: {t.surface_hover};
+                border-color: {t.success};
+            }}
+            
+            #dangerButton {{
+                background: transparent;
+                color: {t.error};
+                border: 1px solid {t.error};
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-weight: 500;
+                font-size: 10px;
+            }}
+            
+            #dangerButton:hover {{
+                background-color: {t.surface_hover};
+                border-color: {t.error};
+            }}
+            
+            #warningButton {{
+                background: transparent;
+                color: {t.warning};
+                border: 1px solid {t.warning};
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-weight: 500;
+                font-size: 10px;
+            }}
+            
+            #warningButton:hover {{
+                background-color: {t.surface_hover};
+                border-color: {t.warning};
+            }}
+            
+            /* ============ Data Table ============ */
+            #dataTableView {{
+                background-color: {t.surface};
+                alternate-background-color: {t.surface_hover};
+                selection-background-color: {t.selected};
+                selection-color: {t.foreground};
+                gridline-color: {t.border_light};
+                border: none;
+                border-radius: 8px;
+                color: {t.foreground};
+            }}
+            
+            #dataTableView::item {{
+                padding: 4px 8px;
+                color: {t.foreground};
+            }}
+            
+            #dataTableView::item:selected {{
+                background-color: {t.primary};
+                color: white;
+            }}
+            
+            #dataTableView::item:hover {{
+                background-color: {t.hover};
+            }}
+            
+            #dataTableView QHeaderView::section {{
+                background-color: {t.surface};
+                border: none;
+                border-bottom: 1px solid {t.border};
+                padding: 6px 8px;
+                font-weight: 600;
+                font-size: 11px;
+                color: {t.foreground};
+            }}
+            
+            #dataTableView QHeaderView::section:hover {{
+                background-color: {t.surface_hover};
+            }}
+            
+            /* ============ Sliding Window ============ */
+            #slidingWindow {{
+                background-color: {t.surface};
+                border: 1px solid {t.border};
+                border-radius: 4px;
+            }}
+            
+            /* ============ Side-by-Side Layout ============ */
+            #statsFrame {{
+                background-color: {t.surface};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            
+            #syncOptionsFrame {{
+                background-color: {t.surface};
+                border-bottom: 1px solid {t.border};
+            }}
+            
+            #graphPlaceholder {{
+                background-color: {t.surface};
+                border: 1px solid {t.border};
+                color: {t.foreground};
             }}
         """
     

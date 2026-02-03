@@ -75,16 +75,8 @@ class StatCard(QFrame):
         self._setup_ui(icon, title, value, subtitle)
     
     def _setup_style(self):
-        self.setStyleSheet(f"""
-            #StatCard {{
-                background: #1E293B;
-                border: 1px solid #334155;
-                border-radius: 8px;
-            }}
-            #StatCard:hover {{
-                background: #243043;
-            }}
-        """)
+        # Styles now handled by global theme stylesheet
+        self.setProperty("class", "statCard")
     
     def _setup_ui(self, icon: str, title: str, value: str, subtitle: str):
         layout = QVBoxLayout(self)
@@ -97,40 +89,23 @@ class StatCard(QFrame):
         
         # Small icon
         icon_label = QLabel(icon)
-        icon_label.setStyleSheet(f"font-size: 12px; background: transparent;")
+        icon_label.setObjectName("cardIcon")
         header.addWidget(icon_label)
         
         # Title
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("""
-            color: #C9D1DB;
-            font-size: 10px;
-            font-weight: 500;
-            background: transparent;
-            border: none;
-        """)
+        self.title_label.setObjectName("cardTitle")
         header.addWidget(self.title_label, 1)
         layout.addLayout(header)
         
         # Value (compact)
         self.value_label = QLabel(value)
-        self.value_label.setStyleSheet(f"""
-            color: #F2F4F8;
-            font-size: 18px;
-            font-weight: 600;
-            background: transparent;
-            border: none;
-        """)
+        self.value_label.setObjectName("cardValue")
         layout.addWidget(self.value_label)
         
         # Subtitle
         self.subtitle_label = QLabel(subtitle if subtitle else "")
-        self.subtitle_label.setStyleSheet("""
-            color: #C9D1DB;
-            font-size: 9px;
-            background: transparent;
-            border: none;
-        """)
+        self.subtitle_label.setObjectName("cardSubtitle")
         self.subtitle_label.setVisible(bool(subtitle))
         layout.addWidget(self.subtitle_label)
     
@@ -144,30 +119,15 @@ class StatCard(QFrame):
         if self.subtitle_label:
             if trend > 0:
                 self.subtitle_label.setText(f"↑ +{trend:.1f}{suffix}")
-                self.subtitle_label.setStyleSheet("""
-                    color: #10B981;
-                    font-size: 11px;
-                    font-weight: 500;
-                    background: transparent;
-                    border: none;
-                """)
+                self.subtitle_label.setProperty("trend", "positive")
             elif trend < 0:
                 self.subtitle_label.setText(f"↓ {trend:.1f}{suffix}")
-                self.subtitle_label.setStyleSheet("""
-                    color: #EF4444;
-                    font-size: 11px;
-                    font-weight: 500;
-                    background: transparent;
-                    border: none;
-                """)
+                self.subtitle_label.setProperty("trend", "negative")
             else:
                 self.subtitle_label.setText("→ 0%")
-                self.subtitle_label.setStyleSheet("""
-                    color: #9CA3AF;
-                    font-size: 11px;
-                    background: transparent;
-                    border: none;
-                """)
+                self.subtitle_label.setProperty("trend", "neutral")
+            self.subtitle_label.style().unpolish(self.subtitle_label)
+            self.subtitle_label.style().polish(self.subtitle_label)
 
 
 class MiniSparkline(QFrame):
@@ -223,23 +183,12 @@ class SummaryPanel(QWidget):
 
         # Title with icon - compact
         title = QLabel("📊 Overview")
-        title.setStyleSheet("""
-            font-weight: 600;
-            font-size: 12px;
-            color: #F2F4F8;
-            background: transparent;
-        """)
+        title.setObjectName("sectionHeader")
         header.addWidget(title)
 
         # Context label (shows grouping/filter info)
         self.context_label = QLabel("")
-        self.context_label.setStyleSheet("""
-            color: #C9D1DB;
-            font-size: 11px;
-            background: transparent;
-            padding: 2px 8px;
-            border-radius: 8px;
-        """)
+        self.context_label.setObjectName("contextLabel")
         header.addWidget(self.context_label, 1)
 
         header.addStretch()
@@ -368,22 +317,12 @@ class SummaryPanel(QWidget):
             pct = (count / total * 100) if total > 0 else 0
 
             self.context_label.setText(f"Selected: {count:,} of {total:,} rows ({pct:.1f}%)")
-            self.context_label.setStyleSheet("""
-                color: #10B981;
-                font-size: 12px;
-                background: #10B98115;
-                padding: 4px 12px;
-                border-radius: 12px;
-            """)
+            self.context_label.setProperty("state", "selection")
         else:
             self.context_label.setText("")
-            self.context_label.setStyleSheet("""
-                color: #C2C8D1;
-                font-size: 12px;
-                background: transparent;
-                padding: 4px 12px;
-                border-radius: 12px;
-            """)
+            self.context_label.setProperty("state", "")
+        self.context_label.style().unpolish(self.context_label)
+        self.context_label.style().polish(self.context_label)
     
     @Slot()
     def _on_group_changed(self):
@@ -395,13 +334,9 @@ class SummaryPanel(QWidget):
                 group_names += f" +{len(groups) - 3}"
             
             self.context_label.setText(f"Grouped by: {group_names}")
-            self.context_label.setStyleSheet("""
-                color: #59B8E3;
-                font-size: 12px;
-                background: #59B8E315;
-                padding: 4px 12px;
-                border-radius: 12px;
-            """)
+            self.context_label.setProperty("state", "grouped")
+            self.context_label.style().unpolish(self.context_label)
+            self.context_label.style().polish(self.context_label)
     
     @Slot()
     def _on_value_changed(self):

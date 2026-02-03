@@ -605,13 +605,8 @@ class XAxisZone(QFrame):
         self._apply_style()
     
     def _apply_style(self):
-        self.setStyleSheet("""
-            #XAxisZone {
-                background: #F0FDF4;
-                border: none;
-                border-radius: 8px;
-            }
-        """)
+        # Styles handled by global theme stylesheet
+        pass
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -623,16 +618,12 @@ class XAxisZone(QFrame):
         header_layout.setSpacing(8)
 
         icon = QLabel("📐")
-        icon.setStyleSheet("font-size: 16px; background: transparent;")
+        icon.setObjectName("zoneIcon")
         header_layout.addWidget(icon)
 
         header = QLabel("X-Axis")
-        header.setStyleSheet("""
-            font-weight: 600;
-            font-size: 13px;
-            color: #047857;
-            background: transparent;
-        """)
+        header.setObjectName("zoneHeader")
+        header.setProperty("zone", "x")
         header_layout.addWidget(header)
         header_layout.addStretch()
 
@@ -640,46 +631,26 @@ class XAxisZone(QFrame):
 
         # Help text
         help_label = QLabel("Drag column for X-axis\n(empty = use index)")
-        help_label.setStyleSheet("""
-            color: #059669;
-            font-size: 10px;
-            background: transparent;
-        """)
+        help_label.setObjectName("zoneHelp")
+        help_label.setProperty("zone", "x")
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
 
         # Chip drop area
         self.x_column_frame = QFrame()
-        self.x_column_frame.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 2px dashed #6EE7B7;
-                border-radius: 8px;
-                min-height: 50px;
-            }
-        """)
+        self.x_column_frame.setObjectName("dropZone")
+        self.x_column_frame.setProperty("zone", "x")
         x_layout = QVBoxLayout(self.x_column_frame)
         x_layout.setContentsMargins(6, 6, 6, 6)
         x_layout.setSpacing(4)
 
         self.placeholder_label = QLabel("(Index)")
         self.placeholder_label.setAlignment(Qt.AlignCenter)
-        self.placeholder_label.setStyleSheet("""
-            color: #94A3B8;
-            font-size: 12px;
-            font-style: italic;
-            background: transparent;
-        """)
+        self.placeholder_label.setObjectName("placeholder")
         x_layout.addWidget(self.placeholder_label)
 
         self.list_widget = ChipListWidget(zone_id="x", accept_drop=True, single_item=True)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background: transparent;
-                border: none;
-                outline: none;
-            }
-        """)
+        self.list_widget.setObjectName("chipList")
         self.list_widget.item_dropped.connect(self._on_chip_dropped)
         x_layout.addWidget(self.list_widget)
 
@@ -687,21 +658,8 @@ class XAxisZone(QFrame):
 
         # Clear button
         clear_btn = QPushButton("✕ Use Index")
-        clear_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #059669;
-                border: 1px solid #6EE7B7;
-                border-radius: 6px;
-                padding: 8px 12px;
-                font-weight: 500;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background: #D1FAE5;
-                border-color: #059669;
-            }
-        """)
+        clear_btn.setObjectName("zoneClearBtn")
+        clear_btn.setProperty("zone", "x")
         clear_btn.clicked.connect(self._clear_x_column)
         layout.addWidget(clear_btn)
 
@@ -734,26 +692,14 @@ class XAxisZone(QFrame):
             self.list_widget.add_chip(column_name, chip)
             self.placeholder_label.hide()
             self.list_widget.show()
-            self.x_column_frame.setStyleSheet("""
-                QFrame {
-                    background: #ECFDF5;
-                    border: 2px solid #10B981;
-                    border-radius: 8px;
-                    min-height: 50px;
-                }
-            """)
+            self.x_column_frame.setProperty("state", "filled")
         else:
             self.placeholder_label.setText("(Index)")
             self.placeholder_label.show()
             self.list_widget.hide()
-            self.x_column_frame.setStyleSheet("""
-                QFrame {
-                    background: white;
-                    border: 2px dashed #6EE7B7;
-                    border-radius: 8px;
-                    min-height: 50px;
-                }
-            """)
+            self.x_column_frame.setProperty("state", "empty")
+        self.x_column_frame.style().unpolish(self.x_column_frame)
+        self.x_column_frame.style().polish(self.x_column_frame)
     
     def _sync_from_state(self):
         """Sync from state"""
@@ -762,14 +708,9 @@ class XAxisZone(QFrame):
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
-            self.x_column_frame.setStyleSheet("""
-                QFrame {
-                    background: #D1FAE5;
-                    border: 2px solid #10B981;
-                    border-radius: 8px;
-                    min-height: 50px;
-                }
-            """)
+            self.x_column_frame.setProperty("state", "dragover")
+            self.x_column_frame.style().unpolish(self.x_column_frame)
+            self.x_column_frame.style().polish(self.x_column_frame)
     
     def dragLeaveEvent(self, event):
         self._update_display(self.state.x_column)
@@ -800,13 +741,8 @@ class GroupZone(QFrame):
         self._apply_style()
     
     def _apply_style(self):
-        self.setStyleSheet("""
-            #GroupZone {
-                background: #F8FAFC;
-                border: none;
-                border-radius: 8px;
-            }
-        """)
+        # Styles handled by global theme stylesheet
+        pass
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -818,16 +754,12 @@ class GroupZone(QFrame):
         header_layout.setSpacing(8)
 
         icon = QLabel("📁")
-        icon.setStyleSheet("font-size: 16px; background: transparent;")
+        icon.setObjectName("zoneIcon")
         header_layout.addWidget(icon)
 
         header = QLabel("Group By")
-        header.setStyleSheet("""
-            font-weight: 600;
-            font-size: 13px;
-            color: #E6E9EF;
-            background: transparent;
-        """)
+        header.setObjectName("zoneHeader")
+        header.setProperty("zone", "group")
         header_layout.addWidget(header)
         header_layout.addStretch()
 
@@ -835,11 +767,8 @@ class GroupZone(QFrame):
 
         # Help text
         help_label = QLabel("Drag columns to group")
-        help_label.setStyleSheet("""
-            color: #64748B;
-            font-size: 10px;
-            background: transparent;
-        """)
+        help_label.setObjectName("zoneHelp")
+        help_label.setProperty("zone", "group")
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
         
@@ -859,21 +788,7 @@ class GroupZone(QFrame):
 
         # Clear button
         remove_btn = QPushButton("✕ Clear")
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #EF4444;
-                border: 1px solid #FCA5A5;
-                border-radius: 6px;
-                padding: 6px 10px;
-                font-weight: 500;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background: #FEF2F2;
-                border-color: #EF4444;
-            }
-        """)
+        remove_btn.setObjectName("dangerButton")
         remove_btn.clicked.connect(self.state.clear_group_zone)
         layout.addWidget(remove_btn)
     
@@ -924,13 +839,8 @@ class ValueZone(QFrame):
         self._apply_style()
     
     def _apply_style(self):
-        self.setStyleSheet("""
-            #ValueZone {
-                background: #FAF5FF;
-                border: none;
-                border-radius: 8px;
-            }
-        """)
+        # Styles handled by global theme stylesheet
+        pass
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -942,16 +852,12 @@ class ValueZone(QFrame):
         header_layout.setSpacing(8)
 
         icon = QLabel("📊")
-        icon.setStyleSheet("font-size: 16px; background: transparent;")
+        icon.setObjectName("zoneIcon")
         header_layout.addWidget(icon)
 
         header = QLabel("Y-Axis Values")
-        header.setStyleSheet("""
-            font-weight: 600;
-            font-size: 13px;
-            color: #581C87;
-            background: transparent;
-        """)
+        header.setObjectName("zoneHeader")
+        header.setProperty("zone", "value")
         header_layout.addWidget(header)
         header_layout.addStretch()
 
@@ -959,23 +865,14 @@ class ValueZone(QFrame):
 
         # Help text
         help_label = QLabel("Drag numeric columns for Y values")
-        help_label.setStyleSheet("""
-            color: #9333EA;
-            font-size: 10px;
-            background: transparent;
-        """)
+        help_label.setObjectName("zoneHelp")
+        help_label.setProperty("zone", "value")
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
         
         # Chip list
         self.list_widget = ChipListWidget(zone_id="value", accept_drop=True)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background: transparent;
-                border: none;
-                outline: none;
-            }
-        """)
+        self.list_widget.setObjectName("chipList")
         self.list_widget.item_dropped.connect(self._on_column_dropped)
         layout.addWidget(self.list_widget, 1)
     
@@ -1042,13 +939,8 @@ class HoverZone(QFrame):
         self._apply_style()
 
     def _apply_style(self):
-        self.setStyleSheet("""
-            #HoverZone {
-                background: #FEFCE8;
-                border: none;
-                border-radius: 8px;
-            }
-        """)
+        # Styles handled by global theme stylesheet
+        pass
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -1060,16 +952,12 @@ class HoverZone(QFrame):
         header_layout.setSpacing(8)
 
         icon = QLabel("💬")
-        icon.setStyleSheet("font-size: 16px; background: transparent;")
+        icon.setObjectName("zoneIcon")
         header_layout.addWidget(icon)
 
         header = QLabel("Hover Data")
-        header.setStyleSheet("""
-            font-weight: 600;
-            font-size: 13px;
-            color: #854D0E;
-            background: transparent;
-        """)
+        header.setObjectName("zoneHeader")
+        header.setProperty("zone", "hover")
         header_layout.addWidget(header)
         header_layout.addStretch()
 
@@ -1077,44 +965,21 @@ class HoverZone(QFrame):
 
         # Help text
         help_label = QLabel("Drag columns to show\non hover tooltip")
-        help_label.setStyleSheet("""
-            color: #A16207;
-            font-size: 10px;
-            background: transparent;
-        """)
+        help_label.setObjectName("zoneHelp")
+        help_label.setProperty("zone", "hover")
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
 
         # List widget for hover columns
         self.list_widget = ChipListWidget(zone_id="hover", accept_drop=True)
         self.list_widget.setMaximumHeight(120)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background: transparent;
-                border: none;
-                outline: none;
-            }
-        """)
+        self.list_widget.setObjectName("chipList")
         self.list_widget.item_dropped.connect(self._on_column_dropped)
         layout.addWidget(self.list_widget, 1)
 
         # Clear button
         clear_btn = QPushButton("✕ Clear")
-        clear_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #CA8A04;
-                border: 1px solid #FACC15;
-                border-radius: 6px;
-                padding: 6px 10px;
-                font-weight: 500;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background: #FEF9C3;
-                border-color: #EAB308;
-            }
-        """)
+        clear_btn.setObjectName("warningButton")
         clear_btn.clicked.connect(self._clear_all)
         layout.addWidget(clear_btn)
 
@@ -1168,43 +1033,8 @@ class DataTableView(QTableView):
         self.setSortingEnabled(True)
         self.setDragEnabled(True)
         
-        # Compact, clean style
-        self.setStyleSheet("""
-            QTableView {
-                background: #323D4A;
-                alternate-background-color: #2B3440;
-                selection-background-color: #3A4E63;
-                selection-color: #E6E9EF;
-                gridline-color: #3E4A59;
-                border: none;
-                border-radius: 8px;
-                color: #E6E9EF;
-            }
-            QTableView::item {
-                padding: 4px 8px;
-                color: #E6E9EF;
-            }
-            QTableView::item:selected {
-                background: #3A4E63;
-                color: #E6E9EF;
-            }
-            QTableView::item:hover {
-                background: #384554;
-            }
-            QHeaderView::section {
-                background: #2B3440;
-                border: none;
-                border-bottom: 1px solid #3E4A59;
-                padding: 6px 8px;
-                font-weight: 600;
-                font-size: 11px;
-                color: #E6E9EF;
-            }
-            QHeaderView::section:hover {
-                background: #3A4654;
-                color: #F2F4F8;
-            }
-        """)
+        # Styles handled by global theme stylesheet
+        self.setObjectName("dataTableView")
         
         # Context menu for cells
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -1256,7 +1086,7 @@ class DataTableView(QTableView):
                 if self._header_drag_start is not None and self._header_drag_col:
                     distance = (event.pos() - self._header_drag_start).manhattanLength()
                     # Start drag if moved enough distance - both inside or outside header area
-                    if distance >= QApplication.startDragDistance() * 2:
+                    if distance >= QApplication.startDragDistance():
                         drag = QDrag(self)
                         mime = QMimeData()
                         mime.setText(self._header_drag_col)

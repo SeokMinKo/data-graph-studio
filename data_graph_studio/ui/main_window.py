@@ -3654,6 +3654,11 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         stylesheet = self._theme_manager.generate_stylesheet()
         QApplication.instance().setStyleSheet(stylesheet)
         
+        # Apply theme to stat panel mini-graphs
+        is_light = self._theme_manager.current_theme.is_light()
+        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+            self.graph_panel.stat_panel.apply_theme(is_light)
+        
         self.statusbar.showMessage(f"Theme changed to {theme_id.title()}", 3000)
 
     def _on_toggle_grid(self, checked: bool):

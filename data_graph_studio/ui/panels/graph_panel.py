@@ -55,82 +55,8 @@ class GraphOptionsPanel(QFrame):
         self._on_sliding_window_changed(Qt.Checked)
     
     def _apply_style(self):
-        self.setStyleSheet("""
-            #GraphOptionsPanel {
-                background: #2B3440;
-                border: none;
-                border-radius: 8px;
-            }
-            QTabWidget::pane {
-                border: none;
-                background: transparent;
-            }
-            QTabBar::tab {
-                background: transparent;
-                border: none;
-                padding: 6px 10px;
-                margin-right: 2px;
-                font-size: 10px;
-                color: #C2C8D1;
-            }
-            QTabBar::tab:selected {
-                color: #59B8E3;
-                font-weight: 600;
-                border-bottom: 2px solid #59B8E3;
-            }
-            QGroupBox {
-                background: transparent;
-                border: none;
-                margin-top: 8px;
-                padding: 4px;
-                font-weight: 500;
-                font-size: 10px;
-                color: #C2C8D1;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 4px;
-                padding: 0 2px;
-            }
-            QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
-                background: #323D4A;
-                border: 1px solid #3E4A59;
-                border-radius: 4px;
-                padding: 4px 6px;
-                color: #E6E9EF;
-                min-height: 20px;
-                font-size: 11px;
-            }
-            QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
-                border-color: #59B8E3;
-            }
-            QCheckBox {
-                color: #E6E9EF;
-                font-size: 10px;
-                spacing: 4px;
-            }
-            QLabel {
-                color: #C2C8D1;
-                font-size: 10px;
-                background: transparent;
-            }
-            QSlider::groove:horizontal {
-                height: 3px;
-                background: #3E4A59;
-                border-radius: 1px;
-            }
-            QSlider::handle:horizontal {
-                width: 10px;
-                height: 10px;
-                margin: -4px 0;
-                background: #59B8E3;
-                border-radius: 5px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #59B8E3;
-                border-radius: 1px;
-            }
-        """)
+        # Styles now handled by global theme stylesheet
+        pass
     
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -143,7 +69,7 @@ class GraphOptionsPanel(QFrame):
         header_layout.setSpacing(4)
 
         header = QLabel("⚙️ Chart Options")
-        header.setStyleSheet("font-weight: 600; font-size: 13px; color: #E6E9EF; padding: 4px;")
+        header.setObjectName("sectionHeader")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
@@ -317,7 +243,7 @@ class GraphOptionsPanel(QFrame):
 
         # Hint label
         hint_label = QLabel("Double-click to reset view")
-        hint_label.setStyleSheet("font-size: 10px; color: #9CA3AF; font-style: italic;")
+        hint_label.setObjectName("hintLabel")
         slider_layout.addWidget(hint_label)
 
         layout.addWidget(slider_group)
@@ -671,7 +597,7 @@ class GraphOptionsPanel(QFrame):
 
         # Name label
         name_label = QLabel(name)
-        name_label.setStyleSheet("font-size: 11px; color: #E6E9EF;")
+        name_label.setObjectName("seriesNameLabel")
         item_layout.addWidget(name_label, 1)
 
         # Insert before stretch
@@ -878,57 +804,8 @@ class LegendSettingsPanel(QFrame):
         self._apply_style()
     
     def _apply_style(self):
-        self.setStyleSheet("""
-            #LegendPanel {
-                background: #2B3440;
-                border: none;
-                border-radius: 8px;
-            }
-            QGroupBox {
-                background: transparent;
-                border: none;
-                margin-top: 8px;
-                padding: 4px;
-                font-weight: 500;
-                font-size: 10px;
-                color: #C2C8D1;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 4px;
-                padding: 0 2px;
-            }
-            QComboBox {
-                background: #2D3748;
-                border: 1px solid #3E4A59;
-                border-radius: 4px;
-                padding: 4px 6px;
-                color: #E6E9EF;
-                min-height: 20px;
-                font-size: 11px;
-            }
-            QCheckBox {
-                color: #E6E9EF;
-                font-size: 10px;
-            }
-            QLabel {
-                color: #C2C8D1;
-                font-size: 10px;
-                background: transparent;
-            }
-            QListWidget {
-                background: transparent;
-                border: none;
-                padding: 2px;
-            }
-            QListWidget::item {
-                padding: 2px;
-                border-radius: 4px;
-            }
-            QListWidget::item:hover {
-                background: #3A4654;
-            }
-        """)
+        # Styles now handled by global theme stylesheet
+        pass
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -941,7 +818,7 @@ class LegendSettingsPanel(QFrame):
         header_layout.setSpacing(4)
 
         header = QLabel("📊 Legend")
-        header.setStyleSheet("font-weight: 600; font-size: 13px; color: #E6E9EF; padding: 4px;")
+        header.setObjectName("sectionHeader")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
@@ -997,12 +874,12 @@ class LegendSettingsPanel(QFrame):
         btn_layout = QHBoxLayout()
         
         show_all_btn = QPushButton("Show All")
-        show_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        show_all_btn.setObjectName("smallButton")
         show_all_btn.clicked.connect(self._show_all_series)
         btn_layout.addWidget(show_all_btn)
         
         hide_all_btn = QPushButton("Hide All")
-        hide_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
+        hide_all_btn.setObjectName("smallButton")
         hide_all_btn.clicked.connect(self._hide_all_series)
         btn_layout.addWidget(hide_all_btn)
         
@@ -1044,7 +921,7 @@ class LegendSettingsPanel(QFrame):
         
         # Name label
         name_label = QLabel(name)
-        name_label.setStyleSheet("font-size: 11px; color: #E6E9EF;")
+        name_label.setObjectName("seriesNameLabel")
         item_layout.addWidget(name_label, 1)
         
         # Insert before stretch
@@ -1132,31 +1009,8 @@ class StatPanel(QFrame):
         self._apply_style()
     
     def _apply_style(self):
-        self.setStyleSheet("""
-            #StatPanel {
-                background: #2B3440;
-                border: none;
-                border-radius: 8px;
-            }
-            QGroupBox {
-                background: transparent;
-                border: none;
-                margin-top: 8px;
-                padding: 4px;
-                font-weight: 500;
-                font-size: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 4px;
-                padding: 0 2px;
-                color: #C2C8D1;
-            }
-            QLabel {
-                background: transparent;
-                color: #E6E9EF;
-            }
-        """)
+        # Styles now handled by global theme stylesheet
+        pass
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -1169,7 +1023,7 @@ class StatPanel(QFrame):
         header_layout.setSpacing(4)
 
         header = QLabel("📈 Stats")
-        header.setStyleSheet("font-weight: 600; font-size: 14px; color: #E6E9EF;")
+        header.setObjectName("sectionHeader")
         header_layout.addWidget(header)
 
         header_layout.addStretch()
@@ -1195,6 +1049,8 @@ class StatPanel(QFrame):
         graph_grid.setContentsMargins(0, 0, 0, 0)
 
         # Create mini plot widgets with minimal chrome
+        self._mini_plot_widgets = []  # Store for theme updates
+        
         def create_plot_group(title: str) -> tuple:
             group = QGroupBox(title)
             group.setToolTip("Double-click to expand")
@@ -1205,12 +1061,14 @@ class StatPanel(QFrame):
             widget = ClickablePlotWidget()
             widget.setMinimumHeight(60)
             widget.setMaximumHeight(80)
+            # Default dark background - will be updated by apply_theme()
             widget.setBackground('#2B3440')
             widget.hideAxis('bottom')
             widget.hideAxis('left')
             widget.setCursor(Qt.PointingHandCursor)
             widget.getPlotItem().setContentsMargins(0, 0, 0, 0)
             grp_layout.addWidget(widget)
+            self._mini_plot_widgets.append(widget)
             return group, widget
 
         # X Distribution
@@ -1237,7 +1095,7 @@ class StatPanel(QFrame):
         stats_layout.setContentsMargins(4, 4, 4, 4)
 
         self.stats_label = QLabel("No data")
-        self.stats_label.setStyleSheet("font-family: 'Consolas', monospace; font-size: 12px; color: #C2C8D1;")
+        self.stats_label.setObjectName("statsLabel")
         self.stats_label.setWordWrap(True)
         stats_layout.addWidget(self.stats_label)
 
@@ -1457,6 +1315,13 @@ class StatPanel(QFrame):
                     lines.append(f"  {k} sum: {v:.4f}")
         
         self.stats_label.setText("\n".join(lines))
+
+    def apply_theme(self, is_light: bool):
+        """Apply theme colors to mini-graphs"""
+        bg_color = '#F8FAFC' if is_light else '#2B3440'
+        if hasattr(self, '_mini_plot_widgets'):
+            for widget in self._mini_plot_widgets:
+                widget.setBackground(bg_color)
 
 
 # ==================== Main Graph ====================

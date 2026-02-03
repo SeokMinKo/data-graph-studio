@@ -45,13 +45,8 @@ class SlidingWindowWidget(QWidget):
             self.setMinimumWidth(50)
             self.setMaximumWidth(60)
 
-        self.setStyleSheet("""
-            SlidingWindowWidget {
-                background: #2B3440;
-                border: 1px solid #3E4A59;
-                border-radius: 4px;
-            }
-        """)
+        # Styles handled by global theme stylesheet
+        self.setObjectName("slidingWindow")
 
     def set_data(self, data: np.ndarray):
         """Set the data for the overview display"""
