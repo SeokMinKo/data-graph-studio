@@ -355,8 +355,6 @@ class ChipWidget(QFrame):
         label = QLabel(text)
         label.setObjectName("chipLabel")
         label.setToolTip(text)
-        label.setMaximumWidth(120)
-        label.setStyleSheet("font-size: 11px;")
         layout.addWidget(label, 1)
 
         remove_btn = QPushButton("×")
@@ -403,14 +401,11 @@ class ValueChipWidget(QFrame):
         name_label = QLabel(f"● {value_col.name}")
         name_label.setObjectName("valueNameLabel")
         name_label.setToolTip(value_col.name)
-        name_label.setMaximumWidth(90)
-        name_label.setStyleSheet("font-size: 11px;")
         layout.addWidget(name_label)
 
         agg_combo = QComboBox()
         agg_combo.setFixedWidth(70)
         agg_combo.setFixedHeight(22)
-        agg_combo.setStyleSheet("font-size: 11px;")
         for agg in AggregationType:
             agg_combo.addItem(agg.value.upper(), agg)
         agg_combo.setCurrentText(value_col.aggregation.value.upper())
@@ -422,9 +417,8 @@ class ValueChipWidget(QFrame):
         formula_edit = QLineEdit()
         formula_edit.setPlaceholderText("f(y) = ...")
         formula_edit.setText(value_col.formula or "")
-        formula_edit.setMaximumWidth(100)
+        formula_edit.setMaximumWidth(120)
         formula_edit.setFixedHeight(22)
-        formula_edit.setStyleSheet("font-size: 11px;")
         formula_edit.setToolTip(
             "Y값에 적용할 수식을 입력하세요.\n"
             "예시: y*2, y+100, LOG(y), SQRT(y), ABS(y)"
@@ -537,8 +531,8 @@ class XAxisZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("XAxisZone")
-        self.setMinimumWidth(120)
-        self.setMaximumWidth(150)
+        self.setMinimumWidth(140)
+        self.setMaximumWidth(180)
         self.setAcceptDrops(True)
         
         self._setup_ui()
@@ -674,8 +668,8 @@ class GroupZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GroupZone")
-        self.setMinimumWidth(100)
-        self.setMaximumWidth(140)
+        self.setMinimumWidth(130)
+        self.setMaximumWidth(170)
         self.setAcceptDrops(True)
         
         self._setup_ui()
