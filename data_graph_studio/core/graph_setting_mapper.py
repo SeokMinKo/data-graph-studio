@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from .profile import GraphSetting
-from .state import AppState, ChartType
+from .state import AppState, ChartType, ValueColumn, GroupColumn
 
 
 class GraphSettingMapper:
@@ -44,7 +44,7 @@ class GraphSettingMapper:
     @staticmethod
     def to_app_state(setting: GraphSetting, state: AppState) -> None:
         """Apply GraphSetting to AppState with signal batching"""
-        state.begin_batch_update()
+        # 직접 내부 속성을 변경하고 마지막에 시그널 한 번만 발행
         try:
             chart_type: Any = setting.chart_type
             if isinstance(chart_type, ChartType):
@@ -57,17 +57,37 @@ class GraphSettingMapper:
             state._chart_settings.chart_type = resolved_chart_type
 
             state._x_column = setting.x_column
-            state._group_columns = list(setting.group_columns)
-            state._value_columns = list(setting.value_columns)
-            state._hover_columns = list(setting.hover_columns)
+
+            # group_columns: 문자열이면 GroupColumn으로 변환
+            state._group_columns = [
+                g if isinstance(g, GroupColumn) else GroupColumn(name=str(g))
+                for g in setting.group_columns
+            ]
+
+            # value_columns: 문자열이면 ValueColumn으로 변환
+            state._value_columns = [
+                v if isinstance(v, ValueColumn) else ValueColumn(name=str(v))
+                for v in setting.value_columns
+            ]
+
+            state._hover_columns = [str(h) for h in setting.hover_columns]
             state._filters = list(setting.filters)
             state._sorts = list(setting.sorts)
-            
+
             # Apply chart_settings
             if setting.chart_settings:
                 cs = state._chart_settings
                 for key, value in setting.chart_settings.items():
                     if hasattr(cs, key):
                         setattr(cs, key, value)
-        finally:
-            state.end_batch_update()
+        except Exception:
+            pass
+
+        # 변경 완료 후 시그널 발행 (UI 갱신 트리거)
+        try:
+            state.chart_settings_changed.emit()
+            state.value_zone_changed.emit()
+            state.group_zone_changed.emit()
+            state.hover_zone_changed.emit()
+        except Exception:
+            pass
