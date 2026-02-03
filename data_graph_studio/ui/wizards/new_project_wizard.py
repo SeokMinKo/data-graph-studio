@@ -43,6 +43,10 @@ class NewProjectWizard(QWizard):
         self._graph_setting = None
         self._preview_df = None
 
+        self.setWindowTitle("New Project Wizard")
+        self.resize(1500, 800)
+        self.setMinimumSize(1200, 600)
+
         self.addPage(ParsingStep(file_path))
         self.addPage(GraphSetupStep())
         self.addPage(FinishStep())
