@@ -1735,6 +1735,9 @@ class MainWindow(QMainWindow):
             if self.engine.profile:
                 self._update_summary_from_profile()
 
+            # 프로젝트 탐색창 갱신 (새 데이터셋 표시)
+            self.profile_model.refresh()
+
             # 로딩 완료 후 메모리 정리
             gc.collect()
             logger.info(f"Data loaded: {self.engine.row_count:,} rows, {self.engine.column_count} columns")
@@ -2755,6 +2758,9 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
                 if self.engine.profile:
                     self._update_summary_from_profile()
+
+                # 프로젝트 탐색창 갱신 (새 데이터셋 표시)
+                self.profile_model.refresh()
 
                 gc.collect()
                 logger.info(f"Dataset added: {dataset_id} ({name}), {self.engine.row_count:,} rows")
