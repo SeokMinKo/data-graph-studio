@@ -54,7 +54,8 @@ class GraphSettingMapper:
                 resolved_chart_type = chart_type
             else:
                 try:
-                    resolved_chart_type = ChartType(chart_type)
+                    # 대소문자 무시하여 변환 (e.g. "Scatter" → "scatter")
+                    resolved_chart_type = ChartType(str(chart_type).lower())
                 except Exception:
                     resolved_chart_type = state._chart_settings.chart_type
             state._chart_settings.chart_type = resolved_chart_type

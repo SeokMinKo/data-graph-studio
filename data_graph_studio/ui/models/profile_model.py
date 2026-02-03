@@ -61,16 +61,21 @@ class ProfileModel(QAbstractItemModel):
         if role == Qt.DisplayRole:
             if node.is_dataset:
                 return self._get_dataset_name(node.dataset_id)
-            # Use chart_type_icon instead of non-existent icon property
-            icon = self._chart_type_icon(node.setting.chart_type)
-            return f"{icon} {node.setting.name}"
+            return node.setting.name
 
         if role == Qt.UserRole:
             if node.is_dataset:
                 return node.dataset_id
             return node.setting
 
-        if role == Qt.DecorationRole:
+        if role == Qt.ToolTipRole:
+            if not node.is_dataset:
+                icon = self._chart_type_icon(node.setting.chart_type)
+                return f"{icon} {node.setting.name}"
+
+        # Note: DecorationRole은 반환하지 않음 - 문자열 반환 시 Qt가 QIcon 변환 시도하여 에러
+        # 아이콘은 delegate에서 UserRole+1로 처리
+        if role == Qt.UserRole + 1:
             if not node.is_dataset:
                 return self._chart_type_icon(node.setting.chart_type)
 

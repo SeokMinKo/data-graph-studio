@@ -10,21 +10,40 @@ from ..models.profile_model import ProfileModel
 
 
 class _ChartIconDelegate(QStyledItemDelegate):
-    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index):
-        decoration = index.data(Qt.DecorationRole)
-        if isinstance(decoration, str) and decoration:
-            icon_rect = option.rect
-            icon_rect.setWidth(min(option.rect.width(), 20))
-            painter.save()
-            painter.setFont(option.font)
-            painter.drawText(icon_rect, Qt.AlignVCenter | Qt.AlignHCenter, decoration)
-            painter.restore()
+    """Profile 항목에 차트 아이콘 + 이름을 렌더링하는 delegate"""
+    ICON_ROLE = Qt.UserRole + 1
 
-            text_option = QStyleOptionViewItem(option)
-            text_option.rect = option.rect.adjusted(icon_rect.width() + 4, 0, 0, 0)
-            text_option.icon = None
-            text_option.decorationSize = QSize(0, 0)
-            super().paint(painter, text_option, index)
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index):
+        # 기본 배경/선택 렌더링
+        self.initStyleOption(option, index)
+
+        icon_text = index.data(self.ICON_ROLE)
+        if isinstance(icon_text, str) and icon_text:
+            # 선택/호버 배경 먼저 그리기
+            style = option.widget.style() if option.widget else None
+            if style:
+                style.drawPrimitive(style.PE_PanelItemViewItem, option, painter, option.widget)
+
+            painter.save()
+
+            # 텍스트 색상 설정 (선택 상태에 따라)
+            if option.state & option.widget.style().State_Selected:
+                painter.setPen(option.palette.color(option.palette.HighlightedText))
+            else:
+                painter.setPen(option.palette.color(option.palette.Text))
+
+            # 아이콘 영역
+            icon_rect = option.rect.adjusted(2, 0, 0, 0)
+            icon_rect.setWidth(20)
+            painter.setFont(option.font)
+            painter.drawText(icon_rect, Qt.AlignVCenter | Qt.AlignHCenter, icon_text)
+
+            # 텍스트 영역
+            display_text = index.data(Qt.DisplayRole) or ""
+            text_rect = option.rect.adjusted(24, 0, -2, 0)
+            painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, display_text)
+
+            painter.restore()
             return
 
         super().paint(painter, option, index)
