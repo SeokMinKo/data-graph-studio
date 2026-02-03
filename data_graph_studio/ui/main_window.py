@@ -1765,7 +1765,9 @@ class MainWindow(QMainWindow):
             active_id = self.engine.active_dataset_id
             if active_id:
                 # 프로젝트 탐색창에 추가
-                self.profile_store.add_setting(active_id, graph_setting)
+                from dataclasses import replace
+                graph_setting = replace(graph_setting, dataset_id=active_id)
+                self.profile_store.add(graph_setting)
                 self.profile_model.refresh()
                 
                 # 그래프 설정 적용
