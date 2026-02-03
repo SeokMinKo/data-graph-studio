@@ -34,6 +34,14 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
+# etl-parser for Windows ETL binary parsing (optional)
+try:
+    from etl.etl import IEtlFileObserver, build_from_stream
+    from etl.system import System
+    HAS_ETL_PARSER = True
+except ImportError:
+    HAS_ETL_PARSER = False
+
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
@@ -836,6 +844,250 @@ class DataEngine:
         
         return df
     
+    @staticmethod
+    def is_binary_etl(path: str) -> bool:
+        """
+        ETL 파일이 바이너리인지 확인
+
+        파일 시작 512바이트를 읽어 null 바이트 또는 비인쇄 문자 비율로 판단.
+        parsing_step에서도 사용하기 위해 static method로 제공.
+        """
+        try:
+            with open(path, 'rb') as f:
+                header = f.read(512)
+        except Exception:
+            return False
+
+        if not header:
+            return False
+
+        null_count = header.count(b'\x00')
+        non_printable_count = sum(1 for b in header if b < 32 and b not in (9, 10, 13))
+
+        is_text = (null_count == 0 and
+                   (non_printable_count / len(header) < 0.05 if len(header) > 0 else True))
+        return not is_text
+
+    @staticmethod
+    def parse_etl_binary(path: str) -> pl.DataFrame:
+        """
+        etl-parser 라이브러리로 바이너리 ETL 파일을 파싱하여 DataFrame 반환
+
+        주요 타겟: Disk I/O 이벤트 (Read/Write/Flush) 및 ETW manifest 이벤트.
+        etl-parser가 설치되어 있지 않으면 ImportError를 발생시킴.
+
+        Returns:
+            파싱된 이벤트의 polars DataFrame
+        Raises:
+            ImportError: etl-parser가 설치되지 않은 경우
+            ValueError: 파싱 결과가 비어있거나 파일 문제가 있는 경우
+        """
+        if not HAS_ETL_PARSER:
+            raise ImportError("etl-parser 라이브러리가 설치되지 않았습니다.")
+
+        from datetime import timedelta
+
+        # Windows FILETIME 기준점 (1601-01-01)
+        FILETIME_EPOCH = datetime(1601, 1, 1)
+
+        class EtlEventCollector(IEtlFileObserver):
+            """ETL 이벤트 수집기"""
+
+            def __init__(self):
+                self.events: List[Dict[str, Any]] = []
+                self.etw_events: List[Dict[str, Any]] = []
+                self._error_count = 0
+                self._max_errors = 1000  # 과도한 에러 방지
+
+            def _filetime_to_datetime(self, filetime_val) -> Optional[datetime]:
+                """Windows FILETIME (100ns intervals since 1601-01-01) → datetime"""
+                try:
+                    if filetime_val is None or filetime_val <= 0:
+                        return None
+                    return FILETIME_EPOCH + timedelta(microseconds=filetime_val // 10)
+                except (OverflowError, OSError, ValueError):
+                    return None
+
+            def on_system_trace(self, event):
+                """MOF 기반 system trace 이벤트 (Disk I/O 등)"""
+                try:
+                    system = System(event)
+                    mof = system.get_mof()
+                    event_def = mof.get_event_definition()
+
+                    # Disk I/O 이벤트 수집
+                    record = {
+                        'Timestamp': self._filetime_to_datetime(
+                            getattr(event, 'timestamp', None)
+                        ),
+                        'EventType': str(event_def) if event_def else 'Unknown',
+                        'ProcessID': getattr(event, 'process_id', None),
+                        'ThreadID': getattr(event, 'thread_id', None),
+                        'DiskNumber': getattr(mof.source, 'DiskNumber', None),
+                        'TransferSize': getattr(mof.source, 'TransferSize', None),
+                        'ByteOffset': getattr(mof.source, 'ByteOffset', None),
+                        'IrpFlags': getattr(mof.source, 'IrpFlags', None),
+                        'HighResResponseTime': getattr(mof.source, 'HighResResponseTime',
+                                                       getattr(mof.source, 'HighResponseTime', None)),
+                        'IssuingThreadId': getattr(mof.source, 'IssuingThreadId', None),
+                        'Source': 'SystemTrace',
+                    }
+                    self.events.append(record)
+                except Exception:
+                    # GroupNotFound, VersionNotFound, EventTypeNotFound 등
+                    # 미지원 이벤트는 조용히 스킵
+                    self._error_count += 1
+
+            def on_event_record(self, event):
+                """ETW manifest 기반 이벤트"""
+                try:
+                    try:
+                        msg = event.parse_etw()
+                    except Exception:
+                        try:
+                            msg = event.parse_tracelogging()
+                        except Exception:
+                            return
+
+                    if msg is None:
+                        return
+
+                    record = {
+                        'Timestamp': self._filetime_to_datetime(
+                            getattr(event, 'timestamp', None)
+                        ),
+                        'EventType': str(getattr(msg, 'name', getattr(msg, 'opcode_name', 'ETW'))),
+                        'ProcessID': getattr(event, 'process_id', None),
+                        'ThreadID': getattr(event, 'thread_id', None),
+                        'DiskNumber': None,
+                        'TransferSize': None,
+                        'ByteOffset': None,
+                        'IrpFlags': None,
+                        'HighResResponseTime': None,
+                        'IssuingThreadId': None,
+                        'Source': 'ETW',
+                    }
+
+                    # ETW 이벤트의 추가 필드를 동적으로 추출 시도
+                    if hasattr(msg, 'properties'):
+                        for key, val in msg.properties.items():
+                            if key not in record:
+                                record[key] = str(val) if val is not None else None
+
+                    self.etw_events.append(record)
+                except Exception:
+                    self._error_count += 1
+
+            def on_perfinfo_trace(self, event):
+                """PerfInfo trace 이벤트 (현재 스킵)"""
+                pass
+
+            def on_trace_record(self, event):
+                """Trace record (현재 스킵)"""
+                pass
+
+            def on_win_trace(self, event):
+                """WinTrace 이벤트 (현재 스킵)"""
+                pass
+
+        # 파일 읽기 및 파싱
+        try:
+            with open(path, 'rb') as f:
+                raw_data = f.read()
+        except Exception as e:
+            raise ValueError(f"ETL 파일 읽기 실패: {e}")
+
+        if not raw_data:
+            raise ValueError("ETL 파일이 비어 있습니다.")
+
+        collector = EtlEventCollector()
+
+        try:
+            reader = build_from_stream(raw_data)
+            reader.parse(collector)
+        except Exception as e:
+            raise ValueError(
+                f"ETL 바이너리 파싱 실패: {e}\n\n"
+                "가능한 원인:\n"
+                "  - 지원되지 않는 ETL 버전 (version=3만 지원)\n"
+                "  - 파일이 손상되었거나 불완전한 경우\n"
+                "  - ETL 형식이 아닌 파일"
+            )
+
+        # system_trace(MOF) 이벤트를 우선으로, ETW 이벤트를 보조로 합침
+        all_events = collector.events
+        if collector.etw_events:
+            # ETW 이벤트는 MOF에서 수집되지 않은 경우 보조적으로 추가
+            all_events.extend(collector.etw_events)
+
+        if not all_events:
+            error_info = ""
+            if collector._error_count > 0:
+                error_info = f"\n(파싱 중 {collector._error_count}개의 미지원 이벤트 스킵됨)"
+            raise ValueError(
+                f"ETL 파일에서 파싱 가능한 이벤트를 찾지 못했습니다.{error_info}\n\n"
+                "가능한 원인:\n"
+                "  - Disk I/O 이벤트가 포함되지 않은 ETL 파일\n"
+                "  - 지원되지 않는 이벤트 버전\n\n"
+                "대안: Windows에서 tracerpt로 CSV 변환 후 열기"
+            )
+
+        # DataFrame 기본 컬럼 정의
+        base_columns = [
+            'Timestamp', 'EventType', 'ProcessID', 'ThreadID',
+            'DiskNumber', 'TransferSize', 'ByteOffset',
+            'IrpFlags', 'HighResResponseTime', 'IssuingThreadId', 'Source'
+        ]
+
+        # 모든 이벤트에서 추가 컬럼 수집 (ETW 동적 필드)
+        extra_columns = set()
+        for evt in all_events:
+            for key in evt.keys():
+                if key not in base_columns:
+                    extra_columns.add(key)
+
+        all_columns = base_columns + sorted(extra_columns)
+
+        # DataFrame 생성
+        df_dict: Dict[str, list] = {col: [] for col in all_columns}
+        for evt in all_events:
+            for col in all_columns:
+                df_dict[col].append(evt.get(col, None))
+
+        df = pl.DataFrame(df_dict)
+
+        # Timestamp 컬럼 타입 변환
+        if 'Timestamp' in df.columns:
+            try:
+                df = df.with_columns(
+                    pl.col('Timestamp').cast(pl.Datetime('us'))
+                )
+            except Exception:
+                pass  # 변환 실패 시 원본 유지
+
+        # 숫자 컬럼 타입 변환 시도
+        numeric_cols = ['ProcessID', 'ThreadID', 'DiskNumber', 'TransferSize',
+                        'ByteOffset', 'IrpFlags', 'HighResResponseTime', 'IssuingThreadId']
+        for col in numeric_cols:
+            if col in df.columns:
+                try:
+                    df = df.with_columns(pl.col(col).cast(pl.Int64))
+                except Exception:
+                    pass  # 변환 실패 시 원본 유지
+
+        # 완전히 null인 컬럼 제거
+        non_null_cols = [col for col in df.columns if df[col].null_count() < len(df)]
+        if non_null_cols:
+            df = df.select(non_null_cols)
+
+        logger.info(
+            f"ETL 바이너리 파싱 완료: {len(all_events)}개 이벤트 "
+            f"(MOF: {len(collector.events)}, ETW: {len(collector.etw_events)}, "
+            f"스킵: {collector._error_count})"
+        )
+
+        return df
+
     def _load_etl(
         self,
         path: str,
@@ -851,96 +1103,111 @@ class DataEngine:
         ETL 파일 로드
 
         ETL (Event Trace Log)은 Windows 바이너리 형식.
-        - 텍스트로 변환된 ETL 파일은 _load_text로 처리
-        - 바이너리 ETL은 tracerpt 명령으로 변환 권고
+        로드 우선순위:
+        1. 텍스트 ETL (이미 변환된 경우) → _load_text로 처리
+        2. etl-parser로 바이너리 직접 파싱 (크로스 플랫폼)
+        3. Windows tracerpt 명령으로 CSV 변환 (폴백)
         """
         import platform
 
-        # 바이너리 ETL인지 확인 (더 많은 바이트 검사)
-        with open(path, 'rb') as f:
-            header = f.read(512)
+        # 바이너리 ETL인지 확인
+        is_binary = self.is_binary_etl(path)
 
-        # ETL 바이너리 체크 개선:
-        # 1. null 바이트(0x00)가 있으면 바이너리 (ETL 바이너리의 특징)
-        # 2. 비인쇄 문자가 많으면 바이너리
-        null_count = header.count(b'\x00')
-        non_printable_count = sum(1 for b in header if b < 32 and b not in (9, 10, 13))
+        if not is_binary:
+            # 텍스트 ETL (이미 변환됨)
+            return self._load_text(path, encoding, delimiter, delimiter_type,
+                                   regex_pattern, has_header, skip_rows, comment_char)
 
-        # null 바이트가 있거나 비인쇄 문자가 5% 이상이면 바이너리
-        is_text = (null_count == 0 and
-                   (non_printable_count / len(header) < 0.05 if len(header) > 0 else True))
+        # --- 바이너리 ETL 처리 ---
 
-        if not is_text:
-            system = platform.system()
+        # 1차 시도: etl-parser로 직접 파싱
+        if HAS_ETL_PARSER:
+            try:
+                logger.info(f"etl-parser로 바이너리 ETL 파싱 시도: {path}")
+                return self.parse_etl_binary(path)
+            except ImportError:
+                logger.warning("etl-parser 임포트 실패, 폴백으로 전환")
+            except ValueError as e:
+                logger.warning(f"etl-parser 파싱 실패: {e}")
+                # 파싱은 됐지만 이벤트가 없는 경우 등은 tracerpt로 폴백
+            except Exception as e:
+                logger.warning(f"etl-parser 예상치 못한 오류: {e}", exc_info=True)
 
-            if system == 'Windows':
-                # Windows에서 tracerpt로 변환 시도
-                try:
-                    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
-                        tmp_path = tmp.name
+        # 2차 시도: Windows tracerpt 폴백
+        system = platform.system()
 
-                    result = subprocess.run(
-                        ['tracerpt', path, '-o', tmp_path, '-of', 'CSV', '-y'],
-                        capture_output=True,
-                        text=True,
-                        timeout=120
-                    )
+        if system == 'Windows':
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+                    tmp_path = tmp.name
 
-                    if result.returncode == 0 and os.path.exists(tmp_path):
-                        if os.path.getsize(tmp_path) > 0:
-                            df = self._load_csv(tmp_path, encoding, ',', True, 0, None)
-                            os.unlink(tmp_path)
-                            return df
-                        else:
-                            os.unlink(tmp_path)
-                            raise ValueError(
-                                "ETL 파일 변환 결과가 비어 있습니다.\n"
-                                "파일이 손상되었거나 지원되지 않는 형식일 수 있습니다."
-                            )
+                result = subprocess.run(
+                    ['tracerpt', path, '-o', tmp_path, '-of', 'CSV', '-y'],
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+
+                if result.returncode == 0 and os.path.exists(tmp_path):
+                    if os.path.getsize(tmp_path) > 0:
+                        df = self._load_csv(tmp_path, encoding, ',', True, 0, None)
+                        os.unlink(tmp_path)
+                        return df
                     else:
-                        error_msg = result.stderr if result.stderr else "알 수 없는 오류"
+                        os.unlink(tmp_path)
                         raise ValueError(
-                            f"ETL 파일 변환 실패: {error_msg}\n\n"
-                            "수동 변환 시도:\n"
-                            "  1. 관리자 권한으로 명령 프롬프트 실행\n"
-                            f"  2. tracerpt \"{path}\" -o output.csv -of CSV\n"
-                            "  3. 생성된 output.csv 파일을 열기"
+                            "ETL 파일 변환 결과가 비어 있습니다.\n"
+                            "파일이 손상되었거나 지원되지 않는 형식일 수 있습니다."
                         )
-                except subprocess.TimeoutExpired:
+                else:
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                    error_msg = result.stderr if result.stderr else "알 수 없는 오류"
                     raise ValueError(
-                        "ETL 변환 시간 초과 (2분).\n"
-                        "파일이 너무 크거나 손상되었습니다.\n\n"
-                        "대안:\n"
-                        "  - Windows Performance Analyzer (WPA) 사용\n"
-                        "  - xperf로 변환 후 CSV 내보내기"
-                    )
-                except FileNotFoundError:
-                    raise ValueError(
-                        "tracerpt 명령을 찾을 수 없습니다.\n\n"
-                        "해결 방법:\n"
+                        f"ETL 파일 변환 실패: {error_msg}\n\n"
+                        "수동 변환 시도:\n"
                         "  1. 관리자 권한으로 명령 프롬프트 실행\n"
                         f"  2. tracerpt \"{path}\" -o output.csv -of CSV\n"
                         "  3. 생성된 output.csv 파일을 열기"
                     )
-            else:
-                # Linux/Mac에서는 바이너리 ETL 지원 안 함
-                filename = os.path.basename(path)
+            except subprocess.TimeoutExpired:
                 raise ValueError(
-                    f"ETL (Event Trace Log) 파일은 Windows 전용 바이너리 형식입니다.\n\n"
-                    f"현재 시스템: {system}\n\n"
+                    "ETL 변환 시간 초과 (2분).\n"
+                    "파일이 너무 크거나 손상되었습니다.\n\n"
+                    "대안:\n"
+                    "  - Windows Performance Analyzer (WPA) 사용\n"
+                    "  - xperf로 변환 후 CSV 내보내기"
+                )
+            except FileNotFoundError:
+                raise ValueError(
+                    "tracerpt 명령을 찾을 수 없습니다.\n\n"
                     "해결 방법:\n"
-                    "  1. Windows에서 CSV로 변환:\n"
-                    f"     tracerpt \"{filename}\" -o output.csv -of CSV\n\n"
-                    "  2. Windows Performance Analyzer (WPA) 사용:\n"
-                    "     ETL 파일 열기 → File → Export → CSV\n\n"
-                    "  3. 변환된 CSV 파일을 이 프로그램에서 열기\n\n"
-                    "참고: 텍스트로 이미 변환된 ETL 파일은 .txt 또는 .csv로\n"
-                    "확장자를 변경하면 정상적으로 열 수 있습니다."
+                    "  1. 관리자 권한으로 명령 프롬프트 실행\n"
+                    f"  2. tracerpt \"{path}\" -o output.csv -of CSV\n"
+                    "  3. 생성된 output.csv 파일을 열기"
                 )
         else:
-            # 텍스트 ETL (이미 변환됨)
-            return self._load_text(path, encoding, delimiter, delimiter_type,
-                                   regex_pattern, has_header, skip_rows, comment_char)
+            # Linux/Mac에서 etl-parser도 없는 경우
+            filename = os.path.basename(path)
+            etl_parser_msg = ""
+            if not HAS_ETL_PARSER:
+                etl_parser_msg = (
+                    "  0. etl-parser 설치 (크로스 플랫폼 파싱):\n"
+                    "     pip install etl-parser\n\n"
+                )
+            raise ValueError(
+                f"ETL (Event Trace Log) 바이너리 파일을 파싱할 수 없습니다.\n\n"
+                f"현재 시스템: {system}\n\n"
+                "해결 방법:\n"
+                f"{etl_parser_msg}"
+                "  1. Windows에서 CSV로 변환:\n"
+                f"     tracerpt \"{filename}\" -o output.csv -of CSV\n\n"
+                "  2. Windows Performance Analyzer (WPA) 사용:\n"
+                "     ETL 파일 열기 → File → Export → CSV\n\n"
+                "  3. 변환된 CSV 파일을 이 프로그램에서 열기\n\n"
+                "참고: 텍스트로 이미 변환된 ETL 파일은 .txt 또는 .csv로\n"
+                "확장자를 변경하면 정상적으로 열 수 있습니다."
+            )
     
     def _load_excel(self, path: str, sheet_name: Optional[str]) -> pl.DataFrame:
         """Excel 로드"""

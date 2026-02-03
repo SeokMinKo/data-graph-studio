@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
 )
 
-from ...core.data_engine import FileType, DelimiterType
+from ...core.data_engine import FileType, DelimiterType, DataEngine, HAS_ETL_PARSER
 from ...core.parsing import ParsingSettings
 
 
@@ -49,6 +49,7 @@ class ParsingStep(QWizardPage):
         self._preview_df: Optional[pd.DataFrame] = None
         self._parsing_success = False
         self._raw_load_error = False
+        self._is_binary_etl = False  # 바이너리 ETL 파일 여부
 
         self._excluded_columns: set[int] = set()
         self._column_checkboxes: List[QCheckBox] = []
@@ -322,6 +323,15 @@ class ParsingStep(QWizardPage):
     def _load_raw_preview(self):
         encoding = self.encoding_combo.currentText() if hasattr(self, 'encoding_combo') else "utf8"
         self._raw_load_error = False
+        self._is_binary_etl = False
+
+        # ETL 확장자이고 바이너리인 경우 특별 처리
+        ext = Path(self.file_path).suffix.lower()
+        if ext == '.etl' and DataEngine.is_binary_etl(self.file_path):
+            self._is_binary_etl = True
+            self._raw_lines = self._load_binary_etl_preview()
+            return
+
         try:
             self._raw_lines = []
             with open(self.file_path, 'r', encoding=encoding, errors='replace') as f:
@@ -332,6 +342,66 @@ class ParsingStep(QWizardPage):
         except Exception as e:
             self._raw_lines = [f"Error reading file: {e}"]
             self._raw_load_error = True
+
+    def _load_binary_etl_preview(self) -> List[str]:
+        """
+        바이너리 ETL 파일의 프리뷰를 etl-parser로 파싱하여 CSV 문자열로 반환
+
+        etl-parser가 없거나 파싱 실패 시 안내 메시지를 반환.
+        """
+        if not HAS_ETL_PARSER:
+            return [
+                "# Binary ETL (Event Trace Log) file detected",
+                "# etl-parser 라이브러리가 설치되지 않아 미리보기를 표시할 수 없습니다.",
+                "# 설치: pip install etl-parser",
+                "#",
+                "# 또는 Windows에서 CSV로 변환 후 열기:",
+                f"#   tracerpt \"{self.file_name}\" -o output.csv -of CSV",
+            ]
+
+        try:
+            import polars as pl
+            df = DataEngine.parse_etl_binary(self.file_path)
+
+            if df is None or len(df) == 0:
+                return [
+                    "# Binary ETL file parsed but no events found",
+                    "# 파싱 가능한 이벤트가 없습니다.",
+                ]
+
+            # DataFrame을 CSV 문자열로 변환하여 _raw_lines로 제공
+            # → 기존 프리뷰 로직(delimiter=',' 파싱)으로 자연스럽게 처리됨
+            csv_lines = []
+
+            # 헤더
+            csv_lines.append(",".join(df.columns))
+
+            # 데이터 (최대 PREVIEW_ROWS 행)
+            preview_count = min(len(df), self.PREVIEW_ROWS)
+            for i in range(preview_count):
+                row_values = []
+                for col in df.columns:
+                    val = df[col][i]
+                    if val is None:
+                        row_values.append("")
+                    else:
+                        # CSV 안전하게: 쉼표나 따옴표가 포함된 값은 따옴표로 감싸기
+                        s = str(val)
+                        if ',' in s or '"' in s or '\n' in s:
+                            s = '"' + s.replace('"', '""') + '"'
+                        row_values.append(s)
+                csv_lines.append(",".join(row_values))
+
+            return csv_lines
+
+        except Exception as e:
+            return [
+                "# Binary ETL file - parsing failed",
+                f"# 파싱 오류: {e}",
+                "#",
+                "# 대안: Windows에서 CSV로 변환 후 열기:",
+                f"#   tracerpt \"{self.file_name}\" -o output.csv -of CSV",
+            ]
 
     def _detect_delimiter_auto(self) -> str:
         if not self._raw_lines:
@@ -363,9 +433,16 @@ class ParsingStep(QWizardPage):
         if not self._raw_lines:
             return []
 
-        delimiter, delimiter_type = self._get_delimiter()
-        skip_rows = self.skip_rows_spin.value()
-        comment_char = self.comment_edit.text().strip()
+        # 바이너리 ETL은 이미 CSV 형태로 변환되어 있으므로 comma 강제
+        if self._is_binary_etl:
+            delimiter = ","
+            delimiter_type = DelimiterType.COMMA
+            skip_rows = 0
+            comment_char = ""
+        else:
+            delimiter, delimiter_type = self._get_delimiter()
+            skip_rows = self.skip_rows_spin.value()
+            comment_char = self.comment_edit.text().strip()
 
         if delimiter_type == DelimiterType.AUTO:
             delimiter = self._detect_delimiter_auto()
@@ -404,6 +481,23 @@ class ParsingStep(QWizardPage):
             self._update_column_checkboxes([])
             self.progress_bar.setValue(0)
             return
+
+        # 바이너리 ETL의 경우: delimiter/encoding 설정 비활성화, comma 강제
+        if self._is_binary_etl:
+            self.delimiter_combo.setEnabled(False)
+            self.regex_edit.setEnabled(False)
+            self.encoding_combo.setEnabled(False)
+            self.header_checkbox.setChecked(True)
+            self.header_checkbox.setEnabled(False)
+            self.skip_rows_spin.setValue(0)
+            self.skip_rows_spin.setEnabled(False)
+            self.comment_edit.setEnabled(False)
+        else:
+            self.delimiter_combo.setEnabled(True)
+            self.encoding_combo.setEnabled(True)
+            self.header_checkbox.setEnabled(True)
+            self.skip_rows_spin.setEnabled(True)
+            self.comment_edit.setEnabled(True)
 
         parsed = self._parse_preview()
 
