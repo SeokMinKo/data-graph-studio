@@ -1113,15 +1113,29 @@ class StatPanel(QFrame):
 
         layout.addLayout(graph_grid)
 
-        # Summary Stats - compact
+        # Summary Stats - compact, selectable, scrollable
         stats_group = QGroupBox("Summary")
         stats_layout = QVBoxLayout(stats_group)
         stats_layout.setContentsMargins(4, 4, 4, 4)
 
+        stats_scroll = QScrollArea()
+        stats_scroll.setWidgetResizable(True)
+        stats_scroll.setFrameShape(QFrame.NoFrame)
+        stats_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        stats_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        stats_scroll.setMaximumHeight(200)
+        stats_scroll.setStyleSheet("background: transparent; border: none;")
+
         self.stats_label = QLabel("No data")
         self.stats_label.setObjectName("statsLabel")
         self.stats_label.setWordWrap(True)
-        stats_layout.addWidget(self.stats_label)
+        self.stats_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self.stats_label.setCursor(Qt.IBeamCursor)
+        stats_scroll.setWidget(self.stats_label)
+
+        stats_layout.addWidget(stats_scroll)
 
         layout.addWidget(stats_group)
 

@@ -778,14 +778,14 @@ class MainWindow(QMainWindow):
                 self.main_splitter.addWidget(panel)
                 panel.show()
 
-        # Set sizes - optimized ratios (50/50 split for graph and table)
+        # Set sizes - Graph 40%, Table 60% (테이블에 더 많은 공간)
         total_height = self.main_splitter.height()
         if total_height == 0:
             total_height = 800  # 기본값
 
         sizes = [
-            int(total_height * 0.5),   # Graph
-            int(total_height * 0.5),   # Table
+            int(total_height * 0.4),   # Graph
+            int(total_height * 0.6),   # Table
         ]
         self.main_splitter.setSizes(sizes)
 
