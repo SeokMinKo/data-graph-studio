@@ -471,7 +471,9 @@ class ParsingStep(QWizardPage):
         return rows
 
     def _update_preview(self):
-        self.progress_bar.setValue(10)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Parsing...")
+        QApplication.processEvents()
         if self._raw_load_error:
             self.preview_table.clear()
             self.preview_table.setRowCount(0)
@@ -499,7 +501,15 @@ class ParsingStep(QWizardPage):
             self.skip_rows_spin.setEnabled(True)
             self.comment_edit.setEnabled(True)
 
+        self.progress_bar.setValue(20)
+        self.progress_bar.setFormat("Parsing columns...")
+        QApplication.processEvents()
+
         parsed = self._parse_preview()
+
+        self.progress_bar.setValue(50)
+        self.progress_bar.setFormat("Building preview...")
+        QApplication.processEvents()
 
         if not parsed:
             self.preview_table.clear()
@@ -527,6 +537,10 @@ class ParsingStep(QWizardPage):
             elif len(row) > max_cols:
                 data[i] = row[:max_cols]
 
+        self.progress_bar.setValue(70)
+        self.progress_bar.setFormat("Loading table...")
+        QApplication.processEvents()
+
         self._update_column_checkboxes(headers)
 
         row_count = min(len(data), self.PREVIEW_ROWS)
@@ -553,6 +567,7 @@ class ParsingStep(QWizardPage):
         self._preview_df = pd.DataFrame(data, columns=headers)
         self._parsing_success = True
         self.progress_bar.setValue(100)
+        self.progress_bar.setFormat("Ready (%p%)")
 
     def _update_column_checkboxes(self, headers: List[str]):
         for cb in self._column_checkboxes:
