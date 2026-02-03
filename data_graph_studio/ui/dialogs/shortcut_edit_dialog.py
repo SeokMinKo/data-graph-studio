@@ -93,16 +93,19 @@ class ShortcutEditDialog(QDialog):
         btn_layout = QHBoxLayout()
 
         reset_all_btn = QPushButton("Reset All to Defaults")
+        reset_all_btn.setToolTip("Reset all shortcuts to their default key bindings")
         reset_all_btn.clicked.connect(self._on_reset_all)
         btn_layout.addWidget(reset_all_btn)
 
         btn_layout.addStretch()
 
         cancel_btn = QPushButton("Cancel")
+        cancel_btn.setToolTip("Discard changes and close")
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
         save_btn = QPushButton("Save")
+        save_btn.setToolTip("Save shortcut changes")
         save_btn.setDefault(True)
         save_btn.clicked.connect(self._on_save)
         btn_layout.addWidget(save_btn)
@@ -230,6 +233,7 @@ class _KeyCaptureDialog(QDialog):
         layout.addWidget(QLabel("Press the new key combination:"))
 
         self._key_edit = QKeySequenceEdit()
+        self._key_edit.setToolTip("Press the desired key combination")
         if self._current_keys:
             self._key_edit.setKeySequence(QKeySequence(self._current_keys))
         layout.addWidget(self._key_edit)

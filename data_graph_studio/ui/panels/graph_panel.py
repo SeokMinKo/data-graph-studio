@@ -156,10 +156,12 @@ class GraphOptionsPanel(QFrame):
         x_layout.addWidget(self.x_format_combo, 1, 1)
 
         self.x_log_check = QCheckBox("Log Scale")
+        self.x_log_check.setToolTip("Use logarithmic scale for X-axis")
         self.x_log_check.stateChanged.connect(self._on_option_changed)
         x_layout.addWidget(self.x_log_check, 2, 0, 1, 2)
 
         self.x_reverse_check = QCheckBox("Reverse")
+        self.x_reverse_check.setToolTip("Reverse X-axis direction")
         self.x_reverse_check.stateChanged.connect(self._on_option_changed)
         x_layout.addWidget(self.x_reverse_check, 3, 0, 1, 2)
 
@@ -208,6 +210,7 @@ class GraphOptionsPanel(QFrame):
 
         y_layout.addWidget(QLabel("Min:"), 2, 0)
         self.y_min_spin = QDoubleSpinBox()
+        self.y_min_spin.setToolTip("Minimum Y-axis value (Auto = fit to data)")
         self.y_min_spin.setRange(-1e9, 1e9)
         self.y_min_spin.setSpecialValueText("Auto")
         self.y_min_spin.setValue(self.y_min_spin.minimum())
@@ -216,6 +219,7 @@ class GraphOptionsPanel(QFrame):
 
         y_layout.addWidget(QLabel("Max:"), 3, 0)
         self.y_max_spin = QDoubleSpinBox()
+        self.y_max_spin.setToolTip("Maximum Y-axis value (Auto = fit to data)")
         self.y_max_spin.setRange(-1e9, 1e9)
         self.y_max_spin.setSpecialValueText("Auto")
         self.y_max_spin.setValue(self.y_max_spin.minimum())
@@ -223,10 +227,12 @@ class GraphOptionsPanel(QFrame):
         y_layout.addWidget(self.y_max_spin, 3, 1)
 
         self.y_log_check = QCheckBox("Log Scale")
+        self.y_log_check.setToolTip("Use logarithmic scale for Y-axis")
         self.y_log_check.stateChanged.connect(self._on_option_changed)
         y_layout.addWidget(self.y_log_check, 4, 0, 1, 2)
 
         self.y_reverse_check = QCheckBox("Reverse")
+        self.y_reverse_check.setToolTip("Reverse Y-axis direction")
         self.y_reverse_check.stateChanged.connect(self._on_option_changed)
         y_layout.addWidget(self.y_reverse_check, 5, 0, 1, 2)
 
@@ -244,6 +250,7 @@ class GraphOptionsPanel(QFrame):
 
         # X-axis sliding window checkbox
         self.x_sliding_window_check = QCheckBox("X-Axis Navigator")
+        self.x_sliding_window_check.setToolTip("Show X-axis minimap navigator")
         self.x_sliding_window_check.setChecked(True)
         self.x_sliding_window_check.setEnabled(True)  # Enabled by default since master is checked
         self.x_sliding_window_check.stateChanged.connect(self._on_option_changed)
@@ -251,6 +258,7 @@ class GraphOptionsPanel(QFrame):
 
         # Y-axis sliding window checkbox
         self.y_sliding_window_check = QCheckBox("Y-Axis Navigator")
+        self.y_sliding_window_check.setToolTip("Show Y-axis minimap navigator")
         self.y_sliding_window_check.setChecked(True)
         self.y_sliding_window_check.setEnabled(True)  # Enabled by default since master is checked
         self.y_sliding_window_check.stateChanged.connect(self._on_option_changed)
@@ -268,11 +276,13 @@ class GraphOptionsPanel(QFrame):
         grid_layout = QVBoxLayout(grid_group)
         
         self.grid_x_check = QCheckBox("Show X Grid")
+        self.grid_x_check.setToolTip("Show vertical grid lines")
         self.grid_x_check.setChecked(True)
         self.grid_x_check.stateChanged.connect(self._on_option_changed)
         grid_layout.addWidget(self.grid_x_check)
         
         self.grid_y_check = QCheckBox("Show Y Grid")
+        self.grid_y_check.setToolTip("Show horizontal grid lines")
         self.grid_y_check.setChecked(True)
         self.grid_y_check.stateChanged.connect(self._on_option_changed)
         grid_layout.addWidget(self.grid_y_check)
@@ -303,6 +313,7 @@ class GraphOptionsPanel(QFrame):
         type_layout = QVBoxLayout(type_group)
         
         self.chart_type_combo = QComboBox()
+        self.chart_type_combo.setToolTip("Select chart visualization type")
         chart_types = [
             ("📈 Line", ChartType.LINE),
             ("📊 Bar", ChartType.BAR),
@@ -345,15 +356,18 @@ class GraphOptionsPanel(QFrame):
         data_layout = QVBoxLayout(data_group)
         
         self.show_labels_check = QCheckBox("Show Data Labels")
+        self.show_labels_check.setToolTip("Display values next to data points")
         self.show_labels_check.stateChanged.connect(self._on_option_changed)
         data_layout.addWidget(self.show_labels_check)
         
         self.show_points_check = QCheckBox("Show Data Points")
+        self.show_points_check.setToolTip("Show markers at each data point")
         self.show_points_check.setChecked(True)
         self.show_points_check.stateChanged.connect(self._on_option_changed)
         data_layout.addWidget(self.show_points_check)
         
         self.smooth_check = QCheckBox("Smooth Line")
+        self.smooth_check.setToolTip("Apply curve smoothing to line chart")
         self.smooth_check.stateChanged.connect(self._on_option_changed)
         data_layout.addWidget(self.smooth_check)
 
@@ -366,6 +380,7 @@ class GraphOptionsPanel(QFrame):
 
         # Show All Data checkbox
         self.show_all_data_check = QCheckBox("Show All Data (may be slow)")
+        self.show_all_data_check.setToolTip("Disable downsampling — render every data point")
         self.show_all_data_check.setChecked(False)
         self.show_all_data_check.stateChanged.connect(self._on_show_all_data_changed)
         sampling_layout.addWidget(self.show_all_data_check)

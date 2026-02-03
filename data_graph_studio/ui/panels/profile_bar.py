@@ -283,6 +283,7 @@ class ProfileBar(QFrame):
 
         # 프로파일 드롭다운
         self._profile_combo = QComboBox()
+        self._profile_combo.setToolTip("Select a saved profile to load")
         self._profile_combo.setMinimumWidth(150)
         self._profile_combo.setStyleSheet("""
             QComboBox {

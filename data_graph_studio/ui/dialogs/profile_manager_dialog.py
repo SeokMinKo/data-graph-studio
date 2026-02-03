@@ -153,11 +153,13 @@ class ProfileManagerDialog(QDialog):
         profile_actions.setSpacing(8)
 
         new_profile_btn = QPushButton("➕ New")
+        new_profile_btn.setToolTip("Create a new empty profile")
         new_profile_btn.setObjectName("smallButton")
         new_profile_btn.clicked.connect(self._on_new_profile)
         profile_actions.addWidget(new_profile_btn)
 
         import_btn = QPushButton("📂 Import")
+        import_btn.setToolTip("Import a profile from file")
         import_btn.setObjectName("smallButton")
         import_btn.clicked.connect(self._on_import_profile)
         profile_actions.addWidget(import_btn)
@@ -198,11 +200,13 @@ class ProfileManagerDialog(QDialog):
         settings_actions.setSpacing(8)
 
         export_btn = QPushButton("💾 Export Profile")
+        export_btn.setToolTip("Export selected profile to a file")
         export_btn.setObjectName("smallButton")
         export_btn.clicked.connect(self._on_export_profile)
         settings_actions.addWidget(export_btn)
 
         delete_profile_btn = QPushButton("🗑️ Delete Profile")
+        delete_profile_btn.setToolTip("Permanently delete selected profile")
         delete_profile_btn.setObjectName("deleteButton")
         delete_profile_btn.clicked.connect(self._on_delete_profile)
         settings_actions.addWidget(delete_profile_btn)
@@ -226,6 +230,7 @@ class ProfileManagerDialog(QDialog):
         footer_layout.addStretch()
 
         close_btn = QPushButton("Close")
+        close_btn.setToolTip("Close profile manager")
         close_btn.setObjectName("secondaryButton")
         close_btn.clicked.connect(self.close)
         footer_layout.addWidget(close_btn)

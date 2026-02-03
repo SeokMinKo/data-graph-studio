@@ -133,6 +133,7 @@ class ProfileOverlayRenderer(QWidget):
             "border-radius: 3px; padding: 2px 6px; }"
             "QPushButton:hover { background: #e74c3c; }"
         )
+        exit_btn.setToolTip("Exit overlay comparison view")
         exit_btn.clicked.connect(self.exit_requested.emit)
         header_layout.addWidget(exit_btn)
 

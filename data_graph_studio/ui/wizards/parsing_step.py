@@ -184,6 +184,7 @@ class ParsingStep(QWizardPage):
         encoding_group = QGroupBox("Encoding")
         encoding_layout = QGridLayout(encoding_group)
         self.encoding_combo = QComboBox()
+        self.encoding_combo.setToolTip("Select file text encoding")
         self.encoding_combo.addItems([
             "utf8",
             "utf8-lossy",
@@ -202,6 +203,7 @@ class ParsingStep(QWizardPage):
         delimiter_layout = QGridLayout(delimiter_group)
         delimiter_layout.addWidget(QLabel("Type:"), 0, 0)
         self.delimiter_combo = QComboBox()
+        self.delimiter_combo.setToolTip("Select column delimiter for parsing")
         self.delimiter_combo.addItems([
             "Auto Detect",
             "Comma (,)",
@@ -226,12 +228,14 @@ class ParsingStep(QWizardPage):
         structure_group = QGroupBox("Structure")
         structure_layout = QGridLayout(structure_group)
         self.header_checkbox = QCheckBox("First row is header")
+        self.header_checkbox.setToolTip("Treat the first data row as column headers")
         self.header_checkbox.setChecked(True)
         self.header_checkbox.stateChanged.connect(self._schedule_update)
         structure_layout.addWidget(self.header_checkbox, 0, 0, 1, 2)
 
         structure_layout.addWidget(QLabel("Skip rows:"), 1, 0)
         self.skip_rows_spin = QSpinBox()
+        self.skip_rows_spin.setToolTip("Number of rows to skip at the beginning")
         self.skip_rows_spin.setRange(0, 1000)
         self.skip_rows_spin.setValue(0)
         self.skip_rows_spin.valueChanged.connect(self._schedule_update)
@@ -271,11 +275,13 @@ class ParsingStep(QWizardPage):
 
         btn_row = QHBoxLayout()
         select_all_btn = QPushButton("Select All")
+        select_all_btn.setToolTip("Include all columns in import")
         select_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
         select_all_btn.clicked.connect(self._select_all_columns)
         btn_row.addWidget(select_all_btn)
 
         deselect_all_btn = QPushButton("Deselect All")
+        deselect_all_btn.setToolTip("Exclude all columns from import")
         deselect_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
         deselect_all_btn.clicked.connect(self._deselect_all_columns)
         btn_row.addWidget(deselect_all_btn)

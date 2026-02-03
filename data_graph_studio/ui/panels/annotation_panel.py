@@ -82,6 +82,7 @@ class AnnotationPanel(QFrame):
 
         # 표시/숨기기 토글
         self._visibility_check = QCheckBox("Show")
+        self._visibility_check.setToolTip("Toggle annotation visibility on chart")
         self._visibility_check.setChecked(True)
         self._visibility_check.stateChanged.connect(self._on_visibility_changed)
         header_layout.addWidget(self._visibility_check)
@@ -106,7 +107,7 @@ class AnnotationPanel(QFrame):
 
         self._delete_orphaned_btn = QPushButton("Clean Orphaned")
         self._delete_orphaned_btn.setObjectName("smallButton")
-        self._delete_orphaned_btn.setToolTip("Delete all orphaned annotations")
+        self._delete_orphaned_btn.setToolTip("Remove annotations referencing deleted datasets")
         self._delete_orphaned_btn.clicked.connect(self._on_delete_orphaned)
         btn_layout.addWidget(self._delete_orphaned_btn)
 

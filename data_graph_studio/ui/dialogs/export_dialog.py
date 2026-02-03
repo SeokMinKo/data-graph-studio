@@ -84,6 +84,7 @@ class ExportDialog(QDialog):
         fmt_layout = QFormLayout(fmt_group)
 
         self.format_combo = QComboBox()
+        self.format_combo.setToolTip("Select the output file format")
         if self._mode == "chart":
             self.format_combo.addItem("PNG", ExportFormat.PNG)
             self.format_combo.addItem("SVG", ExportFormat.SVG)
@@ -99,8 +100,10 @@ class ExportDialog(QDialog):
         path_row = QHBoxLayout()
         self.path_edit = QLineEdit()
         self.path_edit.setPlaceholderText("Choose output file…")
+        self.path_edit.setToolTip("Output file path")
         path_row.addWidget(self.path_edit)
         self.browse_btn = QPushButton("Browse…")
+        self.browse_btn.setToolTip("Choose export file location")
         self.browse_btn.clicked.connect(self._browse)
         path_row.addWidget(self.browse_btn)
         fmt_layout.addRow("Save to:", path_row)
@@ -113,6 +116,7 @@ class ExportDialog(QDialog):
 
         # Resolution
         self.resolution_combo = QComboBox()
+        self.resolution_combo.setToolTip("Select output image resolution")
         for label in _RESOLUTION_PRESETS:
             self.resolution_combo.addItem(label)
         self.resolution_combo.currentTextChanged.connect(self._on_resolution_changed)
@@ -123,11 +127,13 @@ class ExportDialog(QDialog):
         cs_layout = QHBoxLayout(self.custom_size_widget)
         cs_layout.setContentsMargins(0, 0, 0, 0)
         self.width_spin = QSpinBox()
+        self.width_spin.setToolTip("Custom image width in pixels")
         self.width_spin.setRange(100, 7680)
         self.width_spin.setValue(1920)
         cs_layout.addWidget(QLabel("W:"))
         cs_layout.addWidget(self.width_spin)
         self.height_spin = QSpinBox()
+        self.height_spin.setToolTip("Custom image height in pixels")
         self.height_spin.setRange(100, 4320)
         self.height_spin.setValue(1080)
         cs_layout.addWidget(QLabel("H:"))
@@ -137,22 +143,26 @@ class ExportDialog(QDialog):
 
         # DPI
         self.dpi_spin = QSpinBox()
+        self.dpi_spin.setToolTip("Dots per inch — higher values for print quality")
         self.dpi_spin.setRange(72, 600)
         self.dpi_spin.setValue(96)
         chart_layout.addRow("DPI:", self.dpi_spin)
 
         # Background
         self.bg_combo = QComboBox()
+        self.bg_combo.setToolTip("Background color for exported chart")
         self.bg_combo.addItems(["White", "Transparent", "Dark"])
         chart_layout.addRow("Background:", self.bg_combo)
 
         # Legend
         self.legend_check = QCheckBox("Include legend")
+        self.legend_check.setToolTip("Include chart legend in export")
         self.legend_check.setChecked(True)
         chart_layout.addRow("", self.legend_check)
 
         # Stats (PDF only)
         self.stats_check = QCheckBox("Include statistics summary")
+        self.stats_check.setToolTip("Append statistical summary page (PDF only)")
         self.stats_check.setChecked(False)
         chart_layout.addRow("", self.stats_check)
 
@@ -176,7 +186,9 @@ class ExportDialog(QDialog):
         # --- Buttons ---
         self.button_box = QDialogButtonBox()
         self.export_btn = self.button_box.addButton("Export", QDialogButtonBox.AcceptRole)
+        self.export_btn.setToolTip("Start export with current settings")
         self.cancel_btn = self.button_box.addButton(QDialogButtonBox.Cancel)
+        self.cancel_btn.setToolTip("Cancel and close dialog")
         self.button_box.accepted.connect(self._on_export)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)

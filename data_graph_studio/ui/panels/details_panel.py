@@ -309,6 +309,7 @@ class DetailsOnDemandPanel(QWidget):
         columns_btn = QToolButton()
         columns_btn.setText("Columns")
         columns_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        columns_btn.setToolTip("Select columns to display")
         columns_btn.setMenu(self._create_columns_menu())
         layout.addWidget(columns_btn)
         self._columns_btn = columns_btn
@@ -316,12 +317,14 @@ class DetailsOnDemandPanel(QWidget):
         # 복사 버튼
         copy_btn = QPushButton("Copy")
         copy_btn.setMaximumWidth(60)
+        copy_btn.setToolTip("Copy selected data to clipboard")
         copy_btn.clicked.connect(self._copy_to_clipboard)
         layout.addWidget(copy_btn)
 
         # 내보내기 버튼
         export_btn = QPushButton("Export")
         export_btn.setMaximumWidth(60)
+        export_btn.setToolTip("Export data to file")
         export_btn.clicked.connect(self._export_to_file)
         layout.addWidget(export_btn)
 

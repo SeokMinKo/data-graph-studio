@@ -423,6 +423,7 @@ if HAS_QT:
             header_layout.addStretch()
 
             reset_btn = QPushButton("Reset All")
+            reset_btn.setToolTip("Reset all filters to default values")
             reset_btn.clicked.connect(self._reset_all_filters)
             header_layout.addWidget(reset_btn)
 

@@ -22,6 +22,7 @@ class ColorButton(QPushButton):
         self._color = color
         self.setFixedSize(28, 28)
         self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Click to choose a color")
         self.clicked.connect(self._on_clicked)
         self._update_style()
     

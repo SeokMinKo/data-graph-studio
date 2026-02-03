@@ -300,10 +300,12 @@ class ParsingPreviewDialog(QDialog):
         button_layout.addStretch()
         
         cancel_btn = QPushButton("Cancel")
+        cancel_btn.setToolTip("Cancel import and close")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
         import_btn = QPushButton("Import")
+        import_btn.setToolTip("Import file with current parsing settings")
         import_btn.setObjectName("primary")
         import_btn.clicked.connect(self.accept)
         button_layout.addWidget(import_btn)
@@ -324,6 +326,7 @@ class ParsingPreviewDialog(QDialog):
         
         delimiter_layout.addWidget(QLabel("Type:"), 0, 0)
         self.delimiter_combo = QComboBox()
+        self.delimiter_combo.setToolTip("Select column delimiter for parsing")
         self.delimiter_combo.addItems([
             "Auto Detect",
             "Comma (,)",
@@ -351,6 +354,7 @@ class ParsingPreviewDialog(QDialog):
         encoding_layout.setSpacing(8)
         
         self.encoding_combo = QComboBox()
+        self.encoding_combo.setToolTip("Select file text encoding")
         self.encoding_combo.addItems([
             "utf8",
             "utf8-lossy",
@@ -371,12 +375,14 @@ class ParsingPreviewDialog(QDialog):
         structure_layout.setSpacing(8)
         
         self.header_checkbox = QCheckBox("First row is header")
+        self.header_checkbox.setToolTip("Treat the first data row as column headers")
         self.header_checkbox.setChecked(True)
         self.header_checkbox.stateChanged.connect(self._schedule_update)
         structure_layout.addWidget(self.header_checkbox, 0, 0, 1, 2)
         
         structure_layout.addWidget(QLabel("Skip rows:"), 1, 0)
         self.skip_rows_spin = QSpinBox()
+        self.skip_rows_spin.setToolTip("Number of rows to skip at the beginning of the file")
         self.skip_rows_spin.setRange(0, 1000)
         self.skip_rows_spin.setValue(0)
         self.skip_rows_spin.valueChanged.connect(self._schedule_update)
@@ -431,11 +437,13 @@ class ParsingPreviewDialog(QDialog):
         # Select all/none buttons
         etl_btn_layout = QHBoxLayout()
         select_all_proc_btn = QPushButton("Select All")
+        select_all_proc_btn.setToolTip("Select all ETL processes")
         select_all_proc_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
         select_all_proc_btn.clicked.connect(self._select_all_processes)
         etl_btn_layout.addWidget(select_all_proc_btn)
 
         deselect_all_proc_btn = QPushButton("Deselect All")
+        deselect_all_proc_btn.setToolTip("Deselect all ETL processes")
         deselect_all_proc_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
         deselect_all_proc_btn.clicked.connect(self._deselect_all_processes)
         etl_btn_layout.addWidget(deselect_all_proc_btn)
@@ -500,11 +508,13 @@ class ParsingPreviewDialog(QDialog):
         # Buttons row
         btn_row = QHBoxLayout()
         select_all_btn = QPushButton("Select All")
+        select_all_btn.setToolTip("Include all columns in import")
         select_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
         select_all_btn.clicked.connect(self._select_all_columns)
         btn_row.addWidget(select_all_btn)
 
         deselect_all_btn = QPushButton("Deselect All")
+        deselect_all_btn.setToolTip("Exclude all columns from import")
         deselect_all_btn.setStyleSheet("font-size: 10px; padding: 4px 8px;")
         deselect_all_btn.clicked.connect(self._deselect_all_columns)
         btn_row.addWidget(deselect_all_btn)

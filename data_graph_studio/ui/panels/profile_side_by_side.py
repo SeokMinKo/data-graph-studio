@@ -94,6 +94,7 @@ class ProfileSideBySideLayout(QWidget):
             "border-radius: 3px; padding: 2px 6px; }"
             "QPushButton:hover { background: #e74c3c; }"
         )
+        exit_btn.setToolTip("Exit side-by-side comparison view")
         exit_btn.clicked.connect(self.exit_requested.emit)
         header_layout.addWidget(exit_btn)
 
@@ -109,16 +110,19 @@ class ProfileSideBySideLayout(QWidget):
 
         self._sync_x_cb = QCheckBox("X축")
         self._sync_x_cb.setChecked(True)
+        self._sync_x_cb.setToolTip("Synchronize X-axis panning across panels")
         self._sync_x_cb.stateChanged.connect(self._on_sync_x_changed)
         sync_layout.addWidget(self._sync_x_cb)
 
         self._sync_y_cb = QCheckBox("Y축")
         self._sync_y_cb.setChecked(False)
+        self._sync_y_cb.setToolTip("Synchronize Y-axis zoom across panels")
         self._sync_y_cb.stateChanged.connect(self._on_sync_y_changed)
         sync_layout.addWidget(self._sync_y_cb)
 
         self._sync_sel_cb = QCheckBox("Selection")
         self._sync_sel_cb.setChecked(True)
+        self._sync_sel_cb.setToolTip("Synchronize data selection across panels")
         self._sync_sel_cb.stateChanged.connect(self._on_sync_sel_changed)
         sync_layout.addWidget(self._sync_sel_cb)
 
@@ -126,6 +130,7 @@ class ProfileSideBySideLayout(QWidget):
 
         reset_btn = QPushButton("Reset All")
         reset_btn.setFixedWidth(80)
+        reset_btn.setToolTip("Reset view to fit all data")
         reset_btn.clicked.connect(self._on_reset_all)
         sync_layout.addWidget(reset_btn)
 

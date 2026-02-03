@@ -265,6 +265,7 @@ if HAS_QT:
             header_layout.addStretch()
 
             reset_btn = QPushButton("Reset")
+            reset_btn.setToolTip("Reset all properties to default values")
             reset_btn.clicked.connect(self._reset_to_defaults)
             header_layout.addWidget(reset_btn)
 

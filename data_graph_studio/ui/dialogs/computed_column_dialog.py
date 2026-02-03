@@ -175,6 +175,7 @@ class ComputedColumnDialog(QDialog):
         form = QFormLayout()
         self._name_edit = QLineEdit()
         self._name_edit.setPlaceholderText("e.g. power_calc")
+        self._name_edit.setToolTip("Name for the new computed column")
         form.addRow("Name:", self._name_edit)
         layout.addLayout(form)
 
@@ -184,10 +185,15 @@ class ComputedColumnDialog(QDialog):
         self._type_group = QButtonGroup(self)
 
         self._radio_formula = QRadioButton("Formula")
+        self._radio_formula.setToolTip("Create column using a custom formula expression")
         self._radio_moving_avg = QRadioButton("Moving Average")
+        self._radio_moving_avg.setToolTip("Compute moving average over a window")
         self._radio_diff = QRadioButton("Difference")
+        self._radio_diff.setToolTip("Compute difference between consecutive values")
         self._radio_cumsum = QRadioButton("Cumulative Sum")
+        self._radio_cumsum.setToolTip("Compute running cumulative sum")
         self._radio_normalize = QRadioButton("Normalize")
+        self._radio_normalize.setToolTip("Normalize values using min-max or z-score")
 
         for i, rb in enumerate([
             self._radio_formula, self._radio_moving_avg,
@@ -207,17 +213,20 @@ class ComputedColumnDialog(QDialog):
         # Formula input
         self._formula_edit = QLineEdit()
         self._formula_edit.setPlaceholderText("{voltage} * {current}")
+        self._formula_edit.setToolTip("Enter formula using {column_name} syntax")
         param_layout.addWidget(QLabel("Formula:"))
         param_layout.addWidget(self._formula_edit)
 
         # Source column combo
         self._source_combo = QComboBox()
+        self._source_combo.setToolTip("Select the source column for computation")
         self._source_combo.addItems(self._existing_columns)
         param_layout.addWidget(QLabel("Source Column:"))
         param_layout.addWidget(self._source_combo)
 
         # Window size
         self._window_spin = QSpinBox()
+        self._window_spin.setToolTip("Number of rows in the moving average window")
         self._window_spin.setRange(1, 100000)
         self._window_spin.setValue(3)
         param_layout.addWidget(QLabel("Window Size:"))
@@ -225,6 +234,7 @@ class ComputedColumnDialog(QDialog):
 
         # Diff order
         self._order_spin = QSpinBox()
+        self._order_spin.setToolTip("Order of differencing (1 = first difference)")
         self._order_spin.setRange(1, 10)
         self._order_spin.setValue(1)
         param_layout.addWidget(QLabel("Diff Order:"))
@@ -232,6 +242,7 @@ class ComputedColumnDialog(QDialog):
 
         # Normalize method
         self._norm_combo = QComboBox()
+        self._norm_combo.setToolTip("Normalization method: min-max (0-1) or z-score")
         self._norm_combo.addItems(["min_max", "z_score"])
         param_layout.addWidget(QLabel("Method:"))
         param_layout.addWidget(self._norm_combo)
@@ -249,6 +260,7 @@ class ComputedColumnDialog(QDialog):
         self._preview_label = QLabel("Preview:")
         self._preview_text = QTextEdit()
         self._preview_text.setReadOnly(True)
+        self._preview_text.setToolTip("Preview of computed values (first 10 rows)")
         self._preview_text.setMaximumHeight(80)
         layout.addWidget(self._preview_label)
         layout.addWidget(self._preview_text)
@@ -263,6 +275,12 @@ class ComputedColumnDialog(QDialog):
         self._btn_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        ok_btn = self._btn_box.button(QDialogButtonBox.StandardButton.Ok)
+        if ok_btn:
+            ok_btn.setToolTip("Create the computed column")
+        cancel_btn = self._btn_box.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel_btn:
+            cancel_btn.setToolTip("Cancel and close dialog")
         self._btn_box.accepted.connect(self._on_create)
         self._btn_box.rejected.connect(self._on_cancel)
         layout.addWidget(self._btn_box)

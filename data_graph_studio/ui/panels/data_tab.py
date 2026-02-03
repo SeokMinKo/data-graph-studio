@@ -80,6 +80,7 @@ def _make_section_header(
         btn_none.setObjectName("smallButton")
         btn_none.setFixedHeight(20)
         btn_none.setMaximumWidth(42)
+        btn_none.setToolTip("Deselect all items in this section")
         btn_none.clicked.connect(on_none)
         row.addWidget(btn_none)
 
@@ -134,6 +135,7 @@ class _YAxisItemWidget(QWidget):
         self.formula_toggle.setCheckable(True)
         self.formula_toggle.setChecked(False)
         self.formula_toggle.setMinimumHeight(20)
+        self.formula_toggle.setToolTip("Toggle formula editor for this column")
         self.formula_toggle.clicked.connect(self._on_formula_toggled)
         self.formula_toggle.setVisible(False)
         row1.addWidget(self.formula_toggle)
@@ -264,6 +266,7 @@ class DataTab(QWidget):
         self._x_combo = QComboBox()
         self._x_combo.setEditable(True)
         self._x_combo.setInsertPolicy(QComboBox.NoInsert)
+        self._x_combo.setToolTip("Select column for X-axis (or use index)")
         self._x_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         if self._x_combo.lineEdit():
             self._x_combo.lineEdit().setPlaceholderText("🔍 Search column...")
@@ -339,6 +342,7 @@ class DataTab(QWidget):
 
         self._agg_combo = QComboBox()
         self._agg_combo.setMinimumHeight(24)
+        self._agg_combo.setToolTip("Primary aggregation function for grouped data")
         for label, agg in _AGG_ITEMS:
             self._agg_combo.addItem(label, agg)
         self._agg_combo.currentIndexChanged.connect(self._on_global_agg_changed)
@@ -354,6 +358,7 @@ class DataTab(QWidget):
 
         self._agg_combo_2 = QComboBox()
         self._agg_combo_2.setMinimumHeight(24)
+        self._agg_combo_2.setToolTip("Secondary aggregation function for grouped data")
         for label, agg in _AGG_ITEMS:
             self._agg_combo_2.addItem(label, agg)
         # Default Agg 2 to MEAN

@@ -355,12 +355,14 @@ class SideBySideLayout(QWidget):
         # Scroll checkbox → controls ViewSyncManager.sync_x
         self.sync_scroll_cb = QCheckBox("Scroll")
         self.sync_scroll_cb.setChecked(self._view_sync_manager.sync_x)
+        self.sync_scroll_cb.setToolTip("Synchronize horizontal scrolling across panels")
         self.sync_scroll_cb.stateChanged.connect(self._on_sync_scroll_changed)
         options_layout.addWidget(self.sync_scroll_cb)
 
         # Zoom checkbox → controls ViewSyncManager.sync_y
         self.sync_zoom_cb = QCheckBox("Zoom")
         self.sync_zoom_cb.setChecked(self._view_sync_manager.sync_y)
+        self.sync_zoom_cb.setToolTip("Synchronize zoom level across panels")
         self.sync_zoom_cb.stateChanged.connect(self._on_sync_zoom_changed)
         options_layout.addWidget(self.sync_zoom_cb)
 
@@ -369,6 +371,7 @@ class SideBySideLayout(QWidget):
         # 리셋 버튼
         self.reset_btn = QPushButton("Reset Views")
         self.reset_btn.setFixedWidth(80)
+        self.reset_btn.setToolTip("Reset view to fit all data")
         self.reset_btn.clicked.connect(self.reset_all_views)
         options_layout.addWidget(self.reset_btn)
 

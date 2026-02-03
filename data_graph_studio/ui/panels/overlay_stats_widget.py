@@ -141,6 +141,7 @@ class OverlayStatsWidget(QWidget):
         # 닫기 버튼
         close_btn = QPushButton("×")
         close_btn.setFixedSize(20, 20)
+        close_btn.setToolTip("Close statistics overlay")
         close_btn.clicked.connect(self.close_requested.emit)
         close_btn.setStyleSheet("border: none; font-size: 14px;")
         header_layout.addWidget(close_btn)

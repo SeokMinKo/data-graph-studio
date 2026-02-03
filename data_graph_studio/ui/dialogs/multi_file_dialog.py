@@ -96,14 +96,17 @@ class MultiFileDialog(QDialog):
         btn_layout = QHBoxLayout()
 
         self.add_btn = QPushButton("Add Files...")
+        self.add_btn.setToolTip("Browse and add data files")
         self.add_btn.clicked.connect(self._add_files)
         btn_layout.addWidget(self.add_btn)
 
         self.remove_btn = QPushButton("Remove Selected")
+        self.remove_btn.setToolTip("Remove highlighted files from list")
         self.remove_btn.clicked.connect(self._remove_selected)
         btn_layout.addWidget(self.remove_btn)
 
         self.clear_btn = QPushButton("Clear All")
+        self.clear_btn.setToolTip("Remove all files from list")
         self.clear_btn.clicked.connect(self._clear_all)
         btn_layout.addWidget(self.clear_btn)
 
@@ -117,12 +120,14 @@ class MultiFileDialog(QDialog):
         options_layout = QVBoxLayout(options_group)
 
         self.auto_compare_cb = QCheckBox("Automatically start comparison after loading")
+        self.auto_compare_cb.setToolTip("Begin dataset comparison as soon as all files are loaded")
         self.auto_compare_cb.setChecked(True)
         options_layout.addWidget(self.auto_compare_cb)
 
         naming_layout = QHBoxLayout()
         naming_layout.addWidget(QLabel("Naming:"))
         self.naming_combo = QComboBox()
+        self.naming_combo.setToolTip("How to name datasets when loaded")
         self.naming_combo.addItem("Use file name", "filename")
         self.naming_combo.addItem("Use file name (without extension)", "filename_no_ext")
         self.naming_combo.addItem("Use sequential numbers (Data 1, Data 2, ...)", "sequential")
@@ -151,10 +156,12 @@ class MultiFileDialog(QDialog):
         btn_frame_layout.addStretch()
 
         self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setToolTip("Cancel and close dialog")
         self.cancel_btn.clicked.connect(self.reject)
         btn_frame_layout.addWidget(self.cancel_btn)
 
         self.open_btn = QPushButton("Open Files")
+        self.open_btn.setToolTip("Open selected files as datasets")
         self.open_btn.setDefault(True)
         self.open_btn.clicked.connect(self._accept)
         self.open_btn.setEnabled(False)

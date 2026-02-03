@@ -47,6 +47,7 @@ class _EmptyCellWidget(QFrame):
         self.setFrameStyle(QFrame.Shape.StyledPanel)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumSize(MIN_CELL_WIDTH, MIN_CELL_HEIGHT)
+        self.setToolTip("Click to add a chart to this cell")
         self.setStyleSheet(
             "QFrame { border: 2px dashed #888; border-radius: 6px; background: transparent; }"
         )
@@ -150,6 +151,7 @@ class DashboardPanel(QWidget):
 
         hl.addWidget(QLabel("Layout:"))
         self._preset_combo = QComboBox()
+        self._preset_combo.setToolTip("Select dashboard grid layout preset")
         self._preset_combo.addItems(list(LAYOUT_PRESETS.keys()))
         self._preset_combo.currentTextChanged.connect(self.preset_changed.emit)
         hl.addWidget(self._preset_combo)

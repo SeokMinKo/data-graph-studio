@@ -312,6 +312,7 @@ class DashboardItemWidget(QFrame):
         # 메뉴 버튼
         menu_btn = QPushButton("⋮")
         menu_btn.setFixedWidth(30)
+        menu_btn.setToolTip("Dashboard item options")
         menu_btn.clicked.connect(self._show_menu)
         header.addWidget(menu_btn)
         

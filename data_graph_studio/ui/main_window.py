@@ -349,6 +349,7 @@ class MainWindow(QMainWindow):
         graph_elements_menu.addSeparator()
         
         legend_action = QAction("Legend", self)
+        legend_action.setToolTip("Toggle chart legend visibility")
         legend_action.setCheckable(True)
         legend_action.setChecked(True)
         legend_action.triggered.connect(self._on_toggle_legend)
@@ -357,6 +358,7 @@ class MainWindow(QMainWindow):
         self._show_legend_action = legend_action
         
         grid_action = QAction("Grid", self)
+        grid_action.setToolTip("Toggle chart grid lines")
         grid_action.setCheckable(True)
         grid_action.setChecked(True)
         grid_action.triggered.connect(self._on_toggle_grid)
@@ -365,6 +367,7 @@ class MainWindow(QMainWindow):
         self._show_grid_action = grid_action
         
         statistics_overlay_action = QAction("Statistics Overlay", self)
+        statistics_overlay_action.setToolTip("Show statistics overlay on chart")
         statistics_overlay_action.setCheckable(True)
         statistics_overlay_action.setChecked(False)
         statistics_overlay_action.triggered.connect(self._on_toggle_statistics_overlay)
@@ -372,6 +375,7 @@ class MainWindow(QMainWindow):
         self._graph_element_actions["statistics_overlay"] = statistics_overlay_action
         
         axis_labels_action = QAction("Axis Labels", self)
+        axis_labels_action.setToolTip("Toggle axis labels on chart")
         axis_labels_action.setCheckable(True)
         axis_labels_action.setChecked(True)
         axis_labels_action.triggered.connect(self._on_toggle_axis_labels)
@@ -380,15 +384,18 @@ class MainWindow(QMainWindow):
 
         graph_elements_menu.addSeparator()
         drawing_style_action = QAction("Drawing Style...", self)
+        drawing_style_action.setToolTip("Configure drawing tool style")
         drawing_style_action.triggered.connect(self._on_drawing_style)
         graph_elements_menu.addAction(drawing_style_action)
 
         delete_drawing_action = QAction("Delete Selected Drawing", self)
+        delete_drawing_action.setToolTip("Delete the currently selected drawing (Delete)")
         delete_drawing_action.setShortcut("Delete")
         delete_drawing_action.triggered.connect(self._on_delete_drawing)
         graph_elements_menu.addAction(delete_drawing_action)
 
         clear_drawings_action = QAction("Clear All Drawings", self)
+        clear_drawings_action.setToolTip("Remove all drawings from the chart")
         clear_drawings_action.triggered.connect(self._on_clear_drawings)
         graph_elements_menu.addAction(clear_drawings_action)
 
@@ -404,6 +411,7 @@ class MainWindow(QMainWindow):
         table_elements_menu.addSeparator()
         
         row_numbers_action = QAction("Row Numbers", self)
+        row_numbers_action.setToolTip("Show or hide row numbers in table")
         row_numbers_action.setCheckable(True)
         row_numbers_action.setChecked(True)
         row_numbers_action.triggered.connect(self._on_toggle_row_numbers)
@@ -411,6 +419,7 @@ class MainWindow(QMainWindow):
         self._table_element_actions["row_numbers"] = row_numbers_action
         
         column_headers_action = QAction("Column Headers", self)
+        column_headers_action.setToolTip("Show or hide column headers in table")
         column_headers_action.setCheckable(True)
         column_headers_action.setChecked(True)
         column_headers_action.triggered.connect(self._on_toggle_column_headers)
@@ -418,6 +427,7 @@ class MainWindow(QMainWindow):
         self._table_element_actions["column_headers"] = column_headers_action
         
         filter_bar_action = QAction("Filter Bar", self)
+        filter_bar_action.setToolTip("Show or hide table filter bar")
         filter_bar_action.setCheckable(True)
         filter_bar_action.setChecked(False)
         filter_bar_action.triggered.connect(self._on_toggle_filter_bar)
@@ -440,6 +450,7 @@ class MainWindow(QMainWindow):
         self._theme_actions = {}
 
         light_theme_action = QAction("Light", self)
+        light_theme_action.setToolTip("Switch to light theme")
         light_theme_action.setCheckable(True)
         light_theme_action.setChecked(False)
         light_theme_action.triggered.connect(lambda: self._on_theme_changed("light"))
@@ -447,12 +458,14 @@ class MainWindow(QMainWindow):
         self._theme_actions["light"] = light_theme_action
 
         dark_theme_action = QAction("Dark", self)
+        dark_theme_action.setToolTip("Switch to dark theme")
         dark_theme_action.setCheckable(True)
         dark_theme_action.triggered.connect(lambda: self._on_theme_changed("dark"))
         theme_menu.addAction(dark_theme_action)
         self._theme_actions["dark"] = dark_theme_action
 
         midnight_theme_action = QAction("Midnight", self)
+        midnight_theme_action.setToolTip("Switch to midnight theme")
         midnight_theme_action.setCheckable(True)
         midnight_theme_action.setChecked(True)
         midnight_theme_action.triggered.connect(lambda: self._on_theme_changed("midnight"))

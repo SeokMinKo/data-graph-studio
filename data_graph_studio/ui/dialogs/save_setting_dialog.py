@@ -92,6 +92,7 @@ class SaveSettingDialog(QDialog):
         form_layout.addWidget(icon_label, 1, 0, Qt.AlignRight)
 
         self._icon_combo = QComboBox()
+        self._icon_combo.setToolTip("Choose an icon for this setting")
         self._icon_combo.setMinimumWidth(100)
         for icon in SETTING_ICONS:
             self._icon_combo.addItem(icon, icon)
@@ -150,10 +151,12 @@ class SaveSettingDialog(QDialog):
         options_layout.addWidget(options_header)
 
         self._include_filters_cb = QCheckBox("Include current filters")
+        self._include_filters_cb.setToolTip("Save active filter settings with this profile")
         self._include_filters_cb.setStyleSheet("color: #C2C8D1;")
         options_layout.addWidget(self._include_filters_cb)
 
         self._include_sorts_cb = QCheckBox("Include current sort order")
+        self._include_sorts_cb.setToolTip("Save current table sort order with this profile")
         self._include_sorts_cb.setStyleSheet("color: #C2C8D1;")
         options_layout.addWidget(self._include_sorts_cb)
 
@@ -164,6 +167,7 @@ class SaveSettingDialog(QDialog):
         button_layout.addStretch()
 
         cancel_btn = QPushButton("Cancel")
+        cancel_btn.setToolTip("Cancel and close dialog")
         cancel_btn.setStyleSheet("""
             QPushButton {
                 background: #3A4654;
@@ -181,6 +185,7 @@ class SaveSettingDialog(QDialog):
         button_layout.addWidget(cancel_btn)
 
         save_btn = QPushButton("Save")
+        save_btn.setToolTip("Save graph setting")
         save_btn.setStyleSheet("""
             QPushButton {
                 background: #59B8E3;

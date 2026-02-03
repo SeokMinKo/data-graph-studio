@@ -139,6 +139,7 @@ class ReportDialog(QDialog):
         output_layout.addWidget(self.output_path_edit, 1)
 
         browse_btn = QPushButton("Browse...")
+        browse_btn.setToolTip("Choose output file location")
         browse_btn.clicked.connect(self._browse_output)
         output_layout.addWidget(browse_btn)
 
@@ -149,14 +150,17 @@ class ReportDialog(QDialog):
         button_layout.addStretch()
 
         cancel_btn = QPushButton("Cancel")
+        cancel_btn.setToolTip("Cancel and close dialog")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
 
         preview_btn = QPushButton("Preview")
+        preview_btn.setToolTip("Preview report before generating")
         preview_btn.clicked.connect(self._preview_report)
         button_layout.addWidget(preview_btn)
 
         self.generate_btn = QPushButton("Generate Report")
+        self.generate_btn.setToolTip("Generate and save the report")
         self.generate_btn.setDefault(True)
         self.generate_btn.clicked.connect(self._generate_report)
         self.generate_btn.setStyleSheet("""
@@ -242,6 +246,7 @@ class ReportDialog(QDialog):
         theme_layout = QHBoxLayout(theme_group)
 
         self.theme_combo = QComboBox()
+        self.theme_combo.setToolTip("Select report visual theme")
         self.theme_combo.addItem("Light", ReportTheme.LIGHT)
         self.theme_combo.addItem("Dark", ReportTheme.DARK)
         self.theme_combo.addItem("Corporate", ReportTheme.CORPORATE)
@@ -249,6 +254,7 @@ class ReportDialog(QDialog):
 
         theme_layout.addWidget(QLabel("Language:"))
         self.language_combo = QComboBox()
+        self.language_combo.setToolTip("Select report language")
         self.language_combo.addItem("Korean", "ko")
         self.language_combo.addItem("English", "en")
         theme_layout.addWidget(self.language_combo)
@@ -353,10 +359,12 @@ class ReportDialog(QDialog):
         chart_layout = QGridLayout(chart_group)
 
         self.interactive_charts_check = QCheckBox("Interactive Charts (HTML only)")
+        self.interactive_charts_check.setToolTip("Enable hover/zoom interactions in HTML reports")
         chart_layout.addWidget(self.interactive_charts_check, 0, 0, 1, 2)
 
         chart_layout.addWidget(QLabel("Chart DPI:"), 1, 0)
         self.chart_dpi_spin = QSpinBox()
+        self.chart_dpi_spin.setToolTip("Chart resolution in dots per inch")
         self.chart_dpi_spin.setRange(72, 300)
         self.chart_dpi_spin.setValue(150)
         chart_layout.addWidget(self.chart_dpi_spin, 1, 1)
@@ -386,6 +394,7 @@ class ReportDialog(QDialog):
         slide_layout.addWidget(self.slide_size_combo, 0, 1)
 
         self.one_chart_per_slide_check = QCheckBox("One Chart per Slide")
+        self.one_chart_per_slide_check.setToolTip("Place each chart on a separate slide")
         self.one_chart_per_slide_check.setChecked(True)
         slide_layout.addWidget(self.one_chart_per_slide_check, 1, 0, 1, 2)
 

@@ -143,6 +143,7 @@ class ProfileDifferenceRenderer(QWidget):
             "border-radius: 3px; padding: 2px 6px; }"
             "QPushButton:hover { background: #e74c3c; }"
         )
+        exit_btn.setToolTip("Exit difference analysis view")
         exit_btn.clicked.connect(self.exit_requested.emit)
         top_row.addWidget(exit_btn)
         header_layout.addLayout(top_row)

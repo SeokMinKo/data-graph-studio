@@ -605,6 +605,7 @@ class XAxisZone(QFrame):
         clear_btn = QPushButton("✕ Use Index")
         clear_btn.setObjectName("zoneClearBtn")
         clear_btn.setProperty("zone", "x")
+        clear_btn.setToolTip("Clear X-axis column and use row index")
         clear_btn.clicked.connect(self._clear_x_column)
         layout.addWidget(clear_btn)
 
@@ -729,6 +730,7 @@ class GroupZone(QFrame):
         # Clear button
         remove_btn = QPushButton("✕ Clear")
         remove_btn.setObjectName("dangerButton")
+        remove_btn.setToolTip("Clear all group-by columns")
         remove_btn.clicked.connect(self.state.clear_group_zone)
         layout.addWidget(remove_btn)
     
@@ -920,6 +922,7 @@ class HoverZone(QFrame):
         # Clear button
         clear_btn = QPushButton("✕ Clear")
         clear_btn.setObjectName("warningButton")
+        clear_btn.setToolTip("Clear all hover columns")
         clear_btn.clicked.connect(self._clear_all)
         layout.addWidget(clear_btn)
 
@@ -1147,6 +1150,7 @@ class FilterBar(QFrame):
         # Clear all button
         clear_btn = QPushButton("Clear All")
         clear_btn.setObjectName("warningButton")
+        clear_btn.setToolTip("Remove all active filters")
         clear_btn.clicked.connect(self.clear_all.emit)
         self.main_layout.addWidget(clear_btn)
         
@@ -1248,6 +1252,7 @@ class HiddenColumnsBar(QFrame):
         # Show all button
         show_all_btn = QPushButton("Show All")
         show_all_btn.setObjectName("smallButton")
+        show_all_btn.setToolTip("Show all hidden columns")
         show_all_btn.clicked.connect(self.show_all.emit)
         self.main_layout.addWidget(show_all_btn)
         
@@ -1400,11 +1405,13 @@ class TablePanel(QWidget):
         
         expand_btn = QPushButton("▼ Expand")
         expand_btn.setObjectName("smallButton")
+        expand_btn.setToolTip("Expand all groups")
         expand_btn.clicked.connect(self._expand_all)
         toolbar.addWidget(expand_btn)
         
         collapse_btn = QPushButton("▶ Collapse")
         collapse_btn.setObjectName("smallButton")
+        collapse_btn.setToolTip("Collapse all groups")
         collapse_btn.clicked.connect(self._collapse_all)
         toolbar.addWidget(collapse_btn)
         

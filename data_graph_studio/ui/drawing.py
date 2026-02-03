@@ -529,6 +529,7 @@ class ColorButton(QPushButton):
         self._color = color
         self.setFixedSize(28, 28)
         self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Click to choose a color")
         self.clicked.connect(self._on_clicked)
         self._update_style()
 
@@ -586,10 +587,12 @@ class DrawingStyleDialog(QDialog):
         self.stroke_width_spin.setRange(0.5, 20.0)
         self.stroke_width_spin.setValue(2.0)
         self.stroke_width_spin.setSingleStep(0.5)
+        self.stroke_width_spin.setToolTip("Set stroke line width")
         stroke_layout.addWidget(self.stroke_width_spin, 1, 1)
 
         stroke_layout.addWidget(QLabel("Style:"), 2, 0)
         self.line_style_combo = QComboBox()
+        self.line_style_combo.setToolTip("Select line dash style")
         self.line_style_combo.addItems(["Solid", "Dashed", "Dotted", "Dash-Dot"])
         stroke_layout.addWidget(self.line_style_combo, 2, 1)
 
@@ -600,6 +603,7 @@ class DrawingStyleDialog(QDialog):
         fill_layout = QGridLayout(fill_group)
 
         self.fill_enabled_check = QCheckBox("Enable Fill")
+        self.fill_enabled_check.setToolTip("Enable or disable shape fill")
         fill_layout.addWidget(self.fill_enabled_check, 0, 0, 1, 2)
 
         fill_layout.addWidget(QLabel("Color:"), 1, 0)
@@ -611,6 +615,7 @@ class DrawingStyleDialog(QDialog):
         self.fill_opacity_spin.setRange(0.0, 1.0)
         self.fill_opacity_spin.setValue(0.3)
         self.fill_opacity_spin.setSingleStep(0.1)
+        self.fill_opacity_spin.setToolTip("Set fill opacity (0 = transparent, 1 = opaque)")
         fill_layout.addWidget(self.fill_opacity_spin, 2, 1)
 
         layout.addWidget(fill_group)
@@ -685,6 +690,7 @@ class RectStyleDialog(DrawingStyleDialog):
         self.corner_radius_spin = QDoubleSpinBox()
         self.corner_radius_spin.setRange(0, 100)
         self.corner_radius_spin.setValue(0)
+        self.corner_radius_spin.setToolTip("Set corner rounding radius")
         corner_layout.addWidget(self.corner_radius_spin, 0, 1)
 
         # Insert before buttons
@@ -727,6 +733,7 @@ class TextInputDialog(QDialog):
         self.size_spin = QSpinBox()
         self.size_spin.setRange(6, 72)
         self.size_spin.setValue(12)
+        self.size_spin.setToolTip("Set font size in points")
         font_layout.addWidget(self.size_spin, 1, 1)
 
         font_layout.addWidget(QLabel("Color:"), 2, 0)
@@ -736,7 +743,9 @@ class TextInputDialog(QDialog):
         # Style checkboxes
         style_layout = QHBoxLayout()
         self.bold_check = QCheckBox("Bold")
+        self.bold_check.setToolTip("Toggle bold text style")
         self.italic_check = QCheckBox("Italic")
+        self.italic_check.setToolTip("Toggle italic text style")
         style_layout.addWidget(self.bold_check)
         style_layout.addWidget(self.italic_check)
         style_layout.addStretch()
@@ -745,6 +754,7 @@ class TextInputDialog(QDialog):
         # Alignment
         font_layout.addWidget(QLabel("Align:"), 4, 0)
         self.align_combo = QComboBox()
+        self.align_combo.setToolTip("Set text alignment")
         self.align_combo.addItems(["Left", "Center", "Right"])
         font_layout.addWidget(self.align_combo, 4, 1)
 

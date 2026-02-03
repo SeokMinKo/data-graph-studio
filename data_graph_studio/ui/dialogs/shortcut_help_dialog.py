@@ -85,6 +85,7 @@ class ShortcutHelpDialog(QDialog):
         btn_layout.addStretch()
 
         close_btn = QPushButton("Close")
+        close_btn.setToolTip("Close shortcut help dialog")
         close_btn.clicked.connect(self.accept)
         close_btn.setDefault(True)
         btn_layout.addWidget(close_btn)

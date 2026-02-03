@@ -59,6 +59,7 @@ class DatasetItemWidget(QFrame):
 
         # 색상 버튼
         self.color_btn = QToolButton()
+        self.color_btn.setToolTip("Change dataset color")
         self.color_btn.setFixedSize(20, 20)
         self._update_color_button()
         self.color_btn.clicked.connect(self._on_color_click)
@@ -86,6 +87,7 @@ class DatasetItemWidget(QFrame):
         # 삭제 버튼
         self.remove_btn = QToolButton()
         self.remove_btn.setText("×")
+        self.remove_btn.setToolTip("Remove this dataset")
         self.remove_btn.setFixedSize(20, 20)
         self.remove_btn.setObjectName("datasetRemoveBtn")
         self.remove_btn.clicked.connect(self._on_remove_click)
@@ -268,6 +270,7 @@ class DatasetManagerPanel(QWidget):
         # Buttons row
         btn_row = QHBoxLayout()
         self.add_btn = QPushButton("+ 데이터셋 추가")
+        self.add_btn.setToolTip("Add a new dataset from file")
         self.add_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -283,11 +286,13 @@ class DatasetManagerPanel(QWidget):
         btn_row.addWidget(self.add_btn)
 
         self.save_profile_btn = QPushButton("💾 프로파일 저장")
+        self.save_profile_btn.setToolTip("Save current graph settings as a profile")
         self.save_profile_btn.setStyleSheet("font-size: 11px; padding: 6px 8px;")
         self.save_profile_btn.clicked.connect(self._on_save_profile)
         btn_row.addWidget(self.save_profile_btn)
 
         self.load_profile_btn = QPushButton("📂 프로파일 불러오기")
+        self.load_profile_btn.setToolTip("Load a saved profile from file")
         self.load_profile_btn.setStyleSheet("font-size: 11px; padding: 6px 8px;")
         self.load_profile_btn.clicked.connect(self._on_load_profile)
         btn_row.addWidget(self.load_profile_btn)
@@ -310,6 +315,7 @@ class DatasetManagerPanel(QWidget):
         mode_layout.addWidget(QLabel("모드:"))
 
         self.mode_combo = QComboBox()
+        self.mode_combo.setToolTip("Select comparison visualization mode")
         self.mode_combo.addItem("단일", ComparisonMode.SINGLE.value)
         self.mode_combo.addItem("오버레이", ComparisonMode.OVERLAY.value)
         self.mode_combo.addItem("병렬", ComparisonMode.SIDE_BY_SIDE.value)
@@ -324,6 +330,7 @@ class DatasetManagerPanel(QWidget):
         key_layout.addWidget(QLabel("키 컬럼:"))
 
         self.key_combo = QComboBox()
+        self.key_combo.setToolTip("Column used to align rows across datasets")
         self.key_combo.setEnabled(False)
         self.key_combo.currentTextChanged.connect(self._on_key_column_changed)
         key_layout.addWidget(self.key_combo, 1)
@@ -333,26 +340,31 @@ class DatasetManagerPanel(QWidget):
         # 동기화 옵션
         sync_layout = QHBoxLayout()
         self.sync_scroll_cb = QCheckBox("스크롤")
+        self.sync_scroll_cb.setToolTip("Synchronize table scroll across datasets")
         self.sync_scroll_cb.setChecked(True)
         self.sync_scroll_cb.stateChanged.connect(self._on_sync_changed)
         sync_layout.addWidget(self.sync_scroll_cb)
 
         self.sync_zoom_cb = QCheckBox("줌")
+        self.sync_zoom_cb.setToolTip("Synchronize chart zoom across datasets")
         self.sync_zoom_cb.setChecked(True)
         self.sync_zoom_cb.stateChanged.connect(self._on_sync_changed)
         sync_layout.addWidget(self.sync_zoom_cb)
 
         self.sync_select_cb = QCheckBox("선택")
+        self.sync_select_cb.setToolTip("Synchronize data selection across datasets")
         self.sync_select_cb.stateChanged.connect(self._on_sync_changed)
         sync_layout.addWidget(self.sync_select_cb)
 
         # Pan sync (graph)
         self.sync_pan_x_cb = QCheckBox("X 패닝")
+        self.sync_pan_x_cb.setToolTip("Synchronize X-axis panning")
         self.sync_pan_x_cb.setChecked(True)
         self.sync_pan_x_cb.stateChanged.connect(self._on_sync_changed)
         sync_layout.addWidget(self.sync_pan_x_cb)
 
         self.sync_pan_y_cb = QCheckBox("Y 패닝")
+        self.sync_pan_y_cb.setToolTip("Synchronize Y-axis panning")
         self.sync_pan_y_cb.setChecked(True)
         self.sync_pan_y_cb.stateChanged.connect(self._on_sync_changed)
         sync_layout.addWidget(self.sync_pan_y_cb)
@@ -361,6 +373,7 @@ class DatasetManagerPanel(QWidget):
 
         # 비교 시작 버튼
         self.compare_btn = QPushButton("비교 시작")
+        self.compare_btn.setToolTip("Start comparison with selected datasets")
         self.compare_btn.setEnabled(False)
         self.compare_btn.clicked.connect(self._on_compare_click)
         compare_layout.addWidget(self.compare_btn)

@@ -89,6 +89,7 @@ class ComparisonStatsPanel(QWidget):
         col_layout.addWidget(QLabel("Column:"))
 
         self.column_combo = QComboBox()
+        self.column_combo.setToolTip("Select column to compare statistics")
         self.column_combo.currentTextChanged.connect(self._on_column_changed)
         col_layout.addWidget(self.column_combo, 1)
 
@@ -137,6 +138,7 @@ class ComparisonStatsPanel(QWidget):
         test_layout = QHBoxLayout()
         test_layout.addWidget(QLabel("Test Type:"))
         self.test_type_combo = QComboBox()
+        self.test_type_combo.setToolTip("Select statistical test method")
         self.test_type_combo.addItem("Auto (recommended)", "auto")
         self.test_type_combo.addItem("t-test (parametric)", "ttest")
         self.test_type_combo.addItem("Mann-Whitney U (non-parametric)", "mannwhitney")
@@ -147,6 +149,7 @@ class ComparisonStatsPanel(QWidget):
         corr_layout = QHBoxLayout()
         corr_layout.addWidget(QLabel("Correlation:"))
         self.corr_method_combo = QComboBox()
+        self.corr_method_combo.setToolTip("Select correlation calculation method")
         self.corr_method_combo.addItem("Pearson", "pearson")
         self.corr_method_combo.addItem("Spearman", "spearman")
         corr_layout.addWidget(self.corr_method_combo, 1)
@@ -157,10 +160,12 @@ class ComparisonStatsPanel(QWidget):
         # 분석 버튼
         btn_layout = QHBoxLayout()
         self.run_test_btn = QPushButton("Run Statistical Test")
+        self.run_test_btn.setToolTip("Run statistical test")
         self.run_test_btn.clicked.connect(self._run_statistical_test)
         btn_layout.addWidget(self.run_test_btn)
 
         self.run_corr_btn = QPushButton("Calculate Correlation")
+        self.run_corr_btn.setToolTip("Run correlation analysis")
         self.run_corr_btn.clicked.connect(self._run_correlation)
         btn_layout.addWidget(self.run_corr_btn)
 
@@ -244,6 +249,7 @@ class ComparisonStatsPanel(QWidget):
 
         # 분석 버튼
         self.analyze_btn = QPushButton("Analyze Difference")
+        self.analyze_btn.setToolTip("Analyze comparison statistics")
         self.analyze_btn.clicked.connect(self._analyze_difference)
         layout.addWidget(self.analyze_btn)
 

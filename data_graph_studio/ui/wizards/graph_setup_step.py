@@ -85,28 +85,33 @@ class GraphSetupStep(QWizardPage):
         # Chart type
         left_layout.addWidget(QLabel("차트 타입"))
         self.chart_type_combo = QComboBox()
+        self.chart_type_combo.setToolTip("Select chart visualization type")
         self.chart_type_combo.addItems(self.CHART_TYPES)
         left_layout.addWidget(self.chart_type_combo)
 
         # X axis
         left_layout.addWidget(QLabel("X축 컬럼 *"))
         self.x_column_combo = QComboBox()
+        self.x_column_combo.setToolTip("Column to use as X-axis values")
         left_layout.addWidget(self.x_column_combo)
 
         # Y axis (multi)
         left_layout.addWidget(QLabel("Y축 컬럼 * (복수 선택)"))
         self.y_columns_list = QListWidget()
+        self.y_columns_list.setToolTip("Check columns to plot on Y-axis")
         self.y_columns_list.setSelectionMode(QListWidget.NoSelection)
         left_layout.addWidget(self.y_columns_list)
 
         # Group column
         left_layout.addWidget(QLabel("Group 컬럼"))
         self.group_column_combo = QComboBox()
+        self.group_column_combo.setToolTip("Column to group data by (creates separate series)")
         left_layout.addWidget(self.group_column_combo)
 
         # Hover columns
         left_layout.addWidget(QLabel("Hover 컬럼 (복수 선택)"))
         self.hover_columns_list = QListWidget()
+        self.hover_columns_list.setToolTip("Check columns to show in hover tooltip")
         self.hover_columns_list.setSelectionMode(QListWidget.NoSelection)
         left_layout.addWidget(self.hover_columns_list)
 
