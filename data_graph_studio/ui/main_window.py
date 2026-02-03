@@ -1553,18 +1553,14 @@ class MainWindow(QMainWindow):
         if parsing_settings is None:
             return
         
-        # 파일 로드
-        self._load_file_with_settings(parsing_settings.file_path, parsing_settings)
+        # 마법사 결과 저장 (로딩 완료 후 적용)
+        self._pending_wizard_result = {
+            'graph_setting': graph_setting,
+            'project_name': project_name,
+        }
         
-        # 그래프 설정 적용
-        if graph_setting:
-            # 현재 데이터셋에 프로파일 추가
-            active_id = self.engine.active_dataset_id
-            if active_id:
-                self.profile_store.add_setting(active_id, graph_setting)
-                self.profile_model.refresh()
-                # 프로파일 적용
-                self.profile_controller.apply_setting(graph_setting)
+        # 파일 로드 (비동기)
+        self._load_file_with_settings(parsing_settings.file_path, parsing_settings)
     
     def _load_project_file(self, file_path: str):
         """프로젝트 파일 (.dgs) 로드"""
@@ -1838,6 +1834,9 @@ class MainWindow(QMainWindow):
             # 로딩 완료 후 메모리 정리
             gc.collect()
             logger.info(f"Data loaded: {self.engine.row_count:,} rows, {self.engine.column_count} columns")
+            
+            # 마법사 결과 적용 (pending이 있으면)
+            self._apply_pending_wizard_result()
         else:
             error_msg = self.engine.progress.error_message or "Unknown error"
             logger.error(f"Failed to load file: {error_msg}")
@@ -1846,6 +1845,29 @@ class MainWindow(QMainWindow):
                 "Error",
                 f"Failed to load file:\n{error_msg}"
             )
+    
+    def _apply_pending_wizard_result(self):
+        """마법사 결과 적용 (로딩 완료 후)"""
+        if not hasattr(self, '_pending_wizard_result') or self._pending_wizard_result is None:
+            return
+        
+        result = self._pending_wizard_result
+        self._pending_wizard_result = None
+        
+        graph_setting = result.get('graph_setting')
+        project_name = result.get('project_name')
+        
+        if graph_setting:
+            active_id = self.engine.active_dataset_id
+            if active_id:
+                # 프로젝트 탐색창에 추가
+                self.profile_store.add_setting(active_id, graph_setting)
+                self.profile_model.refresh()
+                
+                # 그래프 설정 적용
+                self.profile_controller.apply_setting(graph_setting)
+                
+                logger.info(f"Wizard result applied: {graph_setting.name}")
     
     def _cancel_loading(self):
         """로딩 취소"""
