@@ -521,9 +521,11 @@ class ParsingStep(QWizardPage):
             data = parsed
 
         max_cols = len(headers)
-        for row in data:
-            while len(row) < max_cols:
-                row.append("")
+        for i, row in enumerate(data):
+            if len(row) < max_cols:
+                data[i] = row + [''] * (max_cols - len(row))
+            elif len(row) > max_cols:
+                data[i] = row[:max_cols]
 
         self._update_column_checkboxes(headers)
 
