@@ -391,34 +391,49 @@ class ValueChipWidget(QFrame):
         self._start_pos = None
         accent = value_col.color
         self.setObjectName("valueChipWidget")
-        self.setFixedHeight(32)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
-        layout.setSpacing(4)
+        self.setMinimumHeight(28)
 
-        layout.addWidget(DragHandleLabel("value", value_col.name, index))
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(6, 4, 6, 4)
+        main_layout.setSpacing(2)
+
+        # Row 1: drag handle + name + remove button
+        row1 = QHBoxLayout()
+        row1.setSpacing(4)
+        row1.addWidget(DragHandleLabel("value", value_col.name, index))
 
         name_label = QLabel(f"● {value_col.name}")
         name_label.setObjectName("valueNameLabel")
         name_label.setToolTip(value_col.name)
-        layout.addWidget(name_label)
+        row1.addWidget(name_label, 1)
+
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(16, 16)
+        remove_btn.setObjectName("chipRemoveBtn")
+        remove_btn.clicked.connect(self.remove_clicked.emit)
+        row1.addWidget(remove_btn)
+        main_layout.addLayout(row1)
+
+        # Row 2: agg combo + formula
+        row2 = QHBoxLayout()
+        row2.setSpacing(4)
 
         agg_combo = QComboBox()
-        agg_combo.setFixedWidth(70)
-        agg_combo.setFixedHeight(22)
+        agg_combo.setMinimumWidth(55)
+        agg_combo.setMaximumWidth(70)
+        agg_combo.setFixedHeight(20)
         for agg in AggregationType:
             agg_combo.addItem(agg.value.upper(), agg)
         agg_combo.setCurrentText(value_col.aggregation.value.upper())
         agg_combo.currentIndexChanged.connect(
             lambda idx, combo=agg_combo: on_agg_changed(index, combo.currentData())
         )
-        layout.addWidget(agg_combo)
+        row2.addWidget(agg_combo)
 
         formula_edit = QLineEdit()
-        formula_edit.setPlaceholderText("f(y) = ...")
+        formula_edit.setPlaceholderText("f(y)=...")
         formula_edit.setText(value_col.formula or "")
-        formula_edit.setMaximumWidth(120)
-        formula_edit.setFixedHeight(22)
+        formula_edit.setFixedHeight(20)
         formula_edit.setToolTip(
             "Y값에 적용할 수식을 입력하세요.\n"
             "예시: y*2, y+100, LOG(y), SQRT(y), ABS(y)"
@@ -426,13 +441,8 @@ class ValueChipWidget(QFrame):
         formula_edit.editingFinished.connect(
             lambda edit=formula_edit: on_formula_changed(index, edit.text())
         )
-        layout.addWidget(formula_edit, 1)
-
-        remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(16, 16)
-        remove_btn.setObjectName("chipRemoveBtn")
-        remove_btn.clicked.connect(self.remove_clicked.emit)
-        layout.addWidget(remove_btn)
+        row2.addWidget(formula_edit, 1)
+        main_layout.addLayout(row2)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -509,10 +519,10 @@ class ChipListWidget(QListWidget):
     def add_chip(self, name: str, widget: QWidget):
         item = QListWidgetItem()
         item.setData(Qt.UserRole, name)
-        # Use widget's maximum height if explicitly constrained, otherwise 32px
-        max_h = widget.maximumHeight()
-        h = max_h if max_h < 16777215 else max(widget.sizeHint().height(), 32)
-        item.setSizeHint(QSize(-1, h + 4))
+        # Ensure proper size hint from the widget
+        widget.adjustSize()
+        h = max(widget.sizeHint().height(), widget.minimumHeight(), 28)
+        item.setSizeHint(QSize(self.viewport().width(), h + 4))
         self.addItem(item)
         self.setItemWidget(item, widget)
 

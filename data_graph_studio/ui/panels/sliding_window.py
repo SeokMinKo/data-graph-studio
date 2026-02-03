@@ -219,31 +219,32 @@ class SlidingWindowWidget(QWidget):
             painter.fillRect(int(x2 - handle_width // 2), plot_rect.top(),
                             handle_width, plot_rect.height(), QColor('#59B8E3'))
         else:
-            y1 = plot_rect.top() + (1 - win_end) * plot_rect.height()
-            y2 = plot_rect.top() + (1 - win_start) * plot_rect.height()
+            # _value_to_pos already inverts for vertical (min→bottom, max→top)
+            y_top = plot_rect.top() + self._value_to_pos(self._window_max) * plot_rect.height()
+            y_bottom = plot_rect.top() + self._value_to_pos(self._window_min) * plot_rect.height()
 
             # Draw shaded regions outside window
             painter.fillRect(
                 plot_rect.left(), plot_rect.top(),
-                plot_rect.width(), int(y1 - plot_rect.top()),
+                plot_rect.width(), int(y_top - plot_rect.top()),
                 QColor(0, 0, 0, 40)
             )
             painter.fillRect(
-                plot_rect.left(), int(y2),
-                plot_rect.width(), int(plot_rect.bottom() - y2),
+                plot_rect.left(), int(y_bottom),
+                plot_rect.width(), int(plot_rect.bottom() - y_bottom),
                 QColor(0, 0, 0, 40)
             )
 
             # Draw window frame
             painter.setPen(QPen(QColor('#59B8E3'), 2))
             painter.setBrush(Qt.NoBrush)
-            painter.drawRect(plot_rect.left(), int(y1), plot_rect.width(), int(y2 - y1))
+            painter.drawRect(plot_rect.left(), int(y_top), plot_rect.width(), int(y_bottom - y_top))
 
             # Draw handles
             handle_height = 6
-            painter.fillRect(plot_rect.left(), int(y1 - handle_height // 2),
+            painter.fillRect(plot_rect.left(), int(y_top - handle_height // 2),
                             plot_rect.width(), handle_height, QColor('#59B8E3'))
-            painter.fillRect(plot_rect.left(), int(y2 - handle_height // 2),
+            painter.fillRect(plot_rect.left(), int(y_bottom - handle_height // 2),
                             plot_rect.width(), handle_height, QColor('#59B8E3'))
 
     def _draw_labels(self, painter, rect, plot_rect):
@@ -309,8 +310,9 @@ class SlidingWindowWidget(QWidget):
             plot_rect = self.rect().adjusted(margin + 15, margin, -margin, -margin)
             y = pos.y()
 
-            win_top_y = plot_rect.top() + (1 - self._value_to_pos(self._window_max)) * plot_rect.height()
-            win_bottom_y = plot_rect.top() + (1 - self._value_to_pos(self._window_min)) * plot_rect.height()
+            # _value_to_pos already inverts for vertical
+            win_top_y = plot_rect.top() + self._value_to_pos(self._window_max) * plot_rect.height()
+            win_bottom_y = plot_rect.top() + self._value_to_pos(self._window_min) * plot_rect.height()
 
             handle_size = 10
 
@@ -415,8 +417,9 @@ class SlidingWindowWidget(QWidget):
                     self.setCursor(Qt.ArrowCursor)
             else:
                 y = pos.y()
-                win_top_y = plot_rect.top() + (1 - self._value_to_pos(self._window_max)) * plot_rect.height()
-                win_bottom_y = plot_rect.top() + (1 - self._value_to_pos(self._window_min)) * plot_rect.height()
+                # _value_to_pos already inverts for vertical
+                win_top_y = plot_rect.top() + self._value_to_pos(self._window_max) * plot_rect.height()
+                win_bottom_y = plot_rect.top() + self._value_to_pos(self._window_min) * plot_rect.height()
 
                 if abs(y - win_top_y) < 10 or abs(y - win_bottom_y) < 10:
                     self.setCursor(Qt.SizeVerCursor)

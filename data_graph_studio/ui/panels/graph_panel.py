@@ -1376,6 +1376,13 @@ class MainGraph(pg.PlotWidget):
         self._current_drawing_style = DrawingStyle()
         self._shift_pressed = False
 
+        # View range undo/redo stack
+        self._view_range_stack: list = []  # undo stack
+        self._view_range_redo: list = []   # redo stack
+        self._view_range_max = 50
+        self._view_range_recording = True  # prevent recursive push
+        self._last_recorded_range = None
+
         # Sampling status label
         self._sampling_label = pg.TextItem(
             text="",
@@ -2367,6 +2374,60 @@ class MainGraph(pg.PlotWidget):
         """Set the current drawing style"""
         self._current_drawing_style = style
 
+    def push_view_range(self):
+        """현재 view range를 undo 스택에 저장"""
+        if not self._view_range_recording:
+            return
+        current = self.viewRange()
+        current_tuple = (tuple(current[0]), tuple(current[1]))
+        if self._last_recorded_range == current_tuple:
+            return
+        if self._last_recorded_range is not None:
+            self._view_range_stack.append(self._last_recorded_range)
+            if len(self._view_range_stack) > self._view_range_max:
+                self._view_range_stack.pop(0)
+            self._view_range_redo.clear()
+        self._last_recorded_range = current_tuple
+
+    def undo_view_range(self) -> bool:
+        """이전 view range로 복원"""
+        if not self._view_range_stack:
+            return False
+        # 현재 range를 redo에 저장
+        current = self.viewRange()
+        self._view_range_redo.append((tuple(current[0]), tuple(current[1])))
+        prev = self._view_range_stack.pop()
+        self._view_range_recording = False
+        self.setXRange(prev[0][0], prev[0][1], padding=0)
+        self.setYRange(prev[1][0], prev[1][1], padding=0)
+        self._last_recorded_range = prev
+        self._view_range_recording = True
+        return True
+
+    def redo_view_range(self) -> bool:
+        """redo view range"""
+        if not self._view_range_redo:
+            return False
+        current = self.viewRange()
+        self._view_range_stack.append((tuple(current[0]), tuple(current[1])))
+        next_range = self._view_range_redo.pop()
+        self._view_range_recording = False
+        self.setXRange(next_range[0][0], next_range[0][1], padding=0)
+        self.setYRange(next_range[1][0], next_range[1][1], padding=0)
+        self._last_recorded_range = next_range
+        self._view_range_recording = True
+        return True
+
+    def mouseReleaseEvent(self, event):
+        """마우스 릴리즈 시 view range 기록"""
+        super().mouseReleaseEvent(event)
+        self.push_view_range()
+
+    def wheelEvent(self, event):
+        """휠 줌 후 view range 기록"""
+        super().wheelEvent(event)
+        self.push_view_range()
+
     def keyPressEvent(self, event):
         """Handle key press events"""
         if event.key() == Qt.Key_Shift:
@@ -2376,13 +2437,15 @@ class MainGraph(pg.PlotWidget):
             if self._drawing_manager:
                 self._drawing_manager.delete_selected()
         elif event.key() == Qt.Key_Z and event.modifiers() & Qt.ControlModifier:
-            # Undo
-            if self._drawing_manager:
-                self._drawing_manager.undo()
+            # Undo: view range first, then drawing
+            if not self.undo_view_range():
+                if self._drawing_manager:
+                    self._drawing_manager.undo()
         elif event.key() == Qt.Key_Y and event.modifiers() & Qt.ControlModifier:
-            # Redo
-            if self._drawing_manager:
-                self._drawing_manager.redo()
+            # Redo: view range first, then drawing
+            if not self.redo_view_range():
+                if self._drawing_manager:
+                    self._drawing_manager.redo()
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
