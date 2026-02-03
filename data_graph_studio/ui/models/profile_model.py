@@ -24,6 +24,7 @@ class ProfileModel(QAbstractItemModel):
         self._store = store
         self._state = state
         self._dataset_ids: List[str] = []
+        self._nodes: List[_ProfileNode] = []  # prevent GC of internalPointer objects
         self.refresh()
 
     # ==================== Qt Model Interface ====================
@@ -75,6 +76,15 @@ class ProfileModel(QAbstractItemModel):
 
         return None
 
+    def _find_node(self, dataset_id: str, setting: Optional[GraphSetting] = None) -> _ProfileNode:
+        """Find a cached node, or create and cache a new one."""
+        for n in self._nodes:
+            if n.dataset_id == dataset_id and n.setting is setting:
+                return n
+        node = _ProfileNode(dataset_id=dataset_id, setting=setting)
+        self._nodes.append(node)
+        return node
+
     def index(self, row: int, col: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
         if col != 0 or row < 0:
             return QModelIndex()
@@ -83,17 +93,19 @@ class ProfileModel(QAbstractItemModel):
             if row >= len(self._dataset_ids):
                 return QModelIndex()
             dataset_id = self._dataset_ids[row]
-            return self.createIndex(row, col, _ProfileNode(dataset_id=dataset_id))
+            node = self._find_node(dataset_id)
+            return self.createIndex(row, col, node)
 
-        node = parent.internalPointer()
-        if not isinstance(node, _ProfileNode) or not node.is_dataset:
+        parent_node = parent.internalPointer()
+        if not isinstance(parent_node, _ProfileNode) or not parent_node.is_dataset:
             return QModelIndex()
 
-        profiles = self._get_profiles(node.dataset_id)
+        profiles = self._get_profiles(parent_node.dataset_id)
         if row >= len(profiles):
             return QModelIndex()
 
-        return self.createIndex(row, col, _ProfileNode(dataset_id=node.dataset_id, setting=profiles[row]))
+        node = self._find_node(parent_node.dataset_id, profiles[row])
+        return self.createIndex(row, col, node)
 
     def parent(self, index: QModelIndex) -> QModelIndex:
         if not index.isValid():
@@ -108,7 +120,8 @@ class ProfileModel(QAbstractItemModel):
         except ValueError:
             return QModelIndex()
 
-        return self.createIndex(row, 0, _ProfileNode(dataset_id=node.dataset_id))
+        parent_node = self._find_node(node.dataset_id)
+        return self.createIndex(row, 0, parent_node)
 
     # ==================== Custom Methods ====================
 
@@ -131,6 +144,12 @@ class ProfileModel(QAbstractItemModel):
     def refresh(self) -> None:
         self.beginResetModel()
         self._dataset_ids = list(self._get_dataset_ids())
+        # Rebuild node cache to keep internalPointer objects alive (PySide6 GC safety)
+        self._nodes.clear()
+        for ds_id in self._dataset_ids:
+            self._nodes.append(_ProfileNode(dataset_id=ds_id))
+            for profile in self._get_profiles(ds_id):
+                self._nodes.append(_ProfileNode(dataset_id=ds_id, setting=profile))
         self.endResetModel()
 
     # ==================== Internal Helpers ====================
