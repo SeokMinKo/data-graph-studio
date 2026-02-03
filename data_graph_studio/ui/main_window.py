@@ -3185,11 +3185,11 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 # 프로필 적용
                 self._load_profile(file_path)
             else:
-                # 데이터 파일 로드
-                self._open_file(file_path)
+                # 데이터 파일 로드 (마법사 사용)
+                self._show_new_project_wizard(file_path)
         else:
             # 여러 파일 - 첫 번째 파일만 로드 (또는 다중 로드 다이얼로그)
-            self._open_file(files[0])
+            self._show_new_project_wizard(files[0])
             self.statusBar().showMessage(f"Loaded first file. {len(files)-1} more files ignored.")
     
     # ==================== Clipboard ====================
