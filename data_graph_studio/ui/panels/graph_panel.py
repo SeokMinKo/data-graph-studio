@@ -2758,7 +2758,11 @@ class GraphPanel(QWidget):
 
     def refresh(self):
         """Refresh graph"""
+        import logging as _logging
+        _lg = _logging.getLogger(__name__)
+        _lg.debug("[DEBUG-CRASH] graph_panel.refresh() called")
         if not self.engine.is_loaded:
+            _lg.debug("[DEBUG-CRASH] graph_panel.refresh() skipped - not loaded")
             return
 
         # Check if we're in overlay comparison mode

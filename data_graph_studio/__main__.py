@@ -33,6 +33,9 @@ def setup_logging():
 
 
 def main():
+    import faulthandler
+    faulthandler.enable()  # segfault 시 traceback 출력
+    
     logger = setup_logging()
     logger.info("=" * 60)
     logger.info("Data Graph Studio Starting...")

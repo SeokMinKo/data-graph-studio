@@ -1783,20 +1783,27 @@ class MainWindow(QMainWindow):
         
         if graph_setting:
             active_id = self.engine.active_dataset_id
+            logger.debug(f"[DEBUG-CRASH] active_id={active_id}, graph_setting={graph_setting}")
             if active_id:
                 # 프로젝트 탐색창에 추가
                 from dataclasses import replace
                 graph_setting = replace(graph_setting, dataset_id=active_id)
+                logger.debug(f"[DEBUG-CRASH] profile_store.add() start")
                 self.profile_store.add(graph_setting)
+                logger.debug(f"[DEBUG-CRASH] profile_store.add() done, profile_model.refresh() start")
                 self.profile_model.refresh()
+                logger.debug(f"[DEBUG-CRASH] profile_model.refresh() done")
                 
                 # 그래프 설정 적용
                 try:
+                    logger.debug(f"[DEBUG-CRASH] apply_profile() start, id={graph_setting.id}")
                     self.profile_controller.apply_profile(graph_setting.id)
+                    logger.debug(f"[DEBUG-CRASH] apply_profile() done")
                 except Exception as e:
-                    logger.warning(f"Failed to apply profile: {e}")
+                    logger.warning(f"Failed to apply profile: {e}", exc_info=True)
                 
                 logger.info(f"Wizard result applied: {graph_setting.name}")
+                logger.debug(f"[DEBUG-CRASH] after wizard result applied, returning from _apply_pending_wizard_result")
     
     def _cancel_loading(self):
         """로딩 취소"""

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
 from .profile import GraphSetting
 from .state import AppState, ChartType, ValueColumn, GroupColumn
+
+logger = logging.getLogger(__name__)
 
 
 class GraphSettingMapper:
@@ -85,9 +88,14 @@ class GraphSettingMapper:
 
         # 변경 완료 후 시그널 발행 (UI 갱신 트리거)
         try:
+            logger.debug("[DEBUG-CRASH] emitting chart_settings_changed")
             state.chart_settings_changed.emit()
+            logger.debug("[DEBUG-CRASH] emitting value_zone_changed")
             state.value_zone_changed.emit()
+            logger.debug("[DEBUG-CRASH] emitting group_zone_changed")
             state.group_zone_changed.emit()
+            logger.debug("[DEBUG-CRASH] emitting hover_zone_changed")
             state.hover_zone_changed.emit()
-        except Exception:
-            pass
+            logger.debug("[DEBUG-CRASH] all signals emitted OK")
+        except Exception as e:
+            logger.error(f"[DEBUG-CRASH] signal emit failed: {e}", exc_info=True)
