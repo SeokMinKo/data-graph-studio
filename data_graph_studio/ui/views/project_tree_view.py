@@ -4,7 +4,7 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem
+from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem, QStyle
 
 from ..models.profile_model import ProfileModel
 
@@ -22,12 +22,12 @@ class _ChartIconDelegate(QStyledItemDelegate):
             # 선택/호버 배경 먼저 그리기
             style = option.widget.style() if option.widget else None
             if style:
-                style.drawPrimitive(style.PE_PanelItemViewItem, option, painter, option.widget)
+                style.drawPrimitive(QStyle.PE_PanelItemViewItem, option, painter, option.widget)
 
             painter.save()
 
             # 텍스트 색상 설정 (선택 상태에 따라)
-            if option.state & option.widget.style().State_Selected:
+            if option.state & QStyle.State_Selected:
                 painter.setPen(option.palette.color(option.palette.HighlightedText))
             else:
                 painter.setPen(option.palette.color(option.palette.Text))
