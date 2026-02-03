@@ -9,7 +9,7 @@ import polars as pl
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
     QTableView, QHeaderView, QAbstractItemView, QMenu,
-    QLineEdit, QComboBox, QPushButton,
+    QLineEdit, QComboBox, QPushButton, QMessageBox,
     QSplitter, QSizePolicy, QApplication, QListWidget,
     QListWidgetItem, QGroupBox, QSlider
 )
