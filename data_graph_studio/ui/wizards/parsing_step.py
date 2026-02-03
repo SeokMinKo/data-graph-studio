@@ -530,19 +530,25 @@ class ParsingStep(QWizardPage):
         self._update_column_checkboxes(headers)
 
         row_count = min(len(data), self.PREVIEW_ROWS)
-        self.preview_table.setRowCount(row_count)
-        self.preview_table.setColumnCount(max_cols)
-        self.preview_table.setHorizontalHeaderLabels(headers)
+        self.preview_table.setUpdatesEnabled(False)
+        try:
+            self.preview_table.setRowCount(row_count)
+            self.preview_table.setColumnCount(max_cols)
+            self.preview_table.setHorizontalHeaderLabels(headers)
 
-        for i, row in enumerate(data[:self.PREVIEW_ROWS]):
-            for j, val in enumerate(row[:max_cols]):
-                item = QTableWidgetItem(val)
-                if j in self._excluded_columns:
-                    item.setBackground(QColor("#E5E7EB"))
-                    item.setForeground(QColor("#6B7280"))
-                self.preview_table.setItem(i, j, item)
+            excluded_bg = QColor("#E5E7EB")
+            excluded_fg = QColor("#6B7280")
+            for i, row in enumerate(data[:self.PREVIEW_ROWS]):
+                for j, val in enumerate(row[:max_cols]):
+                    item = QTableWidgetItem(val)
+                    if j in self._excluded_columns:
+                        item.setBackground(excluded_bg)
+                        item.setForeground(excluded_fg)
+                    self.preview_table.setItem(i, j, item)
 
-        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+            self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        finally:
+            self.preview_table.setUpdatesEnabled(True)
 
         self._preview_df = pd.DataFrame(data, columns=headers)
         self._parsing_success = True
@@ -581,17 +587,25 @@ class ParsingStep(QWizardPage):
         self.column_count_label.setText(f"Loading {selected} of {total} columns")
 
     def _apply_column_exclusion_styles(self):
-        for row in range(self.preview_table.rowCount()):
-            for col in range(self.preview_table.columnCount()):
-                item = self.preview_table.item(row, col)
-                if not item:
-                    continue
-                if col in self._excluded_columns:
-                    item.setBackground(QColor("#E5E7EB"))
-                    item.setForeground(QColor("#6B7280"))
-                else:
-                    item.setBackground(QColor("#FFFFFF"))
-                    item.setForeground(QColor("#111827"))
+        self.preview_table.setUpdatesEnabled(False)
+        try:
+            excluded_bg = QColor("#E5E7EB")
+            excluded_fg = QColor("#6B7280")
+            normal_bg = QColor("#FFFFFF")
+            normal_fg = QColor("#111827")
+            for row in range(self.preview_table.rowCount()):
+                for col in range(self.preview_table.columnCount()):
+                    item = self.preview_table.item(row, col)
+                    if not item:
+                        continue
+                    if col in self._excluded_columns:
+                        item.setBackground(excluded_bg)
+                        item.setForeground(excluded_fg)
+                    else:
+                        item.setBackground(normal_bg)
+                        item.setForeground(normal_fg)
+        finally:
+            self.preview_table.setUpdatesEnabled(True)
 
     def _select_all_columns(self):
         for cb in self._column_checkboxes:
