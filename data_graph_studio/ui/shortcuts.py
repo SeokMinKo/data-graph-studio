@@ -119,7 +119,7 @@ class ShortcutManager:
             if isinstance(keys, str):
                 keys = QKeySequence(keys)
             self._shortcuts[id].keys = keys
-            self._customized[id] = str(keys)
+            self._customized[id] = keys.toString(QKeySequence.PortableText)
     
     def reset(self, id: str):
         """단축키 초기화"""

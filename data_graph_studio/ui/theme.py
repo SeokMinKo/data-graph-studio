@@ -314,6 +314,7 @@ class ThemeManager:
         }
         self._current: str = 'midnight'
         self._chart_palette: ColorPalette = ColorPalette.default()
+        self._theme_preference: str = 'system'  # PRD §3.6: "light" | "dark" | "system"
     
     @property
     def current_theme(self) -> Theme:
@@ -327,10 +328,34 @@ class ThemeManager:
             self._current = theme_id
     
     def toggle(self):
-        if self._current == 'light':
-            self._current = 'dark'
+        """
+        FR-6.2: light ↔ dark 토글.
+
+        동작:
+        - preference가 'light' → 'dark' 전환
+        - preference가 'dark' → 'light' 전환
+        - preference가 'system' → resolve 결과의 반대로 전환
+        - _current도 light↔dark 토글 (하위 호환)
+        """
+        if self._theme_preference == "light":
+            self.set_theme_preference("dark")
+        elif self._theme_preference == "dark":
+            self.set_theme_preference("light")
         else:
-            self._current = 'light'
+            # system → resolve 결과의 반대
+            resolved = self.resolve_theme()
+            if resolved.is_light():
+                self.set_theme_preference("dark")
+            else:
+                self.set_theme_preference("light")
+
+        # 하위 호환: _current도 light↔dark 전환 (기존 테스트 지원)
+        current_theme = self._themes.get(self._current)
+        if current_theme:
+            if current_theme.is_light():
+                self._current = 'dark'
+            else:
+                self._current = 'light'
     
     def add_theme(self, theme_id: str, theme: Theme):
         self._themes[theme_id] = theme
@@ -1882,20 +1907,143 @@ class ThemeManager:
             }}
         """
     
+    # ==================== Theme Toggle (PRD §3.6) ====================
+
+    _VALID_PREFERENCES = {"light", "dark", "system"}
+
+    @property
+    def theme_preference(self) -> str:
+        """현재 테마 선호 설정 ('light', 'dark', 'system')"""
+        return self._theme_preference
+
+    def set_theme_preference(self, preference: str) -> None:
+        """
+        FR-6.1 ~ FR-6.4: 테마 선호 설정.
+
+        유효하지 않은 값은 무시 (기존 유지).
+        """
+        if preference not in self._VALID_PREFERENCES:
+            return
+        self._theme_preference = preference
+
+        # 내부 _current도 연동 (tailwind / tailwind-dark 매핑)
+        resolved = self.resolve_theme()
+        if resolved.is_light():
+            if 'tailwind' in self._themes:
+                self._current = 'tailwind'
+            else:
+                self._current = 'light'
+        else:
+            if 'tailwind-dark' in self._themes:
+                self._current = 'tailwind-dark'
+            else:
+                self._current = 'dark'
+
+    def resolve_theme(self) -> Theme:
+        """
+        현재 preference에 따라 실제 적용할 Theme 반환.
+
+        - 'light'  → Tailwind (light)
+        - 'dark'   → Tailwind Dark
+        - 'system' → OS 다크모드 감지 후 결정
+          - ERR-6.1: OS 감지 실패 → light 폴백
+        """
+        if self._theme_preference == "light":
+            return self._themes.get('tailwind', TAILWIND_THEME)
+        elif self._theme_preference == "dark":
+            return self._themes.get('tailwind-dark', TAILWIND_DARK_THEME)
+        else:
+            # system mode
+            try:
+                is_dark = self._detect_system_dark_mode()
+            except Exception:
+                # ERR-6.1: 감지 실패 → light 폴백
+                is_dark = False
+
+            if is_dark:
+                return self._themes.get('tailwind-dark', TAILWIND_DARK_THEME)
+            else:
+                return self._themes.get('tailwind', TAILWIND_THEME)
+
+    def _detect_system_dark_mode(self) -> bool:
+        """
+        FR-6.4: macOS 시스템 다크모드 감지.
+
+        subprocess로 defaults 명령 사용. 실패 시 예외 발생.
+        """
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["defaults", "read", "-g", "AppleInterfaceStyle"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            return result.returncode == 0 and "Dark" in result.stdout
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            raise RuntimeError(f"Failed to detect system dark mode: {e}") from e
+
+    def get_graph_colors(self) -> Dict[str, str]:
+        """
+        FR-6.5: pyqtgraph 배경/전경 색상 반환.
+
+        Returns:
+            Dict with 'background' and 'foreground' keys.
+        """
+        theme = self.resolve_theme()
+        return {
+            "background": theme.background,
+            "foreground": theme.foreground,
+        }
+
+    def get_theme(self) -> str:
+        """
+        FR-6.7: IPC `get_theme` 지원.
+
+        Returns:
+            현재 theme_preference ('light', 'dark', 'system')
+        """
+        return self._theme_preference
+
+    # ==================== Persistence ====================
+
     def to_dict(self) -> Dict:
         return {
             'current': self._current,
+            'theme_preference': self._theme_preference,
             'custom_themes': {
                 k: v.to_dict()
                 for k, v in self._themes.items()
                 if k not in self.BUILTIN_THEMES
             },
         }
-    
-    def from_dict(self, data: Dict):
-        if 'current' in data and data['current'] in self._themes:
-            self._current = data['current']
-        
-        if 'custom_themes' in data:
-            for theme_id, theme_data in data['custom_themes'].items():
-                self._themes[theme_id] = Theme.from_dict(theme_data)
+
+    def from_dict(self, data) -> None:
+        """
+        설정 복원. ERR-6.2: 손상 시 기본값 폴백.
+
+        - None / dict가 아닌 입력 → 무시
+        - 유효하지 않은 preference → 무시
+        - 유효하지 않은 current → 무시
+        """
+        if not isinstance(data, dict):
+            return
+
+        # Restore theme_preference
+        pref = data.get('theme_preference')
+        if pref in self._VALID_PREFERENCES:
+            self._theme_preference = pref
+
+        # Restore current (internal theme id)
+        current = data.get('current')
+        if current and current in self._themes:
+            self._current = current
+
+        # Restore custom themes
+        custom = data.get('custom_themes')
+        if isinstance(custom, dict):
+            for theme_id, theme_data in custom.items():
+                try:
+                    self._themes[theme_id] = Theme.from_dict(theme_data)
+                except Exception:
+                    pass  # ERR-6.2: 손상 무시

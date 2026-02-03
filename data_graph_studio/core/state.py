@@ -15,6 +15,14 @@ if TYPE_CHECKING:
     from .profile import Profile, GraphSetting
 
 
+# ==================== Theme State (PRD §3.6 / §9.3) ====================
+
+@dataclass
+class ThemeState:
+    """테마 상태 — PRD §9.3"""
+    current: str = "system"    # "light" | "dark" | "system"
+
+
 # ==================== Multi-Dataset Comparison ====================
 
 class ComparisonMode(Enum):

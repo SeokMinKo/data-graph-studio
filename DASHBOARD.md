@@ -1,71 +1,79 @@
-# Development Dashboard
+# Development Dashboard — Data Graph Studio v2: 7대 기능 확장
 
-## Status: PHASE 4 - QA
-Last Updated: 2026-02-03 09:15 KST
-
-## Current Task
-**Data Table Enhancement (Sorting & Searching)**
-- PRD: `PRD_TABLE_ENHANCEMENT.md`
-- Review Log: `REVIEW_LOG.md`
+## Status: Phase 5 — QA
+Last Updated: 2026-02-04 06:55 KST
 
 ## Phase Progress
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1. PRD | ✅ | PRD_TABLE_ENHANCEMENT.md 작성 완료 |
-| 2. Review | ✅ | Round 2: 6/6 AGREE ✅ |
-| 3. Implementation | ✅ | 완료 |
-| 4. QA | ⏳ | Unit 테스트 통과, E2E 대기 |
+| 1. PRD | ✅ | PRD-v2-features.md (55KB, 933줄) |
+| 2. Review | ✅ | Round 3: 8/8 AGREE (FULL PASS) |
+| 3. Implementation | ⏳ | Phase A 진행 중 (3개 병렬 에이전트) |
+| 4. QA | ⏳ | |
 
-## PRD Review Status (Round 2 - FINAL)
-| Reviewer | Status | Feedback Summary |
-|----------|--------|------------------|
-| 🧠 Behavior | ✅ AGREE | 핵심 동작 정의 충분 |
-| 🏗️ Structure | ✅ AGREE | 메모리 효율화, 캐시 무효화 조건 OK |
-| 🎨 UI | ✅ AGREE | 기본 UI 구조 적절 |
-| 🔍 Overall | ✅ AGREE | 전체 흐름 일관성 유지 |
-| ⚡ Algorithm | ✅ AGREE | 캐시/정렬 순서 명시됨 |
-| 🔧 Perf & Memory | ✅ AGREE | 인덱스 기반, 10% 메모리 제한 OK |
+## PRD Review Status (Final — Round 3)
+| Reviewer | Status | Key Concerns |
+|----------|--------|--------------|
+| 🧠 Behavior | ✅ AGREE | — |
+| 🏗️ Structure | ✅ AGREE | — |
+| 🎨 UI | ✅ AGREE | R3에서 주석 인터랙션 모드 추가 후 통과 |
+| 🔍 Overall | ✅ AGREE | — |
+| ⚡ Algorithm | ✅ AGREE | — |
+| 🔧 Perf & Memory | ✅ AGREE | — |
+| 🛡️ Security & Error | ✅ AGREE | — |
+| 🧪 Testability | ✅ AGREE | — |
 
-**통과: 6/6 AGREE ✅**
+## Implementation — Phase A (독립, 병렬)
 
-## Implementation Summary
+| Agent | Module | Status | Tests |
+|-------|--------|--------|-------|
+| Impl-A1 | 공통 인프라 + Feature 6 (테마 토글) | ✅ | 67/67 |
+| Impl-A2 | Feature 7 (키보드 단축키) | ✅ | 45/45 |
+| Impl-A3 | Feature 5 (북마크/주석) | ✅ | 40/40 |
 
-### Completed Features
-1. **PolarsTableModel.sort()** - 컬럼 정렬 기능
-   - 오름차순/내림차순 정렬
-   - NULL 값 마지막 처리
-   - 원본 인덱스 매핑 (pl.Series Int32)
-   - 정렬 상태 추적 및 초기화
+### Impl-A1: 공통 인프라 + 테마 토글
+- UndoManager (core/undo_manager.py)
+- I/O 추상화 (core/io_abstract.py)
+- 원자적 저장 유틸리티
+- ThemeController (테마 토글 로직)
+- 테스트: UT-6.1~6.3, UT-8.1~8.4
 
-2. **Search Enhancement**
-   - 300ms 디바운싱
-   - 결과 카운트 표시 ("N results")
-   - 클리어 버튼 (X)
-   - 검색 결과 없음 표시
+### Impl-A2: 키보드 단축키
+- ShortcutController (core/shortcut_controller.py)
+- ShortcutHelpDialog, ShortcutEditDialog
+- 기존 shortcuts.py 확장
+- 테스트: UT-7.1~7.4
 
-3. **Header Sort Indicator**
-   - 정렬 아이콘 (▲/▼) 헤더에 표시
+### Impl-A3: 북마크/주석
+- AnnotationController (core/annotation_controller.py)
+- AnnotationPanel (ui/panels/annotation_panel.py)
+- 주석 인터랙션 모드 (FR-5.8)
+- 테스트: UT-5.1~5.5
+
+## Implementation — Phase B (Phase A 이후)
+
+| Agent | Module | Status | Tests |
+|-------|--------|--------|-------|
+| Impl-B1 | Feature 3 (컬럼 생성) | ✅ | 73/73 |
+| Impl-B2 | Feature 2 (실시간 스트리밍) | ✅ | 41/41 |
+
+## Implementation — Phase C (Phase A+B 이후)
+
+| Agent | Module | Status | Tests |
+|-------|--------|--------|-------|
+| Impl-C1 | Feature 1 (대시보드) | ✅ | 40/40 |
+| Impl-C2 | Feature 4 (내보내기) | ✅ | 27/27 |
 
 ## Test Results
 | Level | Pass | Fail | Skip |
 |-------|------|------|------|
-| Unit (Sorting) | 16 | 0 | 0 |
-| Unit (Search) | 10 | 0 | 0 |
-| Unit (TableModel) | 25 | 0 | 0 |
-| **Total** | **51** | **0** | **0** |
-
-## Files Modified
-- `data_graph_studio/ui/panels/table_panel.py`
-  - PolarsTableModel: sort(), clear_sort(), get_sort_column(), get_sort_order(), get_original_row_index()
-  - TablePanel: 검색 디바운싱, 결과 카운트, 클리어 버튼
-  - headerData(): 정렬 아이콘 표시
-
-## Files Added
-- `tests/unit/test_table_sorting.py` - 정렬 테스트 16개
-- `tests/unit/test_table_search.py` - 검색 테스트 10개
-- `PRD_TABLE_ENHANCEMENT.md` - 기능 명세
-- `REVIEW_LOG.md` - 리뷰 기록
+| Unit (45) | — | — | — |
+| Integration (7) | — | — | — |
+| E2E (7) | — | — | — |
+| Performance (3) | — | — | — |
 
 ## Next Actions
-1. E2E 테스트 (앱 실행하여 실제 동작 확인)
-2. Git commit & push
+1. Phase A 3개 에이전트 완료 대기
+2. Phase A 완료 → Phase B 2개 에이전트 시작
+3. Phase B 완료 → Phase C 2개 에이전트 시작
+4. 전체 완료 → QA Phase
