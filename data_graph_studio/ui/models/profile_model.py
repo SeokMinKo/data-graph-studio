@@ -226,24 +226,39 @@ class ProfileModel(QAbstractItemModel):
         self.endRemoveRows()
 
     def update_profile_data(self, dataset_id: str, setting: GraphSetting) -> None:
-        """프로파일 데이터만 업데이트 (이름 변경 등, expand 상태 보존)."""
-        try:
-            ds_row = self._dataset_ids.index(dataset_id)
-        except ValueError:
+        """프로파일 데이터만 업데이트 (이름 변경 등, expand 상태 보존).
+
+        Uses beginResetModel/endResetModel to safely rebuild the node cache.
+        This avoids stale internalPointer access violations that occur when
+        swapping frozen _ProfileNode objects while Qt views still hold old
+        QModelIndex references.
+        """
+        # Verify dataset exists
+        if dataset_id not in self._dataset_ids:
             return
 
-        row = 0
-        for i, node in enumerate(self._nodes):
-            if node.dataset_id == dataset_id and node.setting is not None:
-                if node.setting.id == setting.id:
-                    # node 교체 (frozen dataclass이므로 새로 만듦)
-                    self._nodes[i] = _ProfileNode(dataset_id=dataset_id, setting=setting)
-                    parent_node = self._find_node(dataset_id)
-                    parent_idx = self.createIndex(ds_row, 0, parent_node)
-                    child_idx = self.index(row, 0, parent_idx)
-                    self.dataChanged.emit(child_idx, child_idx)
-                    return
-                row += 1
+        # Check if the profile actually exists in our cache
+        found = any(
+            n.dataset_id == dataset_id
+            and n.setting is not None
+            and n.setting.id == setting.id
+            for n in self._nodes
+        )
+        if not found:
+            return
+
+        # Safe full rebuild — clears all internalPointers before replacing nodes
+        self.beginResetModel()
+        self._nodes.clear()
+        for ds_id in self._dataset_ids:
+            self._nodes.append(_ProfileNode(dataset_id=ds_id))
+            for profile in self._get_profiles(ds_id):
+                # Use the updated setting for the matching profile
+                if ds_id == dataset_id and profile.id == setting.id:
+                    self._nodes.append(_ProfileNode(dataset_id=ds_id, setting=setting))
+                else:
+                    self._nodes.append(_ProfileNode(dataset_id=ds_id, setting=profile))
+        self.endResetModel()
 
     # ==================== Internal Helpers ====================
 
