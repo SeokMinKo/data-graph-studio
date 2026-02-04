@@ -24,6 +24,8 @@ from ..core.state import AppState, ToolMode, ChartType, ComparisonMode, Aggregat
 from ..core.comparison_report import ComparisonReport
 from ..core.ipc_server import IPCServer
 from ..core.clipboard_manager import ClipboardManager, DragDropHandler
+from ..core.streaming_controller import StreamingController
+from ..core.io_abstract import RealFileSystem, ITimerFactory
 from ..utils.memory import MemoryMonitor
 
 # 에러 로깅 설정
@@ -40,6 +42,8 @@ from .panels.overlay_stats_widget import OverlayStatsWidget
 from .dialogs.parsing_preview_dialog import ParsingPreviewDialog
 from ..core.parsing import ParsingSettings
 from .dialogs.save_setting_dialog import SaveSettingDialog
+from .dialogs.streaming_dialog import StreamingDialog
+from .dialogs.command_palette_dialog import CommandPaletteDialog
 from .dialogs.profile_manager_dialog import ProfileManagerDialog
 from .dialogs.multi_file_dialog import open_multi_file_dialog
 from .floatable import FloatWindow
@@ -115,6 +119,26 @@ class DataLoaderThreadWithSettings(QThread):
         self.progress_updated.emit(progress)
 
 
+class _QtTimerWrapper:
+    """Wraps QTimer to match the start/stop interface expected by FileWatcher."""
+    def __init__(self, interval_ms: int, callback):
+        self._timer = QTimer()
+        self._timer.setInterval(interval_ms)
+        self._timer.timeout.connect(callback)
+
+    def start(self):
+        self._timer.start()
+
+    def stop(self):
+        self._timer.stop()
+
+
+class _QtTimerFactory(ITimerFactory):
+    """Production timer factory using PySide6 QTimer."""
+    def create_timer(self, interval_ms: int, callback):
+        return _QtTimerWrapper(interval_ms, callback)
+
+
 class MainWindow(QMainWindow):
     """
     Data Graph Studio 메인 윈도우
@@ -153,6 +177,13 @@ class MainWindow(QMainWindow):
             self.profile_store, self.profile_controller, self.state,
         )
 
+        # Streaming controller
+        self._streaming_controller = StreamingController(
+            fs=RealFileSystem(),
+            timer_factory=_QtTimerFactory(),
+            parent=self,
+        )
+
         # Loading thread
         self._loader_thread: Optional[DataLoaderThread] = None
 
@@ -179,6 +210,7 @@ class MainWindow(QMainWindow):
         self._setup_menubar()
         self._setup_main_layout()  # Must be before toolbar (toolbar references dataset_manager)
         self._setup_toolbar()
+        self._setup_streaming_toolbar()
         self._setup_compare_toolbar()
         self._setup_statusbar()
 
@@ -488,6 +520,20 @@ class MainWindow(QMainWindow):
         theme_menu.addAction(midnight_theme_action)
         self._theme_actions["midnight"] = midnight_theme_action
 
+        view_menu.addSeparator()
+
+        # Streaming menu items
+        self._start_streaming_action = QAction("Start &Streaming...", self)
+        self._start_streaming_action.setStatusTip("Open streaming configuration dialog")
+        self._start_streaming_action.triggered.connect(self._on_start_streaming_dialog)
+        view_menu.addAction(self._start_streaming_action)
+
+        self._stop_streaming_action = QAction("Sto&p Streaming", self)
+        self._stop_streaming_action.setStatusTip("Stop the active streaming session")
+        self._stop_streaming_action.setEnabled(False)
+        self._stop_streaming_action.triggered.connect(self._on_stop_streaming)
+        view_menu.addAction(self._stop_streaming_action)
+
         # ============================================================
         # Data Menu
         # ============================================================
@@ -548,7 +594,37 @@ class MainWindow(QMainWindow):
         trend_line_action.setStatusTip("Add a trend line to the current graph")
         trend_line_action.triggered.connect(self._on_add_trend_line)
         options_menu.addAction(trend_line_action)
-    
+
+        # ============================================================
+        # Help Menu
+        # ============================================================
+        help_menu = menubar.addMenu("&Help")
+
+        search_features_action = QAction("&Search Features...", self)
+        search_features_action.setShortcut("Ctrl+Shift+P")
+        search_features_action.setStatusTip("Open Command Palette to search and execute features (Ctrl+Shift+P)")
+        search_features_action.triggered.connect(self._on_open_command_palette)
+        help_menu.addAction(search_features_action)
+
+        # Also bind F1 as alternative shortcut
+        search_features_f1_action = QAction("Search Features (F1)", self)
+        search_features_f1_action.setShortcut("F1")
+        search_features_f1_action.triggered.connect(self._on_open_command_palette)
+        self.addAction(search_features_f1_action)  # Window-level shortcut
+
+        help_menu.addSeparator()
+
+        shortcuts_action = QAction("&Keyboard Shortcuts...", self)
+        shortcuts_action.setShortcut("Ctrl+/")
+        shortcuts_action.setStatusTip("Show keyboard shortcuts reference")
+        shortcuts_action.triggered.connect(self._show_shortcuts)
+        help_menu.addAction(shortcuts_action)
+
+        about_action = QAction("&About", self)
+        about_action.setStatusTip("About Data Graph Studio")
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
     def _setup_toolbar(self):
         """Compact toolbar setup"""
         toolbar = QToolBar("Main Toolbar")
@@ -1661,6 +1737,14 @@ class MainWindow(QMainWindow):
             self._on_profile_comparison_ended
         )
 
+        # Streaming controller signals
+        self._streaming_controller.streaming_state_changed.connect(
+            self._on_streaming_state_changed
+        )
+        self._streaming_controller.data_updated.connect(
+            self._on_streaming_data_updated
+        )
+
     def _setup_float_handlers(self):
         """메인 패널들의 Float 버튼 핸들러 설정"""
         # Connect float buttons for main panels
@@ -2520,6 +2604,11 @@ class MainWindow(QMainWindow):
         msg.setIcon(QMessageBox.Information)
         msg.exec()
     
+    def _on_open_command_palette(self):
+        """Open the Command Palette dialog for feature search."""
+        dialog = CommandPaletteDialog(self)
+        dialog.exec()
+
     def _show_shortcuts(self):
         """키보드 단축키 다이얼로그"""
         shortcuts = """
@@ -3623,8 +3712,129 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         self.graph_panel.refresh()
         self.statusbar.showMessage("Profile comparison ended", 2000)
 
+    # ==================== Streaming ====================
+
+    def _on_start_streaming_dialog(self):
+        """Open the streaming configuration dialog and start streaming."""
+        initial_path = self._streaming_controller.current_path or ""
+        dlg = StreamingDialog(
+            self,
+            initial_path=initial_path,
+            initial_interval_ms=self._streaming_controller.poll_interval_ms,
+            initial_mode="tail",
+        )
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        file_path = dlg.file_path
+        if not file_path:
+            return
+
+        # Configure and start
+        self._streaming_controller.set_poll_interval(dlg.interval_ms)
+        ok = self._streaming_controller.start(file_path, mode=dlg.mode)
+        if not ok:
+            QMessageBox.warning(
+                self, "Streaming Error",
+                f"Could not start streaming for:\n{file_path}\n\n"
+                "The file may not exist or is not accessible.",
+            )
+
+    def _on_pause_streaming(self):
+        """Toggle pause/resume for streaming."""
+        if self._streaming_controller.state == "live":
+            self._streaming_controller.pause()
+        elif self._streaming_controller.state == "paused":
+            self._streaming_controller.resume()
+
+    def _on_stop_streaming(self):
+        """Stop the active streaming session."""
+        self._streaming_controller.stop()
+
+    @Slot(str)
+    def _on_streaming_state_changed(self, new_state: str):
+        """Handle streaming state transitions — update toolbar and status bar."""
+        is_active = new_state in ("live", "paused")
+
+        # Toolbar buttons
+        self._stream_start_action.setEnabled(new_state == "off")
+        self._stream_pause_action.setEnabled(is_active)
+        self._stream_stop_action.setEnabled(is_active)
+
+        # Pause button label
+        if new_state == "paused":
+            self._stream_pause_action.setText("▶ Resume")
+            self._stream_pause_action.setToolTip(
+                self._format_tooltip("Resume Streaming", "Resume the paused stream")
+            )
+        else:
+            self._stream_pause_action.setText("⏸ Pause")
+            self._stream_pause_action.setToolTip(
+                self._format_tooltip("Pause Streaming", "Pause the live stream")
+            )
+
+        # Menu actions
+        self._start_streaming_action.setEnabled(new_state == "off")
+        self._stop_streaming_action.setEnabled(is_active)
+
+        # Status label on toolbar
+        label_map = {"off": "off", "live": "🟢 active", "paused": "⏸ paused"}
+        self._stream_status_label.setText(f"  Streaming: {label_map.get(new_state, new_state)}")
+
+        # Status bar
+        if new_state == "live":
+            self.statusbar.showMessage("Streaming: active", 3000)
+        elif new_state == "paused":
+            self.statusbar.showMessage("Streaming: paused", 3000)
+        elif new_state == "off":
+            self.statusbar.showMessage("Streaming stopped", 3000)
+
+    @Slot(str, int)
+    def _on_streaming_data_updated(self, file_path: str, new_row_count: int):
+        """Handle incoming streaming data — reload file and refresh graph."""
+        try:
+            if not self.engine.is_loaded:
+                # First load via engine
+                dataset_id = self.engine.load_dataset(file_path)
+                if dataset_id:
+                    dataset = self.engine.get_dataset(dataset_id)
+                    if dataset:
+                        memory_bytes = (
+                            dataset.df.estimated_size()
+                            if dataset and dataset.df is not None
+                            else 0
+                        )
+                        self.state.add_dataset(
+                            dataset_id=dataset_id,
+                            name=dataset.name if dataset.name else Path(file_path).stem,
+                            file_path=file_path,
+                            row_count=self.engine.row_count,
+                            column_count=self.engine.column_count,
+                            memory_bytes=memory_bytes,
+                        )
+                    self._on_dataset_activated(dataset_id)
+                return
+
+            # Re-load the active dataset from disk
+            success = self.engine.load_file(file_path, optimize_memory=True)
+            if success:
+                self.state.set_data_loaded(True, self.engine.row_count)
+                self.table_panel.set_data(self.engine.df)
+                self.graph_panel.refresh()
+                if new_row_count > 0:
+                    self.statusbar.showMessage(
+                        f"Streaming: +{new_row_count} rows", 2000
+                    )
+        except Exception as e:
+            logger.error(f"Streaming data update error: {e}", exc_info=True)
+            self.statusbar.showMessage(f"Streaming error: {e}", 5000)
+
     def closeEvent(self, event):
         """창 닫기 이벤트"""
+        # Stop streaming
+        if hasattr(self, '_streaming_controller'):
+            self._streaming_controller.shutdown()
+
         # Stop IPC server
         if hasattr(self, '_ipc_server'):
             self._ipc_server.stop()
