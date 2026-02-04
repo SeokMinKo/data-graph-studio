@@ -1037,42 +1037,40 @@ class DataTableView(QTableView):
             return
         
         menu = QMenu(self)
-        
+
+        # Set as — 최상위에 펼쳐서 배치
+        set_x = QAction("📐 Set as X-Axis", self)
+        set_x.triggered.connect(lambda: self.column_dragged.emit(f"X:{column_name}"))
+        menu.addAction(set_x)
+
+        set_y = QAction("📊 Set as Y-Axis Value", self)
+        set_y.triggered.connect(lambda: self.column_dragged.emit(f"V:{column_name}"))
+        menu.addAction(set_y)
+
+        set_g = QAction("📁 Set as Group By", self)
+        set_g.triggered.connect(lambda: self.column_dragged.emit(f"G:{column_name}"))
+        menu.addAction(set_g)
+
+        set_h = QAction("💬 Set as Hover Data", self)
+        set_h.triggered.connect(lambda: self.column_dragged.emit(f"H:{column_name}"))
+        menu.addAction(set_h)
+
+        menu.addSeparator()
+
         sort_asc = QAction("↑ Sort Ascending", self)
         sort_asc.triggered.connect(lambda: self.sortByColumn(logical_index, Qt.AscendingOrder))
         menu.addAction(sort_asc)
-        
+
         sort_desc = QAction("↓ Sort Descending", self)
         sort_desc.triggered.connect(lambda: self.sortByColumn(logical_index, Qt.DescendingOrder))
         menu.addAction(sort_desc)
-        
+
         menu.addSeparator()
-        
+
         exclude_col = QAction("🚫 Exclude Column", self)
         exclude_col.triggered.connect(lambda: self.exclude_column.emit(column_name))
         menu.addAction(exclude_col)
 
-        menu.addSeparator()
-
-        # Set as submenu
-        set_as_menu = menu.addMenu("📌 Set as...")
-        
-        set_x = QAction("📐 X-Axis", self)
-        set_x.triggered.connect(lambda: self.column_dragged.emit(f"X:{column_name}"))
-        set_as_menu.addAction(set_x)
-
-        set_y = QAction("📊 Y-Axis Value", self)
-        set_y.triggered.connect(lambda: self.column_dragged.emit(f"V:{column_name}"))
-        set_as_menu.addAction(set_y)
-
-        set_g = QAction("📁 Group By", self)
-        set_g.triggered.connect(lambda: self.column_dragged.emit(f"G:{column_name}"))
-        set_as_menu.addAction(set_g)
-
-        set_h = QAction("💬 Hover Data", self)
-        set_h.triggered.connect(lambda: self.column_dragged.emit(f"H:{column_name}"))
-        set_as_menu.addAction(set_h)
-        
         menu.exec(self.horizontalHeader().mapToGlobal(pos))
     
     def _show_cell_menu(self, pos):
