@@ -262,6 +262,10 @@ class ProfileDifferenceRenderer(QWidget):
         except Exception:
             x_data = np.arange(len(df))
 
+        # Coerce non-numeric X data (e.g., date strings) to numeric
+        from .profile_overlay import ProfileOverlayRenderer
+        x_data = ProfileOverlayRenderer._coerce_x_to_numeric(x_data, len(df))
+
         # Y data
         try:
             y_a = df[y_col_a].to_numpy() if y_col_a and y_col_a in df else None

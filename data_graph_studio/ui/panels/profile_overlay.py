@@ -203,6 +203,42 @@ class ProfileOverlayRenderer(QWidget):
         return color, int(width)
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _coerce_x_to_numeric(x_data, n: int):
+        """Convert non-numeric X data (date strings, objects) to numeric.
+
+        Mirrors the coercion logic in GraphPanel._do_refresh so that overlay
+        and difference renderers can plot date/string X columns safely.
+        """
+        import numpy as np
+
+        if x_data is None or len(x_data) == 0:
+            return np.arange(n)
+
+        dtype = getattr(x_data, "dtype", None)
+        if dtype is not None and dtype.kind in ("U", "S", "O"):
+            try:
+                import polars as pl
+
+                s = pl.Series("x", x_data)
+                parsed = s.str.strptime(pl.Datetime, strict=False)
+                if parsed.null_count() < len(parsed):
+                    return parsed.dt.timestamp("ms").to_numpy().astype(np.float64)
+            except Exception:
+                pass
+            # Fallback: integer index
+            return np.arange(len(x_data), dtype=np.float64)
+
+        # Ensure float64
+        try:
+            return np.asarray(x_data, dtype=np.float64)
+        except (ValueError, TypeError):
+            return np.arange(n, dtype=np.float64)
+
+    # ------------------------------------------------------------------
     # Internal rendering
     # ------------------------------------------------------------------
 
@@ -277,6 +313,9 @@ class ProfileOverlayRenderer(QWidget):
         except Exception:
             x_data = np.arange(len(df))
 
+        # Coerce non-numeric X data (e.g., date strings) to numeric
+        x_data = self._coerce_x_to_numeric(x_data, len(df))
+
         # Collect Y max values per series (for dual-axis detection)
         import pyqtgraph as pg
 
@@ -301,8 +340,13 @@ class ProfileOverlayRenderer(QWidget):
                 continue
 
             # Item 12: read style from profile's chart_settings
+            # In overlay mode, always use the palette color for visual distinction
+            # unless the user has explicitly customised the profile color
             fallback_color = OVERLAY_COLORS[i % len(OVERLAY_COLORS)]
             color, line_w = self._get_profile_style(gs, fallback_color)
+            # If the color is still the default blue, override with palette color
+            if color == "#1f77b4":
+                color = fallback_color
 
             series_data.append({
                 "profile": gs,
@@ -354,6 +398,9 @@ class ProfileOverlayRenderer(QWidget):
                 p2.setXLink(self._plot_widget)
                 curve = pg.PlotCurveItem(x_plot, y_plot, pen=pen, name=label)
                 p2.addItem(curve)
+
+                # Add a zero-length invisible item to the main plot for legend entry
+                legend_proxy = self._plot_widget.plot([], [], pen=pen, name=label)
 
                 # Sync secondary viewbox geometry with plot's viewbox
                 def _update_views():

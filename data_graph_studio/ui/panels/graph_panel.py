@@ -3517,6 +3517,8 @@ class GraphPanel(QWidget):
     def _refresh_statistical_chart(self, chart_type: ChartType, options: Dict, legend_settings: Dict):
         """Render Box Plot, Violin Plot, or Heatmap using specialised chart classes."""
         self.main_graph.clear_plot()
+        # Clear any leftover title/axis labels from previous chart types
+        self.main_graph.setTitle("")
 
         df = self.engine.df
         if df is None:
@@ -3668,6 +3670,18 @@ class GraphPanel(QWidget):
         if title:
             pw.setTitle(title)
 
+        # Auto-fit view range to show all boxes
+        n = len(categories)
+        if n > 0:
+            all_vals = []
+            for s in stats.values():
+                all_vals.extend([s['whisker_low'], s['whisker_high']])
+                all_vals.extend(s.get('outliers', []))
+            y_min, y_max = min(all_vals), max(all_vals)
+            y_pad = (y_max - y_min) * 0.1 or 1.0
+            pw.setXRange(-0.5, n - 0.5, padding=0.05)
+            pw.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
+
     # -- Violin Plot rendering -----------------------------------------------
 
     def _render_violin_plot(self, df, cat_col, y_col, options, colors):
@@ -3768,6 +3782,17 @@ class GraphPanel(QWidget):
         if title:
             pw.setTitle(title)
 
+        # Auto-fit view range for violin
+        n = len(categories)
+        if n > 0:
+            all_x = [d['x'] for d in density.values() if d.get('x')]
+            if all_x:
+                y_min = min(min(xv) for xv in all_x)
+                y_max = max(max(xv) for xv in all_x)
+                y_pad = (y_max - y_min) * 0.1 or 1.0
+                pw.setXRange(-0.5, n - 0.5, padding=0.05)
+                pw.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
+
     # -- Heatmap rendering ---------------------------------------------------
 
     def _render_heatmap(self, df, cat_col, y_col, options, group_cols):
@@ -3855,6 +3880,14 @@ class GraphPanel(QWidget):
         title = options.get('title')
         if title:
             pw.setTitle(title)
+
+        # Auto-fit view range for heatmap
+        pw.setXRange(0, len(col_labels), padding=0.02)
+        pw.setYRange(0, len(row_labels), padding=0.02)
+
+        # Add colorbar label
+        cb_label = f"{y_col} ({vmin:.1f} – {vmax:.1f})"
+        pw.setTitle(cb_label if not title else title)
 
     def _refresh_overlay_comparison(self):
         """
