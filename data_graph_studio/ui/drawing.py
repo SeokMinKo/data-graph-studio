@@ -141,6 +141,13 @@ class LineDrawing(DrawingObjectBase):
         return (min(self.x1, self.x2), min(self.y1, self.y2),
                 max(self.x1, self.x2), max(self.y1, self.y2))
 
+    def move(self, dx: float, dy: float) -> None:
+        """Translate the line by (dx, dy)."""
+        self.x1 += dx
+        self.y1 += dy
+        self.x2 += dx
+        self.y2 += dy
+
 
 @dataclass
 class CircleDrawing(DrawingObjectBase):
@@ -171,6 +178,11 @@ class CircleDrawing(DrawingObjectBase):
     def get_bounds(self) -> Tuple[float, float, float, float]:
         return (self.cx - self.rx, self.cy - self.ry,
                 self.cx + self.rx, self.cy + self.ry)
+
+    def move(self, dx: float, dy: float) -> None:
+        """Translate the circle/ellipse by (dx, dy)."""
+        self.cx += dx
+        self.cy += dy
 
 
 @dataclass
@@ -205,6 +217,11 @@ class RectDrawing(DrawingObjectBase):
 
     def get_bounds(self) -> Tuple[float, float, float, float]:
         return (self.x, self.y, self.x + self.width, self.y + self.height)
+
+    def move(self, dx: float, dy: float) -> None:
+        """Translate the rectangle by (dx, dy)."""
+        self.x += dx
+        self.y += dy
 
 
 @dataclass
@@ -256,6 +273,11 @@ class TextDrawing(DrawingObjectBase):
         width = len(self.text) * self.font_size * 0.6
         height = self.font_size * 1.2
         return (self.x, self.y - height, self.x + width, self.y)
+
+    def move(self, dx: float, dy: float) -> None:
+        """Translate the text by (dx, dy)."""
+        self.x += dx
+        self.y += dy
 
 
 # ==================== Helper Functions ====================

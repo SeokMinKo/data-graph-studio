@@ -37,6 +37,7 @@ class MiniGraphWidget(QWidget):
     activated = Signal(str)  # dataset_id
     view_range_changed = Signal(str, list, list)  # dataset_id, x_range, y_range
     selection_changed = Signal(str, list)  # dataset_id, [x_min, x_max]
+    row_selection_changed = Signal(str, list)  # dataset_id, row_indices
 
     def __init__(
         self,
@@ -56,6 +57,13 @@ class MiniGraphWidget(QWidget):
         self._selected_indices: list = []
         self._selection_region = None  # LinearRegionItem for drag selection
         self._is_selection_syncing = False  # selection sync guard
+
+        # Stored plot data for selection matching
+        self._plot_x_data = None  # np.ndarray
+        self._plot_y_data = None  # np.ndarray
+
+        # Highlight scatter for selection sync
+        self._highlight_scatter = None
 
         # Rect selection state
         self._rect_selecting = False
@@ -278,6 +286,9 @@ class MiniGraphWidget(QWidget):
         else:
             x_data_full = np.arange(len(df))
 
+        # Store for selection matching
+        self._plot_x_data = x_data_full
+
         # --- Resolve Y column names ---
         y_col_names: list = []
         y_col_colors: dict = {}
@@ -304,6 +315,12 @@ class MiniGraphWidget(QWidget):
 
         if not y_col_names:
             return
+
+        # Store first Y column data for selection matching
+        try:
+            self._plot_y_data = df[y_col_names[0]].to_numpy()
+        except Exception:
+            self._plot_y_data = None
 
         try:
             import pyqtgraph as pg
@@ -602,7 +619,9 @@ class MiniGraphWidget(QWidget):
         return super().eventFilter(obj, event)
 
     def _finish_rect_selection(self, end_x: float, end_y: float):
-        """Finish rectangle selection and emit selected region."""
+        """Finish rectangle selection, match data points, and emit row indices."""
+        import numpy as np
+
         if self._rect_start is None:
             self._rect_selecting = False
             return
@@ -610,8 +629,30 @@ class MiniGraphWidget(QWidget):
         x1, y1 = self._rect_start
         x_min = min(x1, end_x)
         x_max = max(x1, end_x)
+        y_min = min(y1, end_y)
+        y_max = max(y1, end_y)
 
-        # Emit selection as x-range (compatible with ViewSyncManager)
+        # Match actual data points within the rectangle
+        row_indices = []
+        if self._plot_x_data is not None and self._plot_y_data is not None:
+            try:
+                x_arr = np.asarray(self._plot_x_data, dtype=float)
+                y_arr = np.asarray(self._plot_y_data, dtype=float)
+                mask = (
+                    (x_arr >= x_min) & (x_arr <= x_max) &
+                    (y_arr >= y_min) & (y_arr <= y_max)
+                )
+                row_indices = np.where(mask)[0].tolist()
+            except Exception:
+                row_indices = []
+
+        # Highlight locally
+        self.highlight_selection(row_indices)
+
+        # Emit row indices for cross-panel sync
+        self.row_selection_changed.emit(self.dataset_id, row_indices)
+
+        # Also emit x-range for backward compat (ViewSyncManager)
         self._selected_indices = [x_min, x_max]
         self.selection_changed.emit(self.dataset_id, [x_min, x_max])
 
@@ -624,6 +665,54 @@ class MiniGraphWidget(QWidget):
             from PySide6.QtCore import QTimer
             roi = self._rect_roi
             QTimer.singleShot(2000, lambda: self._remove_rect_roi(roi))
+
+    def highlight_selection(self, row_indices: list):
+        """Highlight selected data points by row indices using a ScatterPlotItem overlay."""
+        import numpy as np
+
+        # Remove previous highlight
+        if self._highlight_scatter is not None:
+            try:
+                if self.plot_widget is not None:
+                    self.plot_widget.removeItem(self._highlight_scatter)
+            except (RuntimeError, ValueError):
+                pass
+            self._highlight_scatter = None
+
+        if (
+            not row_indices
+            or self.plot_widget is None
+            or self._plot_x_data is None
+            or self._plot_y_data is None
+        ):
+            return
+
+        try:
+            import pyqtgraph as pg
+
+            x_arr = np.asarray(self._plot_x_data, dtype=float)
+            y_arr = np.asarray(self._plot_y_data, dtype=float)
+            valid = [i for i in row_indices if 0 <= i < len(x_arr)]
+            if not valid:
+                return
+
+            sel_x = x_arr[valid]
+            sel_y = y_arr[valid]
+
+            scatter = pg.ScatterPlotItem(
+                x=sel_x,
+                y=sel_y,
+                size=10,
+                pen=pg.mkPen('#EF4444', width=2),
+                brush=pg.mkBrush('#EF444480'),
+                symbol='o',
+                pxMode=True,
+            )
+            scatter.setZValue(200)
+            self.plot_widget.addItem(scatter)
+            self._highlight_scatter = scatter
+        except Exception:
+            pass
 
     def refresh(self):
         """새로고침 — clear and replot (safe re-render)."""
@@ -892,6 +981,10 @@ class SideBySideLayout(QWidget):
             panel.selection_changed.connect(
                 lambda src_id, region: self._view_sync_manager.on_source_selection_changed(src_id, region)
             )
+            # Route row_selection_changed → always sync highlight to other panels
+            panel.row_selection_changed.connect(
+                lambda src_id, indices, _did=dataset_id: self._on_row_selection(_did, indices)
+            )
             self._panels[dataset_id] = panel
             self._view_sync_manager.register_panel(dataset_id, panel)
             self.splitter.addWidget(panel)
@@ -930,6 +1023,16 @@ class SideBySideLayout(QWidget):
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+
+    def _on_row_selection(self, source_id: str, row_indices: list):
+        """Propagate row selection highlight to all other panels (always sync)."""
+        for did, panel in self._panels.items():
+            if did == source_id:
+                continue
+            try:
+                panel.highlight_selection(row_indices)
+            except Exception:
+                pass
 
     def _on_panel_activated(self, dataset_id: str):
         """패널 활성화"""

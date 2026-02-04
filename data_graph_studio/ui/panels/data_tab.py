@@ -44,6 +44,7 @@ _AGG_ITEMS: List[tuple[str, AggregationType]] = [
 _YAXIS_MAX_HEIGHT = 150
 _GROUP_MAX_HEIGHT = 100
 _HOVER_MAX_HEIGHT = 100
+_FILTER_MAX_HEIGHT = 150
 
 
 # ---------------------------------------------------------------------------
@@ -210,13 +211,17 @@ class DataTab(QWidget):
     """Chart Options → Data tab.
 
     Provides combo-box / checkbox UI for X-Axis, Y-Axis (Values),
-    Group By, and Hover column configuration.
+    Group By, Hover column configuration, and **Filter** (Item 15).
 
     Parameters
     ----------
     state : AppState
         The shared application state singleton.
     """
+
+    # Emitted when the user changes filter selections.
+    # Dict[str, List[Any]]: mapping of column name → selected values.
+    filter_changed = Signal(dict)
 
     def __init__(self, state: AppState, parent: QWidget | None = None):
         super().__init__(parent)
@@ -230,6 +235,10 @@ class DataTab(QWidget):
         self._y_items: Dict[str, _YAxisItemWidget] = {}
         self._group_checks: Dict[str, QCheckBox] = {}
         self._hover_checks: Dict[str, QCheckBox] = {}
+
+        # Filter state
+        self._filter_engine: "DataEngine | None" = None
+        self._filter_checks: Dict[str, QCheckBox] = {}  # value → checkbox
 
         # Guard flag for bulk updates
         self._syncing = False
@@ -530,6 +539,7 @@ class DataTab(QWidget):
                 continue
             item = _YAxisItemWidget(col)
             item.checked_changed.connect(functools.partial(self._on_y_checked, col))
+            item.checked_changed.connect(functools.partial(self._on_y_check_sort, col))
             item.agg_changed.connect(functools.partial(self._on_y_agg_changed, col))
             item.formula_changed.connect(functools.partial(self._on_y_formula_changed, col))
             self._y_items[col] = item
@@ -541,6 +551,7 @@ class DataTab(QWidget):
         for col in self._all_columns:
             cb = QCheckBox(col)
             cb.stateChanged.connect(functools.partial(self._on_group_checked, col))
+            cb.stateChanged.connect(functools.partial(self._on_group_check_sort, col))
             self._group_checks[col] = cb
             self._group_layout.insertWidget(self._group_layout.count() - 1, cb)
 
@@ -549,6 +560,7 @@ class DataTab(QWidget):
         for col in self._all_columns:
             cb = QCheckBox(col)
             cb.stateChanged.connect(functools.partial(self._on_hover_checked, col))
+            cb.stateChanged.connect(functools.partial(self._on_hover_check_sort, col))
             self._hover_checks[col] = cb
             self._hover_layout.insertWidget(self._hover_layout.count() - 1, cb)
 
@@ -907,6 +919,78 @@ class DataTab(QWidget):
     # ==================================================================
     # Column search / filter
     # ==================================================================
+
+    # ==================================================================
+    # Sort checked items to top
+    # ==================================================================
+
+    def _sort_checked_to_top(self, layout: 'QVBoxLayout', items_dict: dict, key_fn=None) -> None:
+        """Move checked items to the top of *layout*.
+
+        Works for both _YAxisItemWidget (uses .is_checked()) and QCheckBox
+        (uses .isChecked()).  The trailing stretch item is preserved at the end.
+
+        Parameters
+        ----------
+        layout : QVBoxLayout
+            The layout containing the items and a trailing stretch.
+        items_dict : dict
+            Mapping of column_name → widget.
+        key_fn : callable, optional
+            Function ``widget → bool`` returning checked state.
+            Defaults to ``widget.isChecked()`` / ``widget.is_checked()``.
+        """
+        if not items_dict:
+            return
+
+        def _is_checked(w):
+            if key_fn is not None:
+                return key_fn(w)
+            if hasattr(w, 'is_checked'):
+                return w.is_checked()
+            if hasattr(w, 'isChecked'):
+                return w.isChecked()
+            return False
+
+        # Collect widgets in desired order: checked first, then unchecked
+        checked = []
+        unchecked = []
+        for col in self._all_columns:
+            w = items_dict.get(col)
+            if w is None:
+                continue
+            if _is_checked(w):
+                checked.append(w)
+            else:
+                unchecked.append(w)
+
+        ordered = checked + unchecked
+
+        # Remove all widgets from layout (except trailing stretch)
+        for w in ordered:
+            layout.removeWidget(w)
+
+        # Re-insert in order before the stretch
+        for i, w in enumerate(ordered):
+            layout.insertWidget(i, w)
+
+    def _on_y_check_sort(self, _col: str, _checked: bool) -> None:
+        """Re-sort Y-axis list after check state change."""
+        if self._syncing:
+            return
+        self._sort_checked_to_top(self._y_layout, self._y_items)
+
+    def _on_group_check_sort(self, _col: str, _state: int) -> None:
+        """Re-sort Group By list after check state change."""
+        if self._syncing:
+            return
+        self._sort_checked_to_top(self._group_layout, self._group_checks)
+
+    def _on_hover_check_sort(self, _col: str, _state: int) -> None:
+        """Re-sort Hover list after check state change."""
+        if self._syncing:
+            return
+        self._sort_checked_to_top(self._hover_layout, self._hover_checks)
 
     @Slot(str)
     def _filter_y_items(self, text: str) -> None:

@@ -257,6 +257,10 @@ class ProfileSideBySideLayout(QWidget):
             panel.selection_changed.connect(
                 lambda src_id, region, _pid=pid: self._view_sync_manager.on_source_selection_changed(_pid, region)
             )
+            # Route row_selection_changed → always sync to other panels
+            panel.row_selection_changed.connect(
+                lambda src_id, indices, _pid=pid: self._on_row_selection(pid, indices)
+            )
             self._panels[pid] = panel
             self._view_sync_manager.register_panel(pid, panel)
 
@@ -273,6 +277,16 @@ class ProfileSideBySideLayout(QWidget):
             self._grid_container.setParent(None)
             self._grid_container.deleteLater()
             self._grid_container = None
+
+    def _on_row_selection(self, source_pid: str, row_indices: list) -> None:
+        """Propagate row selection to all other panels (always sync, ignoring X/Y sync setting)."""
+        for pid, panel in self._panels.items():
+            if pid == source_pid:
+                continue
+            try:
+                panel.highlight_selection(row_indices)
+            except Exception:
+                pass
 
     def _rearrange_panels(self) -> None:
         """Rearrange existing panels according to self._current_grid_layout.
