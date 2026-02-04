@@ -476,7 +476,13 @@ class GraphOptionsPanel(QFrame):
         self.marker_shape_combo.addItems(["Circle", "Square", "Triangle", "Diamond", "Cross", "Plus"])
         self.marker_shape_combo.currentIndexChanged.connect(self._on_option_changed)
         marker_layout.addWidget(self.marker_shape_combo, 1, 1)
-        
+
+        self.marker_border_check = QCheckBox("Border")
+        self.marker_border_check.setToolTip("Show border outline around markers")
+        self.marker_border_check.setChecked(False)
+        self.marker_border_check.stateChanged.connect(self._on_option_changed)
+        marker_layout.addWidget(self.marker_border_check, 2, 0, 1, 2)
+
         layout.addWidget(marker_group)
         
         # Fill
@@ -808,6 +814,7 @@ class GraphOptionsPanel(QFrame):
             'line_style': line_styles[self.line_style_combo.currentIndex()],
             'marker_size': self.marker_size_spin.value(),
             'marker_symbol': marker_symbols[self.marker_shape_combo.currentIndex()],
+            'marker_border': self.marker_border_check.isChecked(),
             'fill_opacity': self.fill_opacity_spin.value(),
             'bg_color': self.bg_color_btn.color(),
             # Sampling options
@@ -1754,7 +1761,8 @@ class MainGraph(pg.PlotWidget):
                     line_width, marker_size, line_style, marker_symbol,
                     show_points,
                     show_labels=options.get('show_labels', False),
-                    smooth=options.get('smooth', False)
+                    smooth=options.get('smooth', False),
+                    marker_border=options.get('marker_border', False),
                 )
         else:
             color = default_colors[0]
@@ -1770,7 +1778,8 @@ class MainGraph(pg.PlotWidget):
                 line_width, marker_size, line_style, marker_symbol,
                 show_points,
                 show_labels=options.get('show_labels', False),
-                smooth=options.get('smooth', False)
+                smooth=options.get('smooth', False),
+                marker_border=options.get('marker_border', False),
             )
     
     def _plot_series(
@@ -1786,10 +1795,12 @@ class MainGraph(pg.PlotWidget):
         marker_symbol: str,
         show_points: bool,
         show_labels: bool = False,
-        smooth: bool = False
+        smooth: bool = False,
+        marker_border: bool = False,
     ):
         pen = pg.mkPen(color=color, width=line_width, style=line_style)
         brush = pg.mkBrush(color=color)
+        marker_pen = pg.mkPen(color=color, width=1) if marker_border else pg.mkPen(None)
 
         # Smooth line (simple moving average)
         if chart_type == ChartType.LINE and smooth and len(y) > 3:
@@ -1800,7 +1811,7 @@ class MainGraph(pg.PlotWidget):
         if chart_type == ChartType.LINE:
             item = self.plot(x, y, pen=pen, name=name)
             if show_points and marker_size > 0:
-                scatter = pg.ScatterPlotItem(x, y, size=marker_size, brush=brush, symbol=marker_symbol)
+                scatter = pg.ScatterPlotItem(x, y, size=marker_size, pen=marker_pen, brush=brush, symbol=marker_symbol)
                 self.addItem(scatter)
                 self._scatter_items.append(scatter)
 
@@ -1819,7 +1830,7 @@ class MainGraph(pg.PlotWidget):
         elif chart_type == ChartType.SCATTER:
             if not show_points:
                 return
-            scatter = pg.ScatterPlotItem(x, y, size=marker_size, brush=brush, symbol=marker_symbol, name=name)
+            scatter = pg.ScatterPlotItem(x, y, size=marker_size, pen=marker_pen, brush=brush, symbol=marker_symbol, name=name)
             self.addItem(scatter)
             self._scatter_items.append(scatter)
             item = scatter
@@ -1965,9 +1976,11 @@ class MainGraph(pg.PlotWidget):
                 self._plot_items.append(item)
 
             elif chart_type == ChartType.SCATTER:
+                m_border = options.get('marker_border', False)
+                s_pen = pg.mkPen(color=color_hex, width=1) if m_border else pg.mkPen(None)
                 scatter = pg.ScatterPlotItem(
                     x=x, y=y,
-                    pen=None,
+                    pen=s_pen,
                     brush=pg.mkBrush(r, g, b, 180),
                     size=marker_size,
                     name=name
@@ -3494,8 +3507,10 @@ class GraphPanel(QWidget):
                     self.main_graph.addItem(bar)
                     self.main_graph._plot_items.append(bar)
                 elif chart_type == ChartType.SCATTER:
+                    m_bdr = options.get('marker_border', False)
+                    sc_pen = pg.mkPen(color, width=1) if m_bdr else pg.mkPen(None)
                     sc = pg.ScatterPlotItem(x_data, y_data, size=options.get('marker_size', 6),
-                                            brush=pg.mkBrush(color), name=label)
+                                            pen=sc_pen, brush=pg.mkBrush(color), name=label)
                     self.main_graph.addItem(sc)
                     self.main_graph._scatter_items.append(sc)
                 else:
