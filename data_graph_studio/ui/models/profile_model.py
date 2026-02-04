@@ -165,6 +165,86 @@ class ProfileModel(QAbstractItemModel):
                 self._nodes.append(_ProfileNode(dataset_id=ds_id, setting=profile))
         self.endResetModel()
 
+    def add_profile_incremental(self, dataset_id: str, setting: GraphSetting) -> None:
+        """프로파일 하나를 추가 (expand 상태 보존, beginResetModel 안 씀)."""
+        try:
+            ds_row = self._dataset_ids.index(dataset_id)
+        except ValueError:
+            # 데이터셋이 없으면 full refresh
+            self.refresh()
+            return
+
+        profiles = self._get_profiles(dataset_id)
+        new_row = len(profiles) - 1  # 이미 store에 add된 후 호출되므로
+        if new_row < 0:
+            self.refresh()
+            return
+
+        parent_node = self._find_node(dataset_id)
+        parent_idx = self.createIndex(ds_row, 0, parent_node)
+
+        self.beginInsertRows(parent_idx, new_row, new_row)
+        self._nodes.append(_ProfileNode(dataset_id=dataset_id, setting=setting))
+        self.endInsertRows()
+
+    def remove_profile_incremental(self, dataset_id: str, profile_id: str) -> None:
+        """프로파일 하나를 제거 (expand 상태 보존)."""
+        try:
+            ds_row = self._dataset_ids.index(dataset_id)
+        except ValueError:
+            self.refresh()
+            return
+
+        # 삭제 전 프로파일 목록에서 row 찾기 (이미 store에서 제거됐으므로 node cache에서 찾음)
+        row = -1
+        for i, node in enumerate(self._nodes):
+            if (node.dataset_id == dataset_id
+                    and node.setting is not None
+                    and node.setting.id == profile_id):
+                row_count = 0
+                # 해당 dataset의 프로파일 중 몇 번째인지 계산
+                for n in self._nodes:
+                    if n.dataset_id == dataset_id and n.setting is not None:
+                        if n.setting.id == profile_id:
+                            row = row_count
+                            break
+                        row_count += 1
+                break
+
+        if row < 0:
+            self.refresh()
+            return
+
+        parent_node = self._find_node(dataset_id)
+        parent_idx = self.createIndex(ds_row, 0, parent_node)
+
+        self.beginRemoveRows(parent_idx, row, row)
+        self._nodes = [n for n in self._nodes
+                       if not (n.dataset_id == dataset_id
+                               and n.setting is not None
+                               and n.setting.id == profile_id)]
+        self.endRemoveRows()
+
+    def update_profile_data(self, dataset_id: str, setting: GraphSetting) -> None:
+        """프로파일 데이터만 업데이트 (이름 변경 등, expand 상태 보존)."""
+        try:
+            ds_row = self._dataset_ids.index(dataset_id)
+        except ValueError:
+            return
+
+        row = 0
+        for i, node in enumerate(self._nodes):
+            if node.dataset_id == dataset_id and node.setting is not None:
+                if node.setting.id == setting.id:
+                    # node 교체 (frozen dataclass이므로 새로 만듦)
+                    self._nodes[i] = _ProfileNode(dataset_id=dataset_id, setting=setting)
+                    parent_node = self._find_node(dataset_id)
+                    parent_idx = self.createIndex(ds_row, 0, parent_node)
+                    child_idx = self.index(row, 0, parent_idx)
+                    self.dataChanged.emit(child_idx, child_idx)
+                    return
+                row += 1
+
     # ==================== Internal Helpers ====================
 
     def _get_dataset_ids(self) -> List[str]:

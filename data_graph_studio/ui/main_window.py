@@ -2155,9 +2155,9 @@ class MainWindow(QMainWindow):
                 graph_setting = replace(graph_setting, dataset_id=active_id)
                 logger.debug(f"[DEBUG-CRASH] profile_store.add() start")
                 self.profile_store.add(graph_setting)
-                logger.debug(f"[DEBUG-CRASH] profile_store.add() done, profile_model.refresh() start")
-                self.profile_model.refresh()
-                logger.debug(f"[DEBUG-CRASH] profile_model.refresh() done")
+                logger.debug(f"[DEBUG-CRASH] profile_store.add() done, profile_model update start")
+                self.profile_model.add_profile_incremental(active_id, graph_setting)
+                logger.debug(f"[DEBUG-CRASH] profile_model update done")
                 
                 # 그래프 설정 적용
                 try:
@@ -2945,7 +2945,11 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         if ok and name.strip():
             profile_id = self.profile_controller.create_profile(dataset_id, name.strip())
             if profile_id:
-                self.profile_model.refresh()
+                setting = self.profile_store.get(profile_id)
+                if setting:
+                    self.profile_model.add_profile_incremental(dataset_id, setting)
+                else:
+                    self.profile_model.refresh()
                 self.statusbar.showMessage(f"Profile '{name}' created", 2000)
 
     def _on_profile_rename_requested(self, profile_id: str):
@@ -2958,7 +2962,11 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         )
         if ok and name.strip():
             if self.profile_controller.rename_profile(profile_id, name.strip()):
-                self.profile_model.refresh()
+                updated = self.profile_store.get(profile_id)
+                if updated:
+                    self.profile_model.update_profile_data(updated.dataset_id, updated)
+                else:
+                    self.profile_model.refresh()
                 self.statusbar.showMessage("Profile renamed", 2000)
 
     def _on_profile_delete_requested(self, profile_id: str):
@@ -2966,6 +2974,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         setting = self.profile_store.get(profile_id)
         if not setting:
             return
+        dataset_id = setting.dataset_id
         reply = QMessageBox.question(
             self, "Delete Profile",
             f"Delete profile '{setting.name}'?",
@@ -2973,14 +2982,18 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         )
         if reply == QMessageBox.Yes:
             if self.profile_controller.delete_profile(profile_id):
-                self.profile_model.refresh()
+                self.profile_model.remove_profile_incremental(dataset_id, profile_id)
                 self.statusbar.showMessage("Profile deleted (Ctrl+Z to undo)", 3000)
 
     def _on_profile_duplicate_requested(self, profile_id: str):
         """프로파일 복제 요청"""
         new_id = self.profile_controller.duplicate_profile(profile_id)
         if new_id:
-            self.profile_model.refresh()
+            new_setting = self.profile_store.get(new_id)
+            if new_setting:
+                self.profile_model.add_profile_incremental(new_setting.dataset_id, new_setting)
+            else:
+                self.profile_model.refresh()
             self.statusbar.showMessage("Profile duplicated", 2000)
 
     def _on_profile_export_requested(self, profile_id: str):
@@ -3003,7 +3016,11 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         if path:
             profile_id = self.profile_controller.import_profile(dataset_id, path)
             if profile_id:
-                self.profile_model.refresh()
+                imported_setting = self.profile_store.get(profile_id)
+                if imported_setting:
+                    self.profile_model.add_profile_incremental(dataset_id, imported_setting)
+                else:
+                    self.profile_model.refresh()
                 self.statusbar.showMessage("Profile imported", 2000)
 
     # ==================== Multi-Dataset Operations ====================

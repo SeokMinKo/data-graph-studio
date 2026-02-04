@@ -77,22 +77,52 @@ def test_apply_profile_updates_state():
     assert applied == ["setting-1"]
 
 
-def test_apply_profile_blocks_on_unsaved_changes():
+def test_apply_profile_auto_saves_active():
+    """프로파일 전환 시 기존 활성 프로파일에 변경사항이 자동 저장된다."""
+    store = ProfileStore()
+    state = make_state()
+    controller = ProfileController(store, state)
+
+    # 프로파일 A (line) 생성 + 적용
+    setting_a = make_setting(id="setting-a", name="A", chart_type="line")
+    store.add(setting_a)
+    controller.apply_profile("setting-a")
+
+    # 프로파일 B (scatter) 생성 + store에 추가
+    setting_b = make_setting(id="setting-b", name="B", chart_type="scatter")
+    store.add(setting_b)
+
+    # AppState에서 chart_type을 BAR로 변경 (A에 대한 수정)
+    state._chart_settings.chart_type = ChartType.BAR
+
+    # B로 전환 → A의 변경사항(BAR)이 자동 저장되어야 함
+    assert controller.apply_profile("setting-b") is True
+
+    # A를 다시 확인 → BAR로 저장되어 있어야 함
+    saved_a = store.get("setting-a")
+    assert saved_a.chart_type == "bar"
+
+    # state는 B의 설정(scatter)으로 바뀌어 있어야 함
+    assert state._chart_settings.chart_type == ChartType.SCATTER
+
+
+def test_apply_same_profile_no_auto_save():
+    """같은 프로파일을 다시 적용하면 auto-save하지 않는다."""
     store = ProfileStore()
     state = make_state()
     controller = ProfileController(store, state)
 
     setting = make_setting(id="setting-1", name="Setting", chart_type="line")
     store.add(setting)
-    controller._active_profile_id = "setting-1"
+    controller.apply_profile("setting-1")
 
+    # 변경 후 같은 프로파일 re-apply → auto-save 안 함 (같은 ID)
     state._chart_settings.chart_type = ChartType.BAR
+    original_modified = store.get("setting-1").modified_at
 
-    errors = []
-    controller.error_occurred.connect(lambda msg: errors.append(msg))
-
-    assert controller.apply_profile("setting-1") is False
-    assert errors
+    assert controller.apply_profile("setting-1") is True
+    # 같은 프로파일이므로 store의 modified_at이 변하지 않아야 함
+    assert store.get("setting-1").modified_at == original_modified
 
 
 def test_rename_profile_and_undo():

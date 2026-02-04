@@ -42,15 +42,36 @@ class ProfileController(QObject):
             self.error_occurred.emit(str(exc))
             return None
 
+    def save_active_profile(self) -> bool:
+        """현재 AppState를 활성 프로파일에 저장 (auto-save)."""
+        if not self._active_profile_id:
+            return False
+        setting = self._store.get(self._active_profile_id)
+        if setting is None:
+            return False
+        updated = GraphSettingMapper.from_app_state(
+            self._state, name=setting.name, dataset_id=setting.dataset_id,
+        )
+        # 기존 id, created_at 유지, modified_at 갱신
+        import time as _time
+        updated = replace(
+            updated,
+            id=setting.id,
+            created_at=setting.created_at,
+            modified_at=_time.time(),
+        )
+        self._store.update(updated)
+        return True
+
     def apply_profile(self, profile_id: str) -> bool:
         setting = self._store.get(profile_id)
         if setting is None:
             self.error_occurred.emit(f"Profile not found: {profile_id}")
             return False
 
-        if self.has_unsaved_changes():
-            self.error_occurred.emit("Unsaved changes")
-            return False
+        # 전환 전에 현재 활성 프로파일에 변경사항 자동 저장
+        if self._active_profile_id and self._active_profile_id != profile_id:
+            self.save_active_profile()
 
         GraphSettingMapper.to_app_state(setting, self._state)
         self._active_profile_id = profile_id
