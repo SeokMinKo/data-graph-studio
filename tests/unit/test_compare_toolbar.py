@@ -58,11 +58,11 @@ class TestCompareToolbarSignals:
 
     def test_exit_requested_emits(self, toolbar, qtbot):
         """Exit button emits exit_requested."""
-        # Find the exit button (last QPushButton that's not checkable)
+        from PySide6.QtWidgets import QPushButton
         with qtbot.waitSignal(toolbar.exit_requested, timeout=1000):
-            # The exit button is connected in _build_ui; find it
-            for child in toolbar.children():
-                if hasattr(child, 'text') and callable(child.text) and 'Exit' in child.text():
+            # The exit button is nested inside the two-row container
+            for child in toolbar.findChildren(QPushButton):
+                if 'Exit' in child.text():
                     child.click()
                     break
 

@@ -237,6 +237,10 @@ class ProfileSideBySideLayout(QWidget):
             panel.view_range_changed.connect(
                 lambda src_id, xr, yr, _pid=pid: self._view_sync_manager.on_source_range_changed(_pid, xr, yr)
             )
+            # Route selection_changed through ViewSyncManager
+            panel.selection_changed.connect(
+                lambda src_id, region, _pid=pid: self._view_sync_manager.on_source_selection_changed(_pid, region)
+            )
             self._panels[pid] = panel
             self._view_sync_manager.register_panel(pid, panel)
 

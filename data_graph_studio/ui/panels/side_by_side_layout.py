@@ -35,6 +35,7 @@ class MiniGraphWidget(QWidget):
 
     activated = Signal(str)  # dataset_id
     view_range_changed = Signal(str, list, list)  # dataset_id, x_range, y_range
+    selection_changed = Signal(str, list)  # dataset_id, [x_min, x_max]
 
     def __init__(
         self,
@@ -52,6 +53,8 @@ class MiniGraphWidget(QWidget):
         self.plot_widget = None
         self._is_syncing = False  # 동기화 중인지 추적 (무한 루프 방지)
         self._selected_indices: list = []
+        self._selection_region = None  # LinearRegionItem for drag selection
+        self._is_selection_syncing = False  # selection sync guard
 
         self._setup_ui()
 
@@ -154,6 +157,23 @@ class MiniGraphWidget(QWidget):
 
             # ViewBox 범위 변경 시그널 연결
             self.plot_widget.getViewBox().sigRangeChanged.connect(self._on_view_range_changed)
+
+            # Selection region (LinearRegionItem) — hidden by default
+            self._selection_region = pg.LinearRegionItem(
+                values=(0, 1),
+                brush=pg.mkBrush(41, 128, 185, 50),  # semi-transparent blue
+                pen=pg.mkPen('#2980b9', width=1),
+                movable=True,
+            )
+            self._selection_region.setZValue(10)
+            self._selection_region.hide()
+            self.plot_widget.addItem(self._selection_region)
+            self._selection_region.sigRegionChangeFinished.connect(
+                self._on_selection_region_changed
+            )
+
+            # Enable right-click drag to create selection region
+            self.plot_widget.scene().sigMouseClicked.connect(self._on_plot_mouse_clicked)
 
             # 간단한 데이터 플롯
             self._plot_data(color)
@@ -394,10 +414,24 @@ class MiniGraphWidget(QWidget):
             QTimer.singleShot(50, self._reset_sync_flag)
 
     def set_selection(self, indices: list):
-        """Highlight selected data points in the plot (ViewSyncManager duck-typing)."""
+        """Highlight selected data points in the plot (ViewSyncManager duck-typing).
+
+        ``indices`` is expected to be a two-element list ``[x_min, x_max]``
+        representing an X-axis range, or an empty list to clear.
+        """
         self._selected_indices = list(indices)
-        # Future: visually highlight the data points at these row indices.
-        # For now, just store them. Rendering will be enhanced in a follow-up.
+        if self._selection_region is None:
+            return
+
+        self._is_selection_syncing = True
+        try:
+            if len(indices) == 2:
+                self._selection_region.setRegion(indices)
+                self._selection_region.show()
+            else:
+                self._selection_region.hide()
+        finally:
+            QTimer.singleShot(50, self._reset_selection_sync_flag)
 
     def get_view_range(self) -> tuple:
         """현재 뷰 범위 반환"""
@@ -423,6 +457,43 @@ class MiniGraphWidget(QWidget):
     def _reset_sync_flag(self):
         """동기화 플래그 리셋"""
         self._is_syncing = False
+
+    def _reset_selection_sync_flag(self):
+        """Selection 동기화 플래그 리셋"""
+        self._is_selection_syncing = False
+
+    def _on_selection_region_changed(self):
+        """User finished dragging the selection region."""
+        if self._is_selection_syncing:
+            return
+        if self._selection_region is None:
+            return
+        region = list(self._selection_region.getRegion())
+        self._selected_indices = region
+        self.selection_changed.emit(self.dataset_id, region)
+
+    def _on_plot_mouse_clicked(self, event):
+        """Handle mouse click on plot scene — double-click to create/toggle selection."""
+        if event.double():
+            if self._selection_region is None:
+                return
+            if self._selection_region.isVisible():
+                # Double-click clears selection
+                self._selection_region.hide()
+                self._selected_indices = []
+                self.selection_changed.emit(self.dataset_id, [])
+            else:
+                # Double-click creates a selection region at current view center
+                vb = self.plot_widget.getViewBox()
+                view_range = vb.viewRange()
+                x_min, x_max = view_range[0]
+                width = (x_max - x_min) * 0.2  # 20% of visible range
+                center = (x_min + x_max) / 2
+                self._selection_region.setRegion([center - width / 2, center + width / 2])
+                self._selection_region.show()
+                region = list(self._selection_region.getRegion())
+                self._selected_indices = region
+                self.selection_changed.emit(self.dataset_id, region)
 
     def mousePressEvent(self, event):
         """클릭 시 활성화"""
@@ -563,6 +634,10 @@ class SideBySideLayout(QWidget):
             # Route view_range_changed through ViewSyncManager
             panel.view_range_changed.connect(
                 lambda src_id, xr, yr: self._view_sync_manager.on_source_range_changed(src_id, xr, yr)
+            )
+            # Route selection_changed through ViewSyncManager
+            panel.selection_changed.connect(
+                lambda src_id, region: self._view_sync_manager.on_source_selection_changed(src_id, region)
             )
             self._panels[dataset_id] = panel
             self._view_sync_manager.register_panel(dataset_id, panel)
