@@ -319,6 +319,7 @@ class GraphOptionsPanel(QFrame):
             ("📊 Bar", ChartType.BAR),
             ("⬤ Scatter", ChartType.SCATTER),
             ("▤ Area", ChartType.AREA),
+            ("🔀 Combination", ChartType.COMBINATION),
             ("📦 Box Plot", ChartType.BOX),
             ("🎻 Violin", ChartType.VIOLIN),
             ("🔥 Heatmap", ChartType.HEATMAP),
@@ -2821,7 +2822,7 @@ class GraphPanel(QWidget):
     def _connect_signals(self):
         self.state.chart_settings_changed.connect(self._on_chart_settings_changed)
         self.state.group_zone_changed.connect(self._on_group_changed)
-        self.state.value_zone_changed.connect(self.refresh)
+        self.state.value_zone_changed.connect(self._on_value_zone_changed)
         self.state.hover_zone_changed.connect(self.refresh)
         self.state.selection_changed.connect(self._on_selection_changed)
         self.options_panel.option_changed.connect(self.refresh)
@@ -2838,6 +2839,33 @@ class GraphPanel(QWidget):
 
         # Connect view range changes to update sliding windows
         self.main_graph.plotItem.sigRangeChanged.connect(self._on_graph_range_changed)
+
+    def _on_value_zone_changed(self):
+        """Handle value zone changes — auto-switch chart type for combo."""
+        num_values = len(self.state.value_columns)
+        current_type = self.state._chart_settings.chart_type
+
+        if num_values >= 2 and current_type != ChartType.COMBINATION:
+            # Auto-switch to Combination when 2+ value columns
+            self.state.set_chart_type(ChartType.COMBINATION)
+            # Update combo box UI without re-triggering signal
+            self.options_panel.chart_type_combo.blockSignals(True)
+            for i in range(self.options_panel.chart_type_combo.count()):
+                if self.options_panel.chart_type_combo.itemData(i) == ChartType.COMBINATION:
+                    self.options_panel.chart_type_combo.setCurrentIndex(i)
+                    break
+            self.options_panel.chart_type_combo.blockSignals(False)
+        elif num_values <= 1 and self.state._chart_settings.chart_type == ChartType.COMBINATION:
+            # Revert to Line when only 1 or 0 value columns
+            self.state.set_chart_type(ChartType.LINE)
+            self.options_panel.chart_type_combo.blockSignals(True)
+            for i in range(self.options_panel.chart_type_combo.count()):
+                if self.options_panel.chart_type_combo.itemData(i) == ChartType.LINE:
+                    self.options_panel.chart_type_combo.setCurrentIndex(i)
+                    break
+            self.options_panel.chart_type_combo.blockSignals(False)
+
+        self.refresh()
 
     def _on_filter_changed(self, filter_dict):
         """Handle filter changes from DataTab (Item 15)."""
