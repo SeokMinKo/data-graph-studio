@@ -408,6 +408,53 @@ class DataTab(QWidget):
         self._hover_scroll.setWidget(self._hover_container)
         self._main_layout.addWidget(self._hover_scroll)
 
+        self._main_layout.addWidget(_make_separator())
+
+        # --- Filter (Item 15) ------------------------------------------------
+        f_row, self._filter_badge = _make_section_header(
+            "Filter",
+            on_none=self._clear_filter,
+        )
+        self._main_layout.addLayout(f_row)
+
+        # Column selector
+        self._filter_col_combo = QComboBox()
+        self._filter_col_combo.setToolTip("Select column to filter on")
+        self._filter_col_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._filter_col_combo.currentIndexChanged.connect(self._on_filter_column_changed)
+        self._main_layout.addWidget(self._filter_col_combo)
+
+        # Select All / Deselect All buttons
+        filter_btn_row = QHBoxLayout()
+        filter_btn_row.setSpacing(4)
+        self._filter_select_all_btn = QPushButton("All")
+        self._filter_select_all_btn.setObjectName("smallButton")
+        self._filter_select_all_btn.setFixedHeight(20)
+        self._filter_select_all_btn.clicked.connect(self._filter_select_all)
+        filter_btn_row.addWidget(self._filter_select_all_btn)
+        self._filter_deselect_all_btn = QPushButton("None")
+        self._filter_deselect_all_btn.setObjectName("smallButton")
+        self._filter_deselect_all_btn.setFixedHeight(20)
+        self._filter_deselect_all_btn.clicked.connect(self._filter_deselect_all)
+        filter_btn_row.addWidget(self._filter_deselect_all_btn)
+        filter_btn_row.addStretch()
+        self._main_layout.addLayout(filter_btn_row)
+
+        # Values list (checkboxes)
+        self._filter_scroll = QScrollArea()
+        self._filter_scroll.setWidgetResizable(True)
+        self._filter_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._filter_scroll.setMaximumHeight(_FILTER_MAX_HEIGHT)
+        self._filter_scroll.setFrameShape(QFrame.NoFrame)
+
+        self._filter_container = QWidget()
+        self._filter_layout = QVBoxLayout(self._filter_container)
+        self._filter_layout.setContentsMargins(0, 0, 0, 0)
+        self._filter_layout.setSpacing(2)
+        self._filter_layout.addStretch()
+        self._filter_scroll.setWidget(self._filter_container)
+        self._main_layout.addWidget(self._filter_scroll)
+
         # Bottom stretch
         self._main_layout.addStretch()
 
@@ -466,6 +513,7 @@ class DataTab(QWidget):
         try:
             self._all_columns = list(columns)
             self._numeric_columns = set()
+            self._filter_engine = engine
 
             # Determine numeric columns
             if engine.df is not None:
@@ -477,6 +525,7 @@ class DataTab(QWidget):
             self._rebuild_y_list()
             self._rebuild_group_list()
             self._rebuild_hover_list()
+            self._rebuild_filter_combo()
 
             # Sync current state into the new widgets
             self._sync_from_state_internal()
@@ -563,6 +612,17 @@ class DataTab(QWidget):
             cb.stateChanged.connect(functools.partial(self._on_hover_check_sort, col))
             self._hover_checks[col] = cb
             self._hover_layout.insertWidget(self._hover_layout.count() - 1, cb)
+
+    def _rebuild_filter_combo(self) -> None:
+        """Rebuild the filter column combo box."""
+        self._filter_col_combo.blockSignals(True)
+        self._filter_col_combo.clear()
+        self._filter_col_combo.addItem("(None)")
+        for col in self._all_columns:
+            self._filter_col_combo.addItem(col)
+        self._filter_col_combo.blockSignals(False)
+        self._clear_filter_checks()
+        self._update_filter_badge()
 
     # -- Clear helpers -------------------------------------------------------
 
@@ -915,6 +975,110 @@ class DataTab(QWidget):
         finally:
             self.setUpdatesEnabled(True)
             self._syncing = False
+
+    # ==================================================================
+    # Filter section (Item 15)
+    # ==================================================================
+
+    def _on_filter_column_changed(self, index: int) -> None:
+        """Load unique values when filter column changes."""
+        self._clear_filter_checks()
+        col = self._filter_col_combo.currentText()
+        if not col or col == "(None)" or self._filter_engine is None:
+            self._update_filter_badge()
+            return
+
+        try:
+            df = self._filter_engine.df
+            if df is None or col not in df.columns:
+                return
+            # Get unique values (limit to 500)
+            unique_vals = df[col].drop_nulls().unique().sort().to_list()[:500]
+        except Exception:
+            unique_vals = []
+
+        for val in unique_vals:
+            label = str(val) if val is not None else "(null)"
+            cb = QCheckBox(label)
+            cb.setChecked(True)
+            cb.stateChanged.connect(self._on_filter_value_toggled)
+            self._filter_checks[label] = cb
+            self._filter_layout.insertWidget(self._filter_layout.count() - 1, cb)
+
+        self._update_filter_badge()
+
+    def _on_filter_value_toggled(self, _state: int) -> None:
+        """Emit filter_changed with current filter selections."""
+        if self._syncing:
+            return
+        self._emit_filter_signal()
+
+    def _emit_filter_signal(self) -> None:
+        col = self._filter_col_combo.currentText()
+        if not col or col == "(None)":
+            self.filter_changed.emit({})
+            return
+        selected = [label for label, cb in self._filter_checks.items() if cb.isChecked()]
+        if len(selected) == len(self._filter_checks):
+            # All selected → no filter
+            self.filter_changed.emit({})
+        else:
+            self.filter_changed.emit({col: selected})
+        self._update_filter_badge()
+
+    def _filter_select_all(self) -> None:
+        for cb in self._filter_checks.values():
+            cb.blockSignals(True)
+            cb.setChecked(True)
+            cb.blockSignals(False)
+        self._emit_filter_signal()
+
+    def _filter_deselect_all(self) -> None:
+        for cb in self._filter_checks.values():
+            cb.blockSignals(True)
+            cb.setChecked(False)
+            cb.blockSignals(False)
+        self._emit_filter_signal()
+
+    def _clear_filter(self) -> None:
+        """Reset filter column selection and clear all checks."""
+        self._clear_filter_checks()
+        self._filter_col_combo.blockSignals(True)
+        if self._filter_col_combo.count() > 0:
+            self._filter_col_combo.setCurrentIndex(0)
+        self._filter_col_combo.blockSignals(False)
+        self.filter_changed.emit({})
+        self._update_filter_badge()
+
+    def _clear_filter_checks(self) -> None:
+        for cb in self._filter_checks.values():
+            cb.setParent(None)
+            cb.deleteLater()
+        self._filter_checks.clear()
+
+    def _update_filter_badge(self) -> None:
+        n_checked = sum(1 for cb in self._filter_checks.values() if cb.isChecked())
+        total = len(self._filter_checks)
+        if self._filter_badge:
+            if total == 0:
+                self._filter_badge.setText("None")
+            elif n_checked == total:
+                self._filter_badge.setText("All")
+            else:
+                self._filter_badge.setText(f"{n_checked}/{total}")
+
+    def get_filter_selections(self) -> Dict[str, list]:
+        """Return current filter as {column: [selected_values]}.
+
+        Returns empty dict when no filter is active.
+        """
+        col = self._filter_col_combo.currentText()
+        if not col or col == "(None)" or not self._filter_checks:
+            return {}
+        selected = [label for label, cb in self._filter_checks.items() if cb.isChecked()]
+        if len(selected) == len(self._filter_checks):
+            return {}
+        return {col: selected}
 
     # ==================================================================
     # Column search / filter

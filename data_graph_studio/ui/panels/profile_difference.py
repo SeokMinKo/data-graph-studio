@@ -62,7 +62,11 @@ class ProfileDifferenceRenderer(QWidget):
 
     @staticmethod
     def can_difference(profiles: List["GraphSetting"]) -> bool:
-        """Check if exactly 2 profiles with same non-None x_column."""
+        """Check if exactly 2 profiles with same non-None x_column.
+
+        Returns False when X columns differ, triggering the X-axis
+        mismatch warning in the comparison controller.
+        """
         if len(profiles) != 2:
             return False
         return (
@@ -286,17 +290,33 @@ class ProfileDifferenceRenderer(QWidget):
         # Plot
         import pyqtgraph as pg
 
-        # Series A (blue)
+        # Read styles from profile chart_settings (Item 12)
+        def _style(gs, fallback_color, fallback_width=2):
+            cs = dict(gs.chart_settings) if gs.chart_settings else {}
+            color = cs.get("color", fallback_color)
+            width = cs.get("line_width", fallback_width)
+            vc = list(gs.value_columns)
+            if vc:
+                first = vc[0]
+                vc_color = first.get("color", None) if isinstance(first, dict) else getattr(first, "color", None)
+                if vc_color:
+                    color = vc_color
+            return color, int(width)
+
+        color_a, width_a = _style(gs_a, "#1f77b4")
+        color_b, width_b = _style(gs_b, "#ff7f0e")
+
+        # Series A
         self._plot_widget.plot(
             x_data, y_a,
-            pen=pg.mkPen("#1f77b4", width=2),
+            pen=pg.mkPen(color_a, width=width_a),
             name=f"A: {y_col_a}",
         )
 
-        # Series B (orange)
+        # Series B
         self._plot_widget.plot(
             x_data, y_b,
-            pen=pg.mkPen("#ff7f0e", width=2),
+            pen=pg.mkPen(color_b, width=width_b),
             name=f"B: {y_col_b}",
         )
 

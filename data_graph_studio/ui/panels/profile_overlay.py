@@ -179,6 +179,30 @@ class ProfileOverlayRenderer(QWidget):
         self._render()
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _get_profile_style(gs: "GraphSetting", fallback_color: str, fallback_width: int = 2):
+        """Extract line color/width from a GraphSetting's chart_settings.
+
+        Returns (color: str, width: int).
+        """
+        cs = gs.chart_settings if gs.chart_settings else {}
+        # chart_settings may be a MappingProxyType — dict() works on both
+        cs = dict(cs) if cs else {}
+        color = cs.get("color", fallback_color)
+        width = cs.get("line_width", fallback_width)
+        # Value columns may carry a color override
+        vc = list(gs.value_columns)
+        if vc:
+            first = vc[0]
+            vc_color = first.get("color", None) if isinstance(first, dict) else getattr(first, "color", None)
+            if vc_color:
+                color = vc_color
+        return color, int(width)
+
+    # ------------------------------------------------------------------
     # Internal rendering
     # ------------------------------------------------------------------
 
@@ -189,6 +213,13 @@ class ProfileOverlayRenderer(QWidget):
         import numpy as np
 
         self._plot_widget.clear()
+        # Clean up previous secondary ViewBox if any
+        if hasattr(self, "_secondary_vb") and self._secondary_vb is not None:
+            try:
+                self._plot_widget.scene().removeItem(self._secondary_vb)
+            except Exception:
+                pass
+            self._secondary_vb = None
 
         # Resolve profiles
         profiles: List["GraphSetting"] = []
@@ -198,6 +229,21 @@ class ProfileOverlayRenderer(QWidget):
                 profiles.append(gs)
 
         if not profiles:
+            return
+
+        # ---- X-axis validation (FR-11 강화) ----
+        x_cols = {p.x_column for p in profiles}
+        x_cols_non_none = x_cols - {None}
+        if len(x_cols_non_none) > 1:
+            # X columns differ → show warning, cannot overlay
+            if self._warning_label is not None:
+                mismatched = ", ".join(sorted(str(c) for c in x_cols_non_none))
+                self._warning_label.setText(
+                    f"⚠ X-axis mismatch ({mismatched}) — overlay disabled"
+                )
+                self._warning_label.setVisible(True)
+            if self._x_col_label is not None:
+                self._x_col_label.setText("")
             return
 
         # Determine shared X column
@@ -254,12 +300,16 @@ class ProfileOverlayRenderer(QWidget):
             if y_data is None:
                 continue
 
-            color = OVERLAY_COLORS[i % len(OVERLAY_COLORS)]
+            # Item 12: read style from profile's chart_settings
+            fallback_color = OVERLAY_COLORS[i % len(OVERLAY_COLORS)]
+            color, line_w = self._get_profile_style(gs, fallback_color)
+
             series_data.append({
                 "profile": gs,
                 "y_col": y_col,
                 "y_data": y_data,
                 "color": color,
+                "line_width": line_w,
                 "y_max": float(np.nanmax(np.abs(y_data))) if len(y_data) > 0 else 0.0,
             })
 
@@ -271,7 +321,14 @@ class ProfileOverlayRenderer(QWidget):
         if len(series_data) == 2:
             use_dual = self.needs_dual_axis(series_data[0]["y_max"], series_data[1]["y_max"])
 
+        if use_dual:
+            # Show right axis
+            self._plot_widget.showAxis("right")
+        else:
+            self._plot_widget.hideAxis("right") if hasattr(self._plot_widget, "hideAxis") else None
+
         # Plot each series
+        self._secondary_vb = None
         for idx, sd in enumerate(series_data):
             x_plot = x_data
             y_plot = sd["y_data"]
@@ -282,17 +339,32 @@ class ProfileOverlayRenderer(QWidget):
                 x_plot = x_plot[::step]
                 y_plot = y_plot[::step]
 
-            pen = pg.mkPen(sd["color"], width=2)
+            pen = pg.mkPen(sd["color"], width=sd["line_width"])
             label = f"{sd['profile'].name} ({sd['y_col']})"
 
             if use_dual and idx == 1:
                 # Second series on right Y axis
                 p2 = pg.ViewBox()
+                self._secondary_vb = p2
                 self._plot_widget.scene().addItem(p2)
-                self._plot_widget.getAxis("right").linkToView(p2)
-                self._plot_widget.getAxis("right").setLabel(sd["y_col"])
+                ax_right = self._plot_widget.getAxis("right")
+                ax_right.linkToView(p2)
+                ax_right.setLabel(sd["y_col"], color=sd["color"])
+                ax_right.setPen(pg.mkPen(sd["color"]))
                 p2.setXLink(self._plot_widget)
                 curve = pg.PlotCurveItem(x_plot, y_plot, pen=pen, name=label)
                 p2.addItem(curve)
+
+                # Sync secondary viewbox geometry with plot's viewbox
+                def _update_views():
+                    p2.setGeometry(self._plot_widget.getViewBox().sceneBoundingRect())
+                    p2.linkedViewChanged(self._plot_widget.getViewBox(), p2.XAxis)
+
+                self._plot_widget.getViewBox().sigResized.connect(_update_views)
+                _update_views()
             else:
                 self._plot_widget.plot(x_plot, y_plot, pen=pen, name=label)
+                if use_dual and idx == 0:
+                    # Label left axis with first series colour
+                    self._plot_widget.getAxis("left").setLabel(sd["y_col"], color=sd["color"])
+                    self._plot_widget.getAxis("left").setPen(pg.mkPen(sd["color"]))

@@ -2749,6 +2749,9 @@ class GraphPanel(QWidget):
         self._x_window_enabled = True
         self._y_window_enabled = True
 
+        # Active filter (Item 15): {col: [values]}
+        self._active_filter: Dict[str, list] = {}
+
         self._setup_ui()
         self._connect_signals()
 
@@ -2823,6 +2826,9 @@ class GraphPanel(QWidget):
         self.state.selection_changed.connect(self._on_selection_changed)
         self.options_panel.option_changed.connect(self.refresh)
 
+        # Filter signal from DataTab (Item 15)
+        self.options_panel.data_tab.filter_changed.connect(self._on_filter_changed)
+
         # Connect graph selection to state
         self.main_graph.points_selected.connect(self._on_graph_points_selected)
 
@@ -2832,6 +2838,11 @@ class GraphPanel(QWidget):
 
         # Connect view range changes to update sliding windows
         self.main_graph.plotItem.sigRangeChanged.connect(self._on_graph_range_changed)
+
+    def _on_filter_changed(self, filter_dict):
+        """Handle filter changes from DataTab (Item 15)."""
+        self._active_filter = dict(filter_dict) if filter_dict else {}
+        self.refresh()
 
     def _on_graph_points_selected(self, indices: list):
         """Handle selection from graph (rect select, lasso select)"""
@@ -2949,10 +2960,25 @@ class GraphPanel(QWidget):
             self._refresh_statistical_chart(chart_type, options, legend_settings)
             return
 
+
         # Get sampling settings from options
         show_all_data = options.get('show_all_data', False)
         max_points = options.get('max_points', 10000)
         sampling_algorithm = options.get('sampling_algorithm', 'auto')
+
+        # Apply filter (Item 15) — work on a filtered view of the DataFrame
+        working_df = self.engine.df
+        if self._active_filter and working_df is not None:
+            for f_col, f_vals in self._active_filter.items():
+                if f_col in working_df.columns and f_vals:
+                    # Cast filter values to match column dtype for robust comparison
+                    try:
+                        working_df = working_df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
+                    except Exception:
+                        pass
+            if len(working_df) == 0:
+                self.main_graph.clear_plot()
+                return
 
         # X column (from state, set by X Zone)
         x_col = self.state.x_column
@@ -2961,10 +2987,10 @@ class GraphPanel(QWidget):
 
         if not x_col:
             # In windowed mode, use visible rows for index to avoid length mismatch
-            if self.engine.is_windowed and self.engine.df is not None:
-                x_data = np.arange(len(self.engine.df))
+            if self.engine.is_windowed and working_df is not None:
+                x_data = np.arange(len(working_df))
             else:
-                x_data = np.arange(self.engine.row_count)
+                x_data = np.arange(len(working_df) if working_df is not None else self.engine.row_count)
             options['x_title'] = options.get('x_title') or 'Index'
         else:
             # Check if X column is categorical
@@ -2975,10 +3001,10 @@ class GraphPanel(QWidget):
                 x_categorical_labels = self.engine.get_unique_values(x_col, limit=500)
                 # Map values to indices
                 value_to_idx = {v: i for i, v in enumerate(x_categorical_labels)}
-                x_raw = self.engine.df[x_col].to_list()
+                x_raw = working_df[x_col].to_list()
                 x_data = np.array([value_to_idx.get(v, 0) for v in x_raw], dtype=np.float64)
             else:
-                x_data = self.engine.df[x_col].to_numpy()
+                x_data = working_df[x_col].to_numpy()
 
             options['x_title'] = options.get('x_title') or x_col
 
@@ -3000,6 +3026,12 @@ class GraphPanel(QWidget):
                         self._x_axis.set_categorical(x_categorical_labels)
             except Exception:
                 pass
+
+        # Item 14: combo chart when 2+ Y columns are selected
+        if len(self.state.value_columns) >= 2 and not self.state.group_columns:
+            self._refresh_combo_chart(working_df, x_data, x_col, x_categorical_labels,
+                                       x_is_categorical, options, legend_settings)
+            return
 
         # Y column
         y_formula = ""
@@ -3032,10 +3064,10 @@ class GraphPanel(QWidget):
             y_categorical_labels = self.engine.get_unique_values(y_col_name, limit=500)
             # Map values to indices
             value_to_idx = {v: i for i, v in enumerate(y_categorical_labels)}
-            y_raw = self.engine.df[y_col_name].to_list()
+            y_raw = working_df[y_col_name].to_list()
             y_data = np.array([value_to_idx.get(v, 0) for v in y_raw], dtype=np.float64)
         else:
-            y_data = self.engine.df[y_col_name].to_numpy()
+            y_data = working_df[y_col_name].to_numpy()
 
         # Apply Y formula if specified
         if y_formula and not y_is_categorical:
@@ -3049,7 +3081,7 @@ class GraphPanel(QWidget):
         # Groups
         groups = None
         if self.state.group_columns:
-            groups = self._build_group_masks()
+            groups = self._build_group_masks(working_df)
 
         # Total points for status display
         total_points = len(x_data)
@@ -3222,8 +3254,8 @@ class GraphPanel(QWidget):
         if hover_columns:
             hover_data = {}
             for col in hover_columns:
-                if col in self.engine.df.columns:
-                    col_data = self.engine.df[col].to_list()
+                if col in working_df.columns:
+                    col_data = working_df[col].to_list()
                     # Apply same sampling if needed
                     if len(col_data) > max_points and len(x_sampled) < len(col_data):
                         # Simple downsampling for hover data
@@ -3358,6 +3390,130 @@ class GraphPanel(QWidget):
             print(f"Error applying formula '{formula}': {e}")
             return y_data
 
+    # ==================== Combo Chart (Item 14) ====================
+
+    def _refresh_combo_chart(self, working_df, x_data, x_col, x_categorical_labels,
+                              x_is_categorical, options, legend_settings):
+        """Render combo chart with dual Y axes for multiple value columns."""
+        self.main_graph.clear_plot()
+
+        if working_df is None:
+            return
+
+        value_cols = self.state.value_columns
+        chart_type = options.get('chart_type', ChartType.LINE)
+        bg_color = options.get('bg_color', QColor('#323D4A'))
+        self.main_graph.setBackground(bg_color.name())
+        line_width = options.get('line_width', 2)
+
+        default_colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+        ]
+
+        # Apply axis options
+        self.main_graph.setLabel('bottom', options.get('x_title') or x_col or 'Index',
+                                 **{'font-size': '14px', 'color': '#E2E8F0'})
+        if x_categorical_labels:
+            self.main_graph._x_axis.set_categorical(x_categorical_labels)
+        else:
+            self.main_graph._x_axis.clear_categorical()
+
+        grid_x = options.get('grid_x', True)
+        grid_y = options.get('grid_y', True)
+        grid_alpha = options.get('grid_opacity', 0.3)
+        self.main_graph.showGrid(x=grid_x, y=grid_y, alpha=grid_alpha)
+
+        title = options.get('title')
+        if title:
+            self.main_graph.setTitle(title)
+
+        # Legend
+        if legend_settings.get('show', True):
+            self.main_graph.legend.show()
+        else:
+            self.main_graph.legend.hide()
+
+        # Secondary ViewBox for dual axis
+        secondary_vb = None
+
+        for idx, vc in enumerate(value_cols):
+            y_col_name = vc.name
+            if y_col_name not in working_df.columns:
+                continue
+
+            y_data = working_df[y_col_name].to_numpy()
+            formula = vc.formula or ""
+            if formula:
+                y_data = self._apply_y_formula(y_data, formula, y_col_name)
+
+            color = vc.color or default_colors[idx % len(default_colors)]
+            pen = pg.mkPen(color, width=line_width)
+            label = y_col_name
+            if formula:
+                label = f"{y_col_name} [{formula}]"
+
+            if idx == 0:
+                # Primary axis (left)
+                self.main_graph.setLabel('left', label, color=color, **{'font-size': '14px'})
+                self.main_graph.getAxis('left').setPen(pg.mkPen(color))
+
+                if chart_type == ChartType.BAR:
+                    w = (x_data.max() - x_data.min()) / len(x_data) * 0.4 if len(x_data) > 1 else 0.4
+                    bar = pg.BarGraphItem(x=x_data - w/2, height=y_data, width=w,
+                                          brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 160),
+                                          name=label)
+                    self.main_graph.addItem(bar)
+                    self.main_graph._plot_items.append(bar)
+                elif chart_type == ChartType.SCATTER:
+                    sc = pg.ScatterPlotItem(x_data, y_data, size=options.get('marker_size', 6),
+                                            brush=pg.mkBrush(color), name=label)
+                    self.main_graph.addItem(sc)
+                    self.main_graph._scatter_items.append(sc)
+                else:
+                    item = self.main_graph.plot(x_data, y_data, pen=pen, name=label)
+                    self.main_graph._plot_items.append(item)
+
+                self.main_graph._data_x = x_data
+                self.main_graph._data_y = y_data
+
+            elif idx == 1:
+                # Secondary axis (right)
+                self.main_graph.showAxis('right')
+                ax_right = self.main_graph.getAxis('right')
+                ax_right.setLabel(label, color=color)
+                ax_right.setPen(pg.mkPen(color))
+
+                secondary_vb = pg.ViewBox()
+                self.main_graph.scene().addItem(secondary_vb)
+                ax_right.linkToView(secondary_vb)
+                secondary_vb.setXLink(self.main_graph)
+
+                curve = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label)
+                secondary_vb.addItem(curve)
+
+                def _sync_vb():
+                    secondary_vb.setGeometry(self.main_graph.getViewBox().sceneBoundingRect())
+                    secondary_vb.linkedViewChanged(self.main_graph.getViewBox(), secondary_vb.XAxis)
+
+                self.main_graph.getViewBox().sigResized.connect(_sync_vb)
+                _sync_vb()
+            else:
+                # 3rd+ series: add to primary axis
+                item = self.main_graph.plot(x_data, y_data, pen=pen, name=label)
+                self.main_graph._plot_items.append(item)
+
+        # Update series names for legend
+        series_names = [vc.name for vc in value_cols if vc.name in working_df.columns]
+        self.options_panel.set_series(series_names)
+
+        # Stats for first Y column
+        if value_cols and value_cols[0].name in working_df.columns:
+            y_first = working_df[value_cols[0].name].to_numpy()
+            self.stat_panel.update_histograms(x_data, y_first)
+            stats = self.engine.get_statistics(value_cols[0].name)
+            self.stat_panel.update_stats(stats)
+
     def _refresh_statistical_chart(self, chart_type: ChartType, options: Dict, legend_settings: Dict):
         """Render Box Plot, Violin Plot, or Heatmap using specialised chart classes."""
         self.main_graph.clear_plot()
@@ -3365,6 +3521,17 @@ class GraphPanel(QWidget):
         df = self.engine.df
         if df is None:
             return
+
+        # Apply filter (Item 15)
+        if self._active_filter:
+            for f_col, f_vals in self._active_filter.items():
+                if f_col in df.columns and f_vals:
+                    try:
+                        df = df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
+                    except Exception:
+                        pass
+            if len(df) == 0:
+                return
 
         # Determine category (X/Group) and value (Y) columns
         x_col = self.state.x_column
@@ -3564,10 +3731,7 @@ class GraphPanel(QWidget):
             path_x = np.concatenate([left_x, right_x[::-1]])
             path_y = np.concatenate([x_arr, x_arr[::-1]])
 
-            fill_item = pg.PlotCurveItem(path_x, path_y, pen=pg.mkPen(color, width=1.5),
-                                         fillLevel=None,
-                                         brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 60))
-            # Use fill between for polygon
+            # Use QPainterPath polygon for violin shape
             from PySide6.QtGui import QPainterPath, QPolygonF
             from PySide6.QtCore import QPointF
             poly = QPolygonF([QPointF(float(px), float(py)) for px, py in zip(path_x, path_y)])
@@ -3914,11 +4078,11 @@ class GraphPanel(QWidget):
         except Exception as e:
             print(f"Error updating stats for selection: {e}")
     
-    def _build_group_masks(self) -> Dict[str, np.ndarray]:
+    def _build_group_masks(self, df_override=None) -> Dict[str, np.ndarray]:
         if not self.state.group_columns or not self.engine.is_loaded:
             return None
         
-        df = self.engine.df
+        df = df_override if df_override is not None else self.engine.df
         n_rows = len(df)
         group_cols = [g.name for g in self.state.group_columns]
         groups = {}
