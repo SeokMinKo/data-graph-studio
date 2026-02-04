@@ -1446,7 +1446,7 @@ class TablePanel(QWidget):
         self.agg_combo.setMinimumWidth(80)
         self.agg_combo.setMaximumWidth(120)
         self.agg_combo.setToolTip("Aggregation function")
-        from ..core.state import AggregationType
+        from ...core.state import AggregationType
         for agg in AggregationType:
             self.agg_combo.addItem(agg.value.capitalize(), agg.value)
         self.agg_combo.setCurrentText("Sum")
@@ -1802,7 +1802,7 @@ class TablePanel(QWidget):
 
     def _on_agg_combo_changed(self):
         """Aggregation 변경 시 현재 value_columns의 aggregation 업데이트"""
-        from ..core.state import AggregationType
+        from ...core.state import AggregationType
         agg_text = self.agg_combo.currentData()
         if not agg_text:
             return
