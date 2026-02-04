@@ -4,6 +4,16 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.15.0] — 2026-02-04
+
+### ✨ Features
+
+- Compare 전용 툴바 — Grid Layout(Row/Column/2×2) + Sync 토글(X/Y/Zoom/Selection) ([`8a79db8`](../../commit/8a79db8))
+- Side-by-Side 비교 시 프로파일 그래프 설정 반영 — scatter, bar, line + group_by + 전체 value_columns ([`8a79db8`](../../commit/8a79db8))
+- View 메뉴에서 Compare Toolbar 토글 가능, Compare 모드 진입/종료 시 자동 show/hide ([`8a79db8`](../../commit/8a79db8))
+
+---
+
 ## [v0.14.4] — 2026-02-04
 
 ### 🐛 Bug Fixes
