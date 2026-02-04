@@ -14,10 +14,10 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget
+    QInputDialog, QTabWidget, QColorDialog, QPushButton
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
 
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
 from ..core.state import AppState, ToolMode, ChartType, ComparisonMode, AggregationType
@@ -618,6 +618,16 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda checked, m=mode: self.state.set_tool_mode(m))
             toolbar.addAction(action)
             self._tool_actions[mode] = action
+
+        # Draw color picker button
+        self._draw_color = QColor("#FF0000")
+        self._draw_color_btn = QPushButton()
+        self._draw_color_btn.setFixedSize(24, 24)
+        self._draw_color_btn.setCursor(Qt.PointingHandCursor)
+        self._draw_color_btn.setToolTip("Draw Color — click to change")
+        self._draw_color_btn.clicked.connect(self._on_draw_color_pick)
+        self._update_draw_color_btn()
+        toolbar.addWidget(self._draw_color_btn)
 
         toolbar.addSeparator()
 
@@ -4433,6 +4443,31 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     def _on_clear_drawings(self):
         if hasattr(self, 'graph_panel') and self.graph_panel is not None:
             self.graph_panel.clear_drawings()
+
+    def _on_draw_color_pick(self):
+        """Open color picker for draw color"""
+        color = QColorDialog.getColor(
+            self._draw_color, self, "Draw Color"
+        )
+        if color.isValid():
+            self._draw_color = color
+            self._update_draw_color_btn()
+            # Apply to graph panel's current drawing style
+            if hasattr(self, 'graph_panel') and self.graph_panel is not None:
+                self.graph_panel.set_drawing_color(color.name())
+
+    def _update_draw_color_btn(self):
+        """Update draw color button appearance"""
+        self._draw_color_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {self._draw_color.name()};
+                border: 2px solid #3E4A59;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                border-color: #59B8E3;
+            }}
+        """)
 
     # ============================================================
     # New Menu Action Methods (View Menu - Table Elements)

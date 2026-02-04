@@ -2009,82 +2009,11 @@ class MainGraph(pg.PlotWidget):
         self.setLogMode(x=False, y=False)
     
     def _on_mouse_clicked(self, event):
-        """Handle mouse click for selection"""
-        if self.state.tool_mode in [ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT]:
-            pos = event.scenePos()
-            mouse_point = self.plotItem.vb.mapSceneToView(pos)
-
-            if event.button() == Qt.LeftButton:
-                if not self._is_selecting:
-                    # Start selection
-                    self._selection_start = mouse_point
-                    self._is_selecting = True
-
-                    # Store start position for rect (important for _finish_selection)
-                    self._rect_start_x = mouse_point.x()
-                    self._rect_start_y = mouse_point.y()
-
-                    # Create selection rectangle
-                    if self._selection_roi is not None:
-                        self.removeItem(self._selection_roi)
-
-                    self._selection_roi = pg.RectROI(
-                        [mouse_point.x(), mouse_point.y()],
-                        [0, 0],
-                        pen=pg.mkPen('b', width=2, style=Qt.DashLine),
-                        movable=False,
-                        resizable=False
-                    )
-                    self._selection_roi.setPen(pg.mkPen((99, 102, 241), width=2, style=Qt.DashLine))
-                    self.addItem(self._selection_roi)
-                else:
-                    # Finish selection
-                    self._finish_selection(mouse_point)
-
-    def _finish_selection(self, end_point):
-        """Finish rectangle selection and select points within"""
-        if self._data_x is None or self._data_y is None:
-            self._is_selecting = False
-            return
-
-        if not hasattr(self, '_rect_start_x'):
-            self._is_selecting = False
-            return
-
-        # Get selection bounds using stored start position
-        start_x = self._rect_start_x
-        start_y = self._rect_start_y
-        end_x = end_point.x()
-        end_y = end_point.y()
-
-        x1 = min(start_x, end_x)
-        x2 = max(start_x, end_x)
-        y1 = min(start_y, end_y)
-        y2 = max(start_y, end_y)
-
-        # Find points within selection
-        selected_indices = []
-        for i in range(len(self._data_x)):
-            x, y = self._data_x[i], self._data_y[i]
-            if x1 <= x <= x2 and y1 <= y <= y2:
-                selected_indices.append(i)
-
-        # Emit selection signal
-        if selected_indices:
-            self.points_selected.emit(selected_indices)
-            self.state.select_rows(selected_indices)
-
-        # Clean up selection ROI
-        if self._selection_roi is not None:
-            self.removeItem(self._selection_roi)
-            self._selection_roi = None
-
-        self._is_selecting = False
-        self._selection_start = None
-        if hasattr(self, '_rect_start_x'):
-            del self._rect_start_x
-        if hasattr(self, '_rect_start_y'):
-            del self._rect_start_y
+        """Handle mouse click - selection/drawing is handled via press/move/release"""
+        # Selection and drawing modes are fully handled by
+        # mousePressEvent / mouseMoveEvent / mouseReleaseEvent.
+        # This handler is kept for potential future single-click actions.
+        pass
 
     def mousePressEvent(self, event):
         """Handle mouse press for selection drag"""
@@ -2217,7 +2146,9 @@ class MainGraph(pg.PlotWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        """Handle mouse release for selection"""
+        """Handle mouse release for selection, drawing, and view range recording"""
+        handled = False
+
         if self._is_selecting and self.state.tool_mode == ToolMode.RECT_SELECT:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
@@ -2226,13 +2157,13 @@ class MainGraph(pg.PlotWidget):
                     self._finish_rect_selection(pos)
 
                 event.accept()
-                return
+                handled = True
                 
         elif self._is_selecting and self.state.tool_mode == ToolMode.LASSO_SELECT:
             if event.button() == Qt.LeftButton:
                 self._finish_lasso_selection()
                 event.accept()
-                return
+                handled = True
         
         # Drawing mode finish
         elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW, 
@@ -2242,9 +2173,13 @@ class MainGraph(pg.PlotWidget):
                 pos = self.plotItem.vb.mapSceneToView(event.position())
                 self._finish_drawing(pos.x(), pos.y())
                 event.accept()
-                return
+                handled = True
 
-        super().mouseReleaseEvent(event)
+        if not handled:
+            super().mouseReleaseEvent(event)
+
+        # Always record view range after release
+        self.push_view_range()
     
     def _finish_rect_selection(self, end_point):
         """Finish rectangle selection"""
@@ -2491,10 +2426,7 @@ class MainGraph(pg.PlotWidget):
         self._view_range_recording = True
         return True
 
-    def mouseReleaseEvent(self, event):
-        """마우스 릴리즈 시 view range 기록"""
-        super().mouseReleaseEvent(event)
-        self.push_view_range()
+    # mouseReleaseEvent is defined above (merged with selection/drawing handling)
 
     def wheelEvent(self, event):
         """휠 줌 후 view range 기록"""
@@ -2794,8 +2726,12 @@ class GraphPanel(QWidget):
 
         layout.addWidget(self.splitter)
 
-        # Initialize DrawingManager
+        # Initialize DrawingManager with a visible default color
         self._drawing_manager = DrawingManager(self.main_graph)
+        self._drawing_manager.current_style.stroke_color = "#FF0000"
+        self._drawing_manager.current_style.stroke_width = 2.0
+        self.main_graph._current_drawing_style.stroke_color = "#FF0000"
+        self.main_graph._current_drawing_style.stroke_width = 2.0
         self.main_graph.set_drawing_manager(self._drawing_manager)
     
     def _connect_signals(self):
@@ -3761,6 +3697,11 @@ class GraphPanel(QWidget):
         """Set the current drawing style for new drawings"""
         self._drawing_manager.current_style = style
         self.main_graph.set_drawing_style(style)
+
+    def set_drawing_color(self, color_hex: str):
+        """Set the stroke color for new drawings"""
+        self._drawing_manager.current_style.stroke_color = color_hex
+        self.main_graph._current_drawing_style.stroke_color = color_hex
 
     def get_drawings_data(self) -> Dict[str, Any]:
         """Get all drawings as serializable dict (for saving)"""
