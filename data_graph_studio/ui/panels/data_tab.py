@@ -104,7 +104,7 @@ def _is_numeric_dtype(dtype_str: str) -> bool:
 # ---------------------------------------------------------------------------
 
 class _SearchableColumnPicker(QWidget):
-    """Editable QComboBox that acts as a searchable column picker.
+    """Searchable combo: type to filter (contains match), click arrow for full dropdown.
 
     When the user selects a column (Enter or click), ``column_selected``
     is emitted and the text is cleared.
@@ -125,8 +125,21 @@ class _SearchableColumnPicker(QWidget):
         self._combo.setMinimumHeight(28)
         if self._combo.lineEdit():
             self._combo.lineEdit().setPlaceholderText(placeholder)
+
+        # Contains-match completer for search-as-you-type
+        self._completer = QCompleter()
+        self._completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._completer.setFilterMode(Qt.MatchContains)
+        self._completer.setCompletionMode(QCompleter.PopupCompletion)
+        self._combo.setCompleter(self._completer)
+
         self._combo.activated.connect(self._on_activated)
+        # Also handle completer selection (Enter on filtered result)
+        self._completer.activated.connect(self._on_completer_activated)
         layout.addWidget(self._combo)
+
+        self._model = QStringListModel()
+        self._completer.setModel(self._model)
 
         self._all_items: List[str] = []
         self._excluded: Set[str] = set()
@@ -142,18 +155,26 @@ class _SearchableColumnPicker(QWidget):
         self._refresh_combo()
 
     def _refresh_combo(self) -> None:
+        visible = [item for item in self._all_items if item not in self._excluded]
         self._combo.blockSignals(True)
         self._combo.clear()
-        for item in self._all_items:
-            if item not in self._excluded:
-                self._combo.addItem(item)
+        for item in visible:
+            self._combo.addItem(item)
         self._combo.setCurrentIndex(-1)
         if self._combo.lineEdit():
             self._combo.lineEdit().clear()
         self._combo.blockSignals(False)
+        # Update completer model
+        self._model.setStringList(visible)
 
     def _on_activated(self, index: int) -> None:
         text = self._combo.itemText(index)
+        self._emit_selection(text)
+
+    def _on_completer_activated(self, text: str) -> None:
+        self._emit_selection(text)
+
+    def _emit_selection(self, text: str) -> None:
         if text and text not in self._excluded:
             self.column_selected.emit(text)
             # Clear text after selection
@@ -427,28 +448,46 @@ class DataTab(QWidget):
         )
         self._main_layout.addLayout(f_row)
 
-        # Column selector
+        # Column selector (searchable combo)
         self._filter_col_combo = QComboBox()
         self._filter_col_combo.setEditable(True)
         self._filter_col_combo.setInsertPolicy(QComboBox.NoInsert)
-        self._filter_col_combo.setToolTip("Select column to filter on")
+        self._filter_col_combo.setToolTip("Select column to filter on (type to search)")
         self._filter_col_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._filter_col_combo.setMinimumHeight(28)
         if self._filter_col_combo.lineEdit():
             self._filter_col_combo.lineEdit().setPlaceholderText("🔍 Search columns...")
+        # Contains-match completer
+        self._filter_col_completer = QCompleter()
+        self._filter_col_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._filter_col_completer.setFilterMode(Qt.MatchContains)
+        self._filter_col_completer.setCompletionMode(QCompleter.PopupCompletion)
+        self._filter_col_model = QStringListModel()
+        self._filter_col_completer.setModel(self._filter_col_model)
+        self._filter_col_combo.setCompleter(self._filter_col_completer)
         self._filter_col_combo.currentIndexChanged.connect(self._on_filter_column_changed)
+        self._filter_col_completer.activated.connect(self._on_filter_col_completer_activated)
         self._main_layout.addWidget(self._filter_col_combo)
 
-        # Value selector
+        # Value selector (searchable combo)
         self._filter_val_combo = QComboBox()
         self._filter_val_combo.setEditable(True)
         self._filter_val_combo.setInsertPolicy(QComboBox.NoInsert)
-        self._filter_val_combo.setToolTip("Select value to add as filter")
+        self._filter_val_combo.setToolTip("Select value to add as filter (type to search)")
         self._filter_val_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._filter_val_combo.setMinimumHeight(28)
         if self._filter_val_combo.lineEdit():
             self._filter_val_combo.lineEdit().setPlaceholderText("🔍 Search values...")
+        # Contains-match completer
+        self._filter_val_completer = QCompleter()
+        self._filter_val_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._filter_val_completer.setFilterMode(Qt.MatchContains)
+        self._filter_val_completer.setCompletionMode(QCompleter.PopupCompletion)
+        self._filter_val_model = QStringListModel()
+        self._filter_val_completer.setModel(self._filter_val_model)
+        self._filter_val_combo.setCompleter(self._filter_val_completer)
         self._filter_val_combo.activated.connect(self._on_filter_value_selected)
+        self._filter_val_completer.activated.connect(self._on_filter_val_completer_activated)
         self._main_layout.addWidget(self._filter_val_combo)
 
         # [All] [None] buttons
@@ -695,10 +734,13 @@ class DataTab(QWidget):
         if self._filter_col_combo.lineEdit():
             self._filter_col_combo.lineEdit().clear()
         self._filter_col_combo.blockSignals(False)
+        # Update completer model
+        self._filter_col_model.setStringList(list(self._all_columns))
 
         self._filter_val_combo.blockSignals(True)
         self._filter_val_combo.clear()
         self._filter_val_combo.blockSignals(False)
+        self._filter_val_model.setStringList([])
         self._filter_unique_vals = []
         self._update_filter_badge()
 
@@ -1108,14 +1150,16 @@ class DataTab(QWidget):
 
         # Exclude already-selected values for this column
         already_selected = set(self._filter_data.get(col, []))
+        visible_vals = [val for val in unique_vals if val not in already_selected]
         self._filter_val_combo.blockSignals(True)
-        for val in unique_vals:
-            if val not in already_selected:
-                self._filter_val_combo.addItem(val)
+        for val in visible_vals:
+            self._filter_val_combo.addItem(val)
         self._filter_val_combo.setCurrentIndex(-1)
         if self._filter_val_combo.lineEdit():
             self._filter_val_combo.lineEdit().clear()
         self._filter_val_combo.blockSignals(False)
+        # Update completer model
+        self._filter_val_model.setStringList(visible_vals)
 
     def _on_filter_value_selected(self, index: int) -> None:
         """User selected a value from the filter value combo."""
@@ -1142,6 +1186,39 @@ class DataTab(QWidget):
         if self._filter_val_combo.lineEdit():
             self._filter_val_combo.lineEdit().clear()
 
+        self._emit_filter_signal()
+        self._update_filter_badge()
+
+    def _on_filter_col_completer_activated(self, text: str) -> None:
+        """Handle filter column selection via completer (typed search)."""
+        idx = self._filter_col_combo.findText(text)
+        if idx >= 0:
+            self._filter_col_combo.setCurrentIndex(idx)
+            # currentIndexChanged will fire and call _on_filter_column_changed
+
+    def _on_filter_val_completer_activated(self, text: str) -> None:
+        """Handle filter value selection via completer (typed search)."""
+        col = self._filter_col_combo.currentText()
+        if not text or not col:
+            return
+        # Reuse the same logic as _on_filter_value_selected
+        if col not in self._filter_data:
+            self._filter_data[col] = []
+        if text not in self._filter_data[col]:
+            self._filter_data[col].append(text)
+            display = f"{col} = {text}"
+            self._filter_listbox.add_item(display)
+            idx = self._filter_val_combo.findText(text)
+            if idx >= 0:
+                self._filter_val_combo.removeItem(idx)
+            # Update completer model
+            current_vals = self._filter_val_model.stringList()
+            if text in current_vals:
+                current_vals.remove(text)
+                self._filter_val_model.setStringList(current_vals)
+        self._filter_val_combo.setCurrentIndex(-1)
+        if self._filter_val_combo.lineEdit():
+            self._filter_val_combo.lineEdit().clear()
         self._emit_filter_signal()
         self._update_filter_badge()
 
