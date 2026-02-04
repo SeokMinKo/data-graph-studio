@@ -3529,8 +3529,9 @@ class GraphPanel(QWidget):
                              line_width, marker_size, marker_border, graph, options):
         """Render a single series in combo chart on the given graph widget."""
         if col_chart_type == "bar":
-            w = (x_data.max() - x_data.min()) / len(x_data) * 0.4 if len(x_data) > 1 else 0.4
+            w = (x_data.max() - x_data.min()) / len(x_data) * 0.8 if len(x_data) > 1 else 0.8
             bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
+                                  pen=pg.mkPen(color, width=0.5),
                                   brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 160),
                                   name=label)
             graph.addItem(bar)
@@ -3555,8 +3556,9 @@ class GraphPanel(QWidget):
                                 line_width, marker_size, marker_border, vb, graph, options):
         """Render a single series in combo chart on a secondary ViewBox."""
         if col_chart_type == "bar":
-            w = (x_data.max() - x_data.min()) / len(x_data) * 0.4 if len(x_data) > 1 else 0.4
+            w = (x_data.max() - x_data.min()) / len(x_data) * 0.8 if len(x_data) > 1 else 0.8
             bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
+                                  pen=pg.mkPen(color, width=0.5),
                                   brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 160),
                                   name=label)
             vb.addItem(bar)
