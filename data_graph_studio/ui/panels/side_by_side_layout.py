@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QPushButton
 )
 from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QColor
 
 from ...core.data_engine import DataEngine
 from ...core.state import AppState, ComparisonMode
@@ -55,6 +56,12 @@ class MiniGraphWidget(QWidget):
         self._selected_indices: list = []
         self._selection_region = None  # LinearRegionItem for drag selection
         self._is_selection_syncing = False  # selection sync guard
+
+        # Rect selection state
+        self._rect_selecting = False
+        self._rect_start = None  # (x, y) in view coords
+        self._rect_roi = None    # QGraphicsRectItem for visual feedback
+        self._current_tool_mode = None
 
         self._setup_ui()
 
@@ -481,44 +488,142 @@ class MiniGraphWidget(QWidget):
         if self.plot_widget is not None:
             self.plot_widget.getViewBox().autoRange()
 
+    def _remove_rect_roi(self, roi):
+        """Remove a rect selection ROI from the plot."""
+        try:
+            if self.plot_widget is not None and roi is not None:
+                self.plot_widget.removeItem(roi)
+                if self._rect_roi is roi:
+                    self._rect_roi = None
+        except (RuntimeError, ValueError):
+            pass
+
     def set_tool_mode(self, mode) -> None:
         """Apply tool mode from toolbar.
 
         Supported:
-          RECT_SELECT / LASSO_SELECT → enable selection region drag.
+          RECT_SELECT / LASSO_SELECT → rect drag selection on the plot.
           ZOOM / PAN → normal pyqtgraph interaction.
           Draw modes → ignored (not supported in mini graph).
         """
         from ...core.state import ToolMode
+
+        self._current_tool_mode = mode
 
         if self.plot_widget is None:
             return
 
         vb = self.plot_widget.getViewBox()
 
+        # Clean up any in-progress rect selection
+        self._rect_selecting = False
+        self._rect_start = None
+        if self._rect_roi is not None:
+            self.plot_widget.removeItem(self._rect_roi)
+            self._rect_roi = None
+
         if mode in (ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT):
-            # Show selection region at center if hidden
-            if self._selection_region is not None and not self._selection_region.isVisible():
-                view_range = vb.viewRange()
-                x_min, x_max = view_range[0]
-                width = (x_max - x_min) * 0.2
-                center = (x_min + x_max) / 2
-                self._selection_region.setRegion([center - width / 2, center + width / 2])
-                self._selection_region.show()
-                region = list(self._selection_region.getRegion())
-                self._selected_indices = region
-                self.selection_changed.emit(self.dataset_id, region)
-            # Disable pan so region drag works
+            # Disable default pan/zoom so our mouse events work
             vb.setMouseEnabled(x=False, y=False)
+            # Install event filter on the plot widget for mouse events
+            self.plot_widget.viewport().installEventFilter(self)
         elif mode == ToolMode.PAN:
             vb.setMouseEnabled(x=True, y=True)
             vb.setMouseMode(vb.PanMode)
+            self.plot_widget.viewport().removeEventFilter(self)
         elif mode == ToolMode.ZOOM:
             vb.setMouseEnabled(x=True, y=True)
             vb.setMouseMode(vb.RectMode)
+            self.plot_widget.viewport().removeEventFilter(self)
         else:
             # Draw modes — not supported, just re-enable normal interaction
             vb.setMouseEnabled(x=True, y=True)
+            self.plot_widget.viewport().removeEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        """Handle mouse events for rect selection in MiniGraphWidget."""
+        from PySide6.QtCore import QEvent
+        from ...core.state import ToolMode
+        import pyqtgraph as pg
+
+        if self.plot_widget is None or self._current_tool_mode not in (
+            ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT
+        ):
+            return super().eventFilter(obj, event)
+
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            pos = self.plot_widget.getViewBox().mapSceneToView(
+                self.plot_widget.mapToScene(event.position().toPoint())
+            )
+            self._rect_start = (pos.x(), pos.y())
+            self._rect_selecting = True
+
+            # Remove old rect
+            if self._rect_roi is not None:
+                self.plot_widget.removeItem(self._rect_roi)
+                self._rect_roi = None
+
+            return True
+
+        elif event.type() == QEvent.MouseMove and self._rect_selecting:
+            pos = self.plot_widget.getViewBox().mapSceneToView(
+                self.plot_widget.mapToScene(event.position().toPoint())
+            )
+            x1, y1 = self._rect_start
+            x2, y2 = pos.x(), pos.y()
+
+            rx = min(x1, x2)
+            ry = min(y1, y2)
+            rw = abs(x2 - x1)
+            rh = abs(y2 - y1)
+
+            # Update visual rect
+            if self._rect_roi is not None:
+                self.plot_widget.removeItem(self._rect_roi)
+
+            from PySide6.QtWidgets import QGraphicsRectItem
+            from PySide6.QtGui import QBrush
+
+            rect = QGraphicsRectItem(rx, ry, rw, rh)
+            rect.setPen(pg.mkPen((99, 102, 241), width=2, style=Qt.DashLine))
+            rect.setBrush(QBrush(QColor(99, 102, 241, 30)))
+            self.plot_widget.addItem(rect)
+            self._rect_roi = rect
+
+            return True
+
+        elif event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton and self._rect_selecting:
+            pos = self.plot_widget.getViewBox().mapSceneToView(
+                self.plot_widget.mapToScene(event.position().toPoint())
+            )
+            self._finish_rect_selection(pos.x(), pos.y())
+            return True
+
+        return super().eventFilter(obj, event)
+
+    def _finish_rect_selection(self, end_x: float, end_y: float):
+        """Finish rectangle selection and emit selected region."""
+        if self._rect_start is None:
+            self._rect_selecting = False
+            return
+
+        x1, y1 = self._rect_start
+        x_min = min(x1, end_x)
+        x_max = max(x1, end_x)
+
+        # Emit selection as x-range (compatible with ViewSyncManager)
+        self._selected_indices = [x_min, x_max]
+        self.selection_changed.emit(self.dataset_id, [x_min, x_max])
+
+        # Clean up
+        self._rect_selecting = False
+        self._rect_start = None
+
+        # Keep the rect visible briefly, then auto-remove after 2s
+        if self._rect_roi is not None:
+            from PySide6.QtCore import QTimer
+            roi = self._rect_roi
+            QTimer.singleShot(2000, lambda: self._remove_rect_roi(roi))
 
     def refresh(self):
         """새로고침 — clear and replot (safe re-render)."""

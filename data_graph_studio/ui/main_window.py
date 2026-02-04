@@ -637,13 +637,8 @@ class MainWindow(QMainWindow):
         deselect_btn.triggered.connect(self._on_clear_selection)
         toolbar.addAction(deselect_btn)
 
-        delete_drawing_btn = QAction("🗑️  Del Draw", self)
-        delete_drawing_btn.setToolTip(self._format_tooltip("Delete Selected Drawing", "Del"))
-        delete_drawing_btn.triggered.connect(self._on_delete_drawing)
-        toolbar.addAction(delete_drawing_btn)
-
-        clear_drawing_btn = QAction("🧹  Clear Draw", self)
-        clear_drawing_btn.setToolTip(self._format_tooltip("Clear All Drawings", ""))
+        clear_drawing_btn = QAction("🗑️  Clear Draw", self)
+        clear_drawing_btn.setToolTip(self._format_tooltip("Clear All Drawings", "Del"))
         clear_drawing_btn.triggered.connect(self._on_clear_drawings)
         toolbar.addAction(clear_drawing_btn)
 
