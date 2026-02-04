@@ -2963,13 +2963,18 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self, "Rename Profile", "Enter new name:", text=setting.name
         )
         if ok and name.strip():
-            if self.profile_controller.rename_profile(profile_id, name.strip()):
-                updated = self.profile_store.get(profile_id)
-                if updated:
-                    self.profile_model.update_profile_data(updated.dataset_id, updated)
-                else:
-                    self.profile_model.refresh()
-                self.statusbar.showMessage("Profile renamed", 2000)
+            # Block graph refresh signals during rename to prevent access violation
+            self.state.blockSignals(True)
+            try:
+                if self.profile_controller.rename_profile(profile_id, name.strip()):
+                    updated = self.profile_store.get(profile_id)
+                    if updated:
+                        self.profile_model.update_profile_data(updated.dataset_id, updated)
+                    else:
+                        self.profile_model.refresh()
+                    self.statusbar.showMessage("Profile renamed", 2000)
+            finally:
+                self.state.blockSignals(False)
 
     def _on_profile_delete_requested(self, profile_id: str):
         """프로파일 삭제 요청"""

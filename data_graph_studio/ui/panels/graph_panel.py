@@ -2901,6 +2901,21 @@ class GraphPanel(QWidget):
             _lg.debug("[DEBUG-CRASH] graph_panel.refresh() skipped - not loaded")
             return
 
+        # Guard against reentrant calls (can cause access violation in pyqtgraph)
+        if getattr(self, '_refreshing', False):
+            _lg.debug("[DEBUG-CRASH] graph_panel.refresh() skipped - already refreshing")
+            return
+        self._refreshing = True
+        try:
+            self._do_refresh()
+        except Exception as e:
+            _lg.error(f"graph_panel.refresh() error: {e}")
+        finally:
+            self._refreshing = False
+
+    def _do_refresh(self):
+        """Internal refresh implementation."""
+
         # Check if we're in overlay comparison mode
         if (self.state.comparison_mode == ComparisonMode.OVERLAY and
                 len(self.state.comparison_dataset_ids) >= 2):
