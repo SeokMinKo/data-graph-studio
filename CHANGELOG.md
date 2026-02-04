@@ -4,6 +4,21 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.18.0] — 2026-02-05
+
+### ✨ Features
+
+- **Help 메뉴 + Command Palette** — Ctrl+Shift+P / F1으로 VS Code 스타일 기능 검색, 모든 메뉴 액션 인덱싱 ([`f27dd60`](../../commit/f27dd60))
+- **스트리밍 UI 연결** — 툴바 ▶Start/⏸Pause/⏹Stop 버튼, View 메뉴 Start/Stop Streaming, StreamingController 연동 ([`b5dda69`](../../commit/b5dda69))
+- **Combination 모드 컬럼별 차트타입** — 각 value column별로 Line/Bar/Scatter/Area 개별 선택 가능 ([`0feb59b`](../../commit/0feb59b))
+
+### 🐛 Bug Fixes
+
+- **단축키 텍스트 입력 충돌 방지** — QLineEdit/QSpinBox 등에 포커스 시 단독키(1~6, F, Home, Delete) 단축키 무시 ([`47e1cd8`](../../commit/47e1cd8))
+- **Combination 차트 Bar 렌더링 개선** — 바 너비 0.8x, outline pen 추가 ([`bb7fa95`](../../commit/bb7fa95))
+
+---
+
 ## [v0.17.0] — 2026-02-04
 
 ### ✨ Features
