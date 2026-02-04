@@ -1639,6 +1639,15 @@ class MainWindow(QMainWindow):
         self.state.selection_changed.connect(self._update_selection_status)
         self.state.tool_mode_changed.connect(self._on_tool_mode_changed)
 
+        # Auto-save active profile on state changes (debounced)
+        self._profile_autosave_timer = QTimer(self)
+        self._profile_autosave_timer.setSingleShot(True)
+        self._profile_autosave_timer.setInterval(500)  # 500ms debounce
+        self._profile_autosave_timer.timeout.connect(self._autosave_active_profile)
+        self.state.chart_settings_changed.connect(self._schedule_profile_autosave)
+        self.state.value_zone_changed.connect(self._schedule_profile_autosave)
+        self.state.group_zone_changed.connect(self._schedule_profile_autosave)
+
         # Panel signals - route through preview dialog
         self.table_panel.file_dropped.connect(self._show_parsing_preview)
         self.table_panel.window_changed.connect(self._on_window_changed)
@@ -2383,6 +2392,15 @@ class MainWindow(QMainWindow):
 
         self.state.update_summary(stats)
     
+    def _schedule_profile_autosave(self):
+        """Schedule debounced auto-save of active profile"""
+        self._profile_autosave_timer.start()
+
+    def _autosave_active_profile(self):
+        """Auto-save current AppState to active profile"""
+        if hasattr(self, 'profile_controller'):
+            self.profile_controller.save_active_profile()
+
     def _on_tool_mode_changed(self):
         """툴 모드 변경"""
         mode = self.state.tool_mode

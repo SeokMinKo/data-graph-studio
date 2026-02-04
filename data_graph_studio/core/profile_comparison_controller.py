@@ -61,6 +61,10 @@ class ProfileComparisonController(QObject):
 
         Returns ``False`` and emits ``error_occurred`` when validation fails.
         """
+        # Save current active profile before comparing
+        # (so chart_type and other changes are persisted)
+        self._controller.save_active_profile()
+
         # --- validation ---
         if len(profile_ids) < 2:
             self.error_occurred.emit("At least 2 profiles required for comparison")
