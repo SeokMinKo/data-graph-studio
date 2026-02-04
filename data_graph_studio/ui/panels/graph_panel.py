@@ -1538,6 +1538,8 @@ class MainGraph(pg.PlotWidget):
 
         self._plot_items = []
         self._scatter_items = []
+        self._secondary_vb = None  # Secondary ViewBox for dual axis
+        self._secondary_vb_items = []  # Items in secondary ViewBox
         self._data_x = None
         self._data_y = None
 
@@ -1953,6 +1955,14 @@ class MainGraph(pg.PlotWidget):
             self._label_items.clear()
         self._plot_items.clear()
         self._scatter_items.clear()
+        # Clear secondary ViewBox (dual axis)
+        if self._secondary_vb is not None:
+            for item in self._secondary_vb_items:
+                self._secondary_vb.removeItem(item)
+            self._secondary_vb_items.clear()
+            self.scene().removeItem(self._secondary_vb)
+            self._secondary_vb = None
+            self.hideAxis('right')
         self._data_x = None
         self._data_y = None
         self.legend.clear()
@@ -3555,25 +3565,26 @@ class GraphPanel(QWidget):
     def _render_combo_series_vb(self, x_data, y_data, col_chart_type, color, pen, label,
                                 line_width, marker_size, marker_border, vb, graph, options):
         """Render a single series in combo chart on a secondary ViewBox."""
+        item = None
         if col_chart_type == "bar":
             w = (x_data.max() - x_data.min()) / len(x_data) * 0.8 if len(x_data) > 1 else 0.8
-            bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
+            item = pg.BarGraphItem(x=x_data, height=y_data, width=w,
                                   pen=pg.mkPen(color, width=0.5),
                                   brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 160),
                                   name=label)
-            vb.addItem(bar)
         elif col_chart_type == "scatter":
             sc_pen = pg.mkPen(color, width=1) if marker_border else pg.mkPen(None)
-            sc = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
+            item = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
                                     pen=sc_pen, brush=pg.mkBrush(color), name=label)
-            vb.addItem(sc)
         elif col_chart_type == "area":
-            curve = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label,
+            item = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label,
                                      fillLevel=0, brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 80))
-            vb.addItem(curve)
         else:
-            curve = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label)
-            vb.addItem(curve)
+            item = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label)
+        
+        if item is not None:
+            vb.addItem(item)
+            graph._secondary_vb_items.append(item)
 
     def _refresh_combo_chart(self, working_df, x_data, x_col, x_categorical_labels,
                               x_is_categorical, options, legend_settings):
@@ -3662,6 +3673,7 @@ class GraphPanel(QWidget):
                 ax_right.setPen(pg.mkPen(color))
 
                 secondary_vb = pg.ViewBox()
+                self.main_graph._secondary_vb = secondary_vb  # Track for cleanup
                 self.main_graph.scene().addItem(secondary_vb)
                 ax_right.linkToView(secondary_vb)
                 secondary_vb.setXLink(self.main_graph)
