@@ -328,7 +328,17 @@ class GraphOptionsPanel(QFrame):
             self.chart_type_combo.addItem(label, ct)
         self.chart_type_combo.currentIndexChanged.connect(self._on_chart_type_changed)
         type_layout.addWidget(self.chart_type_combo)
-        
+
+        # Per-column chart type selector (visible only in Combination mode)
+        self._combo_series_widget = QWidget()
+        self._combo_series_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self._combo_series_layout = QVBoxLayout(self._combo_series_widget)
+        self._combo_series_layout.setContentsMargins(0, 4, 0, 0)
+        self._combo_series_layout.setSpacing(2)
+        self._combo_series_widget.setVisible(False)
+        self._combo_series_combos: Dict[str, QComboBox] = {}
+        type_layout.addWidget(self._combo_series_widget)
+
         layout.addWidget(type_group)
         
         # Title Group
@@ -730,7 +740,77 @@ class GraphOptionsPanel(QFrame):
         chart_type = self.chart_type_combo.currentData()
         if chart_type:
             self.state.set_chart_type(chart_type)
+        # Show/hide per-column chart type selector
+        is_combo = (chart_type == ChartType.COMBINATION)
+        self._combo_series_widget.setVisible(is_combo)
+        if is_combo:
+            self._rebuild_combo_series_ui()
         self.option_changed.emit()
+
+    def _rebuild_combo_series_ui(self):
+        """Rebuild per-column chart type selectors for Combination mode."""
+        # Clear existing
+        for i in reversed(range(self._combo_series_layout.count())):
+            w = self._combo_series_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+                w.deleteLater()
+        self._combo_series_combos.clear()
+
+        combo_chart_types = [
+            ("📈 Line", "line"),
+            ("📊 Bar", "bar"),
+            ("⬤ Scatter", "scatter"),
+            ("▤ Area", "area"),
+        ]
+
+        for vc in self.state.value_columns:
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
+
+            label = QLabel(vc.name)
+            label.setMinimumWidth(60)
+            label.setToolTip(vc.name)
+            row_layout.addWidget(label, 1)
+
+            combo = QComboBox()
+            combo.setMinimumHeight(24)
+            for display, val in combo_chart_types:
+                combo.addItem(display, val)
+            # Default: first column = line, others = line
+            combo.setCurrentIndex(0)
+            combo.currentIndexChanged.connect(self._on_combo_series_type_changed)
+            row_layout.addWidget(combo, 1)
+
+            self._combo_series_combos[vc.name] = combo
+            self._combo_series_layout.addWidget(row)
+
+        # Force layout update — set minimum height based on content
+        row_height = 30
+        total = len(self._combo_series_combos) * row_height + 8
+        self._combo_series_widget.setMinimumHeight(total)
+        self._combo_series_widget.adjustSize()
+        # Invalidate parent layouts
+        parent = self._combo_series_widget.parentWidget()
+        while parent:
+            if parent.layout():
+                parent.layout().invalidate()
+            parent = parent.parentWidget()
+            if parent and parent.__class__.__name__ == 'QTabWidget':
+                break
+
+    def _on_combo_series_type_changed(self):
+        """Per-column chart type changed — refresh graph."""
+        self.option_changed.emit()
+
+    def get_combo_series_chart_types(self) -> Dict[str, str]:
+        """Get per-column chart type mapping for Combination mode."""
+        result = {}
+        for col_name, combo in self._combo_series_combos.items():
+            result[col_name] = combo.currentData() or "line"
+        return result
     
     def _on_option_changed(self):
         self.state.update_chart_settings(
@@ -2870,6 +2950,9 @@ class GraphPanel(QWidget):
                     self.options_panel.chart_type_combo.setCurrentIndex(i)
                     break
             self.options_panel.chart_type_combo.blockSignals(False)
+            # Show per-column chart type UI
+            self.options_panel._combo_series_widget.setVisible(True)
+            self.options_panel._rebuild_combo_series_ui()
         elif num_values <= 1 and self.state._chart_settings.chart_type == ChartType.COMBINATION:
             # Revert to the original chart type before combo was activated
             restore_type = getattr(self, '_pre_combo_chart_type', ChartType.LINE)
@@ -2880,6 +2963,12 @@ class GraphPanel(QWidget):
                     self.options_panel.chart_type_combo.setCurrentIndex(i)
                     break
             self.options_panel.chart_type_combo.blockSignals(False)
+            # Hide per-column chart type UI
+            self.options_panel._combo_series_widget.setVisible(False)
+        elif current_type == ChartType.COMBINATION and num_values >= 2:
+            # Value columns changed while still in Combination — rebuild UI
+            self.options_panel._combo_series_widget.setVisible(True)
+            self.options_panel._rebuild_combo_series_ui()
 
         self.refresh()
 
@@ -3072,7 +3161,7 @@ class GraphPanel(QWidget):
                 pass
 
         # Item 14: combo chart when 2+ Y columns are selected
-        if len(self.state.value_columns) >= 2 and not self.state.group_columns:
+        if len(self.state.value_columns) >= 2:
             self._refresh_combo_chart(working_df, x_data, x_col, x_categorical_labels,
                                        x_is_categorical, options, legend_settings)
             return
@@ -3436,6 +3525,54 @@ class GraphPanel(QWidget):
 
     # ==================== Combo Chart (Item 14) ====================
 
+    def _render_combo_series(self, x_data, y_data, col_chart_type, color, pen, label,
+                             line_width, marker_size, marker_border, graph, options):
+        """Render a single series in combo chart on the given graph widget."""
+        if col_chart_type == "bar":
+            w = (x_data.max() - x_data.min()) / len(x_data) * 0.4 if len(x_data) > 1 else 0.4
+            bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
+                                  brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 160),
+                                  name=label)
+            graph.addItem(bar)
+            graph._plot_items.append(bar)
+        elif col_chart_type == "scatter":
+            sc_pen = pg.mkPen(color, width=1) if marker_border else pg.mkPen(None)
+            sc = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
+                                    pen=sc_pen, brush=pg.mkBrush(color), name=label)
+            graph.addItem(sc)
+            graph._scatter_items.append(sc)
+        elif col_chart_type == "area":
+            curve = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label,
+                                     fillLevel=0, brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 80))
+            graph.addItem(curve)
+            graph._plot_items.append(curve)
+        else:
+            # Default: line
+            item = graph.plot(x_data, y_data, pen=pen, name=label)
+            graph._plot_items.append(item)
+
+    def _render_combo_series_vb(self, x_data, y_data, col_chart_type, color, pen, label,
+                                line_width, marker_size, marker_border, vb, graph, options):
+        """Render a single series in combo chart on a secondary ViewBox."""
+        if col_chart_type == "bar":
+            w = (x_data.max() - x_data.min()) / len(x_data) * 0.4 if len(x_data) > 1 else 0.4
+            bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
+                                  brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 160),
+                                  name=label)
+            vb.addItem(bar)
+        elif col_chart_type == "scatter":
+            sc_pen = pg.mkPen(color, width=1) if marker_border else pg.mkPen(None)
+            sc = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
+                                    pen=sc_pen, brush=pg.mkBrush(color), name=label)
+            vb.addItem(sc)
+        elif col_chart_type == "area":
+            curve = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label,
+                                     fillLevel=0, brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 80))
+            vb.addItem(curve)
+        else:
+            curve = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label)
+            vb.addItem(curve)
+
     def _refresh_combo_chart(self, working_df, x_data, x_col, x_categorical_labels,
                               x_is_categorical, options, legend_settings):
         """Render combo chart with dual Y axes for multiple value columns."""
@@ -3478,6 +3615,11 @@ class GraphPanel(QWidget):
         else:
             self.main_graph.legend.hide()
 
+        # Per-column chart type mapping from UI
+        combo_series_types = self.options_panel.get_combo_series_chart_types()
+        marker_border = options.get('marker_border', False)
+        marker_size = options.get('marker_size', 6)
+
         # Secondary ViewBox for dual axis
         secondary_vb = None
 
@@ -3497,29 +3639,16 @@ class GraphPanel(QWidget):
             if formula:
                 label = f"{y_col_name} [{formula}]"
 
+            # Per-column chart type (default: line)
+            col_chart_type = combo_series_types.get(y_col_name, "line")
+
             if idx == 0:
                 # Primary axis (left)
                 self.main_graph.setLabel('left', label, color=color, **{'font-size': '14px'})
                 self.main_graph.getAxis('left').setPen(pg.mkPen(color))
-
-                if chart_type == ChartType.BAR:
-                    w = (x_data.max() - x_data.min()) / len(x_data) * 0.4 if len(x_data) > 1 else 0.4
-                    bar = pg.BarGraphItem(x=x_data - w/2, height=y_data, width=w,
-                                          brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 160),
-                                          name=label)
-                    self.main_graph.addItem(bar)
-                    self.main_graph._plot_items.append(bar)
-                elif chart_type == ChartType.SCATTER:
-                    m_bdr = options.get('marker_border', False)
-                    sc_pen = pg.mkPen(color, width=1) if m_bdr else pg.mkPen(None)
-                    sc = pg.ScatterPlotItem(x_data, y_data, size=options.get('marker_size', 6),
-                                            pen=sc_pen, brush=pg.mkBrush(color), name=label)
-                    self.main_graph.addItem(sc)
-                    self.main_graph._scatter_items.append(sc)
-                else:
-                    item = self.main_graph.plot(x_data, y_data, pen=pen, name=label)
-                    self.main_graph._plot_items.append(item)
-
+                self._render_combo_series(x_data, y_data, col_chart_type, color, pen, label,
+                                          line_width, marker_size, marker_border,
+                                          self.main_graph, options)
                 self.main_graph._data_x = x_data
                 self.main_graph._data_y = y_data
 
@@ -3535,8 +3664,9 @@ class GraphPanel(QWidget):
                 ax_right.linkToView(secondary_vb)
                 secondary_vb.setXLink(self.main_graph)
 
-                curve = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label)
-                secondary_vb.addItem(curve)
+                self._render_combo_series_vb(x_data, y_data, col_chart_type, color, pen, label,
+                                             line_width, marker_size, marker_border,
+                                             secondary_vb, self.main_graph, options)
 
                 def _sync_vb():
                     secondary_vb.setGeometry(self.main_graph.getViewBox().sceneBoundingRect())
@@ -3546,8 +3676,9 @@ class GraphPanel(QWidget):
                 _sync_vb()
             else:
                 # 3rd+ series: add to primary axis
-                item = self.main_graph.plot(x_data, y_data, pen=pen, name=label)
-                self.main_graph._plot_items.append(item)
+                self._render_combo_series(x_data, y_data, col_chart_type, color, pen, label,
+                                          line_width, marker_size, marker_border,
+                                          self.main_graph, options)
 
         # Update series names for legend
         series_names = [vc.name for vc in value_cols if vc.name in working_df.columns]
