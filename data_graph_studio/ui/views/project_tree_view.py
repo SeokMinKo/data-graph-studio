@@ -96,6 +96,16 @@ class ProjectTreeView(_SafeAccessibleTreeView):
             self._placeholder_model = None
         if self.selectionModel():
             self.selectionModel().selectionChanged.connect(self._on_selection_changed)
+        self.doubleClicked.connect(self._on_double_clicked)
+
+    def _on_double_clicked(self, index):
+        setting = self._get_setting(index)
+        if setting is not None:
+            self.profile_activated.emit(setting.id)
+            return
+        dataset_id = self._get_dataset_id(index)
+        if dataset_id:
+            self.project_activated.emit(dataset_id)
 
     def keyPressEvent(self, event):
         index = self.currentIndex()
