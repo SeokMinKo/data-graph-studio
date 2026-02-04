@@ -259,7 +259,7 @@ class ProfileSideBySideLayout(QWidget):
             )
             # Route row_selection_changed → always sync to other panels
             panel.row_selection_changed.connect(
-                lambda src_id, indices, _pid=pid: self._on_row_selection(pid, indices)
+                lambda src_id, indices, _pid=pid: self._on_row_selection(_pid, indices)
             )
             self._panels[pid] = panel
             self._view_sync_manager.register_panel(pid, panel)
