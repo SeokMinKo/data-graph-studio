@@ -438,9 +438,10 @@ class MainWindow(QMainWindow):
 
         delete_drawing_action = QAction("Delete Selected Drawing", self)
         delete_drawing_action.setToolTip("Delete the currently selected drawing (Delete)")
-        delete_drawing_action.setShortcut("Delete")
+        # Shortcut handled in keyPressEvent to avoid text input conflicts
         delete_drawing_action.triggered.connect(self._on_delete_drawing)
         graph_elements_menu.addAction(delete_drawing_action)
+        self._delete_drawing_action = delete_drawing_action
 
         clear_drawings_action = QAction("Clear All Drawings", self)
         clear_drawings_action.setToolTip("Remove all drawings from the chart")
@@ -724,15 +725,17 @@ class MainWindow(QMainWindow):
 
         reset_btn = QAction("↺  Reset", self)
         reset_btn.setToolTip(self._format_tooltip("Reset View", "Home"))
-        reset_btn.setShortcut(QKeySequence("Home"))
+        # Shortcut handled in keyPressEvent to avoid text input conflicts
         reset_btn.triggered.connect(self._reset_graph_view)
         toolbar.addAction(reset_btn)
+        self._reset_btn_action = reset_btn
 
         autofit_btn = QAction("⊡  Fit", self)
         autofit_btn.setToolTip(self._format_tooltip("Auto Fit to Data", "F"))
-        autofit_btn.setShortcut(QKeySequence("F"))
+        # Shortcut handled in keyPressEvent to avoid text input conflicts
         autofit_btn.triggered.connect(self._autofit_graph)
         toolbar.addAction(autofit_btn)
+        self._autofit_btn_action = autofit_btn
         
         toolbar.addSeparator()
         
@@ -755,6 +758,10 @@ class MainWindow(QMainWindow):
             toolbar.addAction(action)
 
         # (Preset management removed – use File menu profile/project save/load)
+
+    def _setup_streaming_toolbar(self):
+        """Streaming toolbar — placeholder until streaming UI is connected."""
+        pass
 
     def _setup_compare_toolbar(self):
         """Setup the Compare Toolbar (hidden by default, auto-shown during comparison)."""
@@ -3916,6 +3923,14 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     
     # ==================== Clipboard ====================
     
+    def _is_text_input_focused(self) -> bool:
+        """Check if a text input widget currently has focus."""
+        from PySide6.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox
+        fw = QApplication.focusWidget()
+        if fw is None:
+            return False
+        return isinstance(fw, (QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox))
+
     def keyPressEvent(self, event):
         """키보드 이벤트 - 클립보드 및 차트 단축키"""
         # Ctrl+V: 붙여넣기
@@ -3934,8 +3949,14 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 self._copy_selection_to_clipboard()
                 return
         
-        # 차트 타입 단축키 (1-6)
+        # Skip single-key shortcuts when a text input has focus
+        if event.modifiers() == Qt.NoModifier and self._is_text_input_focused():
+            super().keyPressEvent(event)
+            return
+
+        # Single-key shortcuts — only when text input is NOT focused
         if event.modifiers() == Qt.NoModifier:
+            # Chart type shortcuts (1-6)
             chart_shortcuts = {
                 Qt.Key_1: ChartType.LINE,
                 Qt.Key_2: ChartType.BAR,
@@ -3949,6 +3970,24 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 chart_type = chart_shortcuts[event.key()]
                 self.state.set_chart_type(chart_type)
                 self.statusBar().showMessage(f"Chart: {chart_type.name}", 2000)
+                return
+            
+            # F → AutoFit
+            if event.key() == Qt.Key_F:
+                if hasattr(self, '_autofit_btn_action'):
+                    self._autofit_btn_action.trigger()
+                return
+            
+            # Home → Reset View
+            if event.key() == Qt.Key_Home:
+                if hasattr(self, '_reset_btn_action'):
+                    self._reset_btn_action.trigger()
+                return
+            
+            # Delete → Delete Drawing
+            if event.key() == Qt.Key_Delete:
+                if hasattr(self, '_delete_drawing_action'):
+                    self._delete_drawing_action.trigger()
                 return
         
         # 기본 처리
