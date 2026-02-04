@@ -127,8 +127,10 @@ class GroupedTableModel(QAbstractItemModel):
         self.beginResetModel()
         
         self._df = df
-        self._group_columns = group_columns or []
-        self._value_columns = value_columns or []
+        # Filter out group/value columns that don't exist in the dataframe
+        valid_cols = set(df.columns) if df is not None else set()
+        self._group_columns = [c for c in (group_columns or []) if c in valid_cols]
+        self._value_columns = [c for c in (value_columns or []) if c in valid_cols]
         self._aggregations = aggregations or {}
         
         if df is not None:
@@ -306,6 +308,15 @@ class GroupedTableModel(QAbstractItemModel):
         
         group_col = remaining_columns[0]
         rest_columns = remaining_columns[1:]
+        
+        # Skip if column doesn't exist in dataframe
+        if group_col not in self._df.columns:
+            # Try remaining columns or fall back to flat rows
+            if rest_columns:
+                self._build_group_recursive(parent, rest_columns, row_indices, level)
+            else:
+                parent.rows = row_indices
+            return
         
         # Get unique values for this column
         subset = self._df[row_indices]
