@@ -126,15 +126,12 @@ class TestSyncOptions:
         layout_widget.set_sync_option("selection", False)
         assert layout_widget._view_sync_manager.sync_selection is False
 
-    def test_set_sync_zoom(self, layout_widget):
-        """Zoom sets both x and y."""
-        layout_widget.set_sync_option("zoom", True)
-        assert layout_widget._view_sync_manager.sync_x is True
-        assert layout_widget._view_sync_manager.sync_y is True
+    def test_set_sync_unknown_key_noop(self, layout_widget):
+        """Unknown sync key is a no-op (no crash)."""
+        layout_widget.set_sync_option("nonexistent", True)  # should not raise
 
     def test_get_sync_options(self, layout_widget):
         opts = layout_widget.get_sync_options()
         assert "x" in opts
         assert "y" in opts
-        assert "zoom" in opts
         assert "selection" in opts

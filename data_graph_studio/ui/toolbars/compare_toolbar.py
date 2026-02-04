@@ -3,11 +3,11 @@ CompareToolbar — Dedicated toolbar for profile comparison mode.
 
 Provides (two-row layout):
   Row 1: Grid layout selector (Row | Column | 2×2) + Exit Compare button
-  Row 2: Sync checkboxes (X-axis | Y-axis | Zoom | Selection)
+  Row 2: Sync checkboxes (X-axis | Y-axis | Selection)
 
 Signals:
   - grid_layout_changed(str)  — "row", "column", or "grid"
-  - sync_changed(str, bool)   — ("x"|"y"|"zoom"|"selection", checked)
+  - sync_changed(str, bool)   — ("x"|"y"|"selection", checked)
   - exit_requested()
 """
 
@@ -34,7 +34,6 @@ class CompareToolbar(QToolBar):
     _DEFAULT_SYNC = {
         "x": True,
         "y": False,
-        "zoom": False,
         "selection": True,
     }
 
@@ -134,9 +133,8 @@ class CompareToolbar(QToolBar):
         row2_layout.addWidget(sync_label)
 
         sync_options = [
-            ("x", "X-axis", "Synchronize X-axis panning"),
-            ("y", "Y-axis", "Synchronize Y-axis panning"),
-            ("zoom", "Zoom", "Synchronize zoom level"),
+            ("x", "X-axis", "Synchronize X-axis panning and zoom"),
+            ("y", "Y-axis", "Synchronize Y-axis panning and zoom"),
             ("selection", "Selection", "Synchronize data selection"),
         ]
 

@@ -47,8 +47,8 @@ class TestCompareToolbarSignals:
         assert blocker.args == ["x", False]
 
     def test_sync_changed_all_keys(self, toolbar, qtbot):
-        """All 4 sync keys emit correctly."""
-        for key in ["x", "y", "zoom", "selection"]:
+        """All sync keys emit correctly."""
+        for key in ["x", "y", "selection"]:
             signals = []
             toolbar.sync_changed.connect(lambda k, v: signals.append((k, v)))
             toolbar._sync_buttons[key].click()
@@ -71,9 +71,9 @@ class TestCompareToolbarState:
     """Verify state read/write API."""
 
     def test_default_sync_state(self, toolbar):
-        """Default sync state matches spec: X=ON, Y=OFF, Zoom=OFF, Sel=ON."""
+        """Default sync state matches spec: X=ON, Y=OFF, Sel=ON."""
         state = toolbar.sync_state()
-        assert state == {"x": True, "y": False, "zoom": False, "selection": True}
+        assert state == {"x": True, "y": False, "selection": True}
 
     def test_default_grid_layout(self, toolbar):
         """Default grid layout is 'row'."""
@@ -97,13 +97,13 @@ class TestCompareToolbarState:
     def test_reset_to_defaults(self, toolbar):
         """reset_to_defaults restores all states."""
         toolbar.set_sync_state("x", False)
-        toolbar.set_sync_state("zoom", True)
+        toolbar.set_sync_state("y", True)
         toolbar.set_grid_layout("grid")
 
         toolbar.reset_to_defaults()
 
         assert toolbar.grid_layout() == "row"
-        assert toolbar.sync_state() == {"x": True, "y": False, "zoom": False, "selection": True}
+        assert toolbar.sync_state() == {"x": True, "y": False, "selection": True}
 
     def test_set_sync_state_invalid_key(self, toolbar):
         """set_sync_state with unknown key is a no-op."""

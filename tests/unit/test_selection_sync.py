@@ -207,7 +207,7 @@ class TestCompareToolbarCheckboxes:
         tb = CompareToolbar()
         qtbot.addWidget(tb)
 
-        for key in ["x", "y", "zoom", "selection"]:
+        for key in ["x", "y", "selection"]:
             assert isinstance(tb._sync_buttons[key], QCheckBox), (
                 f"Sync button '{key}' should be QCheckBox, got {type(tb._sync_buttons[key])}"
             )

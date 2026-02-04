@@ -122,16 +122,13 @@ class ProfileSideBySideLayout(QWidget):
     def set_sync_option(self, key: str, enabled: bool) -> None:
         """Set a sync option from the CompareToolbar.
 
-        Keys: "x", "y", "zoom", "selection".
-        "zoom" is an alias that sets both sync_x and sync_y.
+        Keys: "x", "y", "selection".
+        X sync controls X-axis panning and zoom synchronization.
+        Y sync controls Y-axis panning and zoom synchronization.
         """
         if key == "x":
             self._view_sync_manager.sync_x = enabled
         elif key == "y":
-            self._view_sync_manager.sync_y = enabled
-        elif key == "zoom":
-            # Zoom sync: when enabled, both x and y sync together
-            self._view_sync_manager.sync_x = enabled
             self._view_sync_manager.sync_y = enabled
         elif key == "selection":
             self._view_sync_manager.sync_selection = enabled
@@ -141,7 +138,6 @@ class ProfileSideBySideLayout(QWidget):
         return {
             "x": self._view_sync_manager.sync_x,
             "y": self._view_sync_manager.sync_y,
-            "zoom": self._view_sync_manager.sync_x and self._view_sync_manager.sync_y,
             "selection": self._view_sync_manager.sync_selection,
         }
 
