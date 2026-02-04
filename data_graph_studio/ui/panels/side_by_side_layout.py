@@ -91,6 +91,22 @@ class MiniGraphWidget(QWidget):
             return "line"
 
     @property
+    def effective_chart_settings(self) -> dict:
+        """Chart style settings (line_width, marker_size, opacity, etc.)."""
+        if self.graph_setting is not None:
+            return dict(self.graph_setting.chart_settings) if self.graph_setting.chart_settings else {}
+        try:
+            cs = self.state._chart_settings
+            result = {}
+            for attr in ['show_legend', 'show_grid', 'show_markers', 'line_width',
+                         'marker_size', 'opacity', 'color_palette']:
+                if hasattr(cs, attr):
+                    result[attr] = getattr(cs, attr)
+            return result
+        except Exception:
+            return {}
+
+    @property
     def effective_group_columns(self) -> list:
         """Group columns: from graph_setting if present, else from state."""
         if self.graph_setting is not None:
@@ -216,11 +232,12 @@ class MiniGraphWidget(QWidget):
     ]
 
     def _plot_data(self, color: str):
-        """Plot data respecting effective chart type, value columns, and group-by.
+        """Plot data respecting effective chart type, value columns, group-by, and style.
 
         Supports: line, scatter, bar chart types.
         Renders all value columns (not just the first).
         Supports group_by with per-group coloring.
+        Applies chart_settings (grid, legend, line_width, etc.) from profile.
         """
         import numpy as np
 
@@ -235,6 +252,15 @@ class MiniGraphWidget(QWidget):
         group_cols = self.effective_group_columns
         # Store hover columns for future tooltip support
         self._hover_columns = self.effective_hover_columns
+
+        # Apply chart style settings (grid, legend) to plot widget
+        cs = self.effective_chart_settings
+        if self.plot_widget is not None:
+            show_grid = cs.get('show_grid', True)
+            self.plot_widget.showGrid(x=show_grid, y=show_grid, alpha=0.3)
+            show_legend = cs.get('show_legend', False)
+            if show_legend:
+                self.plot_widget.addLegend()
 
         # --- Resolve X data ---
         if x_col and x_col in df.columns:
@@ -328,16 +354,51 @@ class MiniGraphWidget(QWidget):
 
             color_idx += 1
 
-    def _render_series(self, x_data, y_data, color, chart_type, pg, np, name: str = ""):
-        """Render a single data series based on chart_type."""
+    def _get_style(self) -> dict:
+        """Safely extract numeric style values from chart_settings."""
         try:
+            cs = self.effective_chart_settings
+        except Exception:
+            cs = {}
+        def _num(key, default):
+            v = cs.get(key, default)
+            return v if isinstance(v, (int, float)) else default
+        def _bool(key, default):
+            v = cs.get(key, default)
+            return bool(v) if isinstance(v, (bool, int)) else default
+        return {
+            'line_width': _num('line_width', 2),
+            'marker_size': _num('marker_size', 5),
+            'opacity': _num('opacity', 1.0),
+            'show_markers': _bool('show_markers', False),
+        }
+
+    def _render_series(self, x_data, y_data, color, chart_type, pg, np, name: str = ""):
+        """Render a single data series based on chart_type and chart_settings."""
+        style = self._get_style()
+        line_width = style['line_width']
+        marker_size = style['marker_size']
+        opacity = style['opacity']
+        show_markers = style['show_markers']
+
+        try:
+            # Apply opacity to color
+            pen_color = pg.mkColor(color)
+            brush_color = pg.mkColor(color)
+            if opacity < 1.0:
+                try:
+                    pen_color.setAlphaF(opacity)
+                    brush_color.setAlphaF(opacity)
+                except Exception:
+                    pass
+
             if chart_type == "scatter":
                 scatter = pg.ScatterPlotItem(
                     x=x_data.astype(float),
                     y=y_data.astype(float),
                     pen=pg.mkPen(None),
-                    brush=pg.mkBrush(color),
-                    size=5,
+                    brush=pg.mkBrush(brush_color),
+                    size=marker_size,
                     name=name,
                 )
                 self.plot_widget.addItem(scatter)
@@ -346,17 +407,28 @@ class MiniGraphWidget(QWidget):
                     x=x_data.astype(float),
                     height=y_data.astype(float),
                     width=0.6,
-                    brush=pg.mkBrush(color),
+                    brush=pg.mkBrush(brush_color),
                     name=name,
                 )
                 self.plot_widget.addItem(bar)
             else:
                 # Default: line
-                self.plot_widget.plot(
+                pen = pg.mkPen(pen_color, width=line_width)
+                plot_item = self.plot_widget.plot(
                     x_data, y_data,
-                    pen=pg.mkPen(color, width=2),
+                    pen=pen,
                     name=name,
                 )
+                # Add markers on top of line if show_markers is enabled
+                if show_markers:
+                    scatter = pg.ScatterPlotItem(
+                        x=x_data.astype(float),
+                        y=y_data.astype(float),
+                        pen=pg.mkPen(None),
+                        brush=pg.mkBrush(brush_color),
+                        size=marker_size,
+                    )
+                    self.plot_widget.addItem(scatter)
         except Exception:
             pass
 
