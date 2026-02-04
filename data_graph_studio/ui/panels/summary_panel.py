@@ -225,6 +225,8 @@ class SummaryPanel(QWidget):
         self._add_card("text", "A", "Text", "-", color="#EC4899")
         self._add_card("missing", "⚠", "Missing", "-", color="#F59E0B")
         self._add_card("memory", "💾", "Memory", "-", color="#3B82F6")
+        self._add_card("x_range", "↔", "X Range", "-", color="#6366F1")
+        self._add_card("y_range", "↕", "Y Range", "-", color="#F43F5E")
         
         self.card_layout.addStretch()
         
@@ -304,6 +306,34 @@ class SummaryPanel(QWidget):
                 self.cards['memory'].set_value(f"{mb:.1f}", "MB")
             else:
                 self.cards['memory'].set_value(f"{mb*1024:.0f}", "KB")
+
+        # X/Y Range cards
+        if 'x_range' in stats:
+            xr = stats['x_range']
+            x_range_val = xr.get('range', 0)
+            x_col = xr.get('column', 'X')
+            self.cards['x_range'].set_value(
+                self._format_value(x_range_val),
+                f"{self._format_value(xr.get('min', '-'))} → {self._format_value(xr.get('max', '-'))}"
+            )
+            self.cards['x_range'].setToolTip(
+                f"X Column: {x_col}\nMin: {xr.get('min', '-')}\nMax: {xr.get('max', '-')}\nRange: {x_range_val}"
+            )
+
+        if 'y_range' in stats:
+            yr = stats['y_range']
+            y_range_val = yr.get('range', 0)
+            y_cols = yr.get('columns', [])
+            self.cards['y_range'].set_value(
+                self._format_value(y_range_val),
+                f"{self._format_value(yr.get('min', '-'))} → {self._format_value(yr.get('max', '-'))}"
+            )
+            cols_str = ", ".join(y_cols[:3])
+            if len(y_cols) > 3:
+                cols_str += f" +{len(y_cols) - 3}"
+            self.cards['y_range'].setToolTip(
+                f"Y Columns: {cols_str}\nMin: {yr.get('min', '-')}\nMax: {yr.get('max', '-')}\nRange: {y_range_val}"
+            )
 
         # Dynamic value cards
         self._update_value_cards(stats)

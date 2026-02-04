@@ -127,6 +127,9 @@ class Project:
     # 계산 필드
     calculated_fields: List[Dict] = field(default_factory=list)
 
+    # 프로파일 (GraphSetting.to_dict() 형태)
+    profiles: List[Dict] = field(default_factory=list)
+
     # 테마
     theme: str = "midnight"
 
@@ -148,6 +151,7 @@ class Project:
             'state': self.state,
             'dashboards': self.dashboards,
             'calculated_fields': self.calculated_fields,
+            'profiles': self.profiles,
             'theme': self.theme,
         }
 
@@ -183,6 +187,7 @@ class Project:
         project.state = data.get('state', {})
         project.dashboards = data.get('dashboards', [])
         project.calculated_fields = data.get('calculated_fields', [])
+        project.profiles = data.get('profiles', [])
         project.theme = data.get('theme', 'midnight')
 
         return project

@@ -246,18 +246,19 @@ class MainWindow(QMainWindow):
         open_no_wizard_action.triggered.connect(self._on_open_file_without_wizard)
         file_menu.addAction(open_no_wizard_action)
 
-        # Open Settings
-        open_settings_action = QAction("Open &Settings...", self)
-        open_settings_action.setShortcut("Ctrl+Alt+O")
-        open_settings_action.setStatusTip("Load a saved settings/profile file (Ctrl+Alt+O)")
-        open_settings_action.triggered.connect(self._on_open_settings)
-        file_menu.addAction(open_settings_action)
+        # Open Profile
+        open_profile_action = QAction("Open &Profile...", self)
+        open_profile_action.setShortcut("Ctrl+Alt+O")
+        open_profile_action.setStatusTip("Load a saved profile file (Ctrl+Alt+O)")
+        open_profile_action.triggered.connect(self._on_open_profile)
+        file_menu.addAction(open_profile_action)
 
-        # Open Settings Bundle
-        open_bundle_action = QAction("Open Settings &Bundle...", self)
-        open_bundle_action.setStatusTip("Load a settings bundle (multiple settings)")
-        open_bundle_action.triggered.connect(self._on_open_settings_bundle)
-        file_menu.addAction(open_bundle_action)
+        # Open Project
+        open_project_action = QAction("Open Pro&ject...", self)
+        open_project_action.setShortcut("Ctrl+Alt+P")
+        open_project_action.setStatusTip("Load a DGS project file (Ctrl+Alt+P)")
+        open_project_action.triggered.connect(self._on_open_project)
+        file_menu.addAction(open_project_action)
 
         file_menu.addSeparator()
 
@@ -275,28 +276,37 @@ class MainWindow(QMainWindow):
         save_data_as_action.triggered.connect(self._on_save_data_as)
         file_menu.addAction(save_data_as_action)
 
-        # Save Settings
-        save_settings_action = QAction("Save Settings", self)
-        save_settings_action.setStatusTip("Save current settings/profile")
-        save_settings_action.triggered.connect(self._on_save_settings)
-        file_menu.addAction(save_settings_action)
+        # Save Profile
+        save_profile_action = QAction("Save Profile", self)
+        save_profile_action.setStatusTip("Save active profile to last path")
+        save_profile_action.triggered.connect(self._on_save_profile_file)
+        file_menu.addAction(save_profile_action)
 
-        # Save Settings As
-        save_settings_as_action = QAction("Save Settings As...", self)
-        save_settings_as_action.setStatusTip("Save current settings to a new file")
-        save_settings_as_action.triggered.connect(self._on_save_settings_as)
-        file_menu.addAction(save_settings_as_action)
+        # Save Profile As
+        save_profile_as_action = QAction("Save Profile As...", self)
+        save_profile_as_action.setStatusTip("Save active profile to a new file")
+        save_profile_as_action.triggered.connect(self._on_save_profile_file_as)
+        file_menu.addAction(save_profile_as_action)
 
-        # Save Settings Bundle
-        save_bundle_action = QAction("Save Settings Bundle", self)
-        save_bundle_action.setStatusTip("Save current settings bundle")
-        save_bundle_action.triggered.connect(self._on_save_settings_bundle)
-        file_menu.addAction(save_bundle_action)
+        # Save Project
+        save_project_action = QAction("Save Project", self)
+        save_project_action.setShortcut("Ctrl+Alt+S")
+        save_project_action.setStatusTip("Save project with profiles (Ctrl+Alt+S)")
+        save_project_action.triggered.connect(self._on_save_project_file)
+        file_menu.addAction(save_project_action)
 
-        # Save Settings Bundle As
-        save_bundle_as_action = QAction("Save Settings Bundle As...", self)
-        save_bundle_as_action.setStatusTip("Save current settings bundle to a new file")
-        save_bundle_as_action.triggered.connect(self._on_save_settings_bundle_as)
+        # Save Project As
+        save_project_as_action = QAction("Save Project As...", self)
+        save_project_as_action.setStatusTip("Save project with profiles to a new file")
+        save_project_as_action.triggered.connect(self._on_save_project_file_as)
+        file_menu.addAction(save_project_as_action)
+
+        file_menu.addSeparator()
+
+        # Save Profile Bundle As
+        save_bundle_as_action = QAction("Save Profile Bundle As...", self)
+        save_bundle_as_action.setStatusTip("Save all profiles as a bundle file")
+        save_bundle_as_action.triggered.connect(self._on_save_profile_bundle_as)
         file_menu.addAction(save_bundle_as_action)
 
         file_menu.addSeparator()
@@ -653,33 +663,7 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda checked, c=ct: self.state.set_chart_type(c))
             toolbar.addAction(action)
 
-        toolbar.addSeparator()
-
-        # Preset management
-        preset_label = QLabel("  Preset: ")
-        preset_label.setObjectName("toolbarLabel")
-        toolbar.addWidget(preset_label)
-
-        self._preset_combo = QComboBox()
-        self._preset_combo.setMinimumWidth(120)
-        self._preset_combo.setToolTip("Load saved preset")
-        self._preset_combo.currentTextChanged.connect(self._on_preset_selected)
-        toolbar.addWidget(self._preset_combo)
-
-        save_preset_btn = QAction("💾", self)
-        save_preset_btn.setToolTip("Save current settings as preset")
-        save_preset_btn.triggered.connect(self._on_save_preset)
-        toolbar.addAction(save_preset_btn)
-
-        delete_preset_btn = QAction("🗑️", self)
-        delete_preset_btn.setToolTip("Delete selected preset")
-        delete_preset_btn.triggered.connect(self._on_delete_preset)
-        toolbar.addAction(delete_preset_btn)
-
-        # Initialize presets directory and load presets
-        self._presets_dir = Path.home() / ".data_graph_studio" / "presets"
-        self._presets_dir.mkdir(parents=True, exist_ok=True)
-        self._refresh_presets()
+        # (Preset management removed – use File menu profile/project save/load)
 
     def _setup_compare_toolbar(self):
         """Setup the Compare Toolbar (hidden by default, auto-shown during comparison)."""
@@ -2348,6 +2332,41 @@ class MainWindow(QMainWindow):
                         'null_count': col_info.null_count,
                     }
 
+        # X/Y Range 계산
+        try:
+            x_col = self.state.x_column
+            if x_col and self.engine.df is not None and x_col in self.engine.df.columns:
+                x_series = self.engine.df[x_col]
+                try:
+                    x_min = float(x_series.min())
+                    x_max = float(x_series.max())
+                    stats['x_range'] = {'min': x_min, 'max': x_max, 'range': x_max - x_min, 'column': x_col}
+                except (TypeError, ValueError):
+                    pass
+
+            if self.state.value_columns and self.engine.df is not None:
+                y_min_all, y_max_all = float('inf'), float('-inf')
+                y_col_names = []
+                for vc in self.state.value_columns:
+                    name = vc.name if hasattr(vc, 'name') else str(vc)
+                    if name in self.engine.df.columns:
+                        y_col_names.append(name)
+                        try:
+                            col_min = float(self.engine.df[name].min())
+                            col_max = float(self.engine.df[name].max())
+                            y_min_all = min(y_min_all, col_min)
+                            y_max_all = max(y_max_all, col_max)
+                        except (TypeError, ValueError):
+                            pass
+                if y_min_all < float('inf') and y_max_all > float('-inf'):
+                    stats['y_range'] = {
+                        'min': y_min_all, 'max': y_max_all,
+                        'range': y_max_all - y_min_all,
+                        'columns': y_col_names,
+                    }
+        except Exception:
+            pass
+
         self.state.update_summary(stats)
     
     def _on_tool_mode_changed(self):
@@ -2653,182 +2672,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         from PySide6.QtCore import QUrl
         QDesktopServices.openUrl(QUrl(url))
 
-    # ==================== Preset Management ====================
-
-    def _refresh_presets(self):
-        """Refresh preset dropdown list"""
-        self._preset_combo.blockSignals(True)
-        current_text = self._preset_combo.currentText()
-        self._preset_combo.clear()
-        self._preset_combo.addItem("(Default)")
-
-        # List preset files
-        if self._presets_dir.exists():
-            preset_files = sorted(self._presets_dir.glob("*.json"))
-            for preset_file in preset_files:
-                self._preset_combo.addItem(preset_file.stem)
-
-        # Restore selection if still exists
-        idx = self._preset_combo.findText(current_text)
-        if idx >= 0:
-            self._preset_combo.setCurrentIndex(idx)
-        else:
-            self._preset_combo.setCurrentIndex(0)
-
-        self._preset_combo.blockSignals(False)
-
-    def _on_preset_selected(self, preset_name: str):
-        """Load selected preset"""
-        if not preset_name or preset_name == "(Default)":
-            return
-
-        preset_path = self._presets_dir / f"{preset_name}.json"
-        if not preset_path.exists():
-            return
-
-        try:
-            with open(preset_path, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-
-            self._apply_preset_settings(settings)
-            self.statusbar.showMessage(f"Loaded preset: {preset_name}", 3000)
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Load Preset Error",
-                f"Failed to load preset: {e}"
-            )
-
-    def _on_save_preset(self):
-        """Save current settings as preset"""
-        name, ok = QInputDialog.getText(
-            self,
-            "Save Preset",
-            "Enter preset name:",
-            text=""
-        )
-
-        if not ok or not name.strip():
-            return
-
-        name = name.strip()
-        # Sanitize name for filename
-        safe_name = "".join(c for c in name if c.isalnum() or c in "._- ")
-        if not safe_name:
-            QMessageBox.warning(self, "Invalid Name", "Please enter a valid preset name.")
-            return
-
-        preset_path = self._presets_dir / f"{safe_name}.json"
-
-        # Check if exists
-        if preset_path.exists():
-            reply = QMessageBox.question(
-                self,
-                "Overwrite Preset",
-                f"Preset '{safe_name}' already exists. Overwrite?",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
-                return
-
-        try:
-            settings = self._get_current_settings()
-            with open(preset_path, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False, default=str)
-
-            self._refresh_presets()
-            self._preset_combo.setCurrentText(safe_name)
-            self.statusbar.showMessage(f"Saved preset: {safe_name}", 3000)
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Save Preset Error",
-                f"Failed to save preset: {e}"
-            )
-
-    def _on_delete_preset(self):
-        """Delete selected preset"""
-        preset_name = self._preset_combo.currentText()
-        if not preset_name or preset_name == "(Default)":
-            QMessageBox.information(self, "Delete Preset", "Select a preset to delete.")
-            return
-
-        reply = QMessageBox.question(
-            self,
-            "Delete Preset",
-            f"Delete preset '{preset_name}'?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply != QMessageBox.Yes:
-            return
-
-        preset_path = self._presets_dir / f"{preset_name}.json"
-        try:
-            if preset_path.exists():
-                preset_path.unlink()
-            self._refresh_presets()
-            self.statusbar.showMessage(f"Deleted preset: {preset_name}", 3000)
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Delete Preset Error",
-                f"Failed to delete preset: {e}"
-            )
-
-    def _get_current_settings(self) -> Dict:
-        """Get current chart and view settings for saving"""
-        settings = {
-            'version': '1.0',
-            'chart_type': self.state.chart_settings.chart_type.value if self.state.chart_settings.chart_type else None,
-            'tool_mode': self.state.tool_mode.value if self.state.tool_mode else None,
-        }
-
-        # Get chart options from graph panel
-        if hasattr(self.graph_panel, 'get_chart_options'):
-            chart_options = self.graph_panel.get_chart_options()
-            # Convert QColor to string for JSON serialization
-            if 'bg_color' in chart_options and chart_options['bg_color']:
-                chart_options['bg_color'] = chart_options['bg_color'].name()
-            settings['chart_options'] = chart_options
-
-        # Get legend settings
-        if hasattr(self.graph_panel, 'get_legend_settings'):
-            settings['legend_settings'] = self.graph_panel.get_legend_settings()
-
-        # Get panel visibility
-        settings['panel_visibility'] = {
-            'summary': self.summary_panel.isVisible(),
-            'graph': self.graph_panel.isVisible(),
-            'table': self.table_panel.isVisible(),
-        }
-
-        return settings
-
-    def _apply_preset_settings(self, settings: Dict):
-        """Apply loaded preset settings"""
-        # Apply chart type
-        if 'chart_type' in settings and settings['chart_type']:
-            try:
-                self.state.set_chart_type(ChartType(settings['chart_type']))
-            except ValueError:
-                pass
-
-        # Apply chart options
-        if 'chart_options' in settings and hasattr(self.graph_panel, 'apply_options'):
-            self.graph_panel.apply_options(settings['chart_options'])
-
-        # Apply panel visibility
-        if 'panel_visibility' in settings:
-            vis = settings['panel_visibility']
-            for panel_key, visible in vis.items():
-                if panel_key in self._view_actions:
-                    self._view_actions[panel_key].setChecked(visible)
-                    self._toggle_panel_visibility(panel_key, visible)
-
-        # Refresh graph
-        if hasattr(self.graph_panel, 'refresh'):
-            self.graph_panel.refresh()
+    # ==================== Profile / Project File I/O ====================
 
     # ==================== Profile Menu Actions ====================
 
@@ -4314,33 +4158,187 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     # New Menu Action Methods (File Menu)
     # ============================================================
 
-    def _on_open_settings(self):
-        """Open Settings - 설정/프로파일 파일 불러오기"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Settings",
-            str(Path.home() / ".data_graph_studio"),
-            "DGS Settings (*.dgs-settings *.json);;All Files (*.*)"
-        )
-        if file_path:
-            try:
-                # 프로파일 로드 시도
-                self._on_load_profile_menu()
-            except Exception as e:
-                QMessageBox.warning(self, "Open Settings", f"Failed to load settings: {e}")
+    # ------ Profile / Project file actions (File menu) ------
 
-    def _on_open_settings_bundle(self):
-        """Open Settings Bundle - 설정 묶음 불러오기"""
+    def _on_open_profile(self):
+        """Open Profile – 단일 프로파일 JSON 파일 로드 → 활성 데이터셋에 추가"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Settings Bundle",
-            str(Path.home() / ".data_graph_studio"),
-            "DGS Settings Bundle (*.dgs-bundle *.zip);;All Files (*.*)"
+            self, "Open Profile",
+            str(Path.home()),
+            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)"
         )
-        if file_path:
-            QMessageBox.information(
-                self, "Open Settings Bundle",
-                f"Settings bundle loading will be implemented.\n\nSelected: {file_path}"
-            )
-            self.statusbar.showMessage(f"Settings bundle: {Path(file_path).name}", 3000)
+        if not file_path:
+            return
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            gs = GraphSetting.from_dict(data)
+            dataset_id = self.state.active_dataset_id or ""
+            if gs.dataset_id != dataset_id:
+                from dataclasses import replace as _replace
+                gs = _replace(gs, dataset_id=dataset_id)
+            self.profile_store.add(gs)
+            self._last_profile_path = file_path
+            if hasattr(self, 'profile_model'):
+                self.profile_model.refresh()
+            self.statusbar.showMessage(f"Profile loaded: {gs.name}", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Open Profile", f"Failed to load profile:\n{e}")
+
+    def _on_open_project(self):
+        """Open Project – .dgs 프로젝트 파일 로드 (프로파일 포함)"""
+        from ..core.project import Project
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Project",
+            str(Path.home()),
+            "DGS Project (*.dgs);;All Files (*.*)"
+        )
+        if not file_path:
+            return
+        try:
+            project = Project.load(file_path)
+            self._last_project_path = file_path
+
+            # 프로파일 복원
+            for p_data in project.profiles:
+                try:
+                    gs = GraphSetting.from_dict(p_data)
+                    self.profile_store.add(gs)
+                except Exception:
+                    logger.warning("Skipping invalid profile entry in project")
+
+            if hasattr(self, 'profile_model'):
+                self.profile_model.refresh()
+            self.statusbar.showMessage(f"Project loaded: {project.name} ({len(project.profiles)} profiles)", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Open Project", f"Failed to load project:\n{e}")
+
+    def _on_save_profile_file(self):
+        """Save Profile – 활성 프로파일을 마지막 경로로 저장"""
+        dataset_id = self.state.active_dataset_id or ""
+        settings = self.profile_store.get_by_dataset(dataset_id)
+        if not settings:
+            QMessageBox.information(self, "Save Profile", "No active profile to save.")
+            return
+
+        # 활성 프로파일(첫 번째)
+        gs = settings[0]
+        path = getattr(self, '_last_profile_path', None)
+        if not path:
+            return self._on_save_profile_file_as()
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(gs.to_dict(), f, indent=2, ensure_ascii=False)
+            self.statusbar.showMessage(f"Profile saved: {path}", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Save Profile", f"Failed to save profile:\n{e}")
+
+    def _on_save_profile_file_as(self):
+        """Save Profile As – 프로파일을 새 경로에 JSON으로 저장"""
+        dataset_id = self.state.active_dataset_id or ""
+        settings = self.profile_store.get_by_dataset(dataset_id)
+        if not settings:
+            QMessageBox.information(self, "Save Profile As", "No active profile to save.")
+            return
+
+        gs = settings[0]
+        default_name = gs.name.replace(' ', '_') if gs.name else "profile"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Profile As",
+            str(Path.home() / f"{default_name}.dgs-profile"),
+            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)"
+        )
+        if not file_path:
+            return
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(gs.to_dict(), f, indent=2, ensure_ascii=False)
+            self._last_profile_path = file_path
+            self.statusbar.showMessage(f"Profile saved: {file_path}", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Save Profile As", f"Failed to save profile:\n{e}")
+
+    def _on_save_project_file(self):
+        """Save Project – 프로젝트+프로파일 저장 (마지막 경로)"""
+        path = getattr(self, '_last_project_path', None)
+        if not path:
+            return self._on_save_project_file_as()
+        self._save_project_to(path)
+
+    def _on_save_project_file_as(self):
+        """Save Project As – 프로젝트+프로파일을 새 경로에 .dgs로 저장"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Project As",
+            str(Path.home() / "project.dgs"),
+            "DGS Project (*.dgs);;All Files (*.*)"
+        )
+        if not file_path:
+            return
+        self._save_project_to(file_path)
+
+    def _save_project_to(self, path: str):
+        """프로젝트를 지정 경로에 저장"""
+        from ..core.project import Project
+        try:
+            project = Project(name=Path(path).stem)
+
+            # 모든 프로파일을 프로젝트에 포함
+            all_profiles = []
+            for did in self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else [""]:
+                for gs in self.profile_store.get_by_dataset(did):
+                    all_profiles.append(gs.to_dict())
+            # dataset_id가 빈 문자열인 프로파일도 포함
+            for gs in self.profile_store.get_by_dataset(""):
+                all_profiles.append(gs.to_dict())
+            # 중복 제거 (id 기준)
+            seen_ids = set()
+            unique = []
+            for p in all_profiles:
+                if p["id"] not in seen_ids:
+                    seen_ids.add(p["id"])
+                    unique.append(p)
+            project.profiles = unique
+
+            project.save(path)
+            self._last_project_path = path
+            self.statusbar.showMessage(f"Project saved: {path} ({len(unique)} profiles)", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Save Project", f"Failed to save project:\n{e}")
+
+    def _on_save_profile_bundle_as(self):
+        """Save Profile Bundle As – 모든 프로파일을 .dgs-bundle JSON으로 저장"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Profile Bundle As",
+            str(Path.home() / "profiles.dgs-bundle"),
+            "DGS Profile Bundle (*.dgs-bundle);;All Files (*.*)"
+        )
+        if not file_path:
+            return
+        try:
+            all_profiles = []
+            for did in self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else [""]:
+                for gs in self.profile_store.get_by_dataset(did):
+                    all_profiles.append(gs.to_dict())
+            for gs in self.profile_store.get_by_dataset(""):
+                all_profiles.append(gs.to_dict())
+            # 중복 제거
+            seen_ids = set()
+            unique = []
+            for p in all_profiles:
+                if p["id"] not in seen_ids:
+                    seen_ids.add(p["id"])
+                    unique.append(p)
+
+            bundle = {
+                "format": "dgs-profile-bundle",
+                "version": "1.0",
+                "profiles": unique,
+            }
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(bundle, f, indent=2, ensure_ascii=False)
+            self.statusbar.showMessage(f"Profile bundle saved: {file_path} ({len(unique)} profiles)", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Save Profile Bundle", f"Failed to save bundle:\n{e}")
 
     def _on_save_data(self):
         """Save Data - 현재 데이터 저장"""
@@ -4382,54 +4380,6 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 self.statusbar.showMessage(f"Data saved to {file_path}", 3000)
             except Exception as e:
                 QMessageBox.warning(self, "Save Data As", f"Failed to save: {e}")
-
-    def _on_save_settings(self):
-        """Save Settings - 현재 설정 저장"""
-        # 현재 프로파일 저장
-        self._on_save_profile_menu()
-
-    def _on_save_settings_as(self):
-        """Save Settings As - 다른 이름으로 설정 저장"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Settings As",
-            str(Path.home() / ".data_graph_studio" / "settings"),
-            "DGS Settings (*.dgs-settings);;JSON Files (*.json);;All Files (*.*)"
-        )
-        if file_path:
-            try:
-                # 현재 상태를 설정으로 저장
-                settings = {
-                    'chart_type': self.state._chart_settings.chart_type.name if hasattr(self.state, '_chart_settings') else 'LINE',
-                    'x_column': self.state.x_column,
-                    'y_columns': list(self.state._y_columns) if hasattr(self.state, '_y_columns') else [],
-                    'theme': getattr(self, '_current_theme', 'light'),
-                }
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(settings, f, indent=2)
-                self.statusbar.showMessage(f"Settings saved to {file_path}", 3000)
-            except Exception as e:
-                QMessageBox.warning(self, "Save Settings As", f"Failed to save settings: {e}")
-
-    def _on_save_settings_bundle(self):
-        """Save Settings Bundle - 설정 묶음 저장"""
-        QMessageBox.information(
-            self, "Save Settings Bundle",
-            "Settings bundle save functionality will be implemented.\n\n"
-            "This will save multiple settings configurations together."
-        )
-
-    def _on_save_settings_bundle_as(self):
-        """Save Settings Bundle As - 다른 이름으로 설정 묶음 저장"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Settings Bundle As",
-            str(Path.home() / ".data_graph_studio" / "bundle"),
-            "DGS Settings Bundle (*.dgs-bundle);;ZIP Files (*.zip);;All Files (*.*)"
-        )
-        if file_path:
-            QMessageBox.information(
-                self, "Save Settings Bundle As",
-                f"Bundle will be saved to:\n{file_path}\n\n(Feature under development)"
-            )
 
     def _on_import_data(self):
         """Import - 데이터 임포트"""
