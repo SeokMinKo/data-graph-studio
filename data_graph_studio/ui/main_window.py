@@ -981,11 +981,21 @@ class MainWindow(QMainWindow):
                     "file_path": meta.file_path
                 })
 
+            # Serialize all profiles from ProfileStore
+            profiles = []
+            for did in self.state._dataset_metadata:
+                for gs in self.profile_store.get_by_dataset(did):
+                    try:
+                        profiles.append(gs.to_dict())
+                    except Exception:
+                        pass
+
             payload = {
-                "version": 1,
+                "version": 2,
                 "datasets": datasets,
                 "active_dataset_id": self.state.active_dataset_id,
                 "graph_state": self.state.get_current_graph_state(),
+                "profiles": profiles,
                 "drawings": self.graph_panel.get_drawings_data() if hasattr(self, 'graph_panel') else {},
                 "ts": time.time()
             }
@@ -1047,6 +1057,17 @@ class MainWindow(QMainWindow):
         elif self.engine.active_dataset_id:
             self._on_dataset_activated(self.engine.active_dataset_id)
 
+        # Restore profiles into ProfileStore
+        profiles_data = data.get("profiles", [])
+        for p_data in profiles_data:
+            try:
+                gs = GraphSetting.from_dict(p_data)
+                # Only add if dataset exists
+                if gs.dataset_id in [ds.get("id") for ds in datasets]:
+                    self.profile_store.add(gs)
+            except Exception:
+                pass
+
         # Restore graph settings
         graph_state = data.get("graph_state", {})
         if graph_state:
@@ -1057,7 +1078,8 @@ class MainWindow(QMainWindow):
         if drawings and hasattr(self, 'graph_panel'):
             self.graph_panel.load_drawings_data(drawings)
 
-        # Final refresh
+        # Refresh profile tree + graph
+        self.profile_model.refresh()
         self.graph_panel.refresh()
         self.summary_panel.refresh()
 

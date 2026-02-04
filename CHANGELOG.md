@@ -4,6 +4,14 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.15.1] — 2026-02-04
+
+### 🐛 Bug Fixes
+
+- 세션 복원 시 프로파일이 프로젝트 탐색창에 표시되지 않는 버그 수정 — autosave에 프로파일 데이터 저장/복원 추가 ([`autosave-profiles`](../../commit/HEAD))
+
+---
+
 ## [v0.15.0] — 2026-02-04
 
 ### ✨ Features
