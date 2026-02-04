@@ -4,6 +4,17 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.13.1] — 2026-02-04
+
+### ✨ Features
+
+- 릴리즈 노트 자동 생성 스크립트 + GitHub Actions 워크플로우 ([`8fa28cc`](../../commit/8fa28cc))
+
+### 🐛 Bug Fixes
+
+- 프로파일 독립성 버그 수정 + 트리 expand 상태 보존 ([`5d424bb`](../../commit/5d424bb))
+- clean up unused imports and variables (bug hunt) ([`dd8253e`](../../commit/dd8253e))
+
 ## [v0.13.0] — 2026-02-04
 
 ### ✨ Features
