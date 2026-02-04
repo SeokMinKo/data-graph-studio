@@ -2859,6 +2859,8 @@ class GraphPanel(QWidget):
         current_type = self.state._chart_settings.chart_type
 
         if num_values >= 2 and current_type != ChartType.COMBINATION:
+            # Remember the original chart type before auto-switching
+            self._pre_combo_chart_type = current_type
             # Auto-switch to Combination when 2+ value columns
             self.state.set_chart_type(ChartType.COMBINATION)
             # Update combo box UI without re-triggering signal
@@ -2869,11 +2871,12 @@ class GraphPanel(QWidget):
                     break
             self.options_panel.chart_type_combo.blockSignals(False)
         elif num_values <= 1 and self.state._chart_settings.chart_type == ChartType.COMBINATION:
-            # Revert to Line when only 1 or 0 value columns
-            self.state.set_chart_type(ChartType.LINE)
+            # Revert to the original chart type before combo was activated
+            restore_type = getattr(self, '_pre_combo_chart_type', ChartType.LINE)
+            self.state.set_chart_type(restore_type)
             self.options_panel.chart_type_combo.blockSignals(True)
             for i in range(self.options_panel.chart_type_combo.count()):
-                if self.options_panel.chart_type_combo.itemData(i) == ChartType.LINE:
+                if self.options_panel.chart_type_combo.itemData(i) == restore_type:
                     self.options_panel.chart_type_combo.setCurrentIndex(i)
                     break
             self.options_panel.chart_type_combo.blockSignals(False)
