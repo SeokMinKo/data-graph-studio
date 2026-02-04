@@ -4,6 +4,14 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.14.3] — 2026-02-04
+
+### 🐛 Bug Fixes
+
+- 존재하지 않는 그룹/값 컬럼 참조 시 ColumnNotFoundError 크래시 수정 ([`6c2cce4`](../../commit/6c2cce4))
+
+---
+
 ## [v0.13.1] — 2026-02-04
 
 ### ✨ Features
