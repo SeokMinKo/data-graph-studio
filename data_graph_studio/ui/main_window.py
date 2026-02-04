@@ -1523,6 +1523,7 @@ class MainWindow(QMainWindow):
         ok = self.profile_controller.apply_profile(profile_id)
         if not ok:
             raise ValueError(f"Failed to apply profile: {profile_id}")
+        self._schedule_autofit()
         return {"ok": True}
 
     def _ipc_delete_profile(self, profile_id: str) -> dict:
@@ -2210,12 +2211,25 @@ class MainWindow(QMainWindow):
                     logger.debug(f"[DEBUG-CRASH] apply_profile() start, id={graph_setting.id}")
                     self.profile_controller.apply_profile(graph_setting.id)
                     logger.debug(f"[DEBUG-CRASH] apply_profile() done")
+                    self._schedule_autofit()
                 except Exception as e:
                     logger.warning(f"Failed to apply profile: {e}", exc_info=True)
                 
                 logger.info(f"Wizard result applied: {graph_setting.name}")
                 logger.debug(f"[DEBUG-CRASH] after wizard result applied, returning from _apply_pending_wizard_result")
-    
+
+    def _schedule_autofit(self):
+        """프로파일 전환/생성 후 그래프를 자동으로 Fit (데이터에 맞춤)."""
+        QTimer.singleShot(50, self._do_autofit)
+
+    def _do_autofit(self):
+        """실제 autofit 수행."""
+        try:
+            if hasattr(self, 'graph_panel') and self.engine.is_loaded:
+                self.graph_panel.autofit()
+        except Exception as e:
+            logger.debug(f"Auto-fit after profile switch failed: {e}")
+
     def _cancel_loading(self):
         """로딩 취소"""
         if self._loader_thread and self._loader_thread.isRunning():
@@ -2981,6 +2995,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         """프로파일 적용 요청 (ProjectTreeView에서)"""
         if self.profile_controller.apply_profile(profile_id):
             self.graph_panel.refresh()
+            self._schedule_autofit()
             self.statusbar.showMessage("Profile applied", 2000)
 
     def _on_new_profile_requested(self, dataset_id: str):
@@ -2997,6 +3012,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 else:
                     self.profile_model.refresh()
                 self.graph_panel.refresh()
+                self._schedule_autofit()
                 self.statusbar.showMessage(f"Profile '{name}' created", 2000)
 
     def _on_profile_rename_requested(self, profile_id: str):
