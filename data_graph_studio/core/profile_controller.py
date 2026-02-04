@@ -33,9 +33,16 @@ class ProfileController(QObject):
 
     def create_profile(self, dataset_id: str, name: str) -> Optional[str]:
         try:
-            setting = GraphSettingMapper.from_app_state(self._state, name=name, dataset_id=dataset_id)
+            import uuid
+            setting = GraphSetting(
+                id=str(uuid.uuid4()),
+                name=name,
+                dataset_id=dataset_id,
+            )
             self._store.add(setting)
+            # 새 프로파일을 활성화하고 빈 상태를 AppState에 적용
             self._active_profile_id = setting.id
+            GraphSettingMapper.to_app_state(setting, self._state)
             self.profile_created.emit(setting.id)
             return setting.id
         except Exception as exc:  # pragma: no cover - defensive

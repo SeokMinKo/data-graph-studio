@@ -267,13 +267,15 @@ class TestCreateProfile:
         stored = win.profile_store.get(result["id"])
         assert stored.dataset_id == "ds-2"
 
-    def test_captures_current_state(self, win):
+    def test_creates_blank_profile(self, win):
+        """신규 프로파일은 빈 그래프 설정으로 생성된다."""
         win.state._chart_settings.chart_type = ChartType.BAR
         win.state._x_column = "date"
-        result = win._ipc_create_profile(name="Bar Chart")
+        result = win._ipc_create_profile(name="Blank Profile")
         stored = win.profile_store.get(result["id"])
-        assert stored.chart_type == "bar"
-        assert stored.x_column == "date"
+        # 새 프로파일은 빈 상태 (현재 AppState를 복사하지 않음)
+        assert stored.chart_type == ""
+        assert stored.x_column is None
 
 
 # ---------------------------------------------------------------------------

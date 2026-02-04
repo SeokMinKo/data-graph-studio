@@ -2950,6 +2950,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                     self.profile_model.add_profile_incremental(dataset_id, setting)
                 else:
                     self.profile_model.refresh()
+                self.graph_panel.refresh()
                 self.statusbar.showMessage(f"Profile '{name}' created", 2000)
 
     def _on_profile_rename_requested(self, profile_id: str):
