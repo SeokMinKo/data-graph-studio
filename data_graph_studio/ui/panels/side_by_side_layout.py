@@ -457,7 +457,7 @@ class MiniGraphWidget(QWidget):
             pass
 
     @staticmethod
-    def _sample(x_data, y_data, np, max_points: int = 1000):
+    def _sample(x_data, y_data, np, max_points: int = 10000):
         """Downsample arrays if they exceed max_points."""
         if len(x_data) > max_points:
             step = len(x_data) // max_points

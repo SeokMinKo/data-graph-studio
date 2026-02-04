@@ -35,7 +35,7 @@ OVERLAY_COLORS = [
     "#17becf",  # cyan
 ]
 
-MAX_POINTS_PER_SERIES = 5000
+MAX_POINTS_PER_SERIES = 10000
 
 
 class ProfileOverlayRenderer(QWidget):
