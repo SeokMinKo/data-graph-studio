@@ -13,7 +13,7 @@ from typing import Dict, Optional, List, Any
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog, QFrame, QComboBox,
+    QProgressDialog, QApplication, QLabel, QDialog, QFrame,
     QInputDialog, QTabWidget
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
@@ -169,6 +169,10 @@ class MainWindow(QMainWindow):
 
         # Floating graph manager
         self._floating_graph_manager: Optional[FloatingGraphManager] = None
+
+        # Last save/load paths for profile/project
+        self._last_profile_path: Optional[str] = None
+        self._last_project_path: Optional[str] = None
 
         # Setup UI
         self._setup_window()
@@ -2388,18 +2392,6 @@ class MainWindow(QMainWindow):
     def _autofit_graph(self):
         """그래프 자동 맞춤"""
         self.graph_panel.autofit()
-    
-    def _on_save_project(self):
-        """프로젝트 저장"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Project",
-            "",
-            "Data Graph Studio Project (*.dgs)"
-        )
-        if file_path:
-            # TODO: 프로젝트 저장 구현
-            self.statusbar.showMessage(f"Project saved: {file_path}", 3000)
     
     def _on_export(self, format: str):
         """내보내기"""
