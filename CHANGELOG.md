@@ -4,6 +4,20 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.17.0] — 2026-02-04
+
+### ✨ Features
+
+- **Combination 차트 자동 전환** — Y축에 value column 2개 이상 추가 시 자동으로 🔀 Combination으로 전환, 1개로 줄이면 원래 차트 타입 복원 ([`691f005`](../../commit/691f005), [`e676d8c`](../../commit/e676d8c))
+- **검색 가능 콤보박스** — 모든 Search columns/values 필드에 contains 매칭 검색 + 드롭다운 기능 통합 ([`5aae78f`](../../commit/5aae78f))
+- **마커 테두리 옵션** — Style > Marker 섹션에 Border 체크박스 추가, Line/Scatter/Combo 차트 전부 적용 ([`cc7ba12`](../../commit/cc7ba12))
+
+### 🐛 Bug Fixes
+
+- **Compare 모드 샘플링** — 하드코딩(1K/5K) 제거, 프로파일의 sampling 설정(show_all_data/max_points) 그대로 사용 ([`e59533b`](../../commit/e59533b))
+
+---
+
 ## [v0.15.7] — 2026-02-04
 
 ### 🐛 Bug Fixes
