@@ -2388,9 +2388,18 @@ class MainWindow(QMainWindow):
         mode = self.state.tool_mode
         for m, action in self._tool_actions.items():
             action.setChecked(m == mode)
+
+        # Delegate tool mode to Compare view panels
+        if self._profile_comparison_view is not None:
+            if hasattr(self._profile_comparison_view, 'set_tool_mode'):
+                self._profile_comparison_view.set_tool_mode(mode)
     
     def _reset_graph_view(self):
-        """그래프 뷰 리셋"""
+        """그래프 뷰 리셋 — Compare 뷰 활성 시 위임"""
+        if self._profile_comparison_view is not None:
+            if hasattr(self._profile_comparison_view, 'reset_all_views'):
+                self._profile_comparison_view.reset_all_views()
+                return
         self.graph_panel.reset_view()
 
     def _on_clear_selection(self):
@@ -2400,7 +2409,11 @@ class MainWindow(QMainWindow):
             self.graph_panel.main_graph.highlight_selection([])
     
     def _autofit_graph(self):
-        """그래프 자동 맞춤"""
+        """그래프 자동 맞춤 — Compare 뷰 활성 시 위임"""
+        if self._profile_comparison_view is not None:
+            if hasattr(self._profile_comparison_view, 'autofit'):
+                self._profile_comparison_view.autofit()
+                return
         self.graph_panel.autofit()
     
     def _on_export(self, format: str):

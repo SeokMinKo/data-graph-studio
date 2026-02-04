@@ -152,6 +152,26 @@ class ProfileSideBySideLayout(QWidget):
         """Reset all panel views to auto-range."""
         self._view_sync_manager.reset_all_views()
 
+    def autofit(self) -> None:
+        """Auto-fit all panels to their data range."""
+        for panel in self._panels.values():
+            try:
+                panel.autofit()
+            except Exception:
+                pass
+
+    def set_tool_mode(self, mode) -> None:
+        """Propagate tool mode to all MiniGraphWidget panels.
+
+        Supported modes: RECT_SELECT, LASSO_SELECT → enable selection drag.
+        Draw modes → show status message (not supported in compare view).
+        """
+        for panel in self._panels.values():
+            try:
+                panel.set_tool_mode(mode)
+            except Exception:
+                pass
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------

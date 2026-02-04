@@ -166,7 +166,7 @@ class MiniGraphWidget(QWidget):
             import pyqtgraph as pg
 
             self.plot_widget = pg.PlotWidget()
-            self.plot_widget.setBackground('w')
+            self.plot_widget.setBackground(self._resolve_bg_color())
             self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
             self.plot_widget.setMinimumHeight(150)
             layout.addWidget(self.plot_widget, 1)
@@ -441,8 +441,84 @@ class MiniGraphWidget(QWidget):
         return x_data, y_data
 
     # ------------------------------------------------------------------
+    # Background color resolution
+    # ------------------------------------------------------------------
+
+    def _resolve_bg_color(self) -> str:
+        """Resolve background color from graph_setting > chart_settings > theme default.
+
+        Priority:
+          1. graph_setting.chart_settings['bg_color']
+          2. state.chart_settings.bg_color (if present)
+          3. Theme-aware default: dark '#1E293B'
+        """
+        # 1. From profile's chart_settings
+        if self.graph_setting is not None:
+            cs = self.graph_setting.chart_settings
+            if cs:
+                bg = cs.get('bg_color') if isinstance(cs, dict) else getattr(cs, 'bg_color', None)
+                if bg:
+                    return bg if isinstance(bg, str) else bg.name() if hasattr(bg, 'name') else str(bg)
+
+        # 2. From state chart_settings
+        try:
+            state_cs = self.state._chart_settings
+            bg = getattr(state_cs, 'bg_color', None)
+            if bg:
+                return bg if isinstance(bg, str) else bg.name() if hasattr(bg, 'name') else str(bg)
+        except Exception:
+            pass
+
+        # 3. Theme-aware default (dark theme)
+        return '#1E293B'
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def autofit(self):
+        """Auto-fit view to data range."""
+        if self.plot_widget is not None:
+            self.plot_widget.getViewBox().autoRange()
+
+    def set_tool_mode(self, mode) -> None:
+        """Apply tool mode from toolbar.
+
+        Supported:
+          RECT_SELECT / LASSO_SELECT → enable selection region drag.
+          ZOOM / PAN → normal pyqtgraph interaction.
+          Draw modes → ignored (not supported in mini graph).
+        """
+        from ...core.state import ToolMode
+
+        if self.plot_widget is None:
+            return
+
+        vb = self.plot_widget.getViewBox()
+
+        if mode in (ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT):
+            # Show selection region at center if hidden
+            if self._selection_region is not None and not self._selection_region.isVisible():
+                view_range = vb.viewRange()
+                x_min, x_max = view_range[0]
+                width = (x_max - x_min) * 0.2
+                center = (x_min + x_max) / 2
+                self._selection_region.setRegion([center - width / 2, center + width / 2])
+                self._selection_region.show()
+                region = list(self._selection_region.getRegion())
+                self._selected_indices = region
+                self.selection_changed.emit(self.dataset_id, region)
+            # Disable pan so region drag works
+            vb.setMouseEnabled(x=False, y=False)
+        elif mode == ToolMode.PAN:
+            vb.setMouseEnabled(x=True, y=True)
+            vb.setMouseMode(vb.PanMode)
+        elif mode == ToolMode.ZOOM:
+            vb.setMouseEnabled(x=True, y=True)
+            vb.setMouseMode(vb.RectMode)
+        else:
+            # Draw modes — not supported, just re-enable normal interaction
+            vb.setMouseEnabled(x=True, y=True)
 
     def refresh(self):
         """새로고침 — clear and replot (safe re-render)."""
