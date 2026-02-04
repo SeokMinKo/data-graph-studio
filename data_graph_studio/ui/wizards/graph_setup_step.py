@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QPushButton,
@@ -95,8 +96,13 @@ class GraphSetupStep(QWizardPage):
         self.x_column_combo.setToolTip("Column to use as X-axis values")
         left_layout.addWidget(self.x_column_combo)
 
-        # Y axis (multi)
+        # Y axis (multi) with search
         left_layout.addWidget(QLabel("Y축 컬럼 * (복수 선택)"))
+        self.y_search_edit = QLineEdit()
+        self.y_search_edit.setPlaceholderText("🔍 Search Y columns...")
+        self.y_search_edit.setClearButtonEnabled(True)
+        self.y_search_edit.textChanged.connect(self._filter_y_columns)
+        left_layout.addWidget(self.y_search_edit)
         self.y_columns_list = QListWidget()
         self.y_columns_list.setToolTip("Check columns to plot on Y-axis")
         self.y_columns_list.setSelectionMode(QListWidget.NoSelection)
@@ -108,8 +114,13 @@ class GraphSetupStep(QWizardPage):
         self.group_column_combo.setToolTip("Column to group data by (creates separate series)")
         left_layout.addWidget(self.group_column_combo)
 
-        # Hover columns
+        # Hover columns with search
         left_layout.addWidget(QLabel("Hover 컬럼 (복수 선택)"))
+        self.hover_search_edit = QLineEdit()
+        self.hover_search_edit.setPlaceholderText("🔍 Search Hover columns...")
+        self.hover_search_edit.setClearButtonEnabled(True)
+        self.hover_search_edit.textChanged.connect(self._filter_hover_columns)
+        left_layout.addWidget(self.hover_search_edit)
         self.hover_columns_list = QListWidget()
         self.hover_columns_list.setToolTip("Check columns to show in hover tooltip")
         self.hover_columns_list.setSelectionMode(QListWidget.NoSelection)
@@ -227,6 +238,25 @@ class GraphSetupStep(QWizardPage):
         finally:
             self.x_column_combo.blockSignals(False)
             self.group_column_combo.blockSignals(False)
+
+    def _filter_y_columns(self, text: str):
+        """Filter Y columns list by search text (preserves check state)"""
+        self._filter_list_widget(self.y_columns_list, text)
+
+    def _filter_hover_columns(self, text: str):
+        """Filter Hover columns list by search text (preserves check state)"""
+        self._filter_list_widget(self.hover_columns_list, text)
+
+    @staticmethod
+    def _filter_list_widget(list_widget: QListWidget, text: str):
+        """Show/hide items based on search text (case-insensitive)"""
+        search = text.strip().lower()
+        for i in range(list_widget.count()):
+            item = list_widget.item(i)
+            if not search:
+                item.setHidden(False)
+            else:
+                item.setHidden(search not in item.text().lower())
 
     def _get_selected_x_column(self) -> Optional[str]:
         value = self.x_column_combo.currentText()
