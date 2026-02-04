@@ -852,13 +852,17 @@ class DataEngine:
         파일 시작 512바이트를 읽어 null 바이트 또는 비인쇄 문자 비율로 판단.
         parsing_step에서도 사용하기 위해 static method로 제공.
         """
+        logger.debug(f"[ETL DEBUG] is_binary_etl called for: {path}")
         try:
             with open(path, 'rb') as f:
                 header = f.read(512)
-        except Exception:
+            logger.debug(f"[ETL DEBUG] Read {len(header)} bytes header")
+        except Exception as e:
+            logger.debug(f"[ETL DEBUG] Failed to read file: {e}")
             return False
 
         if not header:
+            logger.debug("[ETL DEBUG] Empty header, returning False")
             return False
 
         null_count = header.count(b'\x00')
@@ -866,6 +870,10 @@ class DataEngine:
 
         is_text = (null_count == 0 and
                    (non_printable_count / len(header) < 0.05 if len(header) > 0 else True))
+        
+        logger.debug(f"[ETL DEBUG] null_count={null_count}, non_printable={non_printable_count}, "
+                     f"is_text={is_text}, is_binary={not is_text}")
+        logger.debug(f"[ETL DEBUG] First 32 bytes (hex): {header[:32].hex()}")
         return not is_text
 
     @staticmethod
@@ -882,7 +890,11 @@ class DataEngine:
             ImportError: etl-parser가 설치되지 않은 경우
             ValueError: 파싱 결과가 비어있거나 파일 문제가 있는 경우
         """
+        logger.debug(f"[ETL DEBUG] parse_etl_binary called for: {path}")
+        logger.debug(f"[ETL DEBUG] HAS_ETL_PARSER = {HAS_ETL_PARSER}")
+        
         if not HAS_ETL_PARSER:
+            logger.error("[ETL DEBUG] etl-parser not installed!")
             raise ImportError("etl-parser 라이브러리가 설치되지 않았습니다.")
 
         from datetime import timedelta
@@ -991,10 +1003,13 @@ class DataEngine:
                 pass
 
         # 파일 읽기 및 파싱
+        logger.debug(f"[ETL DEBUG] Reading file: {path}")
         try:
             with open(path, 'rb') as f:
                 raw_data = f.read()
+            logger.debug(f"[ETL DEBUG] Read {len(raw_data)} bytes")
         except Exception as e:
+            logger.error(f"[ETL DEBUG] Failed to read file: {e}")
             raise ValueError(f"ETL 파일 읽기 실패: {e}")
 
         if not raw_data:
@@ -1003,9 +1018,17 @@ class DataEngine:
         collector = EtlEventCollector()
 
         try:
+            logger.debug("[ETL DEBUG] Creating reader with build_from_stream...")
             reader = build_from_stream(raw_data)
+            logger.debug(f"[ETL DEBUG] Reader created: {type(reader)}")
+            logger.debug("[ETL DEBUG] Starting parse...")
             reader.parse(collector)
+            logger.debug(f"[ETL DEBUG] Parse complete. Events: {len(collector.events)}, "
+                        f"ETW: {len(collector.etw_events)}, Errors: {collector._error_count}")
         except Exception as e:
+            logger.error(f"[ETL DEBUG] Parse failed with exception: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"[ETL DEBUG] Traceback:\n{traceback.format_exc()}")
             raise ValueError(
                 f"ETL 바이너리 파싱 실패: {e}\n\n"
                 "가능한 원인:\n"
@@ -1110,8 +1133,13 @@ class DataEngine:
         """
         import platform
 
+        logger.info(f"[ETL DEBUG] _load_etl called for: {path}")
+        logger.info(f"[ETL DEBUG] Platform: {platform.system()}")
+        logger.info(f"[ETL DEBUG] HAS_ETL_PARSER: {HAS_ETL_PARSER}")
+
         # 바이너리 ETL인지 확인
         is_binary = self.is_binary_etl(path)
+        logger.info(f"[ETL DEBUG] is_binary: {is_binary}")
 
         if not is_binary:
             # 텍스트 ETL (이미 변환됨)
@@ -1119,19 +1147,28 @@ class DataEngine:
                                    regex_pattern, has_header, skip_rows, comment_char)
 
         # --- 바이너리 ETL 처리 ---
+        logger.info("[ETL DEBUG] Processing as binary ETL...")
 
         # 1차 시도: etl-parser로 직접 파싱
         if HAS_ETL_PARSER:
+            logger.info("[ETL DEBUG] Attempting etl-parser...")
             try:
                 logger.info(f"etl-parser로 바이너리 ETL 파싱 시도: {path}")
-                return self.parse_etl_binary(path)
-            except ImportError:
+                result = self.parse_etl_binary(path)
+                logger.info(f"[ETL DEBUG] etl-parser SUCCESS! Rows: {len(result)}, Cols: {result.columns}")
+                return result
+            except ImportError as e:
+                logger.warning(f"[ETL DEBUG] etl-parser ImportError: {e}")
                 logger.warning("etl-parser 임포트 실패, 폴백으로 전환")
             except ValueError as e:
+                logger.warning(f"[ETL DEBUG] etl-parser ValueError: {e}")
                 logger.warning(f"etl-parser 파싱 실패: {e}")
                 # 파싱은 됐지만 이벤트가 없는 경우 등은 tracerpt로 폴백
             except Exception as e:
+                logger.warning(f"[ETL DEBUG] etl-parser unexpected error: {type(e).__name__}: {e}")
                 logger.warning(f"etl-parser 예상치 못한 오류: {e}", exc_info=True)
+        else:
+            logger.info("[ETL DEBUG] etl-parser not available, skipping to fallback...")
 
         # 2차 시도: Windows tracerpt 폴백
         system = platform.system()
