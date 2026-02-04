@@ -1422,6 +1422,37 @@ class TablePanel(QWidget):
         self.limit_marking_btn.clicked.connect(self._on_limit_marking_toggled)
         toolbar.addWidget(self.limit_marking_btn)
 
+        # GroupBy comboboxes (최대 2개)
+        toolbar.addWidget(QLabel("Group:"))
+
+        self.group_combo1 = QComboBox()
+        self.group_combo1.setMinimumWidth(100)
+        self.group_combo1.setMaximumWidth(160)
+        self.group_combo1.setToolTip("Group By column 1")
+        self.group_combo1.currentTextChanged.connect(self._on_group_combo_changed)
+        toolbar.addWidget(self.group_combo1)
+
+        self.group_combo2 = QComboBox()
+        self.group_combo2.setMinimumWidth(100)
+        self.group_combo2.setMaximumWidth(160)
+        self.group_combo2.setToolTip("Group By column 2")
+        self.group_combo2.currentTextChanged.connect(self._on_group_combo_changed)
+        toolbar.addWidget(self.group_combo2)
+
+        # Aggregation combobox
+        toolbar.addWidget(QLabel("Agg:"))
+
+        self.agg_combo = QComboBox()
+        self.agg_combo.setMinimumWidth(80)
+        self.agg_combo.setMaximumWidth(120)
+        self.agg_combo.setToolTip("Aggregation function")
+        from ..core.state import AggregationType
+        for agg in AggregationType:
+            self.agg_combo.addItem(agg.value.capitalize(), agg.value)
+        self.agg_combo.setCurrentText("Sum")
+        self.agg_combo.currentTextChanged.connect(self._on_agg_combo_changed)
+        toolbar.addWidget(self.agg_combo)
+
         # Window controls (for large datasets)
         self.window_widget = QWidget()
         window_layout = QHBoxLayout(self.window_widget)
@@ -1517,6 +1548,8 @@ class TablePanel(QWidget):
             self.grouped_model._row_cache = []
         self._update_table_model(df)
         self._update_window_controls()
+        self._populate_group_combos()
+        self._sync_group_combos_from_state()
         # Enable/disable search bar based on data availability
         has_data = df is not None and len(df) > 0
         self.search_input.setEnabled(has_data)
@@ -1719,12 +1752,70 @@ class TablePanel(QWidget):
             self.table_view.blockSignals(False)
     
     def _on_group_zone_changed(self):
+        self._sync_group_combos_from_state()
         if self.engine.is_loaded:
             self._update_table_model(self.engine.df)
     
     def _on_value_zone_changed(self):
         if self.engine.is_loaded and self.state.group_columns:
             self._update_table_model(self.engine.df)
+
+    # ── GroupBy / Aggregation Combos ──────────────────────────
+
+    def _populate_group_combos(self):
+        """컬럼 목록으로 GroupBy 콤보박스 채우기"""
+        columns = self.engine.columns if self.engine.is_loaded else []
+        for combo in (self.group_combo1, self.group_combo2):
+            combo.blockSignals(True)
+            prev = combo.currentText()
+            combo.clear()
+            combo.addItem("(None)")
+            for col in columns:
+                combo.addItem(col)
+            # 이전 선택 복원
+            idx = combo.findText(prev)
+            combo.setCurrentIndex(idx if idx >= 0 else 0)
+            combo.blockSignals(False)
+
+    def _sync_group_combos_from_state(self):
+        """AppState의 group_columns를 콤보박스에 반영"""
+        groups = self.state.group_columns
+        for i, combo in enumerate((self.group_combo1, self.group_combo2)):
+            combo.blockSignals(True)
+            if i < len(groups):
+                idx = combo.findText(groups[i].name)
+                combo.setCurrentIndex(idx if idx >= 0 else 0)
+            else:
+                combo.setCurrentIndex(0)  # (None)
+            combo.blockSignals(False)
+
+    def _on_group_combo_changed(self):
+        """콤보박스에서 GroupBy 변경 시 AppState 업데이트"""
+        g1 = self.group_combo1.currentText()
+        g2 = self.group_combo2.currentText()
+
+        self.state.clear_group_zone()
+        if g1 and g1 != "(None)":
+            self.state.add_group_column(g1)
+        if g2 and g2 != "(None)" and g2 != g1:
+            self.state.add_group_column(g2)
+
+    def _on_agg_combo_changed(self):
+        """Aggregation 변경 시 현재 value_columns의 aggregation 업데이트"""
+        from ..core.state import AggregationType
+        agg_text = self.agg_combo.currentData()
+        if not agg_text:
+            return
+        try:
+            agg = AggregationType(agg_text)
+        except ValueError:
+            return
+        # 모든 value_columns의 aggregation 업데이트
+        for vc in self.state.value_columns:
+            self.state.update_value_column(
+                vc.name, aggregation=agg,
+            )
+        self.state.value_zone_changed.emit()
     
     def _on_table_clicked(self, index):
         if index.column() == 0 and self.grouped_model and self.state.group_columns:
