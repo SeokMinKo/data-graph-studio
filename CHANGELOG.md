@@ -4,6 +4,27 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.15.7] — 2026-02-04
+
+### 🐛 Bug Fixes
+
+- Selection/Draw 마우스 드래그 버그 수정 — `mouseReleaseEvent` 중복 정의로 selection/draw 완료 처리가 무시되던 문제 해결 ([`9568bfa`](../../commit/9568bfa))
+- `_on_mouse_clicked` scene signal과 `mousePressEvent` 충돌 제거 — press→drag→release 모델만 사용
+
+### ✨ Features
+
+- 툴바에 Draw 색상 선택 버튼 추가 — 클릭하면 색상 다이얼로그, 기본색 빨간색 ([`9568bfa`](../../commit/9568bfa))
+
+---
+
+## [v0.15.6] — 2026-02-04
+
+### 🔧 Refactor
+
+- 미사용 QComboBox import 제거, 프로파일/프로젝트 last-path 추적 추가, save-project 스텁 제거 ([`71c3c88`](../../commit/71c3c88))
+
+---
+
 ## [v0.15.1] — 2026-02-04
 
 ### 🐛 Bug Fixes
