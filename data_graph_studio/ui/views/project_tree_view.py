@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal, QSize
@@ -92,16 +93,20 @@ class ProjectTreeView(_SafeAccessibleTreeView):
 
     def set_model(self, model: ProfileModel):
         # Disconnect old signals to prevent duplicate connections
-        try:
-            self.doubleClicked.disconnect(self._on_double_clicked)
-        except (RuntimeError, TypeError):
-            pass
-        old_sel = self.selectionModel()
-        if old_sel:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
             try:
-                old_sel.selectionChanged.disconnect(self._on_selection_changed)
+                self.doubleClicked.disconnect(self._on_double_clicked)
             except (RuntimeError, TypeError):
                 pass
+        old_sel = self.selectionModel()
+        if old_sel:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                try:
+                    old_sel.selectionChanged.disconnect(self._on_selection_changed)
+                except (RuntimeError, TypeError):
+                    pass
 
         self._model = model
         self.setModel(model)
