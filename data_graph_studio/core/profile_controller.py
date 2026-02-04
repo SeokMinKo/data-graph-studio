@@ -33,6 +33,10 @@ class ProfileController(QObject):
 
     def create_profile(self, dataset_id: str, name: str) -> Optional[str]:
         try:
+            # 새 프로파일 생성 전에 현재 활성 프로파일의 변경사항 자동 저장
+            if self._active_profile_id:
+                self.save_active_profile()
+
             import uuid
             setting = GraphSetting(
                 id=str(uuid.uuid4()),
@@ -118,6 +122,10 @@ class ProfileController(QObject):
         return True
 
     def duplicate_profile(self, profile_id: str) -> Optional[str]:
+        # 복제 전에 현재 활성 프로파일의 변경사항 자동 저장
+        if self._active_profile_id:
+            self.save_active_profile()
+
         setting = self._store.duplicate(profile_id)
         if setting is None:
             self.error_occurred.emit(f"Profile not found: {profile_id}")
