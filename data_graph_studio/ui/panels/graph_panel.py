@@ -3170,10 +3170,15 @@ class GraphPanel(QWidget):
             except Exception:
                 pass
 
+        # Build group masks early (needed for combo chart too)
+        groups = None
+        if self.state.group_columns:
+            groups = self._build_group_masks(working_df)
+
         # Item 14: combo chart when 2+ Y columns are selected
         if len(self.state.value_columns) >= 2:
             self._refresh_combo_chart(working_df, x_data, x_col, x_categorical_labels,
-                                       x_is_categorical, options, legend_settings)
+                                       x_is_categorical, options, legend_settings, groups)
             return
 
         # Y column
@@ -3221,9 +3226,9 @@ class GraphPanel(QWidget):
         else:
             options['y_title'] = options.get('y_title') or y_col_name
 
-        # Groups
-        groups = None
-        if self.state.group_columns:
+        # Groups (already built above for combo chart, but might be None if no group columns)
+        # Re-build here if we didn't return early from combo chart path
+        if groups is None and self.state.group_columns:
             groups = self._build_group_masks(working_df)
 
         # Total points for status display
@@ -3587,8 +3592,11 @@ class GraphPanel(QWidget):
             graph._secondary_vb_items.append(item)
 
     def _refresh_combo_chart(self, working_df, x_data, x_col, x_categorical_labels,
-                              x_is_categorical, options, legend_settings):
-        """Render combo chart with dual Y axes for multiple value columns."""
+                              x_is_categorical, options, legend_settings, groups=None):
+        """Render combo chart with dual Y axes for multiple value columns.
+        
+        When groups is provided, renders each group as a separate series with distinct colors.
+        """
         self.main_graph.clear_plot()
 
         if working_df is None:
@@ -3636,63 +3644,118 @@ class GraphPanel(QWidget):
         # Secondary ViewBox for dual axis
         secondary_vb = None
 
+        # Group colors (distinct palette for groups)
+        group_colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+            '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
+        ]
+
         for idx, vc in enumerate(value_cols):
             y_col_name = vc.name
             if y_col_name not in working_df.columns:
                 continue
 
-            y_data = working_df[y_col_name].to_numpy()
+            y_data_full = working_df[y_col_name].to_numpy()
             formula = vc.formula or ""
             if formula:
-                y_data = self._apply_y_formula(y_data, formula, y_col_name)
+                y_data_full = self._apply_y_formula(y_data_full, formula, y_col_name)
 
-            color = vc.color or default_colors[idx % len(default_colors)]
-            pen = pg.mkPen(color, width=line_width)
-            label = y_col_name
-            if formula:
-                label = f"{y_col_name} [{formula}]"
-
-            # Per-column chart type (default: line)
+            base_color = vc.color or default_colors[idx % len(default_colors)]
             col_chart_type = combo_series_types.get(y_col_name, "line")
 
-            if idx == 0:
-                # Primary axis (left)
-                self.main_graph.setLabel('left', label, color=color, **{'font-size': '14px'})
-                self.main_graph.getAxis('left').setPen(pg.mkPen(color))
-                self._render_combo_series(x_data, y_data, col_chart_type, color, pen, label,
-                                          line_width, marker_size, marker_border,
-                                          self.main_graph, options)
-                self.main_graph._data_x = x_data
-                self.main_graph._data_y = y_data
+            # Handle groups: render each group as separate series
+            if groups is not None and len(groups) > 0:
+                for g_idx, (group_name, mask) in enumerate(groups.items()):
+                    x_group = x_data[mask]
+                    y_group = y_data_full[mask]
+                    if len(x_group) == 0:
+                        continue
 
-            elif idx == 1:
-                # Secondary axis (right)
-                self.main_graph.showAxis('right')
-                ax_right = self.main_graph.getAxis('right')
-                ax_right.setLabel(label, color=color)
-                ax_right.setPen(pg.mkPen(color))
+                    # Color: use group index for distinct colors
+                    color = group_colors[g_idx % len(group_colors)]
+                    pen = pg.mkPen(color, width=line_width)
+                    label = f"{y_col_name} ({group_name})"
 
-                secondary_vb = pg.ViewBox()
-                self.main_graph._secondary_vb = secondary_vb  # Track for cleanup
-                self.main_graph.scene().addItem(secondary_vb)
-                ax_right.linkToView(secondary_vb)
-                secondary_vb.setXLink(self.main_graph)
+                    if idx == 0:
+                        # Primary axis
+                        if g_idx == 0:
+                            self.main_graph.setLabel('left', y_col_name, color=base_color, **{'font-size': '14px'})
+                            self.main_graph.getAxis('left').setPen(pg.mkPen(base_color))
+                            self.main_graph._data_x = x_data
+                            self.main_graph._data_y = y_data_full
+                        self._render_combo_series(x_group, y_group, col_chart_type, color, pen, label,
+                                                  line_width, marker_size, marker_border,
+                                                  self.main_graph, options)
+                    elif idx == 1:
+                        # Secondary axis
+                        if g_idx == 0:
+                            self.main_graph.showAxis('right')
+                            ax_right = self.main_graph.getAxis('right')
+                            ax_right.setLabel(y_col_name, color=base_color)
+                            ax_right.setPen(pg.mkPen(base_color))
 
-                self._render_combo_series_vb(x_data, y_data, col_chart_type, color, pen, label,
-                                             line_width, marker_size, marker_border,
-                                             secondary_vb, self.main_graph, options)
+                            secondary_vb = pg.ViewBox()
+                            self.main_graph._secondary_vb = secondary_vb
+                            self.main_graph.scene().addItem(secondary_vb)
+                            ax_right.linkToView(secondary_vb)
+                            secondary_vb.setXLink(self.main_graph)
 
-                def _sync_vb():
-                    secondary_vb.setGeometry(self.main_graph.getViewBox().sceneBoundingRect())
-                    secondary_vb.linkedViewChanged(self.main_graph.getViewBox(), secondary_vb.XAxis)
+                            def _sync_vb():
+                                secondary_vb.setGeometry(self.main_graph.getViewBox().sceneBoundingRect())
+                                secondary_vb.linkedViewChanged(self.main_graph.getViewBox(), secondary_vb.XAxis)
+                            self.main_graph.getViewBox().sigResized.connect(_sync_vb)
+                            _sync_vb()
 
-                self.main_graph.getViewBox().sigResized.connect(_sync_vb)
-                _sync_vb()
+                        self._render_combo_series_vb(x_group, y_group, col_chart_type, color, pen, label,
+                                                     line_width, marker_size, marker_border,
+                                                     secondary_vb, self.main_graph, options)
+                    else:
+                        # 3rd+ column: primary axis
+                        self._render_combo_series(x_group, y_group, col_chart_type, color, pen, label,
+                                                  line_width, marker_size, marker_border,
+                                                  self.main_graph, options)
             else:
-                # 3rd+ series: add to primary axis
-                self._render_combo_series(x_data, y_data, col_chart_type, color, pen, label,
-                                          line_width, marker_size, marker_border,
-                                          self.main_graph, options)
+                # No groups: original behavior
+                color = base_color
+                pen = pg.mkPen(color, width=line_width)
+                label = y_col_name
+                if formula:
+                    label = f"{y_col_name} [{formula}]"
+
+                if idx == 0:
+                    self.main_graph.setLabel('left', label, color=color, **{'font-size': '14px'})
+                    self.main_graph.getAxis('left').setPen(pg.mkPen(color))
+                    self._render_combo_series(x_data, y_data_full, col_chart_type, color, pen, label,
+                                              line_width, marker_size, marker_border,
+                                              self.main_graph, options)
+                    self.main_graph._data_x = x_data
+                    self.main_graph._data_y = y_data_full
+                elif idx == 1:
+                    self.main_graph.showAxis('right')
+                    ax_right = self.main_graph.getAxis('right')
+                    ax_right.setLabel(label, color=color)
+                    ax_right.setPen(pg.mkPen(color))
+
+                    secondary_vb = pg.ViewBox()
+                    self.main_graph._secondary_vb = secondary_vb
+                    self.main_graph.scene().addItem(secondary_vb)
+                    ax_right.linkToView(secondary_vb)
+                    secondary_vb.setXLink(self.main_graph)
+
+                    self._render_combo_series_vb(x_data, y_data_full, col_chart_type, color, pen, label,
+                                                 line_width, marker_size, marker_border,
+                                                 secondary_vb, self.main_graph, options)
+
+                    def _sync_vb():
+                        secondary_vb.setGeometry(self.main_graph.getViewBox().sceneBoundingRect())
+                        secondary_vb.linkedViewChanged(self.main_graph.getViewBox(), secondary_vb.XAxis)
+                    self.main_graph.getViewBox().sigResized.connect(_sync_vb)
+                    _sync_vb()
+                else:
+                    self._render_combo_series(x_data, y_data_full, col_chart_type, color, pen, label,
+                                              line_width, marker_size, marker_border,
+                                              self.main_graph, options)
 
         # Update series names for legend
         series_names = [vc.name for vc in value_cols if vc.name in working_df.columns]
