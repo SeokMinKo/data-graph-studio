@@ -711,6 +711,7 @@ class MainWindow(QMainWindow):
         self.project_tree.duplicate_requested.connect(self._on_profile_duplicate_requested)
         self.project_tree.export_requested.connect(self._on_profile_export_requested)
         self.project_tree.import_requested.connect(self._on_profile_import_requested)
+        self.project_tree.compare_requested.connect(self._on_profile_compare_requested)
         self._sidebar_tabs.addTab(self.project_tree, "Projects")
         
         # Dataset Manager (내부용 - 탭에서 제거됨, 기능은 유지)
@@ -3023,6 +3024,34 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 else:
                     self.profile_model.refresh()
                 self.statusbar.showMessage("Profile imported", 2000)
+
+    def _on_profile_compare_requested(self, profile_ids: list, options: dict):
+        """프로젝트 탐색창에서 멀티 선택 → Compare 요청"""
+        if len(profile_ids) < 2:
+            return
+
+        # 데이터셋 ID 확인 (첫 번째 프로파일 기준)
+        first = self.profile_store.get(profile_ids[0])
+        if not first:
+            return
+        dataset_id = first.dataset_id
+
+        # Sync 옵션 적용
+        cs = self.state._comparison_settings
+        cs.sync_pan_x = options.get("x_sync", True)
+        cs.sync_pan_y = options.get("y_sync", True)
+        cs.sync_zoom = options.get("zoom_sync", True)
+        cs.sync_selection = options.get("selection_sync", True)
+
+        # 모드 매핑
+        mode_map = {
+            "side_by_side": ComparisonMode.SIDE_BY_SIDE,
+            "overlay": ComparisonMode.OVERLAY,
+            "difference": ComparisonMode.DIFFERENCE,
+        }
+        mode = mode_map.get(options.get("mode", "side_by_side"), ComparisonMode.SIDE_BY_SIDE)
+
+        self.profile_comparison_controller.start_comparison(dataset_id, profile_ids, mode)
 
     # ==================== Multi-Dataset Operations ====================
 

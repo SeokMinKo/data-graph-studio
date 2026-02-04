@@ -77,6 +77,7 @@ class ProjectTreeView(_SafeAccessibleTreeView):
     duplicate_requested = Signal(str)  # profile_id
     export_requested = Signal(str)  # profile_id
     import_requested = Signal(str)  # dataset_id
+    compare_requested = Signal(list, dict)  # profile_ids, options
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -84,6 +85,7 @@ class ProjectTreeView(_SafeAccessibleTreeView):
 
         self.setHeaderHidden(True)
         self.setIndentation(18)
+        self.setSelectionMode(QTreeView.ExtendedSelection)  # Ctrl/Shift 멀티 선택
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._on_context_menu)
         self.setItemDelegate(_ChartIconDelegate(self))
@@ -149,9 +151,24 @@ class ProjectTreeView(_SafeAccessibleTreeView):
 
         super().keyPressEvent(event)
 
+    def _get_selected_profile_ids(self) -> list:
+        """선택된 모든 프로파일의 ID 반환"""
+        ids = []
+        for index in self.selectedIndexes():
+            setting = self._get_setting(index)
+            if setting is not None and setting.id not in ids:
+                ids.append(setting.id)
+        return ids
+
     def _on_context_menu(self, pos):
         index = self.indexAt(pos)
         if not index.isValid():
+            return
+
+        # 멀티 선택된 프로파일이 2개 이상이면 Compare 메뉴
+        selected_ids = self._get_selected_profile_ids()
+        if len(selected_ids) >= 2:
+            self._show_compare_menu(pos, selected_ids)
             return
 
         setting = self._get_setting(index)
@@ -194,6 +211,66 @@ class ProjectTreeView(_SafeAccessibleTreeView):
 
         delete_action = menu.addAction("Delete")
         delete_action.triggered.connect(lambda: self.delete_requested.emit(profile_id))
+
+        menu.exec(self.viewport().mapToGlobal(pos))
+
+    def _show_compare_menu(self, pos, profile_ids: list):
+        menu = QMenu(self)
+        menu.addSection(f"Compare {len(profile_ids)} Profiles")
+
+        # Sync 옵션 체크박스들
+        x_sync = menu.addAction("X Sync")
+        x_sync.setCheckable(True)
+        x_sync.setChecked(True)
+
+        y_sync = menu.addAction("Y Sync")
+        y_sync.setCheckable(True)
+        y_sync.setChecked(True)
+
+        zoom_sync = menu.addAction("Zoom Sync")
+        zoom_sync.setCheckable(True)
+        zoom_sync.setChecked(True)
+
+        selection_sync = menu.addAction("Selection Sync")
+        selection_sync.setCheckable(True)
+        selection_sync.setChecked(True)
+
+        menu.addSeparator()
+
+        # Compare 실행
+        compare_sbs = menu.addAction("📊 Compare — Side by Side")
+        compare_sbs.triggered.connect(lambda: self.compare_requested.emit(
+            profile_ids, {
+                "mode": "side_by_side",
+                "x_sync": x_sync.isChecked(),
+                "y_sync": y_sync.isChecked(),
+                "zoom_sync": zoom_sync.isChecked(),
+                "selection_sync": selection_sync.isChecked(),
+            }
+        ))
+
+        compare_overlay = menu.addAction("🔀 Compare — Overlay")
+        compare_overlay.triggered.connect(lambda: self.compare_requested.emit(
+            profile_ids, {
+                "mode": "overlay",
+                "x_sync": x_sync.isChecked(),
+                "y_sync": y_sync.isChecked(),
+                "zoom_sync": zoom_sync.isChecked(),
+                "selection_sync": selection_sync.isChecked(),
+            }
+        ))
+
+        if len(profile_ids) == 2:
+            compare_diff = menu.addAction("🔍 Compare — Difference")
+            compare_diff.triggered.connect(lambda: self.compare_requested.emit(
+                profile_ids, {
+                    "mode": "difference",
+                    "x_sync": x_sync.isChecked(),
+                    "y_sync": y_sync.isChecked(),
+                    "zoom_sync": zoom_sync.isChecked(),
+                    "selection_sync": selection_sync.isChecked(),
+                }
+            ))
 
         menu.exec(self.viewport().mapToGlobal(pos))
 
