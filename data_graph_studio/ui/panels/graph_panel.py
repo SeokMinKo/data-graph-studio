@@ -3166,6 +3166,17 @@ class GraphPanel(QWidget):
         if self.state.value_columns:
             stats = self.engine.get_statistics(self.state.value_columns[0].name)
 
+            # X-Diff and Y-Diff (Max - Min) for full data
+            try:
+                clean_x = x_sampled[~np.isnan(x_sampled)]
+                clean_y = y_sampled[~np.isnan(y_sampled)]
+                if len(clean_x) > 0:
+                    stats['X-Diff'] = float(np.max(clean_x) - np.min(clean_x))
+                if len(clean_y) > 0:
+                    stats['Y-Diff'] = float(np.max(clean_y) - np.min(clean_y))
+            except Exception:
+                pass
+
             # Percentiles for summary
             percentiles = {}
             try:
@@ -3441,8 +3452,17 @@ class GraphPanel(QWidget):
             y_data = df[y_col_name].to_numpy()
             selected_y = y_data[selected_indices]
             
+            # Get X data
+            x_col = self.state.x_column
+            if x_col and x_col in df.columns:
+                x_data_full = df[x_col].to_numpy()
+                selected_x = x_data_full[selected_indices]
+            else:
+                selected_x = np.array(selected_indices, dtype=float)
+            
             # Calculate statistics for selection
             clean_y = selected_y[~np.isnan(selected_y.astype(float))]
+            clean_x = selected_x[~np.isnan(selected_x.astype(float))]
             if len(clean_y) == 0:
                 return
             
@@ -3455,16 +3475,15 @@ class GraphPanel(QWidget):
                 'Max': float(np.max(clean_y)),
             }
             
+            # X-Diff and Y-Diff for selection
+            if len(clean_x) > 0:
+                stats['X-Diff'] = float(np.max(clean_x) - np.min(clean_x))
+            if len(clean_y) > 0:
+                stats['Y-Diff'] = float(np.max(clean_y) - np.min(clean_y))
+            
             self.stat_panel.update_stats(stats)
             
             # Update histograms with selected data
-            x_col = self.state.x_column
-            if x_col and x_col in df.columns:
-                x_data = df[x_col].to_numpy()
-                selected_x = x_data[selected_indices]
-            else:
-                selected_x = np.array(selected_indices)
-            
             self.stat_panel.update_histograms(selected_x, selected_y)
             
         except Exception as e:
