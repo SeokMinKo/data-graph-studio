@@ -377,11 +377,15 @@ class ProfileOverlayRenderer(QWidget):
             x_plot = x_data
             y_plot = sd["y_data"]
 
-            # Downsample if needed
-            if len(x_plot) > MAX_POINTS_PER_SERIES:
-                step = len(x_plot) // MAX_POINTS_PER_SERIES
-                x_plot = x_plot[::step]
-                y_plot = y_plot[::step]
+            # Downsample based on profile's sampling settings
+            profile_cs = dict(sd["profile"].chart_settings) if sd["profile"].chart_settings else {}
+            show_all = profile_cs.get("show_all_data", False)
+            if not show_all:
+                mp = profile_cs.get("max_points", MAX_POINTS_PER_SERIES)
+                if len(x_plot) > mp:
+                    step = len(x_plot) // mp
+                    x_plot = x_plot[::step]
+                    y_plot = y_plot[::step]
 
             pen = pg.mkPen(sd["color"], width=sd["line_width"])
             label = f"{sd['profile'].name} ({sd['y_col']})"

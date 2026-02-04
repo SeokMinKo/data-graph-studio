@@ -456,9 +456,14 @@ class MiniGraphWidget(QWidget):
         except Exception:
             pass
 
-    @staticmethod
-    def _sample(x_data, y_data, np, max_points: int = 10000):
-        """Downsample arrays if they exceed max_points."""
+    def _sample(self, x_data, y_data, np, max_points: int = None):
+        """Downsample arrays based on profile/state sampling settings."""
+        cs = self.effective_chart_settings
+        # If show_all_data is set, skip sampling entirely
+        if cs.get('show_all_data', False):
+            return x_data, y_data
+        if max_points is None:
+            max_points = cs.get('max_points', 10000)
         if len(x_data) > max_points:
             step = len(x_data) // max_points
             return x_data[::step], y_data[::step]

@@ -283,9 +283,12 @@ class ProfileDifferenceRenderer(QWidget):
 
         diff = result["diff_series"]
 
-        # Downsample if needed
-        if len(x_data) > MAX_POINTS:
-            step = len(x_data) // MAX_POINTS
+        # Downsample based on profile sampling settings
+        cs_a = dict(gs_a.chart_settings) if gs_a.chart_settings else {}
+        show_all = cs_a.get("show_all_data", False)
+        mp = cs_a.get("max_points", MAX_POINTS)
+        if not show_all and len(x_data) > mp:
+            step = len(x_data) // mp
             x_data = x_data[::step]
             y_a = y_a[::step]
             y_b = y_b[::step]
