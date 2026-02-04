@@ -233,63 +233,37 @@ class ProjectTreeView(_SafeAccessibleTreeView):
 
     def _show_compare_menu(self, pos, profile_ids: list):
         menu = QMenu(self)
-        menu.addSection(f"Compare {len(profile_ids)} Profiles")
-
-        # Sync 옵션 체크박스들
-        x_sync = menu.addAction("X Sync")
-        x_sync.setCheckable(True)
-        x_sync.setChecked(True)
-
-        y_sync = menu.addAction("Y Sync")
-        y_sync.setCheckable(True)
-        y_sync.setChecked(True)
-
-        zoom_sync = menu.addAction("Zoom Sync")
-        zoom_sync.setCheckable(True)
-        zoom_sync.setChecked(True)
-
-        selection_sync = menu.addAction("Selection Sync")
-        selection_sync.setCheckable(True)
-        selection_sync.setChecked(True)
-
-        menu.addSeparator()
+        menu.addSection(f"{len(profile_ids)} Profiles Selected")
 
         # Compare 실행
         compare_sbs = menu.addAction("📊 Compare — Side by Side")
         compare_sbs.triggered.connect(lambda: self.compare_requested.emit(
-            profile_ids, {
-                "mode": "side_by_side",
-                "x_sync": x_sync.isChecked(),
-                "y_sync": y_sync.isChecked(),
-                "zoom_sync": zoom_sync.isChecked(),
-                "selection_sync": selection_sync.isChecked(),
-            }
+            profile_ids, {"mode": "side_by_side"}
         ))
 
         compare_overlay = menu.addAction("🔀 Compare — Overlay")
         compare_overlay.triggered.connect(lambda: self.compare_requested.emit(
-            profile_ids, {
-                "mode": "overlay",
-                "x_sync": x_sync.isChecked(),
-                "y_sync": y_sync.isChecked(),
-                "zoom_sync": zoom_sync.isChecked(),
-                "selection_sync": selection_sync.isChecked(),
-            }
+            profile_ids, {"mode": "overlay"}
         ))
 
         if len(profile_ids) == 2:
             compare_diff = menu.addAction("🔍 Compare — Difference")
             compare_diff.triggered.connect(lambda: self.compare_requested.emit(
-                profile_ids, {
-                    "mode": "difference",
-                    "x_sync": x_sync.isChecked(),
-                    "y_sync": y_sync.isChecked(),
-                    "zoom_sync": zoom_sync.isChecked(),
-                    "selection_sync": selection_sync.isChecked(),
-                }
+                profile_ids, {"mode": "difference"}
             ))
 
+        menu.addSeparator()
+
+        # Remove selected profiles
+        remove_action = menu.addAction("🗑️ Remove Selected")
+        remove_action.triggered.connect(lambda: self._remove_selected_profiles(profile_ids))
+
         menu.exec(self.viewport().mapToGlobal(pos))
+
+    def _remove_selected_profiles(self, profile_ids: list):
+        """Remove multiple selected profiles"""
+        for pid in profile_ids:
+            self.delete_requested.emit(pid)
 
     def _on_selection_changed(self, selected, deselected):
         index = self.currentIndex()

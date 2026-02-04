@@ -1138,7 +1138,6 @@ class StatPanel(QFrame):
         stats_scroll.setFrameShape(QFrame.NoFrame)
         stats_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         stats_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        stats_scroll.setMaximumHeight(200)
         stats_scroll.setStyleSheet("background: transparent; border: none;")
 
         self.stats_label = QLabel("Load data to see statistics")
@@ -1152,9 +1151,39 @@ class StatPanel(QFrame):
 
         stats_layout.addWidget(stats_scroll)
 
-        layout.addWidget(stats_group)
+        layout.addWidget(stats_group, 1)  # stretch factor 1 → fill remaining space
 
-        layout.addStretch()
+        # Setup hover tooltips for mini graphs
+        self._setup_mini_graph_hover()
+
+    def _setup_mini_graph_hover(self):
+        """Setup mouse hover tooltip for mini stat graphs"""
+        for widget in self._mini_plot_widgets:
+            hover_label = pg.TextItem(text="", anchor=(0, 1), color='#E2E8F0')
+            hover_label.setZValue(1000)
+            hover_label.setFont(pg.QtGui.QFont('Arial', 9))
+            hover_label.hide()
+            widget.addItem(hover_label)
+            widget._hover_label = hover_label
+            widget.setMouseTracking(True)
+
+            proxy = pg.SignalProxy(widget.scene().sigMouseMoved, rateLimit=30,
+                                  slot=lambda evt, w=widget: self._on_mini_graph_hover(evt, w))
+            widget._hover_proxy = proxy  # prevent GC
+
+    def _on_mini_graph_hover(self, evt, widget):
+        """Show x,y value on mini graph hover"""
+        pos = evt[0]
+        vb = widget.getPlotItem().vb
+        if widget.sceneBoundingRect().contains(pos):
+            mouse_point = vb.mapSceneToView(pos)
+            x_val = mouse_point.x()
+            y_val = mouse_point.y()
+            widget._hover_label.setText(f"x={x_val:.2g}  y={y_val:.2g}")
+            widget._hover_label.setPos(mouse_point)
+            widget._hover_label.show()
+        else:
+            widget._hover_label.hide()
 
     def _on_x_bins_changed(self, value: int):
         self._x_bins = value
@@ -2862,6 +2891,12 @@ class GraphPanel(QWidget):
         options = self.options_panel.get_chart_options()
         legend_settings = self.options_panel.get_legend_settings()
 
+        # Intercept statistical chart types that need special handling
+        chart_type = options.get('chart_type', ChartType.LINE)
+        if chart_type in (ChartType.BOX, ChartType.VIOLIN, ChartType.HEATMAP):
+            self._refresh_statistical_chart(chart_type, options, legend_settings)
+            return
+
         # Get sampling settings from options
         show_all_data = options.get('show_all_data', False)
         max_points = options.get('max_points', 10000)
@@ -3158,7 +3193,11 @@ class GraphPanel(QWidget):
                     agg_type = self.state.value_columns[0].aggregation
                 for group_name, mask in groups.items():
                     group_y = y_sampled[mask]
-                    group_data[group_name] = self._aggregate_values(group_y, agg_type)
+                    val = self._aggregate_values(group_y, agg_type)
+                    group_data[group_name] = abs(val) if val else 0.0
+                # Discard if all zeros
+                if all(v == 0.0 for v in group_data.values()):
+                    group_data = None
             except Exception:
                 group_data = None
 

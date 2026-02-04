@@ -558,22 +558,26 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         
         # Open file button with modern style
-        open_btn = QAction("📂  Open", self)
-        open_btn.setToolTip(self._format_tooltip("Open File", "Ctrl+O"))
+        open_btn = QAction("📂 Open", self)
+        open_btn.setToolTip(self._format_tooltip("Open Project", "Ctrl+O"))
         open_btn.triggered.connect(self._on_open_file)
         toolbar.addAction(open_btn)
 
-        save_profile_btn = QAction("💾  Save Profile", self)
+        save_project_btn = QAction("💾 Save Project", self)
+        save_project_btn.setToolTip(self._format_tooltip("Save Project", "Ctrl+Alt+S"))
+        save_project_btn.triggered.connect(self._on_save_project_file)
+        toolbar.addAction(save_project_btn)
+
+        save_profile_btn = QAction("💾 Save Profile", self)
         save_profile_btn.setToolTip(self._format_tooltip("Save Graph Profile", ""))
         save_profile_btn.triggered.connect(lambda: self.dataset_manager._on_save_profile())
         toolbar.addAction(save_profile_btn)
 
-        load_profile_btn = QAction("📂  Load Profile", self)
+        load_profile_btn = QAction("📂 Load Profile", self)
         load_profile_btn.setToolTip(self._format_tooltip("Load Graph Profile", ""))
         load_profile_btn.triggered.connect(lambda: self.dataset_manager._on_load_profile())
         toolbar.addAction(load_profile_btn)
 
-        toolbar.addSeparator()
 
         # Graph tools with modern icons
         self._tool_actions = {}
@@ -644,11 +648,13 @@ class MainWindow(QMainWindow):
 
         reset_btn = QAction("↺  Reset", self)
         reset_btn.setToolTip(self._format_tooltip("Reset View", "Home"))
+        reset_btn.setShortcut(QKeySequence("Home"))
         reset_btn.triggered.connect(self._reset_graph_view)
         toolbar.addAction(reset_btn)
 
         autofit_btn = QAction("⊡  Fit", self)
         autofit_btn.setToolTip(self._format_tooltip("Auto Fit to Data", "F"))
+        autofit_btn.setShortcut(QKeySequence("F"))
         autofit_btn.triggered.connect(self._autofit_graph)
         toolbar.addAction(autofit_btn)
         
