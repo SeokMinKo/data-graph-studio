@@ -4,6 +4,15 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.14.4] — 2026-02-04
+
+### 🐛 Bug Fixes
+
+- 프로파일 이름 변경 시 access violation 크래시 수정 — 재진입 방지 가드 + 시그널 블로킹 ([`e651eb7`](../../commit/e651eb7))
+- project_tree_view 시그널 disconnect RuntimeWarning 제거 ([`23867af`](../../commit/23867af))
+
+---
+
 ## [v0.14.3] — 2026-02-04
 
 ### 🐛 Bug Fixes
