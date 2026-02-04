@@ -1790,15 +1790,26 @@ class TablePanel(QWidget):
             combo.blockSignals(False)
 
     def _on_group_combo_changed(self):
-        """콤보박스에서 GroupBy 변경 시 AppState 업데이트"""
+        """콤보박스에서 GroupBy 변경 시 AppState 업데이트
+
+        Uses blockSignals to prevent redundant intermediate table rebuilds
+        when clear_group_zone + add_group_column each emit group_zone_changed.
+        """
         g1 = self.group_combo1.currentText()
         g2 = self.group_combo2.currentText()
 
-        self.state.clear_group_zone()
-        if g1 and g1 != "(None)":
-            self.state.add_group_column(g1)
-        if g2 and g2 != "(None)" and g2 != g1:
-            self.state.add_group_column(g2)
+        was_blocked = self.state.signalsBlocked()
+        self.state.blockSignals(True)
+        try:
+            self.state.clear_group_zone()
+            if g1 and g1 != "(None)":
+                self.state.add_group_column(g1)
+            if g2 and g2 != "(None)" and g2 != g1:
+                self.state.add_group_column(g2)
+        finally:
+            self.state.blockSignals(was_blocked)
+        # Emit once after batch update
+        self.state.group_zone_changed.emit()
 
     def _on_agg_combo_changed(self):
         """Aggregation 변경 시 현재 value_columns의 aggregation 업데이트"""
@@ -1810,12 +1821,9 @@ class TablePanel(QWidget):
             agg = AggregationType(agg_text)
         except ValueError:
             return
-        # 모든 value_columns의 aggregation 업데이트
-        for vc in self.state.value_columns:
-            self.state.update_value_column(
-                vc.name, aggregation=agg,
-            )
-        self.state.value_zone_changed.emit()
+        # 모든 value_columns의 aggregation 업데이트 (index로 전달)
+        for i in range(len(self.state.value_columns)):
+            self.state.update_value_column(i, aggregation=agg)
     
     def _on_table_clicked(self, index):
         if index.column() == 0 and self.grouped_model and self.state.group_columns:

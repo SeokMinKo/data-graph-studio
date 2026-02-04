@@ -91,6 +91,18 @@ class ProjectTreeView(_SafeAccessibleTreeView):
         self.setItemDelegate(_ChartIconDelegate(self))
 
     def set_model(self, model: ProfileModel):
+        # Disconnect old signals to prevent duplicate connections
+        try:
+            self.doubleClicked.disconnect(self._on_double_clicked)
+        except (RuntimeError, TypeError):
+            pass
+        old_sel = self.selectionModel()
+        if old_sel:
+            try:
+                old_sel.selectionChanged.disconnect(self._on_selection_changed)
+            except (RuntimeError, TypeError):
+                pass
+
         self._model = model
         self.setModel(model)
         # Discard placeholder now that real model is installed
