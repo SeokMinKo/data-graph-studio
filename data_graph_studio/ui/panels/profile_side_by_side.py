@@ -58,6 +58,9 @@ class ProfileSideBySideLayout(QWidget):
         self._view_sync_manager.sync_y = False
         self._view_sync_manager.sync_selection = True
 
+        # Grid layout mode: "row" | "column" | "grid"
+        self._current_grid_layout: str = "row"
+
         # Splitter / grid references
         self._splitter: Optional[QSplitter] = None
         self._grid_container: Optional[QWidget] = None
@@ -100,41 +103,8 @@ class ProfileSideBySideLayout(QWidget):
 
         layout.addWidget(header)
 
-        # Sync bar: [☑X축 ☐Y축 ☑Selection] [Reset All]
-        sync_frame = QFrame()
-        sync_frame.setObjectName("syncOptionsFrame")
-        sync_layout = QHBoxLayout(sync_frame)
-        sync_layout.setContentsMargins(8, 4, 8, 4)
-
-        sync_layout.addWidget(QLabel("Sync:"))
-
-        self._sync_x_cb = QCheckBox("X축")
-        self._sync_x_cb.setChecked(True)
-        self._sync_x_cb.setToolTip("Synchronize X-axis panning across panels")
-        self._sync_x_cb.stateChanged.connect(self._on_sync_x_changed)
-        sync_layout.addWidget(self._sync_x_cb)
-
-        self._sync_y_cb = QCheckBox("Y축")
-        self._sync_y_cb.setChecked(False)
-        self._sync_y_cb.setToolTip("Synchronize Y-axis zoom across panels")
-        self._sync_y_cb.stateChanged.connect(self._on_sync_y_changed)
-        sync_layout.addWidget(self._sync_y_cb)
-
-        self._sync_sel_cb = QCheckBox("Selection")
-        self._sync_sel_cb.setChecked(True)
-        self._sync_sel_cb.setToolTip("Synchronize data selection across panels")
-        self._sync_sel_cb.stateChanged.connect(self._on_sync_sel_changed)
-        sync_layout.addWidget(self._sync_sel_cb)
-
-        sync_layout.addStretch()
-
-        reset_btn = QPushButton("Reset All")
-        reset_btn.setFixedWidth(80)
-        reset_btn.setToolTip("Reset view to fit all data")
-        reset_btn.clicked.connect(self._on_reset_all)
-        sync_layout.addWidget(reset_btn)
-
-        layout.addWidget(sync_frame)
+        # NOTE: Sync controls moved to CompareToolbar.
+        # No inline sync checkboxes here.
 
         # Content area — will hold splitter or grid
         self._content_layout = QVBoxLayout()
@@ -146,22 +116,44 @@ class ProfileSideBySideLayout(QWidget):
         esc.activated.connect(self.exit_requested.emit)
 
     # ------------------------------------------------------------------
-    # Sync checkbox handlers
+    # Toolbar integration — sync & grid layout
     # ------------------------------------------------------------------
 
-    def _on_sync_x_changed(self, checkbox_state):
-        checked = checkbox_state == Qt.Checked.value if isinstance(checkbox_state, int) else checkbox_state == Qt.Checked
-        self._view_sync_manager.sync_x = checked
+    def set_sync_option(self, key: str, enabled: bool) -> None:
+        """Set a sync option from the CompareToolbar.
 
-    def _on_sync_y_changed(self, checkbox_state):
-        checked = checkbox_state == Qt.Checked.value if isinstance(checkbox_state, int) else checkbox_state == Qt.Checked
-        self._view_sync_manager.sync_y = checked
+        Keys: "x", "y", "zoom", "selection".
+        "zoom" is an alias that sets both sync_x and sync_y.
+        """
+        if key == "x":
+            self._view_sync_manager.sync_x = enabled
+        elif key == "y":
+            self._view_sync_manager.sync_y = enabled
+        elif key == "zoom":
+            # Zoom sync: when enabled, both x and y sync together
+            self._view_sync_manager.sync_x = enabled
+            self._view_sync_manager.sync_y = enabled
+        elif key == "selection":
+            self._view_sync_manager.sync_selection = enabled
 
-    def _on_sync_sel_changed(self, checkbox_state):
-        checked = checkbox_state == Qt.Checked.value if isinstance(checkbox_state, int) else checkbox_state == Qt.Checked
-        self._view_sync_manager.sync_selection = checked
+    def get_sync_options(self) -> dict:
+        """Return current sync option states."""
+        return {
+            "x": self._view_sync_manager.sync_x,
+            "y": self._view_sync_manager.sync_y,
+            "zoom": self._view_sync_manager.sync_x and self._view_sync_manager.sync_y,
+            "selection": self._view_sync_manager.sync_selection,
+        }
 
-    def _on_reset_all(self):
+    def set_grid_layout(self, layout: str) -> None:
+        """Switch panel arrangement: 'row', 'column', or 'grid'."""
+        if not self._panels:
+            return
+        self._current_grid_layout = layout
+        self._rearrange_panels()
+
+    def reset_all_views(self) -> None:
+        """Reset all panel views to auto-range."""
         self._view_sync_manager.reset_all_views()
 
     # ------------------------------------------------------------------
@@ -226,14 +218,7 @@ class ProfileSideBySideLayout(QWidget):
         self._header_labels.clear()
 
         # Remove old content widget
-        if self._splitter is not None:
-            self._splitter.setParent(None)
-            self._splitter.deleteLater()
-            self._splitter = None
-        if self._grid_container is not None:
-            self._grid_container.setParent(None)
-            self._grid_container.deleteLater()
-            self._grid_container = None
+        self._clear_content_widgets()
 
         if not self._profile_ids:
             return
@@ -255,17 +240,68 @@ class ProfileSideBySideLayout(QWidget):
             self._panels[pid] = panel
             self._view_sync_manager.register_panel(pid, panel)
 
-        # Layout: splitter (horizontal) by default
-        self._splitter = QSplitter(Qt.Horizontal)
-        for pid in self._profile_ids:
-            panel = self._panels.get(pid)
-            if panel is not None:
+        # Arrange panels according to current grid layout
+        self._rearrange_panels()
+
+    def _clear_content_widgets(self) -> None:
+        """Remove old splitter / grid container from content layout."""
+        if self._splitter is not None:
+            self._splitter.setParent(None)
+            self._splitter.deleteLater()
+            self._splitter = None
+        if self._grid_container is not None:
+            self._grid_container.setParent(None)
+            self._grid_container.deleteLater()
+            self._grid_container = None
+
+    def _rearrange_panels(self) -> None:
+        """Rearrange existing panels according to self._current_grid_layout.
+
+        Supports: "row" (horizontal splitter), "column" (vertical splitter),
+        "grid" (2×2 QGridLayout).
+        """
+        if not self._panels:
+            return
+
+        # Detach panels from any current container (without deleting them)
+        for panel in self._panels.values():
+            panel.setParent(None)
+
+        # Remove old container
+        self._clear_content_widgets()
+
+        panel_list = [self._panels[pid] for pid in self._profile_ids if pid in self._panels]
+
+        if self._current_grid_layout == "grid":
+            # 2×2 QGridLayout
+            self._grid_container = QWidget()
+            grid = QGridLayout(self._grid_container)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setSpacing(2)
+            for i, panel in enumerate(panel_list):
+                row = i // 2
+                col = i % 2
+                grid.addWidget(panel, row, col)
+            self._content_layout.addWidget(self._grid_container, 1)
+
+        elif self._current_grid_layout == "column":
+            # Vertical splitter
+            self._splitter = QSplitter(Qt.Vertical)
+            for panel in panel_list:
                 self._splitter.addWidget(panel)
+            if self._splitter.count() > 0:
+                h = max(self.height(), 600)
+                sizes = [h // self._splitter.count()] * self._splitter.count()
+                self._splitter.setSizes(sizes)
+            self._content_layout.addWidget(self._splitter, 1)
 
-        # Equal sizes
-        if self._splitter.count() > 0:
-            w = max(self.width(), 800)
-            sizes = [w // self._splitter.count()] * self._splitter.count()
-            self._splitter.setSizes(sizes)
-
-        self._content_layout.addWidget(self._splitter, 1)
+        else:
+            # Default: "row" — horizontal splitter
+            self._splitter = QSplitter(Qt.Horizontal)
+            for panel in panel_list:
+                self._splitter.addWidget(panel)
+            if self._splitter.count() > 0:
+                w = max(self.width(), 800)
+                sizes = [w // self._splitter.count()] * self._splitter.count()
+                self._splitter.setSizes(sizes)
+            self._content_layout.addWidget(self._splitter, 1)

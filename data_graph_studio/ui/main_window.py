@@ -52,6 +52,7 @@ from .models.profile_model import ProfileModel
 from .panels.profile_side_by_side import ProfileSideBySideLayout
 from .panels.profile_overlay import ProfileOverlayRenderer
 from .panels.profile_difference import ProfileDifferenceRenderer
+from .toolbars.compare_toolbar import CompareToolbar
 from .views.project_tree_view import ProjectTreeView
 from .wizards.new_project_wizard import NewProjectWizard
 
@@ -174,6 +175,7 @@ class MainWindow(QMainWindow):
         self._setup_menubar()
         self._setup_main_layout()  # Must be before toolbar (toolbar references dataset_manager)
         self._setup_toolbar()
+        self._setup_compare_toolbar()
         self._setup_statusbar()
 
         # Connect signals
@@ -678,6 +680,27 @@ class MainWindow(QMainWindow):
         self._presets_dir = Path.home() / ".data_graph_studio" / "presets"
         self._presets_dir.mkdir(parents=True, exist_ok=True)
         self._refresh_presets()
+
+    def _setup_compare_toolbar(self):
+        """Setup the Compare Toolbar (hidden by default, auto-shown during comparison)."""
+        self._compare_toolbar = CompareToolbar(self)
+        self.addToolBar(Qt.TopToolBarArea, self._compare_toolbar)
+        self._compare_toolbar.hide()
+
+        # View menu: "Compare Toolbar" toggle action
+        # Find View menu
+        view_menu = None
+        for action in self.menuBar().actions():
+            if action.text().replace("&", "") == "View":
+                view_menu = action.menu()
+                break
+
+        if view_menu is not None:
+            view_menu.addSeparator()
+            self._compare_toolbar_action = self._compare_toolbar.toggleViewAction()
+            self._compare_toolbar_action.setText("Compare Toolbar")
+            self._compare_toolbar_action.setToolTip("Show/hide the compare toolbar")
+            view_menu.addAction(self._compare_toolbar_action)
 
     def _setup_main_layout(self):
         """메인 레이아웃 설정 (사이드바 + 3단 스플리터)"""
@@ -3625,6 +3648,15 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self.profile_comparison_controller.panel_removed.connect(view.on_profile_deleted)
             self.profile_controller.profile_renamed.connect(view.on_profile_renamed)
 
+            # Wire CompareToolbar → ProfileSideBySideLayout
+            self._compare_toolbar.grid_layout_changed.connect(view.set_grid_layout)
+            self._compare_toolbar.sync_changed.connect(view.set_sync_option)
+            self._compare_toolbar.exit_requested.connect(
+                self.profile_comparison_controller.stop_comparison
+            )
+            self._compare_toolbar.reset_to_defaults()
+            self._compare_toolbar.show()
+
         elif mode == ComparisonMode.OVERLAY:
             view = ProfileOverlayRenderer(
                 dataset_id, self.engine, self.state, self.profile_store,
@@ -3652,6 +3684,24 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
     def _on_profile_comparison_ended(self):
         """Handle profile comparison ended — restore graph panel."""
+        # Disconnect toolbar signals from the comparison view
+        if self._profile_comparison_view is not None:
+            try:
+                self._compare_toolbar.grid_layout_changed.disconnect()
+            except RuntimeError:
+                pass
+            try:
+                self._compare_toolbar.sync_changed.disconnect()
+            except RuntimeError:
+                pass
+            try:
+                self._compare_toolbar.exit_requested.disconnect()
+            except RuntimeError:
+                pass
+
+        # Hide compare toolbar
+        self._compare_toolbar.hide()
+
         self._remove_comparison_view()
         self._profile_comparison_view = None
         self.graph_panel.refresh()

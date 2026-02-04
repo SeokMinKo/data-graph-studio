@@ -88,6 +88,20 @@ class MiniGraphWidget(QWidget):
             return "line"
 
     @property
+    def effective_group_columns(self) -> list:
+        """Group columns: from graph_setting if present, else from state."""
+        if self.graph_setting is not None:
+            return list(self.graph_setting.group_columns)
+        return [gc.name for gc in self.state.group_columns] if self.state.group_columns else []
+
+    @property
+    def effective_hover_columns(self) -> list:
+        """Hover columns: from graph_setting if present, else from state."""
+        if self.graph_setting is not None:
+            return list(self.graph_setting.hover_columns)
+        return list(self.state.hover_columns) if hasattr(self.state, 'hover_columns') else []
+
+    @property
     def _header_name(self) -> str:
         """Display name for the header."""
         if self.graph_setting is not None:
@@ -173,63 +187,166 @@ class MiniGraphWidget(QWidget):
         stats_layout.addStretch()
         layout.addWidget(stats_frame)
 
+    # Color palette for multi-series / group-by rendering
+    COLOR_PALETTE = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+        '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
+        '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5',
+    ]
+
     def _plot_data(self, color: str):
-        """간단한 데이터 플롯 — uses effective columns."""
+        """Plot data respecting effective chart type, value columns, and group-by.
+
+        Supports: line, scatter, bar chart types.
+        Renders all value columns (not just the first).
+        Supports group_by with per-group coloring.
+        """
         import numpy as np
 
         dataset = self.engine.get_dataset(self.dataset_id)
         if not dataset or dataset.df is None:
             return
 
-        # X축 데이터
-        x_col = self.effective_x_column
         df = dataset.df
+        x_col = self.effective_x_column
+        chart_type = self.effective_chart_type
+        value_cols = self.effective_value_columns
+        group_cols = self.effective_group_columns
+        # Store hover columns for future tooltip support
+        self._hover_columns = self.effective_hover_columns
 
+        # --- Resolve X data ---
         if x_col and x_col in df.columns:
             try:
-                x_data = df[x_col].to_numpy()
+                x_data_full = df[x_col].to_numpy()
             except Exception:
-                x_data = np.arange(len(df))
+                x_data_full = np.arange(len(df))
         else:
-            x_data = np.arange(len(df))
+            x_data_full = np.arange(len(df))
 
-        # Y축 데이터 — use effective value columns
-        y_data = None
-        value_cols = self.effective_value_columns
+        # --- Resolve Y column names ---
+        y_col_names: list = []
+        y_col_colors: dict = {}
         if value_cols:
-            # value_cols may be ValueColumn objects or dicts
-            first = value_cols[0]
-            y_col = first.name if hasattr(first, 'name') else first.get('name', '')
-            if y_col and y_col in df.columns:
-                try:
-                    y_data = df[y_col].to_numpy()
-                except Exception:
-                    pass
+            for vc in value_cols:
+                if hasattr(vc, 'name'):
+                    name = vc.name
+                    vc_color = getattr(vc, 'color', None)
+                elif isinstance(vc, dict):
+                    name = vc.get('name', '')
+                    vc_color = vc.get('color', None)
+                else:
+                    continue
+                if name and name in df.columns:
+                    y_col_names.append(name)
+                    if vc_color:
+                        y_col_colors[name] = vc_color
 
-        if y_data is None:
+        # Fallback: use first numeric column
+        if not y_col_names:
             numeric_cols = self.engine.get_numeric_columns(self.dataset_id)
             if numeric_cols:
-                try:
-                    y_data = df[numeric_cols[0]].to_numpy()
-                except Exception:
-                    pass
+                y_col_names = [numeric_cols[0]]
 
-        if y_data is None:
+        if not y_col_names:
             return
 
-        # 샘플링
-        max_points = 1000
-        if len(x_data) > max_points:
-            step = len(x_data) // max_points
-            x_data = x_data[::step]
-            y_data = y_data[::step]
-
-        # 플롯
         try:
             import pyqtgraph as pg
-            self.plot_widget.plot(x_data, y_data, pen=pg.mkPen(color, width=2))
+        except ImportError:
+            return
+
+        # --- Group-by rendering ---
+        if group_cols:
+            # Use first group column for coloring
+            grp_col = group_cols[0] if isinstance(group_cols[0], str) else group_cols[0].get('name', '')
+            if grp_col and grp_col in df.columns:
+                self._plot_grouped(df, x_data_full, x_col, y_col_names, grp_col, chart_type, pg, np)
+                return
+
+        # --- Multi-column rendering (no group-by) ---
+        color_idx = 0
+        for y_col in y_col_names:
+            try:
+                y_data = df[y_col].to_numpy()
+            except Exception:
+                continue
+
+            pen_color = y_col_colors.get(y_col) or self.COLOR_PALETTE[color_idx % len(self.COLOR_PALETTE)]
+            x_sampled, y_sampled = self._sample(x_data_full, y_data, np)
+            self._render_series(x_sampled, y_sampled, pen_color, chart_type, pg, np, name=y_col)
+            color_idx += 1
+
+    def _plot_grouped(self, df, x_data_full, x_col, y_col_names, grp_col, chart_type, pg, np):
+        """Render grouped data with per-group colors."""
+        try:
+            groups = df[grp_col].unique()
+        except Exception:
+            return
+
+        color_idx = 0
+        for group_val in groups:
+            mask = df[grp_col] == group_val
+            indices = np.where(mask)[0]
+
+            if len(indices) == 0:
+                continue
+
+            x_grp = x_data_full[indices]
+            grp_color = self.COLOR_PALETTE[color_idx % len(self.COLOR_PALETTE)]
+
+            for y_col in y_col_names:
+                try:
+                    y_grp = df[y_col].to_numpy()[indices]
+                except Exception:
+                    continue
+
+                x_sampled, y_sampled = self._sample(x_grp, y_grp, np)
+                label = f"{group_val}" if len(y_col_names) == 1 else f"{group_val}/{y_col}"
+                self._render_series(x_sampled, y_sampled, grp_color, chart_type, pg, np, name=label)
+
+            color_idx += 1
+
+    def _render_series(self, x_data, y_data, color, chart_type, pg, np, name: str = ""):
+        """Render a single data series based on chart_type."""
+        try:
+            if chart_type == "scatter":
+                scatter = pg.ScatterPlotItem(
+                    x=x_data.astype(float),
+                    y=y_data.astype(float),
+                    pen=pg.mkPen(None),
+                    brush=pg.mkBrush(color),
+                    size=5,
+                    name=name,
+                )
+                self.plot_widget.addItem(scatter)
+            elif chart_type == "bar":
+                bar = pg.BarGraphItem(
+                    x=x_data.astype(float),
+                    height=y_data.astype(float),
+                    width=0.6,
+                    brush=pg.mkBrush(color),
+                    name=name,
+                )
+                self.plot_widget.addItem(bar)
+            else:
+                # Default: line
+                self.plot_widget.plot(
+                    x_data, y_data,
+                    pen=pg.mkPen(color, width=2),
+                    name=name,
+                )
         except Exception:
             pass
+
+    @staticmethod
+    def _sample(x_data, y_data, np, max_points: int = 1000):
+        """Downsample arrays if they exceed max_points."""
+        if len(x_data) > max_points:
+            step = len(x_data) // max_points
+            return x_data[::step], y_data[::step]
+        return x_data, y_data
 
     # ------------------------------------------------------------------
     # Public API

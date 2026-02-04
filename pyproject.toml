@@ -5,3 +5,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "node-and-date"
+
+[tool.pytest.ini_options]
+qt_api = "pyside6"
