@@ -4,6 +4,18 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.19.0] — 2026-02-05
+
+### ✨ Features
+
+- **Grid View (Facet Grid)** — 데이터를 카테고리별로 분할하여 여러 그래프로 표시 ([`92837ea`](../../commit/92837ea))
+  - Chart 탭에 "Enable Grid View" 체크박스
+  - Split by: Filter에서 선택된 열 기준으로 분할
+  - Direction: Row / Column / Wrap 선택
+  - 축 동기화 (zoom/pan 연동)
+
+---
+
 ## [v0.18.3] — 2026-02-05
 
 ### 🐛 Bug Fixes
