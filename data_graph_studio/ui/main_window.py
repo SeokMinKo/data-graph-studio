@@ -627,18 +627,22 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     def _setup_toolbar(self):
-        """Compact toolbar setup"""
+        """Main toolbar setup (Line 1)"""
         toolbar = QToolBar("Main Toolbar")
         toolbar.setMovable(False)
         toolbar.setIconSize(QSize(16, 16))
-        # Style handled by global theme stylesheet
         self.addToolBar(toolbar)
-        
-        # Open file button with modern style
-        open_btn = QAction("📂 Open", self)
-        open_btn.setToolTip(self._format_tooltip("Open Project", "Ctrl+O"))
-        open_btn.triggered.connect(self._on_open_file)
-        toolbar.addAction(open_btn)
+
+        # === Project/Profile I/O Section ===
+        open_project_btn = QAction("📂 Open Project", self)
+        open_project_btn.setToolTip(self._format_tooltip("Open Project (.dgs)", "Ctrl+O"))
+        open_project_btn.triggered.connect(self._on_open_file)
+        toolbar.addAction(open_project_btn)
+
+        open_profile_btn = QAction("📂 Open Profile", self)
+        open_profile_btn.setToolTip(self._format_tooltip("Load Graph Profile", ""))
+        open_profile_btn.triggered.connect(lambda: self.dataset_manager._on_load_profile())
+        toolbar.addAction(open_profile_btn)
 
         save_project_btn = QAction("💾 Save Project", self)
         save_project_btn.setToolTip(self._format_tooltip("Save Project", "Ctrl+Alt+S"))
@@ -650,13 +654,9 @@ class MainWindow(QMainWindow):
         save_profile_btn.triggered.connect(lambda: self.dataset_manager._on_save_profile())
         toolbar.addAction(save_profile_btn)
 
-        load_profile_btn = QAction("📂 Load Profile", self)
-        load_profile_btn.setToolTip(self._format_tooltip("Load Graph Profile", ""))
-        load_profile_btn.triggered.connect(lambda: self.dataset_manager._on_load_profile())
-        toolbar.addAction(load_profile_btn)
+        toolbar.addSeparator()
 
-
-        # Graph tools with modern icons
+        # === Navigation/Selection Tools ===
         self._tool_actions = {}
 
         tools = [
@@ -673,18 +673,12 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda checked, m=mode: self.state.set_tool_mode(m))
             toolbar.addAction(action)
             self._tool_actions[mode] = action
-        
-        # Default to Pan
+
         self._tool_actions[ToolMode.PAN].setChecked(True)
 
         toolbar.addSeparator()
 
-        # Draw tools label
-        draw_label = QLabel("  Draw: ")
-        draw_label.setObjectName("toolbarLabel")
-        toolbar.addWidget(draw_label)
-
-        # Drawing tools
+        # === Drawing Tools ===
         draw_tools = [
             (ToolMode.LINE_DRAW, "🖊️", "Line Draw", "Shift+L"),
             (ToolMode.CIRCLE_DRAW, "⭕", "Circle Draw", "Shift+C"),
@@ -700,7 +694,7 @@ class MainWindow(QMainWindow):
             toolbar.addAction(action)
             self._tool_actions[mode] = action
 
-        # Draw color picker button
+        # Draw color picker
         self._draw_color = QColor("#FF0000")
         self._draw_color_btn = QPushButton()
         self._draw_color_btn.setFixedSize(24, 24)
@@ -710,58 +704,140 @@ class MainWindow(QMainWindow):
         self._update_draw_color_btn()
         toolbar.addWidget(self._draw_color_btn)
 
-        toolbar.addSeparator()
-
-        # Action buttons
-        deselect_btn = QAction("✕  Clear", self)
-        deselect_btn.setToolTip(self._format_tooltip("Clear Selection", "Esc"))
-        deselect_btn.triggered.connect(self._on_clear_selection)
-        toolbar.addAction(deselect_btn)
-
-        clear_drawing_btn = QAction("🗑️  Clear Draw", self)
+        clear_drawing_btn = QAction("🗑️", self)
         clear_drawing_btn.setToolTip(self._format_tooltip("Clear All Drawings", "Del"))
         clear_drawing_btn.triggered.connect(self._on_clear_drawings)
         toolbar.addAction(clear_drawing_btn)
 
-        reset_btn = QAction("↺  Reset", self)
-        reset_btn.setToolTip(self._format_tooltip("Reset View", "Home"))
-        # Shortcut handled in keyPressEvent to avoid text input conflicts
-        reset_btn.triggered.connect(self._reset_graph_view)
-        toolbar.addAction(reset_btn)
-        self._reset_btn_action = reset_btn
-
-        autofit_btn = QAction("⊡  Fit", self)
-        autofit_btn.setToolTip(self._format_tooltip("Auto Fit to Data", "F"))
-        # Shortcut handled in keyPressEvent to avoid text input conflicts
-        autofit_btn.triggered.connect(self._autofit_graph)
-        toolbar.addAction(autofit_btn)
-        self._autofit_btn_action = autofit_btn
-        
         toolbar.addSeparator()
-        
-        # Chart type selector
-        self._chart_type_label = QLabel("  Chart: ")
-        self._chart_type_label.setObjectName("toolbarLabel")
-        toolbar.addWidget(self._chart_type_label)
-        
+
+        # === Chart Type Selector ===
         chart_types = [
             (ChartType.LINE, "📈", "<b>Line Chart</b><br>Best for: Time series, trends<br>Shortcut: 1"),
             (ChartType.BAR, "📊", "<b>Bar Chart</b><br>Best for: Comparing categories<br>Shortcut: 2"),
             (ChartType.SCATTER, "⚬", "<b>Scatter Plot</b><br>Best for: Correlations, distributions<br>Shortcut: 3"),
             (ChartType.AREA, "▤", "<b>Area Chart</b><br>Best for: Cumulative values, stacked data<br>Shortcut: 5"),
         ]
-        
+
         for ct, icon, tooltip in chart_types:
             action = QAction(icon, self)
             action.setToolTip(tooltip)
             action.triggered.connect(lambda checked, c=ct: self.state.set_chart_type(c))
             toolbar.addAction(action)
 
-        # (Preset management removed – use File menu profile/project save/load)
+        # Store references for view actions
+        self._reset_btn_action = None
+        self._autofit_btn_action = None
 
     def _setup_streaming_toolbar(self):
-        """Streaming toolbar — placeholder until streaming UI is connected."""
-        pass
+        """Secondary toolbar setup (Line 2) - Streaming + Compare"""
+        self.addToolBarBreak(Qt.TopToolBarArea)  # Force new line after main toolbar
+
+        toolbar = QToolBar("Secondary Toolbar")
+        toolbar.setMovable(False)
+        toolbar.setIconSize(QSize(16, 16))
+        self.addToolBar(Qt.TopToolBarArea, toolbar)
+
+        # === Streaming Controls ===
+        streaming_label = QLabel(" Streaming: ")
+        streaming_label.setObjectName("toolbarLabel")
+        toolbar.addWidget(streaming_label)
+
+        # Play/Pause
+        self._streaming_play_action = QAction("▶", self)
+        self._streaming_play_action.setToolTip("Play Streaming")
+        self._streaming_play_action.setCheckable(True)
+        self._streaming_play_action.triggered.connect(self._on_streaming_play)
+        toolbar.addAction(self._streaming_play_action)
+
+        self._streaming_pause_action = QAction("⏸", self)
+        self._streaming_pause_action.setToolTip("Pause Streaming")
+        self._streaming_pause_action.triggered.connect(self._on_streaming_pause)
+        toolbar.addAction(self._streaming_pause_action)
+
+        self._streaming_stop_action = QAction("⏹", self)
+        self._streaming_stop_action.setToolTip("Stop Streaming")
+        self._streaming_stop_action.triggered.connect(self._on_streaming_stop)
+        toolbar.addAction(self._streaming_stop_action)
+
+        # Speed control
+        from PySide6.QtWidgets import QComboBox
+        speed_label = QLabel(" Speed: ")
+        speed_label.setObjectName("toolbarLabel")
+        toolbar.addWidget(speed_label)
+
+        self._streaming_speed_combo = QComboBox()
+        self._streaming_speed_combo.addItems(["0.5x", "1x", "2x", "5x", "10x"])
+        self._streaming_speed_combo.setCurrentIndex(1)  # Default 1x
+        self._streaming_speed_combo.currentTextChanged.connect(self._on_streaming_speed_changed)
+        self._streaming_speed_combo.setFixedWidth(60)
+        toolbar.addWidget(self._streaming_speed_combo)
+
+        # Window size
+        window_label = QLabel(" Window: ")
+        window_label.setObjectName("toolbarLabel")
+        toolbar.addWidget(window_label)
+
+        self._streaming_window_combo = QComboBox()
+        self._streaming_window_combo.addItems(["100", "500", "1000", "5000", "All"])
+        self._streaming_window_combo.setCurrentIndex(2)  # Default 1000
+        self._streaming_window_combo.currentTextChanged.connect(self._on_streaming_window_changed)
+        self._streaming_window_combo.setFixedWidth(70)
+        toolbar.addWidget(self._streaming_window_combo)
+
+        toolbar.addSeparator()
+
+        # === View Controls ===
+        view_label = QLabel(" View: ")
+        view_label.setObjectName("toolbarLabel")
+        toolbar.addWidget(view_label)
+
+        deselect_btn = QAction("✕ Clear", self)
+        deselect_btn.setToolTip(self._format_tooltip("Clear Selection", "Esc"))
+        deselect_btn.triggered.connect(self._on_clear_selection)
+        toolbar.addAction(deselect_btn)
+
+        reset_btn = QAction("↺ Reset", self)
+        reset_btn.setToolTip(self._format_tooltip("Reset View", "Home"))
+        reset_btn.triggered.connect(self._reset_graph_view)
+        toolbar.addAction(reset_btn)
+        self._reset_btn_action = reset_btn
+
+        autofit_btn = QAction("⊡ Fit", self)
+        autofit_btn.setToolTip(self._format_tooltip("Auto Fit to Data", "F"))
+        autofit_btn.triggered.connect(self._autofit_graph)
+        toolbar.addAction(autofit_btn)
+        self._autofit_btn_action = autofit_btn
+
+    # Streaming toolbar event handlers
+    def _on_streaming_play(self, checked: bool):
+        """Start/resume streaming playback"""
+        if hasattr(self, 'streaming_controller') and self.streaming_controller:
+            self.streaming_controller.play()
+
+    def _on_streaming_pause(self):
+        """Pause streaming playback"""
+        if hasattr(self, 'streaming_controller') and self.streaming_controller:
+            self.streaming_controller.pause()
+
+    def _on_streaming_stop(self):
+        """Stop streaming playback"""
+        if hasattr(self, 'streaming_controller') and self.streaming_controller:
+            self.streaming_controller.stop()
+
+    def _on_streaming_speed_changed(self, text: str):
+        """Change streaming speed"""
+        if hasattr(self, 'streaming_controller') and self.streaming_controller:
+            speed = float(text.replace('x', ''))
+            self.streaming_controller.set_speed(speed)
+
+    def _on_streaming_window_changed(self, text: str):
+        """Change streaming window size"""
+        if hasattr(self, 'streaming_controller') and self.streaming_controller:
+            if text == "All":
+                self.streaming_controller.set_window_size(None)
+            else:
+                self.streaming_controller.set_window_size(int(text))
 
     def _setup_compare_toolbar(self):
         """Setup the Compare Toolbar (hidden by default, auto-shown during comparison)."""
@@ -1980,19 +2056,66 @@ class MainWindow(QMainWindow):
     
     def _load_project_file(self, file_path: str):
         """프로젝트 파일 (.dgs) 로드"""
+        from ..core.project import Project
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                project_data = json.load(f)
-            
-            # 프로젝트 데이터에서 파일 경로 추출
-            data_file = project_data.get('data_file')
-            if data_file and os.path.exists(data_file):
-                self._show_new_project_wizard(data_file)
-            else:
+            project = Project.load(file_path)
+            project_dir = Path(file_path).parent
+
+            # 데이터 소스 검증
+            errors = project.validate()
+            if errors:
                 QMessageBox.warning(
                     self, "Load Project",
-                    f"Project file loaded but data file not found:\n{data_file or '(not specified)'}"
+                    f"Some data files not found:\n" + "\n".join(errors)
                 )
+
+            # 데이터 소스들 로드
+            loaded_count = 0
+            active_dataset_id = None
+            for ds in project.get_all_data_sources():
+                resolved_path = ds.resolve(str(project_dir))
+                if os.path.exists(resolved_path):
+                    # 데이터 로드
+                    dataset_id = self.engine.load_dataset(resolved_path, name=ds.name)
+                    if dataset_id:
+                        loaded_count += 1
+                        # Register in state
+                        dataset = self.engine.get_dataset(dataset_id)
+                        if dataset:
+                            self.state.add_dataset(
+                                dataset_id=dataset_id,
+                                name=ds.name or Path(resolved_path).name,
+                                row_count=dataset.row_count,
+                                column_count=dataset.column_count,
+                                memory_bytes=dataset.memory_bytes
+                            )
+                        if ds.is_active:
+                            active_dataset_id = dataset_id
+
+            # 활성 데이터셋 설정
+            if active_dataset_id:
+                self.engine.activate_dataset(active_dataset_id)
+            elif loaded_count > 0:
+                # 첫 번째 로드된 데이터셋 활성화
+                ids = self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else []
+                if ids:
+                    self.engine.activate_dataset(ids[0])
+
+            # 프로파일 복원
+            for profile_dict in project.profiles:
+                try:
+                    gs = GraphSetting.from_dict(profile_dict)
+                    self.profile_store.add(gs)
+                except Exception as e:
+                    logger.warning(f"Failed to restore profile: {e}")
+
+            self._last_project_path = file_path
+            self.statusbar.showMessage(f"Project loaded: {file_path} ({loaded_count} datasets, {len(project.profiles)} profiles)", 3000)
+
+            # UI 업데이트
+            if loaded_count > 0:
+                self._on_data_loaded()
+
         except Exception as e:
             QMessageBox.critical(
                 self, "Load Project Error",
@@ -4561,9 +4684,31 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
     def _save_project_to(self, path: str):
         """프로젝트를 지정 경로에 저장"""
-        from ..core.project import Project
+        from ..core.project import Project, DataSourceRef
         try:
             project = Project(name=Path(path).stem)
+            project_dir = Path(path).parent
+
+            # 데이터 소스 추가 (현재 로드된 데이터셋들)
+            for dataset_id in self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else []:
+                dataset = self.engine.get_dataset(dataset_id)
+                if dataset:
+                    source_path = getattr(dataset, 'source_path', None) or getattr(dataset, 'file_path', None)
+                    if source_path and os.path.exists(source_path):
+                        # 상대 경로로 변환 시도
+                        try:
+                            rel_path = os.path.relpath(source_path, project_dir)
+                        except ValueError:
+                            rel_path = source_path  # 다른 드라이브면 절대경로 유지
+                        
+                        ds_ref = DataSourceRef(
+                            path=rel_path,
+                            file_type=Path(source_path).suffix.lstrip('.'),
+                            dataset_id=dataset_id,
+                            name=getattr(dataset, 'name', None),
+                            is_active=(dataset_id == self.state.active_dataset_id),
+                        )
+                        project.add_data_source(ds_ref)
 
             # 모든 프로파일을 프로젝트에 포함
             all_profiles = []
@@ -4584,7 +4729,8 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
             project.save(path)
             self._last_project_path = path
-            self.statusbar.showMessage(f"Project saved: {path} ({len(unique)} profiles)", 3000)
+            ds_count = len(project.data_sources)
+            self.statusbar.showMessage(f"Project saved: {path} ({ds_count} datasets, {len(unique)} profiles)", 3000)
         except Exception as e:
             QMessageBox.warning(self, "Save Project", f"Failed to save project:\n{e}")
 
