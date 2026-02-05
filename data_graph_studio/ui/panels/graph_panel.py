@@ -340,6 +340,55 @@ class GraphOptionsPanel(QFrame):
         type_layout.addWidget(self._combo_series_widget)
 
         layout.addWidget(type_group)
+
+        # Grid View (Facet Grid) Group
+        grid_group = QGroupBox("Grid View")
+        grid_group.setToolTip("Split data into multiple charts by a category column")
+        grid_layout = QVBoxLayout(grid_group)
+        grid_layout.setSpacing(6)
+
+        # Enable Grid View checkbox
+        self.grid_view_check = QCheckBox("Enable Grid View")
+        self.grid_view_check.setToolTip("Split data into facets by selected column")
+        self.grid_view_check.stateChanged.connect(self._on_grid_view_changed)
+        grid_layout.addWidget(self.grid_view_check)
+
+        # Grid View options container (shown when enabled)
+        self._grid_options_widget = QWidget()
+        grid_options_layout = QGridLayout(self._grid_options_widget)
+        grid_options_layout.setContentsMargins(0, 4, 0, 0)
+        grid_options_layout.setSpacing(6)
+        grid_options_layout.setColumnMinimumWidth(0, 60)
+        grid_options_layout.setColumnStretch(1, 1)
+
+        # Split by column
+        grid_options_layout.addWidget(QLabel("Split by:"), 0, 0)
+        self.grid_split_combo = QComboBox()
+        self.grid_split_combo.setToolTip("Column to split data by (uses Filter panel selections)")
+        self.grid_split_combo.currentTextChanged.connect(self._on_grid_split_changed)
+        grid_options_layout.addWidget(self.grid_split_combo, 0, 1)
+
+        # Direction
+        grid_options_layout.addWidget(QLabel("Direction:"), 1, 0)
+        self.grid_direction_combo = QComboBox()
+        self.grid_direction_combo.addItems(["Wrap", "Row", "Column"])
+        self.grid_direction_combo.setToolTip("Layout direction: Row=horizontal, Column=vertical, Wrap=auto")
+        self.grid_direction_combo.currentIndexChanged.connect(self._on_grid_direction_changed)
+        grid_options_layout.addWidget(self.grid_direction_combo, 1, 1)
+
+        # Max columns (for Wrap mode)
+        grid_options_layout.addWidget(QLabel("Max Cols:"), 2, 0)
+        self.grid_max_cols_spin = QSpinBox()
+        self.grid_max_cols_spin.setRange(1, 10)
+        self.grid_max_cols_spin.setValue(4)
+        self.grid_max_cols_spin.setToolTip("Maximum columns in Wrap mode")
+        self.grid_max_cols_spin.valueChanged.connect(self._on_grid_max_cols_changed)
+        grid_options_layout.addWidget(self.grid_max_cols_spin, 2, 1)
+
+        self._grid_options_widget.setVisible(False)
+        grid_layout.addWidget(self._grid_options_widget)
+
+        layout.addWidget(grid_group)
         
         # Title Group
         title_group = QGroupBox("Titles")
@@ -811,6 +860,58 @@ class GraphOptionsPanel(QFrame):
         for col_name, combo in self._combo_series_combos.items():
             result[col_name] = combo.currentData() or "line"
         return result
+
+    # ==================== Grid View Handlers ====================
+
+    def _on_grid_view_changed(self, state: int):
+        """Handle Grid View enable/disable"""
+        from ...core.state import GridDirection
+        enabled = state == Qt.Checked
+        self._grid_options_widget.setVisible(enabled)
+        self.state.set_grid_view_enabled(enabled)
+        self.option_changed.emit()
+
+    def _on_grid_split_changed(self, column_name: str):
+        """Handle Grid View split column change"""
+        self.state.set_grid_view_split_by(column_name if column_name else None)
+        self.option_changed.emit()
+
+    def _on_grid_direction_changed(self, index: int):
+        """Handle Grid View direction change"""
+        from ...core.state import GridDirection
+        directions = [GridDirection.WRAP, GridDirection.ROW, GridDirection.COLUMN]
+        if 0 <= index < len(directions):
+            self.state.set_grid_view_direction(directions[index])
+        self.option_changed.emit()
+
+    def _on_grid_max_cols_changed(self, value: int):
+        """Handle Grid View max columns change"""
+        self.state.update_grid_view_settings(max_columns=value)
+        self.option_changed.emit()
+
+    def update_grid_split_columns(self, columns: List[str]):
+        """Update the Grid View split column combo box with available filter columns"""
+        current = self.grid_split_combo.currentText()
+        self.grid_split_combo.blockSignals(True)
+        self.grid_split_combo.clear()
+        self.grid_split_combo.addItems(columns)
+        # Restore previous selection if still available
+        if current in columns:
+            self.grid_split_combo.setCurrentText(current)
+        elif columns:
+            self.grid_split_combo.setCurrentIndex(0)
+        self.grid_split_combo.blockSignals(False)
+
+    def get_grid_view_settings(self) -> Dict[str, Any]:
+        """Get current Grid View settings"""
+        from ...core.state import GridDirection
+        direction_map = {0: GridDirection.WRAP, 1: GridDirection.ROW, 2: GridDirection.COLUMN}
+        return {
+            'enabled': self.grid_view_check.isChecked(),
+            'split_by': self.grid_split_combo.currentText() or None,
+            'direction': direction_map.get(self.grid_direction_combo.currentIndex(), GridDirection.WRAP),
+            'max_columns': self.grid_max_cols_spin.value(),
+        }
     
     def _on_option_changed(self):
         self.state.update_chart_settings(
@@ -905,6 +1006,8 @@ class GraphOptionsPanel(QFrame):
             'sliding_window_enabled': self.sliding_window_check.isChecked(),
             'x_sliding_window': self.x_sliding_window_check.isChecked(),
             'y_sliding_window': self.y_sliding_window_check.isChecked(),
+            # Grid View options
+            **self.get_grid_view_settings(),
         }
 
 
@@ -2889,9 +2992,21 @@ class GraphPanel(QWidget):
         self.y_sliding_window.setVisible(False)  # Hidden by default
         graph_layout.addWidget(self.y_sliding_window)
 
-        # Main Graph
+        # Main Graph (single view mode)
         self.main_graph = MainGraph(self.state)
         graph_layout.addWidget(self.main_graph, 1)
+
+        # Grid View Container (facet mode) - hidden by default
+        self._grid_container = QWidget()
+        self._grid_layout = QGridLayout(self._grid_container)
+        self._grid_layout.setContentsMargins(4, 4, 4, 4)
+        self._grid_layout.setSpacing(4)
+        self._grid_container.setVisible(False)
+        graph_layout.addWidget(self._grid_container, 1)
+
+        # List to hold grid cell PlotWidgets
+        self._grid_cells: List[pg.PlotWidget] = []
+        self._grid_cell_labels: List[QLabel] = []
 
         center_layout.addWidget(graph_container, 1)
 
@@ -2942,6 +3057,27 @@ class GraphPanel(QWidget):
 
         # Connect view range changes to update sliding windows
         self.main_graph.plotItem.sigRangeChanged.connect(self._on_graph_range_changed)
+
+        # Grid View signal
+        self.state.grid_view_changed.connect(self._on_grid_view_changed)
+
+        # Update Grid View split columns when filter columns change
+        self.options_panel.data_tab.filter_changed.connect(self._update_grid_split_columns)
+
+    def _on_grid_view_changed(self):
+        """Handle Grid View settings change"""
+        self.refresh()
+
+    def _update_grid_split_columns(self, filter_dict=None):
+        """Update Grid View split column options based on filter panel selections"""
+        # Get columns that have filter selections (from DataTab)
+        filter_columns = list(self._active_filter.keys()) if self._active_filter else []
+
+        # Also include group columns if any
+        group_col_names = [gc.name for gc in self.state.group_columns]
+        all_columns = list(set(filter_columns + group_col_names))
+
+        self.options_panel.update_grid_split_columns(all_columns)
 
     def _on_value_zone_changed(self):
         """Handle value zone changes — auto-switch chart type for combo."""
@@ -3096,6 +3232,18 @@ class GraphPanel(QWidget):
         # Get options including legend settings
         options = self.options_panel.get_chart_options()
         legend_settings = self.options_panel.get_legend_settings()
+
+        # Check if Grid View is enabled
+        grid_enabled = options.get('enabled', False)  # from get_grid_view_settings()
+        grid_split_by = options.get('split_by')
+
+        if grid_enabled and grid_split_by:
+            self._refresh_grid_view(options, legend_settings)
+            return
+
+        # Single graph mode - hide grid container, show main graph
+        self._grid_container.setVisible(False)
+        self.main_graph.setVisible(True)
 
         # Intercept statistical chart types that need special handling
         chart_type = options.get('chart_type', ChartType.LINE)
@@ -4629,3 +4777,220 @@ class GraphPanel(QWidget):
         if dialog.exec() == QDialog.Accepted:
             style = dialog.get_style()
             self.set_drawing_style(style)
+
+    # ==================== Grid View (Facet Grid) ====================
+
+    def _refresh_grid_view(self, options: Dict[str, Any], legend_settings: Dict[str, Any]):
+        """Render Grid View with multiple faceted charts"""
+        from ...core.state import GridDirection
+
+        # Hide main graph, show grid container
+        self.main_graph.setVisible(False)
+        self._grid_container.setVisible(True)
+
+        split_by = options.get('split_by')
+        direction = options.get('direction', GridDirection.WRAP)
+        max_columns = options.get('max_columns', 4)
+
+        # Get the working DataFrame (with filters applied)
+        working_df = self.engine.df
+        if self._active_filter and working_df is not None:
+            for f_col, f_vals in self._active_filter.items():
+                if f_col in working_df.columns and f_vals:
+                    try:
+                        working_df = working_df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
+                    except Exception:
+                        pass
+
+        if working_df is None or len(working_df) == 0:
+            self._clear_grid_cells()
+            return
+
+        # Get unique values for split column
+        if split_by not in working_df.columns:
+            self._clear_grid_cells()
+            return
+
+        split_values = working_df[split_by].unique().to_list()
+        split_values = [v for v in split_values if v is not None]  # Remove nulls
+        split_values = sorted(split_values, key=lambda x: str(x))
+
+        n_facets = len(split_values)
+        if n_facets == 0:
+            self._clear_grid_cells()
+            return
+
+        # Calculate grid dimensions based on direction
+        if direction == GridDirection.ROW:
+            n_cols = n_facets
+            n_rows = 1
+        elif direction == GridDirection.COLUMN:
+            n_cols = 1
+            n_rows = n_facets
+        else:  # WRAP
+            n_cols = min(max_columns, n_facets)
+            n_rows = (n_facets + n_cols - 1) // n_cols
+
+        # Clear existing grid cells
+        self._clear_grid_cells()
+
+        # Create grid cells for each facet
+        chart_type = options.get('chart_type', ChartType.LINE)
+        line_width = options.get('line_width', 2)
+        marker_size = options.get('marker_size', 6)
+        show_points = options.get('show_points', True)
+        bg_color = options.get('bg_color', QColor('#323D4A'))
+        grid_alpha = options.get('grid_opacity', 0.3)
+
+        # Colors for series
+        default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                          '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+
+        # Get X and Y column info
+        x_col = self.state.x_column
+        y_col_name = None
+        if self.state.value_columns:
+            y_col_name = self.state.value_columns[0].name
+        else:
+            numeric_cols = [col for col in self.engine.columns
+                           if self.engine.dtypes.get(col, '').startswith(('Int', 'Float'))]
+            if numeric_cols:
+                y_col_name = numeric_cols[0]
+
+        if not y_col_name or y_col_name not in working_df.columns:
+            self._clear_grid_cells()
+            return
+
+        # Store all cell plots for axis synchronization
+        all_cells = []
+        all_x_data = []
+        all_y_data = []
+
+        for idx, split_val in enumerate(split_values):
+            row = idx // n_cols
+            col = idx % n_cols
+
+            # Create cell container
+            cell_widget = QWidget()
+            cell_layout = QVBoxLayout(cell_widget)
+            cell_layout.setContentsMargins(2, 2, 2, 2)
+            cell_layout.setSpacing(2)
+
+            # Label for this facet
+            label = QLabel(f"{split_by}: {split_val}")
+            label.setAlignment(Qt.AlignCenter)
+            label.setStyleSheet("font-weight: bold; color: #E2E8F0; padding: 2px;")
+            cell_layout.addWidget(label)
+            self._grid_cell_labels.append(label)
+
+            # Create PlotWidget for this facet
+            plot_widget = pg.PlotWidget()
+            plot_widget.setBackground(bg_color.name())
+            plot_widget.showGrid(x=True, y=True, alpha=grid_alpha)
+
+            # Filter data for this facet
+            try:
+                facet_df = working_df.filter(pl.col(split_by).cast(pl.Utf8) == str(split_val))
+            except Exception:
+                facet_df = working_df.filter(pl.col(split_by) == split_val)
+
+            if len(facet_df) == 0:
+                cell_layout.addWidget(plot_widget, 1)
+                self._grid_layout.addWidget(cell_widget, row, col)
+                self._grid_cells.append(plot_widget)
+                all_cells.append(plot_widget)
+                continue
+
+            # Get X data
+            if x_col and x_col in facet_df.columns:
+                x_data = facet_df[x_col].to_numpy()
+            else:
+                x_data = np.arange(len(facet_df))
+
+            # Get Y data
+            y_data = facet_df[y_col_name].to_numpy()
+
+            all_x_data.extend(x_data.tolist())
+            all_y_data.extend(y_data.tolist())
+
+            # Plot data
+            color = default_colors[idx % len(default_colors)]
+            pen = pg.mkPen(color=color, width=line_width)
+
+            if chart_type == ChartType.LINE:
+                plot_widget.plot(x_data, y_data, pen=pen)
+                if show_points and marker_size > 0:
+                    scatter = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
+                                                  brush=pg.mkBrush(color))
+                    plot_widget.addItem(scatter)
+            elif chart_type == ChartType.SCATTER:
+                scatter = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
+                                              brush=pg.mkBrush(color))
+                plot_widget.addItem(scatter)
+            elif chart_type == ChartType.BAR:
+                w = (x_data.max() - x_data.min()) / len(x_data) * 0.8 if len(x_data) > 1 else 0.8
+                bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
+                                       brush=pg.mkBrush(QColor(color).red(),
+                                                       QColor(color).green(),
+                                                       QColor(color).blue(), 180))
+                plot_widget.addItem(bar)
+            elif chart_type == ChartType.AREA:
+                fill_color = QColor(color)
+                fill_color.setAlpha(80)
+                plot_widget.plot(x_data, y_data, pen=pen, fillLevel=0, brush=fill_color)
+            else:
+                plot_widget.plot(x_data, y_data, pen=pen)
+
+            cell_layout.addWidget(plot_widget, 1)
+            self._grid_layout.addWidget(cell_widget, row, col)
+            self._grid_cells.append(plot_widget)
+            all_cells.append(plot_widget)
+
+        # Synchronize axes across all cells
+        if len(all_cells) > 1 and len(all_x_data) > 0 and len(all_y_data) > 0:
+            self._sync_grid_axes(all_cells, all_x_data, all_y_data)
+
+    def _clear_grid_cells(self):
+        """Clear all grid cells"""
+        # Remove widgets from layout
+        while self._grid_layout.count():
+            item = self._grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        self._grid_cells.clear()
+        self._grid_cell_labels.clear()
+
+    def _sync_grid_axes(self, cells: List[pg.PlotWidget], all_x: List, all_y: List):
+        """Synchronize axis ranges across all grid cells"""
+        # Calculate global range
+        try:
+            x_arr = np.array([x for x in all_x if x is not None and not np.isnan(x)])
+            y_arr = np.array([y for y in all_y if y is not None and not np.isnan(y)])
+
+            if len(x_arr) == 0 or len(y_arr) == 0:
+                return
+
+            x_min, x_max = float(np.min(x_arr)), float(np.max(x_arr))
+            y_min, y_max = float(np.min(y_arr)), float(np.max(y_arr))
+
+            # Add some padding
+            x_pad = (x_max - x_min) * 0.05 if x_max > x_min else 0.5
+            y_pad = (y_max - y_min) * 0.05 if y_max > y_min else 0.5
+
+            # Set same range for all cells
+            for cell in cells:
+                cell.setXRange(x_min - x_pad, x_max + x_pad, padding=0)
+                cell.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
+
+            # Link X and Y axes for synchronized zoom/pan
+            if len(cells) > 1:
+                main_vb = cells[0].getViewBox()
+                for cell in cells[1:]:
+                    cell.getViewBox().setXLink(main_vb)
+                    cell.getViewBox().setYLink(main_vb)
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to sync grid axes: {e}")

@@ -171,6 +171,22 @@ class SortCondition:
     descending: bool = False
 
 
+class GridDirection(Enum):
+    """Grid View 방향"""
+    ROW = "row"       # 가로 나열
+    COLUMN = "column" # 세로 나열
+    WRAP = "wrap"     # 자동 줄바꿈
+
+
+@dataclass
+class GridViewSettings:
+    """Grid View (Facet Grid) 설정"""
+    enabled: bool = False
+    split_by: Optional[str] = None  # 분할 기준 열
+    direction: GridDirection = GridDirection.WRAP
+    max_columns: int = 4  # Wrap 모드에서 최대 열 수
+
+
 @dataclass
 class ChartSettings:
     """차트 설정"""
@@ -195,6 +211,9 @@ class ChartSettings:
     secondary_y_min: Optional[float] = None
     secondary_y_max: Optional[float] = None
     secondary_y_label: Optional[str] = None
+    
+    # Grid View 설정
+    grid_view: GridViewSettings = field(default_factory=GridViewSettings)
 
 
 @dataclass
@@ -308,6 +327,7 @@ class AppState(QObject):
 
     chart_settings_changed = Signal()
     tool_mode_changed = Signal()
+    grid_view_changed = Signal()  # Grid View 설정 변경
 
     # Summary 업데이트
     summary_updated = Signal(dict)  # 통계 데이터
@@ -1075,6 +1095,43 @@ class AppState(QObject):
     def set_tool_mode(self, mode: ToolMode):
         self._tool_mode = mode
         self.tool_mode_changed.emit()
+
+    # ==================== Grid View ====================
+
+    @property
+    def grid_view_settings(self) -> GridViewSettings:
+        """Grid View 설정"""
+        return self._chart_settings.grid_view
+
+    def set_grid_view_enabled(self, enabled: bool):
+        """Grid View 활성화/비활성화"""
+        if self._chart_settings.grid_view.enabled != enabled:
+            self._chart_settings.grid_view.enabled = enabled
+            self.grid_view_changed.emit()
+
+    def set_grid_view_split_by(self, column: Optional[str]):
+        """Grid View 분할 기준 열 설정"""
+        if self._chart_settings.grid_view.split_by != column:
+            self._chart_settings.grid_view.split_by = column
+            self.grid_view_changed.emit()
+
+    def set_grid_view_direction(self, direction: GridDirection):
+        """Grid View 방향 설정"""
+        if self._chart_settings.grid_view.direction != direction:
+            self._chart_settings.grid_view.direction = direction
+            self.grid_view_changed.emit()
+
+    def update_grid_view_settings(self, **kwargs):
+        """Grid View 설정 업데이트"""
+        changed = False
+        for key, value in kwargs.items():
+            if hasattr(self._chart_settings.grid_view, key):
+                current = getattr(self._chart_settings.grid_view, key)
+                if current != value:
+                    setattr(self._chart_settings.grid_view, key, value)
+                    changed = True
+        if changed:
+            self.grid_view_changed.emit()
     
     # ==================== Layout ====================
     
