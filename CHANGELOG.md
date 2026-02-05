@@ -4,6 +4,18 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.18.3] — 2026-02-05
+
+### 🐛 Bug Fixes
+
+- **프로젝트 저장/로드 버그 수정** — 저장 시 데이터 소스 경로 포함, 로드 시 자동 복원 ([`b05e65f`](../../commit/b05e65f))
+
+### ✨ Features
+
+- **툴바 2줄 구성** — 1줄: 파일/선택도구/그리기/차트타입, 2줄: 스트리밍/비교 ([`b05e65f`](../../commit/b05e65f))
+
+---
+
 ## [v0.18.0] — 2026-02-05
 
 ### ✨ Features
