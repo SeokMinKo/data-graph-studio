@@ -65,12 +65,21 @@ class ParsingStep(QWizardPage):
 
     def initializePage(self):
         """페이지 진입 시 초기화"""
+        wizard = self.wizard()
+        if hasattr(wizard, "current_file_path"):
+            self.update_file_path(getattr(wizard, "current_file_path"))
         self._load_raw_preview()
         self._update_preview()
 
     def validatePage(self) -> bool:
         """다음 스텝 진행 가능 여부"""
         return self._parsing_success
+
+    def update_file_path(self, file_path: str) -> None:
+        self.file_path = file_path
+        self.file_name = Path(file_path).name
+        if hasattr(self, "_file_info_label"):
+            self._file_info_label.setText(self._build_file_info_text())
 
     def get_parsing_settings(self) -> ParsingSettings:
         """현재 파싱 설정 반환"""
@@ -145,9 +154,9 @@ class ParsingStep(QWizardPage):
         layout.setSpacing(12)
 
         # File info
-        info_label = QLabel(self._build_file_info_text())
-        info_label.setStyleSheet("font-weight: 600; font-size: 13px;")
-        layout.addWidget(info_label)
+        self._file_info_label = QLabel(self._build_file_info_text())
+        self._file_info_label.setStyleSheet("font-weight: 600; font-size: 13px;")
+        layout.addWidget(self._file_info_label)
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self._create_settings_panel())

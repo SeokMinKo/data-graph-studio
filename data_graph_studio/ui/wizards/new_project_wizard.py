@@ -12,6 +12,18 @@ except Exception:  # pragma: no cover - placeholder until implemented
             super().__init__(parent)
             self.file_path = file_path
 
+try:
+    from .wpr_convert_step import WprConvertStep, is_wpr_file
+except Exception:  # pragma: no cover
+
+    def is_wpr_file(_: str) -> bool:
+        return False
+
+    class WprConvertStep(QWizardPage):
+        def __init__(self, file_path: str, parent=None):
+            super().__init__(parent)
+            self.file_path = file_path
+
 
 try:
     from .graph_setup_step import GraphSetupStep
@@ -39,6 +51,7 @@ class NewProjectWizard(QWizard):
     def __init__(self, file_path: str, parent=None):
         super().__init__(parent)
         self.file_path = file_path
+        self.current_file_path = file_path
         self._parsing_settings = None
         self._graph_setting = None
         self._preview_df = None
@@ -47,21 +60,32 @@ class NewProjectWizard(QWizard):
         self.resize(1500, 800)
         self.setMinimumSize(1200, 600)
 
-        self.addPage(ParsingStep(file_path))
-        self.addPage(GraphSetupStep())
-        self.addPage(FinishStep())
+        if is_wpr_file(file_path):
+            self.addPage(WprConvertStep(file_path))
+
+        self._parsing_step = ParsingStep(file_path)
+        self._graph_step = GraphSetupStep()
+        self._finish_step = FinishStep()
+        self.addPage(self._parsing_step)
+        self.addPage(self._graph_step)
+        self.addPage(self._finish_step)
 
     def cleanupPage(self, page_id: int) -> None:
         """마법사 취소 시 cleanup"""
         self._preview_df = None
         super().cleanupPage(page_id)
+
+    def set_current_file_path(self, file_path: str) -> None:
+        self.current_file_path = file_path
+        if hasattr(self, "_parsing_step"):
+            self._parsing_step.update_file_path(file_path)
     
     def accept(self) -> None:
         """마법사 완료 (Finish 버튼)"""
         # 각 단계에서 설정 수집
-        parsing_page = self.page(0)
-        graph_page = self.page(1)
-        finish_page = self.page(2)
+        parsing_page = self._parsing_step
+        graph_page = self._graph_step
+        finish_page = self._finish_step
         
         parsing_settings = None
         graph_setting = None

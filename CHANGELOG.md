@@ -4,6 +4,14 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.20.0] — 2026-02-06
+
+### ✨ Features
+
+- **WPR Import Wizard 단계별 ETL 로딩** — WPAExporter 변환 단계 추가 + Parquet 변환/미리보기 흐름
+
+---
+
 ## [v0.19.0] — 2026-02-05
 
 ### ✨ Features

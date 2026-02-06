@@ -77,3 +77,14 @@ Last Updated: 2026-02-04 06:55 KST
 2. Phase A 완료 → Phase B 2개 에이전트 시작
 3. Phase B 완료 → Phase C 2개 에이전트 시작
 4. 전체 완료 → QA Phase
+
+---
+
+## WPR Import Wizard (단계별 ETL 로딩)
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 1. PRD | ✅ | WPR ETL 단계별 로딩 PRD 추가 |
+| 2. Review | ✅ | Round WPR: 8/8 AGREE |
+| 3. Implementation | ✅ | WPR 변환 단계 추가 |
+| 4. QA | ✅ | tests/test_wpr_convert_step.py |

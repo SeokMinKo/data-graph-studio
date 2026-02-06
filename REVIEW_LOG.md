@@ -224,3 +224,60 @@ The following MUST be addressed before development starts:
 6. **🟠 MEDIUM**: Define behavior for dataset switch / data clear in Data tab.
 7. **🟠 MEDIUM**: Address Ctrl+drag removal from table headers.
 8. **🟠 MEDIUM**: Specify DataTab cleanup/signal disconnection strategy.
+
+---
+
+## Round WPR — Import Wizard WPR ETL 단계별 로딩 (2026-02-06)
+Date: 2026-02-06
+
+### 🧠 Behavior Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- 단계별 진행/재시도/에러 흐름 명확.
+
+### 🏗️ Structure Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- Wizard 단계 추가로 구조적 변경 최소화.
+
+### 🎨 UI Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- 변환 단계 진행 상태 표시 포함.
+
+### 🔍 Overall Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- 대용량 WPR 로딩 문제 해결에 직접적.
+
+### ⚡ Algorithm Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- 변환 단계 분리로 복잡도 영향 제한.
+
+### 🔧 Perf & Memory Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- 변환 프로세스 분리로 UI 스레드 안전.
+
+### 🛡️ Security & Error Handling Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- 변환 실패시 명확한 메시지 요구사항 포함.
+
+### 🧪 Testability Reviewer
+**Status**: ✅ AGREE
+**Checklist**: [x]1 [x]2 [x]3 [x]4 [x]5 [x]6 [x]7 [x]8 [x]9 [x]10
+**Feedback**:
+- 경로 생성/단계 삽입 테스트 가능.
+
+### Summary
+- **AGREE**: 8/8
+- **통과 여부**: ✅ PASS
