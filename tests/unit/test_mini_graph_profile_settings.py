@@ -55,6 +55,8 @@ def _make_state_mock():
     state.value_columns = []
     state.group_columns = []
     state.hover_columns = []
+    # Prevent MagicMock auto-attribute from breaking pyqtgraph color parsing
+    state._chart_settings = None
     return state
 
 
@@ -149,23 +151,23 @@ class TestPlotDataRendering:
         )
         widget.plot_widget.plot.assert_called_once()
 
-    def test_sample_downsamples(self):
+    def test_sample_downsamples(self, qtbot):
         """_sample reduces array to max_points."""
-        from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
         import numpy as np
 
+        widget = _make_widget(qtbot=qtbot)
         x = np.arange(5000)
         y = np.arange(5000)
-        x_s, y_s = MiniGraphWidget._sample(x, y, np, max_points=1000)
+        x_s, y_s = widget._sample(x, y, np, max_points=1000)
         assert len(x_s) <= 1000
         assert len(y_s) <= 1000
 
-    def test_sample_no_downsample_small(self):
+    def test_sample_no_downsample_small(self, qtbot):
         """_sample does not downsample small arrays."""
-        from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
         import numpy as np
 
+        widget = _make_widget(qtbot=qtbot)
         x = np.arange(500)
         y = np.arange(500)
-        x_s, y_s = MiniGraphWidget._sample(x, y, np, max_points=1000)
+        x_s, y_s = widget._sample(x, y, np, max_points=1000)
         assert len(x_s) == 500

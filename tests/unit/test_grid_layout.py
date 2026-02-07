@@ -46,6 +46,8 @@ def _make_mock_state():
     metadata.color = "#1f77b4"
     metadata.name = "Test"
     state.get_dataset_metadata.return_value = metadata
+    # Prevent MagicMock auto-attribute from breaking pyqtgraph color parsing
+    state._chart_settings = None
     return state
 
 

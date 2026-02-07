@@ -1905,7 +1905,217 @@ class ThemeManager:
             #datasetHeaderRows {{
                 color: rgba(255,255,255,0.8);
             }}
+            
+            /* ============ Empty State (New) ============ */
+            #emptyStateWidget {{
+                background-color: {t.background};
+            }}
+            
+            #emptyStateCard {{
+                background-color: {t.surface};
+                border: {"1px solid " + t.border if t.is_light() else "none"};
+                border-radius: 16px;
+            }}
+            
+            #emptyStateIcon {{
+                background: transparent;
+                border: none;
+            }}
+            
+            #emptyStateTitle {{
+                font-size: 24px;
+                font-weight: 700;
+                color: {t.foreground};
+                background: transparent;
+                border: none;
+                margin-top: 8px;
+            }}
+            
+            #emptyStateSubtitle {{
+                font-size: 15px;
+                color: {t.text_secondary};
+                background: transparent;
+                border: none;
+                line-height: 1.5;
+            }}
+            
+            #emptyStateFormats {{
+                font-size: 12px;
+                color: {t.text_muted};
+                background: transparent;
+                border: none;
+                margin-top: 4px;
+            }}
+            
+            #emptyStatePrimaryBtn {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {t.primary}, stop:1 {t.accent});
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: 600;
+                min-width: 120px;
+            }}
+            
+            #emptyStatePrimaryBtn:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {t.accent}, stop:1 {t.primary});
+            }}
+            
+            #emptyStateSecondaryBtn {{
+                background-color: {t.surface};
+                color: {t.foreground};
+                border: 1px solid {t.border};
+                border-radius: 10px;
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: 500;
+                min-width: 120px;
+            }}
+            
+            #emptyStateSecondaryBtn:hover {{
+                background-color: {t.surface_hover};
+                border-color: {t.primary};
+            }}
+            
+            #emptyStateDropHint {{
+                background-color: {"#F0FDF4" if t.is_light() else "rgba(16, 185, 129, 0.1)"};
+                border: 2px dashed {"#86EFAC" if t.is_light() else t.success};
+                border-radius: 12px;
+            }}
+            
+            #dropHintIcon {{
+                font-size: 24px;
+                background: transparent;
+                border: none;
+            }}
+            
+            #dropHintText {{
+                font-size: 13px;
+                color: {t.success};
+                background: transparent;
+                border: none;
+            }}
+            
+            #emptyStateStepsTitle {{
+                font-size: 13px;
+                font-weight: 600;
+                color: {t.text_secondary};
+                background: transparent;
+                border: none;
+                margin-bottom: 8px;
+            }}
+            
+            #stepNumber {{
+                font-size: 16px;
+                background: transparent;
+                border: none;
+            }}
+            
+            #stepText {{
+                font-size: 13px;
+                color: {t.text_secondary};
+                background: transparent;
+                border: none;
+            }}
+            
+            /* ============ Drop Overlay ============ */
+            #dropZoneOverlay {{
+                background-color: rgba({self._hex_to_rgb(t.primary)}, 0.15);
+                border: 3px dashed {t.primary};
+            }}
+            
+            #dropOverlayIcon {{
+                background: transparent;
+                border: none;
+            }}
+            
+            #dropOverlayText {{
+                font-size: 18px;
+                font-weight: 600;
+                color: {t.primary};
+                background: transparent;
+                border: none;
+            }}
+            
+            /* ============ Improved Drop Zones ============ */
+            #XAxisZone {{
+                background-color: {"#ECFDF5" if t.is_light() else "rgba(16, 185, 129, 0.08)"};
+                border: 2px dashed {"#A7F3D0" if t.is_light() else "rgba(16, 185, 129, 0.3)"};
+                border-radius: 12px;
+                padding: 12px;
+            }}
+            
+            #XAxisZone[state="filled"] {{
+                background-color: {"#D1FAE5" if t.is_light() else "rgba(16, 185, 129, 0.15)"};
+                border: 2px solid {t.success};
+            }}
+            
+            #XAxisZone[state="dragover"] {{
+                background-color: {"#A7F3D0" if t.is_light() else "rgba(16, 185, 129, 0.25)"};
+                border: 2px solid {t.success};
+            }}
+            
+            #GroupZone {{
+                background-color: {"#F8FAFC" if t.is_light() else "rgba(148, 163, 184, 0.08)"};
+                border: 2px dashed {"#CBD5E1" if t.is_light() else "rgba(148, 163, 184, 0.3)"};
+                border-radius: 12px;
+                padding: 12px;
+            }}
+            
+            #GroupZone[state="filled"] {{
+                background-color: {"#E2E8F0" if t.is_light() else "rgba(148, 163, 184, 0.15)"};
+                border: 2px solid {t.text_secondary};
+            }}
+            
+            #ValueZone {{
+                background-color: {"#EEF2FF" if t.is_light() else "rgba(99, 102, 241, 0.08)"};
+                border: 2px dashed {"#C7D2FE" if t.is_light() else "rgba(99, 102, 241, 0.3)"};
+                border-radius: 12px;
+                padding: 12px;
+            }}
+            
+            #ValueZone[state="filled"] {{
+                background-color: {"#E0E7FF" if t.is_light() else "rgba(99, 102, 241, 0.15)"};
+                border: 2px solid {t.primary};
+            }}
+            
+            #HoverZone {{
+                background-color: {"#FFFBEB" if t.is_light() else "rgba(245, 158, 11, 0.08)"};
+                border: 2px dashed {"#FDE68A" if t.is_light() else "rgba(245, 158, 11, 0.3)"};
+                border-radius: 12px;
+                padding: 12px;
+            }}
+            
+            #HoverZone[state="filled"] {{
+                background-color: {"#FEF3C7" if t.is_light() else "rgba(245, 158, 11, 0.15)"};
+                border: 2px solid {t.warning};
+            }}
+            
+            /* ============ Enhanced Placeholder Text ============ */
+            #placeholder {{
+                color: {t.text_muted};
+                font-size: 13px;
+                font-weight: 500;
+                background: transparent;
+            }}
+            
+            /* ============ Graph Area Enhancement ============ */
+            #graphAreaFrame {{
+                background-color: {t.background};
+                border-radius: 8px;
+            }}
         """
+    
+    def _hex_to_rgb(self, hex_color: str) -> str:
+        """Convert hex color to RGB values for rgba()"""
+        hex_color = hex_color.lstrip('#')
+        if len(hex_color) == 6:
+            r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+            return f"{r}, {g}, {b}"
+        return "0, 0, 0"
     
     # ==================== Theme Toggle (PRD §3.6) ====================
 

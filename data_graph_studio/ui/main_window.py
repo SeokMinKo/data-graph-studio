@@ -26,6 +26,10 @@ from ..core.ipc_server import IPCServer
 from ..core.clipboard_manager import ClipboardManager, DragDropHandler
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
+from ..core.undo_manager import UndoStack
+from ..core.dashboard_controller import DashboardController
+from ..core.annotation_controller import AnnotationController
+from ..core.shortcut_controller import ShortcutController
 from ..utils.memory import MemoryMonitor
 
 # 에러 로깅 설정
@@ -39,7 +43,10 @@ from .panels.dataset_manager_panel import DatasetManagerPanel
 from .panels.side_by_side_layout import SideBySideLayout
 from .panels.comparison_stats_panel import ComparisonStatsPanel
 from .panels.overlay_stats_widget import OverlayStatsWidget
+from .panels.annotation_panel import AnnotationPanel
+from .panels.dashboard_panel import DashboardPanel
 from .dialogs.parsing_preview_dialog import ParsingPreviewDialog
+from .dialogs.computed_column_dialog import ComputedColumnDialog
 from ..core.parsing import ParsingSettings
 from .dialogs.save_setting_dialog import SaveSettingDialog
 from .dialogs.streaming_dialog import StreamingDialog
@@ -60,63 +67,13 @@ from .toolbars.compare_toolbar import CompareToolbar
 from .views.project_tree_view import ProjectTreeView
 from .wizards.new_project_wizard import NewProjectWizard
 
-
-class DataLoaderThread(QThread):
-    """비동기 데이터 로딩 스레드"""
-    progress_updated = Signal(object)  # LoadingProgress
-    finished_loading = Signal(bool)  # success
-    
-    def __init__(self, engine: DataEngine, file_path: str):
-        super().__init__()
-        self.engine = engine
-        self.file_path = file_path
-    
-    def run(self):
-        self.engine.set_progress_callback(self._on_progress)
-        success = self.engine.load_file(self.file_path, optimize_memory=True)
-        self.finished_loading.emit(success)
-    
-    def _on_progress(self, progress: LoadingProgress):
-        self.progress_updated.emit(progress)
-
-
-class DataLoaderThreadWithSettings(QThread):
-    """비동기 데이터 로딩 스레드 (파싱 설정 적용)"""
-    progress_updated = Signal(object)  # LoadingProgress
-    finished_loading = Signal(bool)  # success
-    
-    def __init__(self, engine: DataEngine, file_path: str, settings: ParsingSettings):
-        super().__init__()
-        self.engine = engine
-        self.file_path = file_path
-        self.settings = settings
-    
-    def run(self):
-        self.engine.set_progress_callback(self._on_progress)
-
-        # Get process filter for ETL files
-        process_filter = None
-        if hasattr(self.settings, 'etl_selected_processes') and self.settings.etl_selected_processes:
-            process_filter = self.settings.etl_selected_processes
-
-        success = self.engine.load_file(
-            self.file_path,
-            file_type=self.settings.file_type,
-            encoding=self.settings.encoding,
-            delimiter=self.settings.delimiter,
-            delimiter_type=self.settings.delimiter_type,
-            regex_pattern=self.settings.regex_pattern if self.settings.regex_pattern else None,
-            has_header=self.settings.has_header,
-            skip_rows=self.settings.skip_rows,
-            comment_char=self.settings.comment_char if self.settings.comment_char else None,
-            excluded_columns=self.settings.excluded_columns if self.settings.excluded_columns else None,
-            process_filter=process_filter,
-            optimize_memory=True
-        )
-        self.finished_loading.emit(success)
-    
-    def _on_progress(self, progress: LoadingProgress):
-        self.progress_updated.emit(progress)
+# Controllers (extracted from MainWindow)
+from .controllers.ipc_controller import IPCController
+from .controllers.file_loading_controller import (
+    FileLoadingController, DataLoaderThread, DataLoaderThreadWithSettings,
+)
+from .controllers.dataset_controller import DatasetController
+from .controllers.profile_ui_controller import ProfileUIController
 
 
 class _QtTimerWrapper:
@@ -184,6 +141,22 @@ class MainWindow(QMainWindow):
             parent=self,
         )
 
+        # ===== v2 Feature Controllers =====
+        # Undo/Redo stack (shared by dashboard, annotation, column controllers)
+        self._undo_stack = UndoStack(max_depth=50)
+
+        # Feature 1: Dashboard Mode
+        self._dashboard_controller = DashboardController(self.state, self._undo_stack)
+        self._dashboard_panel: Optional[DashboardPanel] = None
+        self._dashboard_mode_active = False
+
+        # Feature 5: Annotations/Bookmarks
+        self._annotation_controller = AnnotationController(undo_manager=self._undo_stack)
+        self._annotation_panel: Optional[AnnotationPanel] = None
+
+        # Feature 7: Keyboard Shortcuts
+        self._shortcut_controller = ShortcutController()
+
         # Loading thread
         self._loader_thread: Optional[DataLoaderThread] = None
 
@@ -204,6 +177,12 @@ class MainWindow(QMainWindow):
         # Last save/load paths for profile/project
         self._last_profile_path: Optional[str] = None
         self._last_project_path: Optional[str] = None
+
+        # ===== Controllers (extracted from MainWindow) =====
+        self._ipc_controller = IPCController(self)
+        self._file_controller = FileLoadingController(self)
+        self._dataset_controller = DatasetController(self)
+        self._profile_ui_controller = ProfileUIController(self)
 
         # Setup UI
         self._setup_window()
@@ -491,6 +470,26 @@ class MainWindow(QMainWindow):
         multi_grid_action.setStatusTip("Display multiple graphs in a grid layout")
         multi_grid_action.triggered.connect(self._on_multi_grid_view)
         view_menu.addAction(multi_grid_action)
+
+        view_menu.addSeparator()
+
+        # ===== v2 Feature Menu Items =====
+
+        # Feature 1: Dashboard Mode
+        self._dashboard_mode_action = QAction("&Dashboard Mode", self)
+        self._dashboard_mode_action.setShortcut("Ctrl+D")
+        self._dashboard_mode_action.setStatusTip("Toggle dashboard mode with multiple chart cells (Ctrl+D)")
+        self._dashboard_mode_action.setCheckable(True)
+        self._dashboard_mode_action.triggered.connect(self._on_toggle_dashboard_mode)
+        view_menu.addAction(self._dashboard_mode_action)
+
+        # Feature 5: Annotation Panel
+        self._annotation_panel_action = QAction("&Annotations Panel", self)
+        self._annotation_panel_action.setShortcut("Ctrl+Shift+A")
+        self._annotation_panel_action.setStatusTip("Toggle annotations side panel (Ctrl+Shift+A)")
+        self._annotation_panel_action.setCheckable(True)
+        self._annotation_panel_action.triggered.connect(self._on_toggle_annotation_panel)
+        view_menu.addAction(self._annotation_panel_action)
 
         view_menu.addSeparator()
 
@@ -931,6 +930,10 @@ class MainWindow(QMainWindow):
         # Graph Panel (상단)
         self.graph_panel = GraphPanel(self.state, self.engine)
         self.main_splitter.addWidget(self.graph_panel)
+        
+        # Connect empty state signals
+        self.graph_panel._empty_state.open_file_requested.connect(self._on_open_file)
+        self.graph_panel._empty_state.load_sample_requested.connect(self._on_load_sample_data)
 
         # Table Panel (하단)
         self.table_panel = TablePanel(self.state, self.engine, self.graph_panel)
@@ -1306,460 +1309,92 @@ class MainWindow(QMainWindow):
 
     def _setup_ipc_server(self):
         """IPC 서버 설정 - 외부 프로세스에서 앱 제어 가능"""
-        self._ipc_server = IPCServer(self)
-        
-        # 핸들러 등록
-        self._ipc_server.register_handler('ping', lambda: 'pong')
-        self._ipc_server.register_handler('get_state', self._ipc_get_state)
-        self._ipc_server.register_handler('get_data_info', self._ipc_get_data_info)
-        self._ipc_server.register_handler('set_chart_type', self._ipc_set_chart_type)
-        self._ipc_server.register_handler('set_columns', self._ipc_set_columns)
-        self._ipc_server.register_handler('load_file', self._ipc_load_file)
-        self._ipc_server.register_handler('get_panels', self._ipc_get_panels)
-        self._ipc_server.register_handler('get_summary', self._ipc_get_summary)
-        self._ipc_server.register_handler('execute', self._ipc_execute)
-        
-        # Zone control handlers
-        self._ipc_server.register_handler('set_x_column', self._ipc_set_x_column)
-        self._ipc_server.register_handler('set_value_columns', self._ipc_set_value_columns)
-        self._ipc_server.register_handler('set_group_columns', self._ipc_set_group_columns)
-        self._ipc_server.register_handler('set_hover_columns', self._ipc_set_hover_columns)
-        self._ipc_server.register_handler('clear_all_zones', self._ipc_clear_all_zones)
-        self._ipc_server.register_handler('get_zones', self._ipc_get_zones)
-        
-        # UI control handlers
-        self._ipc_server.register_handler('set_theme', self._ipc_set_theme)
-        self._ipc_server.register_handler('refresh', self._ipc_refresh)
-        self._ipc_server.register_handler('get_screenshot', self._ipc_get_screenshot)
-        self._ipc_server.register_handler('set_agg', self._ipc_set_agg)
-
-        # Profile comparison handlers
-        self._ipc_server.register_handler('list_profiles', self._ipc_list_profiles)
-        self._ipc_server.register_handler('create_profile', self._ipc_create_profile)
-        self._ipc_server.register_handler('apply_profile', self._ipc_apply_profile)
-        self._ipc_server.register_handler('delete_profile', self._ipc_delete_profile)
-        self._ipc_server.register_handler('duplicate_profile', self._ipc_duplicate_profile)
-        self._ipc_server.register_handler('start_profile_comparison', self._ipc_start_profile_comparison)
-        self._ipc_server.register_handler('stop_profile_comparison', self._ipc_stop_profile_comparison)
-        self._ipc_server.register_handler('get_profile_comparison_state', self._ipc_get_profile_comparison_state)
-        self._ipc_server.register_handler('set_comparison_sync', self._ipc_set_comparison_sync)
-
-        # 서버 시작
-        self._ipc_server.start()
+        self._ipc_controller.setup()
     
-    def _ipc_get_state(self) -> dict:
-        """현재 앱 상태 반환"""
-        y_cols = list(self.state._y_columns) if hasattr(self.state, '_y_columns') and self.state._y_columns else []
-        return {
-            'data_loaded': self.state.is_data_loaded,
-            'row_count': self.engine.row_count if self.state.is_data_loaded else 0,
-            'columns': self.engine.columns if self.state.is_data_loaded else [],
-            'chart_type': self.state._chart_settings.chart_type.name,
-            'x_column': self.state.x_column,
-            'y_columns': y_cols,
-            'window_title': self.windowTitle(),
-            'window_size': [self.width(), self.height()],
-        }
-    
-    def _ipc_get_data_info(self) -> dict:
-        """데이터 정보 반환"""
-        if not self.state.is_data_loaded:
-            return {'loaded': False}
-        
-        return {
-            'loaded': True,
-            'row_count': self.engine.row_count,
-            'columns': self.engine.columns,
-            'dtypes': {col: str(dtype) for col, dtype in zip(
-                self.engine.columns, 
-                self.engine.df.dtypes if self.engine.df is not None else []
-            )},
-        }
-    
-    def _ipc_set_chart_type(self, chart_type: str) -> bool:
-        """차트 타입 설정"""
-        try:
-            ct = ChartType[chart_type.upper()]
-            self.state.set_chart_type(ct)
-            return True
-        except KeyError:
-            raise ValueError(f"Unknown chart type: {chart_type}")
-    
-    def _ipc_set_columns(self, x: str = None, y: list = None) -> bool:
-        """X/Y 컬럼 설정"""
-        if x:
-            self.state.set_x_column(x)
-        if y:
-            self.state._y_columns = set(y)
-            # Signal이 있으면 emit
-            if hasattr(self.state, 'y_columns_changed'):
-                self.state.y_columns_changed.emit(y)
-        return True
-    
-    def _ipc_load_file(self, path: str) -> dict:
-        """파일 로드"""
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"File not found: {path}")
-        
-        dataset_id = self.engine.load_dataset(path)
-        if dataset_id:
-            # Register dataset in state (for Project Explorer)
-            dataset = self.engine.get_dataset(dataset_id)
-            if dataset:
-                self.state.add_dataset(
-                    dataset_id=dataset_id,
-                    name=dataset.name if dataset.name else Path(path).stem,
-                    file_path=path,
-                    row_count=dataset.row_count if hasattr(dataset, 'row_count') else self.engine.row_count,
-                    column_count=dataset.column_count if hasattr(dataset, 'column_count') else self.engine.column_count,
-                    memory_bytes=dataset.memory_bytes if hasattr(dataset, 'memory_bytes') else 0,
-                )
-            self.state.set_data_loaded(True, self.engine.row_count)
-            self.table_panel.set_data(self.engine.df)
-            # Activate dataset in project explorer
-            self._on_dataset_activated(dataset_id)
-            # Summary 업데이트
-            self._update_summary_from_profile()
-            return {'success': True, 'dataset_id': dataset_id}
-        return {'success': False}
-    
-    def _ipc_get_panels(self) -> dict:
-        """패널 정보 반환"""
-        panels = {}
-        for name in ['table_panel', 'graph_panel', 'filter_panel', 'property_panel', 'summary_panel']:
-            if hasattr(self, name):
-                panel = getattr(self, name)
-                panels[name] = {
-                    'exists': panel is not None,
-                    'visible': panel.isVisible() if panel else False,
-                }
-        return panels
+    # ==================== IPC Delegates (-> IPCController) ====================
+    # These delegate methods maintain backward compatibility for tests that
+    # call _ipc_* methods directly on MainWindow / mock stand-ins.
 
-    def _ipc_get_summary(self) -> dict:
-        """Summary 통계 반환"""
-        summary = self.engine.get_full_profile_summary()
-        profile = self.engine.profile
+    def _ipc_get_state(self, *a, **kw):
+        return self._ipc_controller._ipc_get_state(*a, **kw)
 
-        if summary is None and profile is None:
-            return {}
+    def _ipc_get_data_info(self, *a, **kw):
+        return self._ipc_controller._ipc_get_data_info(*a, **kw)
 
-        if summary is None and profile is not None:
-            numeric_cols = sum(1 for c in profile.columns if c.is_numeric)
-            text_cols = sum(1 for c in profile.columns if not c.is_numeric and not c.is_temporal)
-            temporal_cols = sum(1 for c in profile.columns if c.is_temporal)
+    def _ipc_set_chart_type(self, *a, **kw):
+        return self._ipc_controller._ipc_set_chart_type(*a, **kw)
 
-            total_cells = profile.total_rows * profile.total_columns
-            total_nulls = sum(c.null_count for c in profile.columns)
-            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
+    def _ipc_set_columns(self, *a, **kw):
+        return self._ipc_controller._ipc_set_columns(*a, **kw)
 
-            summary = {
-                'total_rows': profile.total_rows,
-                'total_columns': profile.total_columns,
-                'numeric_columns': numeric_cols,
-                'text_columns': text_cols + temporal_cols,
-                'missing_percent': missing_percent,
-                'memory_bytes': profile.memory_bytes,
-                'load_time_seconds': profile.load_time_seconds,
-            }
+    def _ipc_load_file(self, *a, **kw):
+        return self._ipc_controller._ipc_load_file(*a, **kw)
 
-        # file name
-        if self.engine._source and self.engine._source.path:
-            summary['file_name'] = Path(self.engine._source.path).name
+    def _ipc_get_panels(self, *a, **kw):
+        return self._ipc_controller._ipc_get_panels(*a, **kw)
 
-        return summary
-    
-    def _ipc_execute(self, code: str) -> any:
-        """Python 코드 실행 (디버깅용)"""
-        # 보안 주의: 로컬 전용
-        local_vars = {
-            'window': self,
-            'state': self.state,
-            'engine': self.engine,
-            'table_panel': self.table_panel,
-            'graph_panel': self.graph_panel,
-            'summary_panel': self.summary_panel,
-        }
-        import builtins as _builtins
-        return eval(code, {'__builtins__': _builtins}, local_vars)
+    def _ipc_get_summary(self, *a, **kw):
+        return self._ipc_controller._ipc_get_summary(*a, **kw)
 
-    # ==================== IPC Zone Control Handlers ====================
+    def _ipc_execute(self, *a, **kw):
+        return self._ipc_controller._ipc_execute(*a, **kw)
 
-    def _ipc_set_x_column(self, column: str) -> dict:
-        """X 컬럼 설정. '(Index)'이면 None으로 설정."""
-        try:
-            if column == "(Index)":
-                self.state.set_x_column(None)
-            else:
-                # Validate column exists
-                if self.state.is_data_loaded and column not in self.engine.columns:
-                    raise ValueError(f"Column not found: {column}")
-                self.state.set_x_column(column)
-            return {"success": True, "x_column": self.state.x_column}
-        except Exception as e:
-            raise ValueError(f"Failed to set x column: {e}")
+    def _ipc_set_x_column(self, *a, **kw):
+        return self._ipc_controller._ipc_set_x_column(*a, **kw)
 
-    def _ipc_set_value_columns(self, columns: list) -> dict:
-        """Value zone 설정. clear 후 각 컬럼 추가."""
-        try:
-            # Validate columns exist
-            if self.state.is_data_loaded:
-                available = set(self.engine.columns)
-                invalid = [c for c in columns if c not in available]
-                if invalid:
-                    raise ValueError(f"Columns not found: {invalid}")
+    def _ipc_set_value_columns(self, *a, **kw):
+        return self._ipc_controller._ipc_set_value_columns(*a, **kw)
 
-            self.state.clear_value_zone()
-            for col in columns:
-                self.state.add_value_column(col)
+    def _ipc_set_group_columns(self, *a, **kw):
+        return self._ipc_controller._ipc_set_group_columns(*a, **kw)
 
-            return {
-                "success": True,
-                "value_columns": [vc.name for vc in self.state.value_columns],
-            }
-        except Exception as e:
-            raise ValueError(f"Failed to set value columns: {e}")
+    def _ipc_set_hover_columns(self, *a, **kw):
+        return self._ipc_controller._ipc_set_hover_columns(*a, **kw)
 
-    def _ipc_set_group_columns(self, columns: list) -> dict:
-        """Group zone 설정. clear 후 각 컬럼 추가."""
-        try:
-            if self.state.is_data_loaded:
-                available = set(self.engine.columns)
-                invalid = [c for c in columns if c not in available]
-                if invalid:
-                    raise ValueError(f"Columns not found: {invalid}")
+    def _ipc_clear_all_zones(self, *a, **kw):
+        return self._ipc_controller._ipc_clear_all_zones(*a, **kw)
 
-            self.state.clear_group_zone()
-            for col in columns:
-                self.state.add_group_column(col)
+    def _ipc_get_zones(self, *a, **kw):
+        return self._ipc_controller._ipc_get_zones(*a, **kw)
 
-            return {
-                "success": True,
-                "group_columns": [gc.name for gc in self.state.group_columns],
-            }
-        except Exception as e:
-            raise ValueError(f"Failed to set group columns: {e}")
+    def _ipc_set_theme(self, *a, **kw):
+        return self._ipc_controller._ipc_set_theme(*a, **kw)
 
-    def _ipc_set_hover_columns(self, columns: list) -> dict:
-        """Hover zone 설정. clear 후 각 컬럼 추가."""
-        try:
-            if self.state.is_data_loaded:
-                available = set(self.engine.columns)
-                invalid = [c for c in columns if c not in available]
-                if invalid:
-                    raise ValueError(f"Columns not found: {invalid}")
+    def _ipc_refresh(self, *a, **kw):
+        return self._ipc_controller._ipc_refresh(*a, **kw)
 
-            self.state.clear_hover_columns()
-            for col in columns:
-                self.state.add_hover_column(col)
+    def _ipc_get_screenshot(self, *a, **kw):
+        return self._ipc_controller._ipc_get_screenshot(*a, **kw)
 
-            return {
-                "success": True,
-                "hover_columns": list(self.state.hover_columns),
-            }
-        except Exception as e:
-            raise ValueError(f"Failed to set hover columns: {e}")
+    def _ipc_set_agg(self, *a, **kw):
+        return self._ipc_controller._ipc_set_agg(*a, **kw)
 
-    def _ipc_clear_all_zones(self) -> dict:
-        """모든 zone 비우기."""
-        try:
-            self.state.set_x_column(None)
-            self.state.clear_value_zone()
-            self.state.clear_group_zone()
-            self.state.clear_hover_columns()
-            return {"success": True}
-        except Exception as e:
-            raise ValueError(f"Failed to clear zones: {e}")
+    def _ipc_list_profiles(self, *a, **kw):
+        return self._ipc_controller._ipc_list_profiles(*a, **kw)
 
-    def _ipc_get_zones(self) -> dict:
-        """현재 각 zone의 상태 반환."""
-        state = self.state
-        return {
-            "x_column": state.x_column,
-            "value_columns": [
-                {"name": vc.name, "aggregation": vc.aggregation.value}
-                for vc in state.value_columns
-            ],
-            "group_columns": [
-                {"name": gc.name}
-                for gc in state.group_columns
-            ],
-            "hover_columns": list(state.hover_columns),
-            "chart_type": state._chart_settings.chart_type.value if hasattr(state, '_chart_settings') else None,
-        }
+    def _ipc_create_profile(self, *a, **kw):
+        return self._ipc_controller._ipc_create_profile(*a, **kw)
 
-    def _ipc_set_theme(self, theme_id: str) -> dict:
-        """테마 변경. light, dark, midnight 중 하나."""
-        valid_themes = ("light", "dark", "midnight")
-        if theme_id not in valid_themes:
-            raise ValueError(f"Invalid theme_id: {theme_id}. Must be one of {valid_themes}")
-        self._on_theme_changed(theme_id)
-        return {"success": True, "theme": theme_id}
+    def _ipc_apply_profile(self, *a, **kw):
+        return self._ipc_controller._ipc_apply_profile(*a, **kw)
 
-    def _ipc_refresh(self) -> dict:
-        """GraphPanel 강제 리프레시."""
-        try:
-            self.graph_panel.refresh()
-            return {"success": True}
-        except Exception as e:
-            raise ValueError(f"Failed to refresh: {e}")
+    def _ipc_delete_profile(self, *a, **kw):
+        return self._ipc_controller._ipc_delete_profile(*a, **kw)
 
-    def _ipc_get_screenshot(self, path: str = "/tmp/dgs_screenshot.png") -> dict:
-        """앱 윈도우를 캡처해서 지정된 경로에 저장."""
-        try:
-            pixmap = self.grab()
-            pixmap.save(path)
-            return {
-                "success": True,
-                "path": path,
-                "width": pixmap.width(),
-                "height": pixmap.height(),
-            }
-        except Exception as e:
-            raise ValueError(f"Failed to take screenshot: {e}")
+    def _ipc_duplicate_profile(self, *a, **kw):
+        return self._ipc_controller._ipc_duplicate_profile(*a, **kw)
 
-    def _ipc_set_agg(self, agg1: str, agg2: str = None) -> dict:
-        """Value column의 aggregation 타입 변경.
+    def _ipc_start_profile_comparison(self, *a, **kw):
+        return self._ipc_controller._ipc_start_profile_comparison(*a, **kw)
 
-        agg1은 첫 번째 value column에, agg2는 두 번째 value column에 적용.
-        값은 'SUM', 'MEAN', 'MEDIAN', 'MIN', 'MAX', 'COUNT', 'STD', 'VAR', 'FIRST', 'LAST'.
-        """
-        try:
-            vcs = self.state.value_columns
-            if not vcs:
-                raise ValueError("No value columns configured")
+    def _ipc_stop_profile_comparison(self, *a, **kw):
+        return self._ipc_controller._ipc_stop_profile_comparison(*a, **kw)
 
-            agg1_type = AggregationType(agg1.lower())
-            self.state.update_value_column(0, aggregation=agg1_type)
+    def _ipc_get_profile_comparison_state(self, *a, **kw):
+        return self._ipc_controller._ipc_get_profile_comparison_state(*a, **kw)
 
-            if agg2 is not None and len(vcs) >= 2:
-                agg2_type = AggregationType(agg2.lower())
-                self.state.update_value_column(1, aggregation=agg2_type)
-
-            return {
-                "success": True,
-                "value_columns": [
-                    {"name": vc.name, "aggregation": vc.aggregation.value}
-                    for vc in self.state.value_columns
-                ],
-            }
-        except Exception as e:
-            raise ValueError(f"Failed to set aggregation: {e}")
-
-    # ==================== IPC Profile Comparison Handlers ====================
-
-    def _ipc_list_profiles(self, dataset_id: str = None) -> list:
-        """List all profiles (GraphSettings) for a dataset."""
-        did = dataset_id or self.state.active_dataset_id
-        if not did:
-            raise ValueError("No active dataset")
-        settings = self.profile_store.get_by_dataset(did)
-        return [
-            {
-                "id": s.id,
-                "name": s.name,
-                "dataset_id": s.dataset_id,
-                "chart_type": s.chart_type,
-                "x_column": s.x_column,
-                "value_columns": list(s.value_columns),
-            }
-            for s in settings
-        ]
-
-    def _ipc_create_profile(self, name: str, dataset_id: str = None) -> dict:
-        """Create a new profile from current state."""
-        did = dataset_id or self.state.active_dataset_id
-        if not did:
-            raise ValueError("No active dataset")
-        profile_id = self.profile_controller.create_profile(did, name)
-        if profile_id is None:
-            raise RuntimeError("Failed to create profile")
-        setting = self.profile_store.get(profile_id)
-        return {"id": setting.id, "name": setting.name}
-
-    def _ipc_apply_profile(self, profile_id: str) -> dict:
-        """Apply a profile to the current view."""
-        ok = self.profile_controller.apply_profile(profile_id)
-        if not ok:
-            raise ValueError(f"Failed to apply profile: {profile_id}")
-        self._schedule_autofit()
-        return {"ok": True}
-
-    def _ipc_delete_profile(self, profile_id: str) -> dict:
-        """Delete a profile."""
-        ok = self.profile_controller.delete_profile(profile_id)
-        if not ok:
-            raise ValueError(f"Failed to delete profile: {profile_id}")
-        return {"ok": True}
-
-    def _ipc_duplicate_profile(self, profile_id: str) -> dict:
-        """Duplicate a profile."""
-        new_id = self.profile_controller.duplicate_profile(profile_id)
-        if new_id is None:
-            raise ValueError(f"Failed to duplicate profile: {profile_id}")
-        setting = self.profile_store.get(new_id)
-        return {"id": setting.id, "name": setting.name}
-
-    def _ipc_start_profile_comparison(self, profile_ids: list, mode: str = "side_by_side") -> dict:
-        """Start comparing profiles via ProfileComparisonController."""
-        comp_mode = {
-            "side_by_side": ComparisonMode.SIDE_BY_SIDE,
-            "overlay": ComparisonMode.OVERLAY,
-            "difference": ComparisonMode.DIFFERENCE,
-        }.get(mode)
-        if comp_mode is None:
-            raise ValueError(f"Invalid comparison mode: {mode}")
-
-        # Determine dataset_id from the first profile
-        if not profile_ids:
-            raise ValueError("At least 2 profiles required for comparison")
-        first = self.profile_store.get(profile_ids[0])
-        if first is None:
-            raise ValueError(f"Profile not found: {profile_ids[0]}")
-        dataset_id = first.dataset_id
-
-        ok = self.profile_comparison_controller.start_comparison(
-            dataset_id, profile_ids, comp_mode,
-        )
-        if not ok:
-            raise ValueError("Profile comparison validation failed")
-
-        return {"ok": True, "mode": mode}
-
-    def _ipc_stop_profile_comparison(self) -> dict:
-        """Stop comparison, return to single view."""
-        self.profile_comparison_controller.stop_comparison()
-        return {"ok": True}
-
-    def _ipc_get_profile_comparison_state(self) -> dict:
-        """Get current comparison status."""
-        pcc = self.profile_comparison_controller
-        cs = self.state.comparison_settings
-        return {
-            "active": pcc.is_active,
-            "mode": pcc.current_mode.value,
-            "target": cs.comparison_target,
-            "profile_ids": list(pcc.current_profiles),
-            "dataset_id": pcc.dataset_id,
-            "sync_x": cs.sync_pan_x,
-            "sync_y": cs.sync_pan_y,
-            "sync_selection": cs.sync_selection,
-        }
-
-    def _ipc_set_comparison_sync(
-        self,
-        sync_x: bool = None,
-        sync_y: bool = None,
-        sync_selection: bool = None,
-    ) -> dict:
-        """Toggle sync options."""
-        if sync_x is not None:
-            self.state._comparison_settings.sync_pan_x = sync_x
-        if sync_y is not None:
-            self.state._comparison_settings.sync_pan_y = sync_y
-        if sync_selection is not None:
-            self.state._comparison_settings.sync_selection = sync_selection
-        self.state.comparison_settings_changed.emit()
-        return {"ok": True}
+    def _ipc_set_comparison_sync(self, *a, **kw):
+        return self._ipc_controller._ipc_set_comparison_sync(*a, **kw)
 
     def _update_memory_status(self):
         """상태바 메모리 사용량 업데이트"""
@@ -1977,432 +1612,49 @@ class MainWindow(QMainWindow):
     
     # ==================== Actions ====================
     
+    # ==================== File Loading Delegates (-> FileLoadingController) ====================
+
     def _on_open_file(self):
-        """파일 열기 다이얼로그 - 새 프로젝트 마법사 사용"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open Data File",
-            "",
-            "All Supported (*.csv *.tsv *.txt *.log *.dat *.etl *.xlsx *.xls *.parquet *.json *.dgs);;"
-            "Project Files (*.dgs);;"
-            "CSV/TSV (*.csv *.tsv);;"
-            "Text Files (*.txt *.log *.dat);;"
-            "ETL Files (*.etl);;"
-            "Excel (*.xlsx *.xls);;"
-            "Parquet (*.parquet);;"
-            "JSON (*.json);;"
-            "All Files (*.*)"
-        )
-        
-        if file_path:
-            ext = Path(file_path).suffix.lower()
-            
-            # .dgs 프로젝트 파일은 바로 로드 (마법사 스킵)
-            if ext == '.dgs':
-                self._load_project_file(file_path)
-                return
-            
-            # 새 프로젝트 마법사 실행
-            self._show_new_project_wizard(file_path)
-    
+        self._file_controller._on_open_file()
+
+    def _on_load_sample_data(self):
+        self._file_controller._on_load_sample_data()
+
     def _on_open_file_without_wizard(self):
-        """파일 열기 (마법사 없이) - Ctrl+Shift+O"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open Data File (Without Wizard)",
-            "",
-            "All Supported (*.csv *.tsv *.txt *.log *.dat *.etl *.xlsx *.xls *.parquet *.json);;"
-            "CSV/TSV (*.csv *.tsv);;"
-            "Text Files (*.txt *.log *.dat);;"
-            "ETL Files (*.etl);;"
-            "Excel (*.xlsx *.xls);;"
-            "Parquet (*.parquet);;"
-            "JSON (*.json);;"
-            "All Files (*.*)"
-        )
-        
-        if file_path:
-            # 기존 파싱 미리보기 다이얼로그 사용
-            self._show_parsing_preview(file_path)
-    
+        self._file_controller._on_open_file_without_wizard()
+
     def _show_new_project_wizard(self, file_path: str):
-        """새 프로젝트 마법사 표시"""
-        # 대용량 파일 경고 체크
-        if not self._check_large_file_warning(file_path):
-            return
-        
-        wizard = NewProjectWizard(file_path, self)
-        wizard.project_created.connect(self._on_wizard_project_created)
-        wizard.exec()
-    
+        self._file_controller._show_new_project_wizard(file_path)
+
     def _on_wizard_project_created(self, result: dict):
-        """마법사에서 프로젝트 생성 완료 시 호출"""
-        parsing_settings = result.get('parsing_settings')
-        graph_setting = result.get('graph_setting')
-        project_name = result.get('project_name')
-        preview_df = result.get('preview_df')
-        
-        if parsing_settings is None:
-            return
-        
-        # 마법사 결과 저장 (로딩 완료 후 적용)
-        self._pending_wizard_result = {
-            'graph_setting': graph_setting,
-            'project_name': project_name,
-        }
-        
-        # 파일 로드 (비동기)
-        self._load_file_with_settings(parsing_settings.file_path, parsing_settings)
-    
+        self._file_controller._on_wizard_project_created(result)
+
     def _load_project_file(self, file_path: str):
-        """프로젝트 파일 (.dgs) 로드"""
-        from ..core.project import Project
-        try:
-            project = Project.load(file_path)
-            project_dir = Path(file_path).parent
-
-            # 데이터 소스 검증
-            errors = project.validate()
-            if errors:
-                QMessageBox.warning(
-                    self, "Load Project",
-                    f"Some data files not found:\n" + "\n".join(errors)
-                )
-
-            # 데이터 소스들 로드
-            loaded_count = 0
-            active_dataset_id = None
-            for ds in project.get_all_data_sources():
-                resolved_path = ds.resolve(str(project_dir))
-                if os.path.exists(resolved_path):
-                    # 데이터 로드
-                    dataset_id = self.engine.load_dataset(resolved_path, name=ds.name)
-                    if dataset_id:
-                        loaded_count += 1
-                        # Register in state
-                        dataset = self.engine.get_dataset(dataset_id)
-                        if dataset:
-                            self.state.add_dataset(
-                                dataset_id=dataset_id,
-                                name=ds.name or Path(resolved_path).name,
-                                row_count=dataset.row_count,
-                                column_count=dataset.column_count,
-                                memory_bytes=dataset.memory_bytes
-                            )
-                        if ds.is_active:
-                            active_dataset_id = dataset_id
-
-            # 활성 데이터셋 설정
-            if active_dataset_id:
-                self.engine.activate_dataset(active_dataset_id)
-            elif loaded_count > 0:
-                # 첫 번째 로드된 데이터셋 활성화
-                ids = self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else []
-                if ids:
-                    self.engine.activate_dataset(ids[0])
-
-            # 프로파일 복원
-            for profile_dict in project.profiles:
-                try:
-                    gs = GraphSetting.from_dict(profile_dict)
-                    self.profile_store.add(gs)
-                except Exception as e:
-                    logger.warning(f"Failed to restore profile: {e}")
-
-            self._last_project_path = file_path
-            self.statusbar.showMessage(f"Project loaded: {file_path} ({loaded_count} datasets, {len(project.profiles)} profiles)", 3000)
-
-            # UI 업데이트
-            if loaded_count > 0:
-                self._on_data_loaded()
-
-        except Exception as e:
-            QMessageBox.critical(
-                self, "Load Project Error",
-                f"Failed to load project file:\n{e}"
-            )
+        self._file_controller._load_project_file(file_path)
 
     def _on_open_multiple_files(self):
-        """다중 파일 열기 다이얼로그"""
-        result = open_multi_file_dialog(self, self.engine)
-
-        if result is None:
-            return
-
-        file_paths, naming_option, auto_compare = result
-
-        if not file_paths:
-            return
-
-        # Progress dialog for loading multiple files
-        progress = QProgressDialog(
-            "Loading files...", "Cancel", 0, len(file_paths), self
-        )
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.show()
-
-        loaded_ids = []
-
-        for i, file_path in enumerate(file_paths):
-            if progress.wasCanceled():
-                break
-
-            progress.setValue(i)
-            progress.setLabelText(f"Loading: {Path(file_path).name}")
-            QApplication.processEvents()
-
-            # Generate dataset name
-            if naming_option == "filename":
-                name = Path(file_path).name
-            elif naming_option == "filename_no_ext":
-                name = Path(file_path).stem
-            elif naming_option == "sequential":
-                name = f"Data {len(self.engine.datasets) + 1}"
-            else:
-                name = Path(file_path).name
-
-            # Load dataset
-            dataset_id = self.engine.load_dataset(file_path, name=name)
-
-            if dataset_id:
-                loaded_ids.append(dataset_id)
-
-                # Register in state
-                dataset = self.engine.get_dataset(dataset_id)
-                if dataset:
-                    self.state.add_dataset(
-                        dataset_id=dataset_id,
-                        name=name,
-                        row_count=dataset.row_count,
-                        column_count=dataset.column_count,
-                        memory_bytes=dataset.memory_bytes
-                    )
-
-        progress.setValue(len(file_paths))
-        progress.close()
-
-        if loaded_ids:
-            self.statusbar.showMessage(
-                f"Loaded {len(loaded_ids)} datasets successfully", 3000
-            )
-
-            # Update UI with first dataset
-            if loaded_ids:
-                self.engine.activate_dataset(loaded_ids[0])
-                self._on_data_loaded()
-
-            # Auto-start comparison if enabled
-            if auto_compare and len(loaded_ids) >= 2:
-                self.state.set_comparison_datasets(loaded_ids[:4])  # Max 4
-                self.state.set_comparison_mode(ComparisonMode.OVERLAY)
-                self._on_comparison_started(loaded_ids[:4])
+        self._file_controller._on_open_multiple_files()
 
     def _show_parsing_preview(self, file_path: str):
-        """파싱 미리보기 다이얼로그 표시"""
-        # 대용량 파일 경고 체크
-        if not self._check_large_file_warning(file_path):
-            return
-
-        ext = Path(file_path).suffix.lower()
-
-        # Binary formats don't need parsing preview
-        if ext in ['.parquet', '.xlsx', '.xls', '.json']:
-            self._load_file(file_path)
-            return
-
-        # Show parsing preview dialog
-        dialog = ParsingPreviewDialog(file_path, self)
-        if dialog.exec() == QDialog.Accepted:
-            settings = dialog.get_settings()
-            self._load_file_with_settings(file_path, settings)
+        self._file_controller._show_parsing_preview(file_path)
 
     def _check_large_file_warning(self, file_path: str) -> bool:
-        """대용량 파일 경고 다이얼로그 표시. 계속 진행하면 True 반환"""
-        try:
-            file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-        except OSError:
-            return True  # 파일 크기 확인 실패 시 계속 진행
-
-        if file_size_mb >= self.HUGE_FILE_WARNING_MB:
-            # 2GB 이상 - 강력 경고
-            sys_mem = MemoryMonitor.get_system_memory()
-            reply = QMessageBox.warning(
-                self,
-                "Very Large File Warning",
-                f"⚠️ This file is very large ({file_size_mb:.0f} MB).\n\n"
-                f"Loading may:\n"
-                f"  • Take a long time\n"
-                f"  • Use significant memory (estimated {file_size_mb * 2:.0f}+ MB)\n"
-                f"  • Cause system slowdown\n\n"
-                f"Current available memory: {sys_mem['available_gb']:.1f} GB\n\n"
-                f"Do you want to continue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
-                return False
-        elif file_size_mb >= self.LARGE_FILE_WARNING_MB:
-            # 500MB 이상 - 일반 경고
-            reply = QMessageBox.question(
-                self,
-                "Large File",
-                f"This file is {file_size_mb:.0f} MB.\n"
-                f"Loading may take some time.\n\n"
-                f"Continue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
-            )
-            if reply != QMessageBox.Yes:
-                return False
-
-        return True
+        return self._file_controller._check_large_file_warning(file_path)
 
     def _cleanup_loader_thread(self):
-        """기존 로더 스레드 정리"""
-        if self._loader_thread is not None:
-            if self._loader_thread.isRunning():
-                logger.debug("Waiting for previous loader thread to finish...")
-                self.engine.cancel_loading()
-                # 최대 2초 대기
-                if not self._loader_thread.wait(2000):
-                    logger.warning("Loader thread did not finish in time, terminating...")
-                    self._loader_thread.terminate()
-                    self._loader_thread.wait(1000)
-            self._loader_thread = None
-            gc.collect()  # 메모리 정리
-    
-    def _load_file(self, file_path: str, settings: Optional[ParsingSettings] = None):
-        """파일 로드 (설정 없이 - 바이너리 포맷용)"""
-        # 기존 스레드 정리
-        self._cleanup_loader_thread()
+        self._file_controller._cleanup_loader_thread()
 
-        # 프로그레스 다이얼로그
-        self._progress_dialog = QProgressDialog(
-            f"Loading {Path(file_path).name}...",
-            "Cancel",
-            0, 100,
-            self
-        )
-        self._progress_dialog.setWindowModality(Qt.WindowModal)
-        self._progress_dialog.setAutoClose(True)
-        self._progress_dialog.setMinimumWidth(400)
-        self._progress_dialog.canceled.connect(self._cancel_loading)
+    def _load_file(self, file_path: str, settings=None):
+        self._file_controller._load_file(file_path, settings)
 
-        # 로더 스레드 시작
-        self._loader_thread = DataLoaderThread(self.engine, file_path)
-        self._loader_thread.progress_updated.connect(self._on_loading_progress)
-        self._loader_thread.finished_loading.connect(self._on_loading_finished)
-        self._loader_thread.start()
+    def _load_file_with_settings(self, file_path: str, settings):
+        self._file_controller._load_file_with_settings(file_path, settings)
 
-        self._progress_dialog.show()
-    
-    def _load_file_with_settings(self, file_path: str, settings: ParsingSettings):
-        """파일 로드 (파싱 설정 적용)"""
-        # 기존 스레드 정리
-        self._cleanup_loader_thread()
+    def _on_loading_progress(self, progress):
+        self._file_controller._on_loading_progress(progress)
 
-        # 프로그레스 다이얼로그
-        self._progress_dialog = QProgressDialog(
-            f"Loading {Path(file_path).name}...",
-            "Cancel",
-            0, 100,
-            self
-        )
-        self._progress_dialog.setWindowModality(Qt.WindowModal)
-        self._progress_dialog.setAutoClose(True)
-        self._progress_dialog.setMinimumWidth(400)
-        self._progress_dialog.canceled.connect(self._cancel_loading)
-
-        # 로더 스레드 시작 (설정 적용)
-        self._loader_thread = DataLoaderThreadWithSettings(self.engine, file_path, settings)
-        self._loader_thread.progress_updated.connect(self._on_loading_progress)
-        self._loader_thread.finished_loading.connect(self._on_loading_finished)
-        self._loader_thread.start()
-
-        self._progress_dialog.show()
-    
-    def _on_loading_progress(self, progress: LoadingProgress):
-        """로딩 진행률 업데이트"""
-        if self._progress_dialog:
-            self._progress_dialog.setValue(int(progress.progress_percent))
-
-            # 메모리 사용량 가져오기
-            try:
-                proc_mem = MemoryMonitor.get_process_memory()
-                mem_str = MemoryMonitor.format_memory(proc_mem['rss_mb'])
-            except Exception:
-                mem_str = "--"
-
-            # ETA 계산
-            eta_str = ""
-            if progress.eta_seconds > 0:
-                eta_str = f"\nETA: {progress.eta_seconds:.0f}s"
-
-            self._progress_dialog.setLabelText(
-                f"Loading... {progress.status}\n"
-                f"{progress.loaded_rows:,} rows loaded\n"
-                f"Memory: {mem_str}{eta_str}"
-            )
-    
     def _on_loading_finished(self, success: bool):
-        """로딩 완료"""
-        if self._progress_dialog:
-            self._progress_dialog.close()
-
-        if success:
-            # 상태 업데이트
-            self.state.set_data_loaded(True, self.engine.row_count)
-            self.state.set_column_order(self.engine.columns)
-
-            # 첫 로드 시 데이터셋 목록에 등록
-            if self.engine.dataset_count == 0:
-                import uuid
-                dataset_id = str(uuid.uuid4())[:8]
-                name = Path(self.engine._source.path).name if self.engine._source and self.engine._source.path else "Dataset"
-                from ..core.data_engine import DatasetInfo
-                dataset_info = DatasetInfo(
-                    id=dataset_id,
-                    name=name,
-                    df=self.engine.df,
-                    lazy_df=self.engine._lazy_df,
-                    source=self.engine._source,
-                    profile=self.engine.profile
-                )
-                self.engine._datasets[dataset_id] = dataset_info
-                self.engine._active_dataset_id = dataset_id
-
-                memory_bytes = self.engine.df.estimated_size() if self.engine.df is not None else 0
-                self.state.add_dataset(
-                    dataset_id=dataset_id,
-                    name=name,
-                    file_path=self.engine._source.path if self.engine._source else None,
-                    row_count=self.engine.row_count,
-                    column_count=self.engine.column_count,
-                    memory_bytes=memory_bytes
-                )
-
-            # 프로파일 기반 Summary 업데이트
-            if self.engine.profile:
-                self._update_summary_from_profile()
-
-            # 프로젝트 탐색창 갱신 (새 데이터셋 표시)
-            self.profile_model.refresh()
-
-            # 로딩 완료 후 메모리 정리
-            gc.collect()
-            logger.info(f"Data loaded: {self.engine.row_count:,} rows, {self.engine.column_count} columns")
-            
-            # 마법사 결과 적용 (pending이 있으면)
-            self._apply_pending_wizard_result()
-        else:
-            error_msg = self.engine.progress.error_message or "Unknown error"
-            logger.error(f"Failed to load file: {error_msg}")
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to load file:\n{error_msg}"
-            )
+        self._file_controller._on_loading_finished(success)
     
     def _apply_pending_wizard_result(self):
         """마법사 결과 적용 (로딩 완료 후)"""
@@ -2453,16 +1705,7 @@ class MainWindow(QMainWindow):
             logger.debug(f"Auto-fit after profile switch failed: {e}")
 
     def _cancel_loading(self):
-        """로딩 취소"""
-        if self._loader_thread and self._loader_thread.isRunning():
-            logger.info("Loading cancelled by user")
-            self.engine.cancel_loading()
-            # 스레드 종료 대기 및 정리
-            self._loader_thread.wait(2000)
-            self._loader_thread = None
-            # 메모리 정리
-            gc.collect()
-            self.statusbar.showMessage("Loading cancelled", 3000)
+        self._file_controller._cancel_loading()
     
     def _on_data_loaded(self):
         """데이터 로드 완료"""
@@ -2504,117 +1747,13 @@ class MainWindow(QMainWindow):
             self.graph_panel.options_panel.data_tab.clear()
     
     def _update_summary_from_profile(self):
-        """프로파일에서 Summary 업데이트"""
-        if not self.engine.profile:
-            return
+        self._profile_ui_controller._update_summary_from_profile()
 
-        profile = self.engine.profile
-        summary = self.engine.get_full_profile_summary()
-        if summary is None and profile is None:
-            return
-
-        # Get file name from engine source
-        file_name = ""
-        if self.engine._source and self.engine._source.path:
-            file_name = Path(self.engine._source.path).name
-
-        if summary is None and profile is not None:
-            # Count column types
-            numeric_cols = sum(1 for c in profile.columns if c.is_numeric)
-            text_cols = sum(1 for c in profile.columns if not c.is_numeric and not c.is_temporal)
-            temporal_cols = sum(1 for c in profile.columns if c.is_temporal)
-
-            # Calculate missing data percentage
-            total_cells = profile.total_rows * profile.total_columns
-            total_nulls = sum(c.null_count for c in profile.columns)
-            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
-
-            total_rows = profile.total_rows
-            total_columns = profile.total_columns
-            numeric_columns = numeric_cols
-            text_columns = text_cols + temporal_cols
-            memory_mb = profile.memory_bytes / (1024 * 1024)
-            load_time = profile.load_time_seconds
-        else:
-            total_rows = summary.get('total_rows', 0)
-            total_columns = summary.get('total_columns', 0)
-            numeric_columns = summary.get('numeric_columns', 0)
-            text_columns = summary.get('text_columns', 0)
-            missing_percent = summary.get('missing_percent', 0)
-            memory_mb = summary.get('memory_bytes', 0) / (1024 * 1024) if summary else 0
-            load_time = summary.get('load_time_seconds', 0) if summary else 0
-
-        # Calculate sampled rows (for graph - max 10000 points)
-        MAX_GRAPH_POINTS = 10000
-        sampled_rows = min(total_rows, MAX_GRAPH_POINTS)
-
-        stats = {
-            'file_name': file_name,
-            'total_rows': total_rows,
-            'sampled_rows': sampled_rows,
-            'total_columns': total_columns,
-            'numeric_columns': numeric_columns,
-            'text_columns': text_columns,
-            'missing_percent': missing_percent,
-            'memory_mb': memory_mb,
-            'load_time': load_time,
-        }
-
-        # 숫자형 컬럼 통계
-        if profile is not None:
-            for col_info in profile.columns:
-                if col_info.is_numeric:
-                    stats[col_info.name] = {
-                        'min': col_info.min_value,
-                        'max': col_info.max_value,
-                        'null_count': col_info.null_count,
-                    }
-
-        # X/Y Range 계산
-        try:
-            x_col = self.state.x_column
-            if x_col and self.engine.df is not None and x_col in self.engine.df.columns:
-                x_series = self.engine.df[x_col]
-                try:
-                    x_min = float(x_series.min())
-                    x_max = float(x_series.max())
-                    stats['x_range'] = {'min': x_min, 'max': x_max, 'range': x_max - x_min, 'column': x_col}
-                except (TypeError, ValueError):
-                    pass
-
-            if self.state.value_columns and self.engine.df is not None:
-                y_min_all, y_max_all = float('inf'), float('-inf')
-                y_col_names = []
-                for vc in self.state.value_columns:
-                    name = vc.name if hasattr(vc, 'name') else str(vc)
-                    if name in self.engine.df.columns:
-                        y_col_names.append(name)
-                        try:
-                            col_min = float(self.engine.df[name].min())
-                            col_max = float(self.engine.df[name].max())
-                            y_min_all = min(y_min_all, col_min)
-                            y_max_all = max(y_max_all, col_max)
-                        except (TypeError, ValueError):
-                            pass
-                if y_min_all < float('inf') and y_max_all > float('-inf'):
-                    stats['y_range'] = {
-                        'min': y_min_all, 'max': y_max_all,
-                        'range': y_max_all - y_min_all,
-                        'columns': y_col_names,
-                    }
-        except Exception:
-            pass
-
-        self.state.update_summary(stats)
-    
     def _schedule_profile_autosave(self):
-        """Schedule debounced auto-save of active profile"""
-        self._profile_autosave_timer.start()
+        self._profile_ui_controller._schedule_profile_autosave()
 
     def _autosave_active_profile(self):
-        """Auto-save current AppState to active profile"""
-        if hasattr(self, 'profile_controller'):
-            self.profile_controller.save_active_profile()
+        self._profile_ui_controller._autosave_active_profile()
 
     def _on_tool_mode_changed(self):
         """툴 모드 변경"""
@@ -2930,917 +2069,168 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     # ==================== Profile Menu Actions ====================
 
     def _on_new_profile_menu(self):
-        """메뉴에서 새 프로파일"""
-        name, ok = QInputDialog.getText(
-            self,
-            "New Profile",
-            "Enter profile name:",
-            text="New Profile"
-        )
-        if ok and name.strip():
-            profile = Profile.create_new(name.strip())
-            self.state.set_profile(profile)
-            self.statusbar.showMessage(f"Created new profile: {name.strip()}", 3000)
+        self._profile_ui_controller._on_new_profile_menu()
+
 
     def _on_load_profile_menu(self):
-        """메뉴에서 프로파일 로드"""
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Profile",
-            str(self.profile_bar.profile_manager.profiles_dir),
-            "Data Graph Profile (*.dgp)"
-        )
-        if path:
-            try:
-                profile = self.profile_bar.profile_manager.load(path)
-                self.state.set_profile(profile)
-                self.statusbar.showMessage(f"Loaded profile: {profile.name}", 3000)
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Load Profile Error",
-                    f"Failed to load profile: {e}"
-                )
+        self._profile_ui_controller._on_load_profile_menu()
+
 
     def _on_save_profile_menu(self):
-        """메뉴에서 프로파일 저장"""
-        profile = self.state.current_profile
-        if not profile:
-            QMessageBox.information(
-                self,
-                "Save Profile",
-                "No profile to save. Create a new profile first."
-            )
-            return
+        self._profile_ui_controller._on_save_profile_menu()
 
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Profile",
-            str(self.profile_bar.profile_manager.profiles_dir / f"{profile.name}.dgp"),
-            "Data Graph Profile (*.dgp)"
-        )
-        if path:
-            try:
-                profile.save(path)
-                self.profile_bar.profile_manager._add_recent_profile(path)
-                self.state.profile_saved.emit()
-                self.statusbar.showMessage(f"Profile saved: {profile.name}", 3000)
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Save Profile Error",
-                    f"Failed to save profile: {e}"
-                )
 
     # ==================== Profile Actions ====================
 
     def _on_profile_setting_clicked(self, setting_id: str):
-        """프로파일 설정 클릭"""
-        profile = self.state.current_profile
-        if profile:
-            setting = profile.get_setting(setting_id)
-            if setting:
-                # 설정 적용
-                self.state.apply_graph_setting(setting)
-                self.state.activate_setting(setting_id)
-                # 그래프 새로고침
-                self.graph_panel.refresh()
+        self._profile_ui_controller._on_profile_setting_clicked(setting_id)
+
 
     def _on_profile_setting_double_clicked(self, setting_id: str):
-        """프로파일 설정 더블클릭 (Floating 창 열기)"""
-        profile = self.state.current_profile
-        if profile and self._floating_graph_manager:
-            setting = profile.get_setting(setting_id)
-            if setting:
-                self._floating_graph_manager.open_floating_graph(setting, self)
+        self._profile_ui_controller._on_profile_setting_double_clicked(setting_id)
+
 
     def _on_add_setting_requested(self):
-        """새 설정 추가 요청"""
-        # 프로파일이 없으면 새로 생성
-        if not self.state.current_profile:
-            name, ok = QInputDialog.getText(
-                self,
-                "New Profile",
-                "No profile loaded. Create a new profile first.\n\nEnter profile name:",
-                text="New Profile"
-            )
-            if not ok or not name.strip():
-                return
-            profile = Profile.create_new(name.strip())
-            self.state.set_profile(profile)
+        self._profile_ui_controller._on_add_setting_requested()
 
-        # 설정 저장 다이얼로그 표시
-        dialog = SaveSettingDialog(self)
-        if dialog.exec() == QDialog.Accepted:
-            setting = dialog.get_setting()
-            if setting:
-                # 현재 그래프 상태를 설정에 저장 (frozen이므로 replace 사용)
-                from dataclasses import replace
-                graph_state = self.state.get_current_graph_state()
-                
-                include_filters = dialog.get_include_filters()
-                include_sorts = dialog.get_include_sorts()
-                
-                setting = replace(
-                    setting,
-                    chart_type=graph_state['chart_type'],
-                    x_column=graph_state['x_column'],
-                    group_columns=tuple(graph_state['group_columns']),
-                    value_columns=tuple(graph_state['value_columns']),
-                    hover_columns=tuple(graph_state['hover_columns']),
-                    chart_settings=graph_state['chart_settings'],
-                    filters=tuple(graph_state['filters']) if include_filters else setting.filters,
-                    sorts=tuple(graph_state['sorts']) if include_sorts else setting.sorts,
-                    include_filters=include_filters,
-                    include_sorts=include_sorts,
-                )
-
-                # 프로파일에 추가
-                self.state.add_setting(setting)
-                self.statusbar.showMessage(f"Setting '{setting.name}' saved", 3000)
 
     def _on_compare_profiles_requested(self):
-        """Compare Profiles 버튼 클릭 — 비교 다이얼로그 표시."""
-        from .dialogs.profile_comparison_dialog import ProfileComparisonDialog
+        self._profile_ui_controller._on_compare_profiles_requested()
 
-        dataset_id = self.state.active_dataset_id or ""
-        profiles = self.profile_store.get_by_dataset(dataset_id) if dataset_id else []
-
-        if len(profiles) < 2:
-            QMessageBox.information(
-                self,
-                "Compare Profiles",
-                "Create at least 2 profiles for the current dataset to compare.",
-            )
-            return
-
-        dialog = ProfileComparisonDialog(profiles, self)
-        if dialog.exec() == QDialog.Accepted:
-            ids = dialog.selected_profile_ids
-            mode = dialog.selected_mode
-            if len(ids) >= 2:
-                self.profile_comparison_controller.start_comparison(dataset_id, ids, mode)
 
     def _show_profile_manager(self):
-        """프로파일 관리자 다이얼로그 표시"""
-        dialog = ProfileManagerDialog(self.profile_bar.profile_manager, self)
-        dialog.exec()
+        self._profile_ui_controller._show_profile_manager()
+
 
     # ==================== Project Explorer Actions ====================
 
     def _on_profile_apply_requested(self, profile_id: str):
-        """프로파일 적용 요청 (ProjectTreeView에서)"""
-        if self.profile_controller.apply_profile(profile_id):
-            self.graph_panel.refresh()
-            self._schedule_autofit()
-            self.statusbar.showMessage("Profile applied", 2000)
+        self._profile_ui_controller._on_profile_apply_requested(profile_id)
+
 
     def _on_new_profile_requested(self, dataset_id: str):
-        """새 프로파일 생성 요청"""
-        name, ok = QInputDialog.getText(
-            self, "New Profile", "Enter profile name:", text="New Profile"
-        )
-        if ok and name.strip():
-            profile_id = self.profile_controller.create_profile(dataset_id, name.strip())
-            if profile_id:
-                setting = self.profile_store.get(profile_id)
-                if setting:
-                    self.profile_model.add_profile_incremental(dataset_id, setting)
-                else:
-                    self.profile_model.refresh()
-                self.graph_panel.refresh()
-                self._schedule_autofit()
-                self.statusbar.showMessage(f"Profile '{name}' created", 2000)
+        self._profile_ui_controller._on_new_profile_requested(dataset_id)
+
 
     def _on_profile_rename_requested(self, profile_id: str):
-        """프로파일 이름 변경 요청"""
-        setting = self.profile_store.get(profile_id)
-        if not setting:
-            return
-        name, ok = QInputDialog.getText(
-            self, "Rename Profile", "Enter new name:", text=setting.name
-        )
-        if ok and name.strip():
-            # Block graph refresh signals during rename to prevent access violation
-            self.state.blockSignals(True)
-            try:
-                if self.profile_controller.rename_profile(profile_id, name.strip()):
-                    updated = self.profile_store.get(profile_id)
-                    if updated:
-                        self.profile_model.update_profile_data(updated.dataset_id, updated)
-                    else:
-                        self.profile_model.refresh()
-                    self.statusbar.showMessage("Profile renamed", 2000)
-            finally:
-                self.state.blockSignals(False)
+        self._profile_ui_controller._on_profile_rename_requested(profile_id)
+
 
     def _on_profile_delete_requested(self, profile_id: str):
-        """프로파일 삭제 요청"""
-        setting = self.profile_store.get(profile_id)
-        if not setting:
-            return
-        dataset_id = setting.dataset_id
-        reply = QMessageBox.question(
-            self, "Delete Profile",
-            f"Delete profile '{setting.name}'?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
-            if self.profile_controller.delete_profile(profile_id):
-                self.profile_model.remove_profile_incremental(dataset_id, profile_id)
-                self.statusbar.showMessage("Profile deleted (Ctrl+Z to undo)", 3000)
+        self._profile_ui_controller._on_profile_delete_requested(profile_id)
+
 
     def _on_profile_duplicate_requested(self, profile_id: str):
-        """프로파일 복제 요청"""
-        new_id = self.profile_controller.duplicate_profile(profile_id)
-        if new_id:
-            new_setting = self.profile_store.get(new_id)
-            if new_setting:
-                self.profile_model.add_profile_incremental(new_setting.dataset_id, new_setting)
-            else:
-                self.profile_model.refresh()
-            self.statusbar.showMessage("Profile duplicated", 2000)
+        self._profile_ui_controller._on_profile_duplicate_requested(profile_id)
+
 
     def _on_profile_export_requested(self, profile_id: str):
-        """프로파일 내보내기 요청"""
-        setting = self.profile_store.get(profile_id)
-        if not setting:
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export Profile", f"{setting.name}.dgp", "Data Graph Profile (*.dgp)"
-        )
-        if path:
-            if self.profile_controller.export_profile(profile_id, path):
-                self.statusbar.showMessage(f"Profile exported to {path}", 3000)
+        self._profile_ui_controller._on_profile_export_requested(profile_id)
+
 
     def _on_profile_import_requested(self, dataset_id: str):
-        """프로파일 가져오기 요청"""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Import Profile", "", "Data Graph Profile (*.dgp)"
-        )
-        if path:
-            profile_id = self.profile_controller.import_profile(dataset_id, path)
-            if profile_id:
-                imported_setting = self.profile_store.get(profile_id)
-                if imported_setting:
-                    self.profile_model.add_profile_incremental(dataset_id, imported_setting)
-                else:
-                    self.profile_model.refresh()
-                self.statusbar.showMessage("Profile imported", 2000)
+        self._profile_ui_controller._on_profile_import_requested(dataset_id)
+
 
     def _on_profile_compare_requested(self, profile_ids: list, options: dict):
-        """프로젝트 탐색창에서 멀티 선택 → Compare 요청"""
-        if len(profile_ids) < 2:
-            return
+        self._profile_ui_controller._on_profile_compare_requested(profile_ids, options)
 
-        # 데이터셋 ID 확인 (첫 번째 프로파일 기준)
-        first = self.profile_store.get(profile_ids[0])
-        if not first:
-            return
-        dataset_id = first.dataset_id
-
-        # Sync 옵션 적용
-        cs = self.state._comparison_settings
-        cs.sync_pan_x = options.get("x_sync", True)
-        cs.sync_pan_y = options.get("y_sync", True)
-        cs.sync_zoom = options.get("zoom_sync", True)
-        cs.sync_selection = options.get("selection_sync", True)
-
-        # 모드 매핑
-        mode_map = {
-            "side_by_side": ComparisonMode.SIDE_BY_SIDE,
-            "overlay": ComparisonMode.OVERLAY,
-            "difference": ComparisonMode.DIFFERENCE,
-        }
-        mode = mode_map.get(options.get("mode", "side_by_side"), ComparisonMode.SIDE_BY_SIDE)
-
-        self.profile_comparison_controller.start_comparison(dataset_id, profile_ids, mode)
 
     # ==================== Multi-Dataset Operations ====================
 
     def _on_add_dataset(self):
-        """새 데이터셋 추가 (멀티 파일 지원)"""
-        file_paths, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Add Dataset",
-            "",
-            "All Supported (*.csv *.tsv *.txt *.log *.dat *.etl *.xlsx *.xls *.parquet *.json);;"
-            "CSV/TSV (*.csv *.tsv);;"
-            "Text Files (*.txt *.log *.dat);;"
-            "ETL Files (*.etl);;"
-            "Excel (*.xlsx *.xls);;"
-            "Parquet (*.parquet);;"
-            "JSON (*.json);;"
-            "All Files (*.*)"
-        )
+        self._dataset_controller._on_add_dataset()
 
-        if not file_paths:
-            return
-
-        if len(file_paths) == 1:
-            self._add_dataset_from_file(file_paths[0])
-            return
-
-        # Multi-file: load sequentially with progress
-        progress = QProgressDialog(
-            "Loading datasets...", "Cancel", 0, len(file_paths), self
-        )
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.show()
-
-        for i, file_path in enumerate(file_paths):
-            if progress.wasCanceled():
-                break
-            progress.setValue(i)
-            progress.setLabelText(f"Loading: {Path(file_path).name}")
-            QApplication.processEvents()
-            self._add_dataset_from_file(file_path)
-
-        progress.setValue(len(file_paths))
 
     def _add_dataset_from_file(self, file_path: str):
-        """파일에서 데이터셋 추가"""
-        # 메모리 체크
-        try:
-            file_size = os.path.getsize(file_path)
-            can_load, message = self.engine.can_load_dataset(file_size * 2)  # 예상 메모리는 파일 크기의 2배
-            if not can_load:
-                QMessageBox.warning(self, "Memory Limit", message)
-                return
-            elif message:
-                # 경고 메시지가 있으면 표시
-                self.statusbar.showMessage(message, 5000)
-        except OSError:
-            pass
+        self._dataset_controller._add_dataset_from_file(file_path)
 
-        # 대용량 파일 경고
-        if not self._check_large_file_warning(file_path):
-            return
-
-        ext = Path(file_path).suffix.lower()
-
-        # 바이너리 포맷은 바로 로드
-        if ext in ['.parquet', '.xlsx', '.xls', '.json']:
-            self._load_dataset(file_path)
-            return
-
-        # 텍스트 파일은 파싱 미리보기 표시
-        dialog = ParsingPreviewDialog(file_path, self)
-        if dialog.exec() == QDialog.Accepted:
-            settings = dialog.get_settings()
-            self._load_dataset_with_settings(file_path, settings)
 
     def _load_dataset(self, file_path: str, settings: Optional[ParsingSettings] = None):
-        """데이터셋 로드 (새 데이터셋으로 추가)"""
-        import uuid
-        from pathlib import Path
+        self._dataset_controller._load_dataset(file_path, settings)
 
-        dataset_id = str(uuid.uuid4())[:8]
-        name = Path(file_path).name
-
-        # 로딩 다이얼로그 표시
-        self._progress_dialog = QProgressDialog(
-            f"Loading {name}...",
-            "Cancel",
-            0, 100,
-            self
-        )
-        self._progress_dialog.setWindowModality(Qt.WindowModal)
-        self._progress_dialog.setMinimumDuration(500)
-        self._progress_dialog.canceled.connect(self._cancel_loading)
-        self._progress_dialog.show()
-
-        # 데이터셋 ID 저장 (콜백에서 사용)
-        self._pending_dataset_id = dataset_id
-        self._pending_dataset_name = name
-        self._pending_dataset_path = file_path
-
-        # 스레드로 로드
-        self._cleanup_loader_thread()
-        self._loader_thread = DataLoaderThread(self.engine, file_path)
-        self._loader_thread.progress_updated.connect(self._on_loading_progress)
-        self._loader_thread.finished_loading.connect(self._on_dataset_loading_finished)
-        self._loader_thread.start()
 
     def _load_dataset_with_settings(self, file_path: str, settings: ParsingSettings):
-        """설정을 적용하여 데이터셋 로드"""
-        import uuid
-        from pathlib import Path
+        self._dataset_controller._load_dataset_with_settings(file_path, settings)
 
-        dataset_id = str(uuid.uuid4())[:8]
-        name = Path(file_path).name
-
-        # 로딩 다이얼로그 표시
-        self._progress_dialog = QProgressDialog(
-            f"Loading {name}...",
-            "Cancel",
-            0, 100,
-            self
-        )
-        self._progress_dialog.setWindowModality(Qt.WindowModal)
-        self._progress_dialog.setMinimumDuration(500)
-        self._progress_dialog.canceled.connect(self._cancel_loading)
-        self._progress_dialog.show()
-
-        # 데이터셋 ID 저장
-        self._pending_dataset_id = dataset_id
-        self._pending_dataset_name = name
-        self._pending_dataset_path = file_path
-
-        # 스레드로 로드
-        self._cleanup_loader_thread()
-        self._loader_thread = DataLoaderThreadWithSettings(self.engine, file_path, settings)
-        self._loader_thread.progress_updated.connect(self._on_loading_progress)
-        self._loader_thread.finished_loading.connect(self._on_dataset_loading_finished)
-        self._loader_thread.start()
 
     def _on_dataset_loading_finished(self, success: bool):
-        """데이터셋 로딩 완료"""
-        if self._progress_dialog:
-            self._progress_dialog.close()
+        self._dataset_controller._on_dataset_loading_finished(success)
 
-        if success:
-            # State에 데이터셋 추가
-            dataset_id = getattr(self, '_pending_dataset_id', None)
-            name = getattr(self, '_pending_dataset_name', 'Dataset')
-            file_path = getattr(self, '_pending_dataset_path', None)
-
-            if dataset_id:
-                # 새 DatasetInfo 생성 (항상 새로 등록)
-                from ..core.data_engine import DatasetInfo
-                dataset_info = DatasetInfo(
-                    id=dataset_id,
-                    name=name,
-                    df=self.engine.df,
-                    lazy_df=self.engine._lazy_df,
-                    source=self.engine._source,
-                    profile=self.engine.profile
-                )
-                self.engine._datasets[dataset_id] = dataset_info
-                self.engine._active_dataset_id = dataset_id
-
-                # State에도 추가
-                memory_bytes = self.engine.df.estimated_size() if self.engine.df is not None else 0
-                self.state.add_dataset(
-                    dataset_id=dataset_id,
-                    name=name,
-                    file_path=file_path,
-                    row_count=self.engine.row_count,
-                    column_count=self.engine.column_count,
-                    memory_bytes=memory_bytes
-                )
-
-                # 기존 로직도 실행 (하위 호환성)
-                self.state.set_data_loaded(True, self.engine.row_count)
-                self.state.set_column_order(self.engine.columns)
-
-                if self.engine.profile:
-                    self._update_summary_from_profile()
-
-                # 프로젝트 탐색창 갱신 (새 데이터셋 표시)
-                self.profile_model.refresh()
-
-                gc.collect()
-                logger.info(f"Dataset added: {dataset_id} ({name}), {self.engine.row_count:,} rows")
-
-            # pending 상태 정리
-            self._pending_dataset_id = None
-            self._pending_dataset_name = None
-            self._pending_dataset_path = None
-        else:
-            error_msg = self.engine.progress.error_message or "Unknown error"
-            logger.error(f"Failed to load dataset: {error_msg}")
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to load dataset:\n{error_msg}"
-            )
 
     def _on_dataset_activated(self, dataset_id: str):
-        """데이터셋 활성화 요청"""
-        # Save current dataset state before switching
-        try:
-            if self.state.active_dataset_id:
-                self.state._sync_to_dataset_state(self.state.active_dataset_id)
-        except Exception:
-            pass
+        self._dataset_controller._on_dataset_activated(dataset_id)
 
-        if self.engine.activate_dataset(dataset_id):
-            self.state.activate_dataset(dataset_id)
-
-            # UI 업데이트
-            self.state.set_data_loaded(True, self.engine.row_count)
-            self.state.set_column_order(self.engine.columns)
-
-            # 패널 업데이트
-            self.table_panel.set_data(self.engine.df)
-            self.graph_panel.set_columns(self.engine.columns)
-            
-            # Data 탭에 컬럼 목록 전달
-            if hasattr(self.graph_panel.options_panel, 'data_tab'):
-                self.graph_panel.options_panel.data_tab.set_columns(
-                    self.engine.columns, self.engine
-                )
-            
-            self.graph_panel.refresh()
-            self.summary_panel.refresh()
-
-            # 프로파일 업데이트
-            if self.engine.profile:
-                self._update_summary_from_profile()
-
-            # Project Explorer 트리 갱신
-            self.profile_model.refresh()
-
-            # 상태바 메시지
-            metadata = self.state.get_dataset_metadata(dataset_id)
-            if metadata:
-                self.statusbar.showMessage(
-                    f"Activated: {metadata.name} ({self.engine.row_count:,} rows)",
-                    3000
-                )
 
     def _on_dataset_remove_requested(self, dataset_id: str):
-        """데이터셋 제거 요청"""
-        metadata = self.state.get_dataset_metadata(dataset_id)
-        name = metadata.name if metadata else dataset_id
+        self._dataset_controller._on_dataset_remove_requested(dataset_id)
 
-        if self.engine.remove_dataset(dataset_id):
-            self.state.remove_dataset(dataset_id)
-
-            # 남은 데이터셋이 있으면 UI 업데이트
-            if self.engine.dataset_count > 0:
-                self._on_dataset_activated(self.engine.active_dataset_id)
-            else:
-                # 모든 데이터셋 제거됨
-                self.state.set_data_loaded(False, 0)
-                self._on_data_cleared()
-
-            self.statusbar.showMessage(f"Removed: {name}", 3000)
 
     def _set_comparison_mode(self, mode: ComparisonMode):
-        """비교 모드 설정 (메뉴에서 호출)"""
-        self.state.set_comparison_mode(mode)
-        self._on_comparison_mode_changed(mode.value)
-        self._update_comparison_mode_actions(mode)
+        self._dataset_controller._set_comparison_mode(mode)
+
 
     def _update_comparison_mode_actions(self, mode: ComparisonMode):
-        """비교 모드 메뉴 액션 상태 업데이트"""
-        if not hasattr(self, '_comparison_mode_actions'):
-            return
+        self._dataset_controller._update_comparison_mode_actions(mode)
 
-        for action_mode, action in self._comparison_mode_actions.items():
-            action.setChecked(action_mode == mode)
 
     def _on_comparison_mode_changed(self, mode_value: str):
-        """비교 모드 변경"""
-        try:
-            mode = ComparisonMode(mode_value)
-            self.state.set_comparison_mode(mode)
+        self._dataset_controller._on_comparison_mode_changed(mode_value)
 
-            # Update menu action states
-            self._update_comparison_mode_actions(mode)
-
-            # Hide overlay stats widget when not in overlay mode
-            if mode != ComparisonMode.OVERLAY:
-                self._hide_overlay_stats_widget()
-
-            if mode == ComparisonMode.SINGLE:
-                self.statusbar.showMessage("Single dataset mode", 2000)
-                # Restore single view
-                self._restore_single_view()
-            elif mode == ComparisonMode.OVERLAY:
-                self.statusbar.showMessage("Overlay comparison mode", 2000)
-                # Restore graph panel for overlay mode
-                self._remove_comparison_view()
-                self.graph_panel.refresh()
-            elif mode == ComparisonMode.SIDE_BY_SIDE:
-                self.statusbar.showMessage("Side-by-side comparison mode", 2000)
-            elif mode == ComparisonMode.DIFFERENCE:
-                self.statusbar.showMessage("Difference analysis mode", 2000)
-        except ValueError:
-            pass
 
     def _on_comparison_started(self, dataset_ids: List[str]):
-        """비교 시작"""
-        mode = self.state.comparison_mode
+        self._dataset_controller._on_comparison_started(dataset_ids)
 
-        if len(dataset_ids) < 2:
-            QMessageBox.warning(
-                self,
-                "Comparison",
-                "Please select at least 2 datasets for comparison."
-            )
-            return
-
-        # 비교 대상 설정
-        self.state.set_comparison_datasets(dataset_ids)
-
-        # 모드별 처리
-        if mode == ComparisonMode.OVERLAY:
-            self._start_overlay_comparison(dataset_ids)
-        elif mode == ComparisonMode.SIDE_BY_SIDE:
-            self._start_side_by_side_comparison(dataset_ids)
-        elif mode == ComparisonMode.DIFFERENCE:
-            self._start_difference_analysis(dataset_ids)
 
     def _start_overlay_comparison(self, dataset_ids: List[str]):
-        """오버레이 비교 시작"""
-        self.statusbar.showMessage(
-            f"Overlay comparison: {len(dataset_ids)} datasets",
-            3000
-        )
-        # GraphPanel에서 오버레이 렌더링
-        self.graph_panel.refresh()
+        self._dataset_controller._start_overlay_comparison(dataset_ids)
 
-        # Create and show overlay stats widget
-        self._show_overlay_stats_widget()
 
     def _show_overlay_stats_widget(self):
-        """오버레이 통계 위젯 표시"""
-        # Create if not exists
-        if self._overlay_stats_widget is None:
-            self._overlay_stats_widget = OverlayStatsWidget(
-                self.engine, self.state, self.graph_panel
-            )
-            self._overlay_stats_widget.close_requested.connect(self._hide_overlay_stats_widget)
-            self._overlay_stats_widget.expand_requested.connect(self._show_comparison_stats_panel)
+        self._dataset_controller._show_overlay_stats_widget()
 
-        # Position and show
-        self._overlay_stats_widget.set_position("top-right")
-        self._overlay_stats_widget.show_animated()
 
     def _hide_overlay_stats_widget(self):
-        """오버레이 통계 위젯 숨기기"""
-        if self._overlay_stats_widget:
-            self._overlay_stats_widget.hide_animated()
+        self._dataset_controller._hide_overlay_stats_widget()
+
 
     def _show_comparison_stats_panel(self):
-        """전체 비교 통계 패널 표시 (다이얼로그)"""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout
+        self._dataset_controller._show_comparison_stats_panel()
 
-        if self._comparison_stats_panel is None:
-            self._comparison_stats_panel = ComparisonStatsPanel(
-                self.engine, self.state
-            )
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Comparison Statistics")
-        dialog.setMinimumSize(600, 500)
-
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(self._comparison_stats_panel)
-
-        self._comparison_stats_panel.refresh()
-        dialog.exec()
 
     def _on_export_comparison_report(self):
-        """비교 리포트 내보내기"""
-        dataset_ids = self.state.comparison_dataset_ids
+        self._dataset_controller._on_export_comparison_report()
 
-        if len(dataset_ids) < 2:
-            QMessageBox.information(
-                self,
-                "Export Report",
-                "Please select at least 2 datasets for comparison first."
-            )
-            return
-
-        # 파일 저장 다이얼로그
-        file_path, selected_filter = QFileDialog.getSaveFileName(
-            self,
-            "Export Comparison Report",
-            "comparison_report",
-            "HTML Report (*.html);;JSON Report (*.json);;CSV Report (*.csv)"
-        )
-
-        if not file_path:
-            return
-
-        # 확장자 확인 및 추가
-        if selected_filter.startswith("HTML") and not file_path.endswith('.html'):
-            file_path += '.html'
-        elif selected_filter.startswith("JSON") and not file_path.endswith('.json'):
-            file_path += '.json'
-        elif selected_filter.startswith("CSV") and not file_path.endswith('.csv'):
-            file_path += '.csv'
-
-        # 리포트 생성 및 저장
-        report_gen = ComparisonReport(self.engine, self.state)
-
-        success = False
-        if file_path.endswith('.html'):
-            success = report_gen.export_html(file_path, dataset_ids)
-        elif file_path.endswith('.json'):
-            success = report_gen.export_json(file_path, dataset_ids)
-        elif file_path.endswith('.csv'):
-            success = report_gen.export_csv(file_path, dataset_ids)
-
-        if success:
-            QMessageBox.information(
-                self,
-                "Export Report",
-                f"Report exported successfully:\n{file_path}"
-            )
-        else:
-            QMessageBox.warning(
-                self,
-                "Export Report",
-                "Failed to export report. Please check the file path and try again."
-            )
 
     def _start_side_by_side_comparison(self, dataset_ids: List[str]):
-        """병렬 비교 시작"""
-        self.statusbar.showMessage(
-            f"Side-by-side comparison: {len(dataset_ids)} datasets",
-            3000
-        )
+        self._dataset_controller._start_side_by_side_comparison(dataset_ids)
 
-        # Remove any existing comparison view
-        self._remove_comparison_view()
-
-        # Create SideBySideLayout if not exists
-        if self._side_by_side_layout is None:
-            self._side_by_side_layout = SideBySideLayout(self.engine, self.state)
-            self._side_by_side_layout.dataset_activated.connect(self._on_dataset_activated)
-
-        # Replace graph panel with side-by-side layout
-        self._show_comparison_view(self._side_by_side_layout)
-
-        # Refresh to show comparison datasets
-        self._side_by_side_layout.refresh()
 
     def _start_difference_analysis(self, dataset_ids: List[str]):
-        """차이 분석 시작"""
-        if len(dataset_ids) != 2:
-            QMessageBox.warning(
-                self,
-                "Difference Analysis",
-                "Please select exactly 2 datasets for difference analysis."
-            )
-            return
+        self._dataset_controller._start_difference_analysis(dataset_ids)
 
-        self.statusbar.showMessage(
-            f"Difference analysis: comparing 2 datasets",
-            3000
-        )
-
-        # Remove any existing comparison view
-        self._remove_comparison_view()
-
-        # Create ComparisonStatsPanel if not exists
-        if self._comparison_stats_panel is None:
-            self._comparison_stats_panel = ComparisonStatsPanel(self.engine, self.state)
-
-        # Replace graph panel with comparison stats panel
-        self._show_comparison_view(self._comparison_stats_panel)
-
-        # Refresh to show comparison statistics
-        self._comparison_stats_panel.refresh()
 
     def _show_comparison_view(self, view_widget: QWidget):
-        """비교 뷰를 그래프 패널 위치에 표시"""
-        # Find graph panel index in splitter
-        graph_index = -1
-        for i in range(self.main_splitter.count()):
-            if self.main_splitter.widget(i) is self.graph_panel:
-                graph_index = i
-                break
+        self._dataset_controller._show_comparison_view(view_widget)
 
-        if graph_index < 0:
-            return
-
-        # Save current sizes
-        current_sizes = self.main_splitter.sizes()
-
-        # Hide graph panel and show comparison view
-        self.graph_panel.hide()
-        self.main_splitter.replaceWidget(graph_index, view_widget)
-        view_widget.show()
-
-        # Restore sizes
-        self.main_splitter.setSizes(current_sizes)
-
-        # Track current comparison view
-        self._current_comparison_view = view_widget
 
     def _remove_comparison_view(self):
-        """비교 뷰를 제거하고 그래프 패널 복원"""
-        if self._current_comparison_view is None:
-            return
+        self._dataset_controller._remove_comparison_view()
 
-        # Find current comparison view index
-        view_index = -1
-        for i in range(self.main_splitter.count()):
-            if self.main_splitter.widget(i) is self._current_comparison_view:
-                view_index = i
-                break
-
-        if view_index < 0:
-            return
-
-        # Save current sizes
-        current_sizes = self.main_splitter.sizes()
-
-        # Hide comparison view and restore graph panel
-        self._current_comparison_view.hide()
-        self._current_comparison_view.setParent(None)
-        self.main_splitter.insertWidget(view_index, self.graph_panel)
-        self.graph_panel.show()
-
-        # Restore sizes
-        self.main_splitter.setSizes(current_sizes)
-
-        # Clear tracking
-        self._current_comparison_view = None
 
     def _restore_single_view(self):
-        """단일 뷰 모드로 복귀"""
-        self._remove_comparison_view()
-        self.graph_panel.refresh()
+        self._dataset_controller._restore_single_view()
+
 
     # ==================== Profile Comparison Views ====================
 
     def _on_profile_comparison_started(self, mode_value: str, profile_ids: list):
-        """Handle profile comparison started — create appropriate renderer."""
-        self._remove_comparison_view()
+        self._dataset_controller._on_profile_comparison_started(mode_value, profile_ids)
 
-        dataset_id = self.profile_comparison_controller.dataset_id
-
-        try:
-            mode = ComparisonMode(mode_value)
-        except ValueError:
-            mode = ComparisonMode.SIDE_BY_SIDE
-
-        if mode == ComparisonMode.SIDE_BY_SIDE:
-            view = ProfileSideBySideLayout(
-                dataset_id, self.engine, self.state, self.profile_store,
-            )
-            view.exit_requested.connect(self.profile_comparison_controller.stop_comparison)
-            view.set_profiles(profile_ids)
-            # FR-10: wire delete/rename from controller to layout
-            self.profile_comparison_controller.panel_removed.connect(view.on_profile_deleted)
-            self.profile_controller.profile_renamed.connect(view.on_profile_renamed)
-
-            # Wire CompareToolbar → ProfileSideBySideLayout
-            self._compare_toolbar.grid_layout_changed.connect(view.set_grid_layout)
-            self._compare_toolbar.sync_changed.connect(view.set_sync_option)
-            self._compare_toolbar.exit_requested.connect(
-                self.profile_comparison_controller.stop_comparison
-            )
-            self._compare_toolbar.reset_to_defaults()
-            self._compare_toolbar.show()
-
-        elif mode == ComparisonMode.OVERLAY:
-            view = ProfileOverlayRenderer(
-                dataset_id, self.engine, self.state, self.profile_store,
-            )
-            view.exit_requested.connect(self.profile_comparison_controller.stop_comparison)
-            view.set_profiles(profile_ids)
-
-        elif mode == ComparisonMode.DIFFERENCE:
-            if len(profile_ids) != 2:
-                return
-            view = ProfileDifferenceRenderer(
-                dataset_id, self.engine, self.state, self.profile_store,
-            )
-            view.exit_requested.connect(self.profile_comparison_controller.stop_comparison)
-            view.set_profiles(profile_ids[0], profile_ids[1])
-
-        else:
-            return
-
-        self._profile_comparison_view = view
-        self._show_comparison_view(view)
-        self.statusbar.showMessage(
-            f"Profile comparison ({mode_value}): {len(profile_ids)} profiles", 3000,
-        )
 
     def _on_profile_comparison_ended(self):
-        """Handle profile comparison ended — restore graph panel."""
-        # Disconnect toolbar signals from the comparison view
-        if self._profile_comparison_view is not None:
-            try:
-                self._compare_toolbar.grid_layout_changed.disconnect()
-            except RuntimeError:
-                pass
-            try:
-                self._compare_toolbar.sync_changed.disconnect()
-            except RuntimeError:
-                pass
-            try:
-                self._compare_toolbar.exit_requested.disconnect()
-            except RuntimeError:
-                pass
+        self._dataset_controller._on_profile_comparison_ended()
 
-        # Hide compare toolbar
-        self._compare_toolbar.hide()
-
-        self._remove_comparison_view()
-        self._profile_comparison_view = None
-        self.graph_panel.refresh()
-        self.statusbar.showMessage("Profile comparison ended", 2000)
 
     # ==================== Streaming ====================
 
@@ -4379,16 +2769,37 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 # self._on_data_loaded()
 
     def _on_add_calculated_field(self):
-        """계산 필드 추가 다이얼로그"""
+        """계산 필드 추가 다이얼로그 (v2 Feature 3)"""
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Add Calculated Field", "No data loaded.")
             return
-        
-        QMessageBox.information(
-            self, "Add Calculated Field",
-            "Calculated field dialog will be implemented.\n\n"
-            "This feature allows you to create new columns based on expressions."
-        )
+
+        # Get the current dataset's DataFrame
+        dataset_id = self.state.active_dataset_id
+        if not dataset_id:
+            QMessageBox.warning(self, "Add Calculated Field", "No active dataset selected.")
+            return
+
+        ds = self.state.dataset_states.get(dataset_id)
+        if ds is None or ds.dataframe is None:
+            QMessageBox.warning(self, "Add Calculated Field", "Dataset has no data.")
+            return
+
+        dialog = ComputedColumnDialog(ds.dataframe, dataset_id=dataset_id, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            result = dialog.get_result()
+            if result and result.get("series") is not None:
+                # Add the computed column to the dataframe
+                col_name = result["name"]
+                series = result["series"]
+                try:
+                    ds.dataframe = ds.dataframe.with_columns(series.alias(col_name))
+                    self.state.dataset_states[dataset_id] = ds
+                    # Refresh UI
+                    self._on_data_loaded()
+                    self.statusbar.showMessage(f"Computed column '{col_name}' added", 3000)
+                except Exception as e:
+                    QMessageBox.warning(self, "Add Calculated Field", f"Failed to add column:\n{e}")
 
     def _on_remove_duplicates(self):
         """중복 제거"""
@@ -4567,207 +2978,36 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     # ------ Profile / Project file actions (File menu) ------
 
     def _on_open_profile(self):
-        """Open Profile – 단일 프로파일 JSON 파일 로드 → 활성 데이터셋에 추가"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Profile",
-            str(Path.home()),
-            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)"
-        )
-        if not file_path:
-            return
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            gs = GraphSetting.from_dict(data)
-            dataset_id = self.state.active_dataset_id or ""
-            if gs.dataset_id != dataset_id:
-                from dataclasses import replace as _replace
-                gs = _replace(gs, dataset_id=dataset_id)
-            self.profile_store.add(gs)
-            self._last_profile_path = file_path
-            if hasattr(self, 'profile_model'):
-                self.profile_model.refresh()
-            self.statusbar.showMessage(f"Profile loaded: {gs.name}", 3000)
-        except Exception as e:
-            QMessageBox.warning(self, "Open Profile", f"Failed to load profile:\n{e}")
+        self._profile_ui_controller._on_open_profile()
+
 
     def _on_open_project(self):
-        """Open Project – .dgs 프로젝트 파일 로드 (프로파일 포함)"""
-        from ..core.project import Project
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Project",
-            str(Path.home()),
-            "DGS Project (*.dgs);;All Files (*.*)"
-        )
-        if not file_path:
-            return
-        try:
-            project = Project.load(file_path)
-            self._last_project_path = file_path
+        self._profile_ui_controller._on_open_project()
 
-            # 프로파일 복원
-            for p_data in project.profiles:
-                try:
-                    gs = GraphSetting.from_dict(p_data)
-                    self.profile_store.add(gs)
-                except Exception:
-                    logger.warning("Skipping invalid profile entry in project")
-
-            if hasattr(self, 'profile_model'):
-                self.profile_model.refresh()
-            self.statusbar.showMessage(f"Project loaded: {project.name} ({len(project.profiles)} profiles)", 3000)
-        except Exception as e:
-            QMessageBox.warning(self, "Open Project", f"Failed to load project:\n{e}")
 
     def _on_save_profile_file(self):
-        """Save Profile – 활성 프로파일을 마지막 경로로 저장"""
-        dataset_id = self.state.active_dataset_id or ""
-        settings = self.profile_store.get_by_dataset(dataset_id)
-        if not settings:
-            QMessageBox.information(self, "Save Profile", "No active profile to save.")
-            return
+        return self._profile_ui_controller._on_save_profile_file()
 
-        # 활성 프로파일(첫 번째)
-        gs = settings[0]
-        path = getattr(self, '_last_profile_path', None)
-        if not path:
-            return self._on_save_profile_file_as()
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(gs.to_dict(), f, indent=2, ensure_ascii=False)
-            self.statusbar.showMessage(f"Profile saved: {path}", 3000)
-        except Exception as e:
-            QMessageBox.warning(self, "Save Profile", f"Failed to save profile:\n{e}")
 
     def _on_save_profile_file_as(self):
-        """Save Profile As – 프로파일을 새 경로에 JSON으로 저장"""
-        dataset_id = self.state.active_dataset_id or ""
-        settings = self.profile_store.get_by_dataset(dataset_id)
-        if not settings:
-            QMessageBox.information(self, "Save Profile As", "No active profile to save.")
-            return
+        self._profile_ui_controller._on_save_profile_file_as()
 
-        gs = settings[0]
-        default_name = gs.name.replace(' ', '_') if gs.name else "profile"
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Profile As",
-            str(Path.home() / f"{default_name}.dgs-profile"),
-            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)"
-        )
-        if not file_path:
-            return
-        try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(gs.to_dict(), f, indent=2, ensure_ascii=False)
-            self._last_profile_path = file_path
-            self.statusbar.showMessage(f"Profile saved: {file_path}", 3000)
-        except Exception as e:
-            QMessageBox.warning(self, "Save Profile As", f"Failed to save profile:\n{e}")
 
     def _on_save_project_file(self):
-        """Save Project – 프로젝트+프로파일 저장 (마지막 경로)"""
-        path = getattr(self, '_last_project_path', None)
-        if not path:
-            return self._on_save_project_file_as()
-        self._save_project_to(path)
+        return self._profile_ui_controller._on_save_project_file()
+
 
     def _on_save_project_file_as(self):
-        """Save Project As – 프로젝트+프로파일을 새 경로에 .dgs로 저장"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Project As",
-            str(Path.home() / "project.dgs"),
-            "DGS Project (*.dgs);;All Files (*.*)"
-        )
-        if not file_path:
-            return
-        self._save_project_to(file_path)
+        self._profile_ui_controller._on_save_project_file_as()
+
 
     def _save_project_to(self, path: str):
-        """프로젝트를 지정 경로에 저장"""
-        from ..core.project import Project, DataSourceRef
-        try:
-            project = Project(name=Path(path).stem)
-            project_dir = Path(path).parent
+        self._profile_ui_controller._save_project_to(path)
 
-            # 데이터 소스 추가 (현재 로드된 데이터셋들)
-            for dataset_id in self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else []:
-                dataset = self.engine.get_dataset(dataset_id)
-                if dataset:
-                    source_path = getattr(dataset, 'source_path', None) or getattr(dataset, 'file_path', None)
-                    if source_path and os.path.exists(source_path):
-                        # 상대 경로로 변환 시도
-                        try:
-                            rel_path = os.path.relpath(source_path, project_dir)
-                        except ValueError:
-                            rel_path = source_path  # 다른 드라이브면 절대경로 유지
-                        
-                        ds_ref = DataSourceRef(
-                            path=rel_path,
-                            file_type=Path(source_path).suffix.lstrip('.'),
-                            dataset_id=dataset_id,
-                            name=getattr(dataset, 'name', None),
-                            is_active=(dataset_id == self.state.active_dataset_id),
-                        )
-                        project.add_data_source(ds_ref)
-
-            # 모든 프로파일을 프로젝트에 포함
-            all_profiles = []
-            for did in self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else [""]:
-                for gs in self.profile_store.get_by_dataset(did):
-                    all_profiles.append(gs.to_dict())
-            # dataset_id가 빈 문자열인 프로파일도 포함
-            for gs in self.profile_store.get_by_dataset(""):
-                all_profiles.append(gs.to_dict())
-            # 중복 제거 (id 기준)
-            seen_ids = set()
-            unique = []
-            for p in all_profiles:
-                if p["id"] not in seen_ids:
-                    seen_ids.add(p["id"])
-                    unique.append(p)
-            project.profiles = unique
-
-            project.save(path)
-            self._last_project_path = path
-            ds_count = len(project.data_sources)
-            self.statusbar.showMessage(f"Project saved: {path} ({ds_count} datasets, {len(unique)} profiles)", 3000)
-        except Exception as e:
-            QMessageBox.warning(self, "Save Project", f"Failed to save project:\n{e}")
 
     def _on_save_profile_bundle_as(self):
-        """Save Profile Bundle As – 모든 프로파일을 .dgs-bundle JSON으로 저장"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Profile Bundle As",
-            str(Path.home() / "profiles.dgs-bundle"),
-            "DGS Profile Bundle (*.dgs-bundle);;All Files (*.*)"
-        )
-        if not file_path:
-            return
-        try:
-            all_profiles = []
-            for did in self.engine.get_dataset_ids() if hasattr(self.engine, 'get_dataset_ids') else [""]:
-                for gs in self.profile_store.get_by_dataset(did):
-                    all_profiles.append(gs.to_dict())
-            for gs in self.profile_store.get_by_dataset(""):
-                all_profiles.append(gs.to_dict())
-            # 중복 제거
-            seen_ids = set()
-            unique = []
-            for p in all_profiles:
-                if p["id"] not in seen_ids:
-                    seen_ids.add(p["id"])
-                    unique.append(p)
+        self._profile_ui_controller._on_save_profile_bundle_as()
 
-            bundle = {
-                "format": "dgs-profile-bundle",
-                "version": "1.0",
-                "profiles": unique,
-            }
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(bundle, f, indent=2, ensure_ascii=False)
-            self.statusbar.showMessage(f"Profile bundle saved: {file_path} ({len(unique)} profiles)", 3000)
-        except Exception as e:
-            QMessageBox.warning(self, "Save Profile Bundle", f"Failed to save bundle:\n{e}")
 
     def _on_save_data(self):
         """Save Data - 현재 데이터 저장"""
@@ -5018,3 +3258,118 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             "• Scale type (linear/log)\n"
             "• Tick marks and intervals"
         )
+
+    # ============================================================
+    # v2 Feature Methods
+    # ============================================================
+
+    def _on_toggle_dashboard_mode(self):
+        """Toggle dashboard mode (v2 Feature 1)"""
+        if not self.state.is_data_loaded:
+            QMessageBox.information(self, "Dashboard Mode", "No data loaded.")
+            self._dashboard_mode_action.setChecked(False)
+            return
+
+        if self._dashboard_mode_active:
+            # Deactivate dashboard mode
+            self._deactivate_dashboard_mode()
+        else:
+            # Activate dashboard mode
+            self._activate_dashboard_mode()
+
+    def _activate_dashboard_mode(self):
+        """Activate dashboard mode - show DashboardPanel"""
+        if not self._dashboard_controller.activate():
+            QMessageBox.warning(
+                self, "Dashboard Mode",
+                "Cannot activate dashboard mode. No datasets loaded."
+            )
+            self._dashboard_mode_action.setChecked(False)
+            return
+
+        # Create dashboard panel if not exists
+        if self._dashboard_panel is None:
+            self._dashboard_panel = DashboardPanel(
+                controller=self._dashboard_controller,
+                state=self.state,
+                engine=self.engine,
+                parent=self,
+            )
+            self._dashboard_panel.exit_requested.connect(self._deactivate_dashboard_mode)
+
+        # Hide normal graph panel, show dashboard panel
+        self.graph_panel.hide()
+        self.main_splitter.insertWidget(1, self._dashboard_panel)
+        self._dashboard_panel.show()
+
+        self._dashboard_mode_active = True
+        self._dashboard_mode_action.setChecked(True)
+        self.statusbar.showMessage("Dashboard mode activated", 3000)
+
+    def _deactivate_dashboard_mode(self):
+        """Deactivate dashboard mode - restore normal view"""
+        self._dashboard_controller.deactivate()
+
+        if self._dashboard_panel is not None:
+            self._dashboard_panel.hide()
+            # Re-show normal graph panel
+            self.graph_panel.show()
+
+        self._dashboard_mode_active = False
+        self._dashboard_mode_action.setChecked(False)
+        self.statusbar.showMessage("Dashboard mode deactivated", 3000)
+
+    def _on_toggle_annotation_panel(self):
+        """Toggle annotation side panel (v2 Feature 5)"""
+        if self._annotation_panel is None:
+            # Create annotation panel
+            self._annotation_panel = AnnotationPanel(
+                controller=self._annotation_controller,
+                parent=self,
+            )
+            # Connect signals
+            self._annotation_panel.navigate_requested.connect(self._on_annotation_navigate)
+            self._annotation_panel.edit_requested.connect(self._on_annotation_edit)
+            self._annotation_panel.delete_requested.connect(self._on_annotation_delete)
+
+        if self._annotation_panel.isVisible():
+            self._annotation_panel.hide()
+            self._annotation_panel_action.setChecked(False)
+            self.statusbar.showMessage("Annotations panel hidden", 2000)
+        else:
+            # Add to right side of root splitter (horizontal)
+            if self._annotation_panel.parent() != self.root_splitter:
+                self.root_splitter.addWidget(self._annotation_panel)
+            self._annotation_panel.show()
+            self._annotation_panel_action.setChecked(True)
+            self.statusbar.showMessage("Annotations panel shown", 2000)
+
+    def _on_annotation_navigate(self, annotation_id: str):
+        """Navigate to annotation location on chart"""
+        annotation = self._annotation_controller.get(annotation_id)
+        if annotation and hasattr(self.graph_panel, 'navigate_to_point'):
+            self.graph_panel.navigate_to_point(annotation.x, annotation.y)
+
+    def _on_annotation_edit(self, annotation_id: str):
+        """Edit annotation via dialog"""
+        annotation = self._annotation_controller.get(annotation_id)
+        if annotation:
+            text, ok = QInputDialog.getText(
+                self, "Edit Annotation", "Text:", text=annotation.text
+            )
+            if ok and text:
+                self._annotation_controller.edit(annotation_id, text=text)
+                if self._annotation_panel:
+                    self._annotation_panel.refresh()
+
+    def _on_annotation_delete(self, annotation_id: str):
+        """Delete annotation"""
+        reply = QMessageBox.question(
+            self, "Delete Annotation",
+            "Are you sure you want to delete this annotation?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self._annotation_controller.delete(annotation_id)
+            if self._annotation_panel:
+                self._annotation_panel.refresh()

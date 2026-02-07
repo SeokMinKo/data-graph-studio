@@ -1,15 +1,16 @@
 # Development Dashboard — Data Graph Studio v2: 7대 기능 확장
 
 ## Status: Phase 5 — QA
-Last Updated: 2026-02-04 06:55 KST
+Last Updated: 2026-02-05 14:15 KST
 
 ## Phase Progress
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 1. PRD | ✅ | PRD-v2-features.md (55KB, 933줄) |
 | 2. Review | ✅ | Round 3: 8/8 AGREE (FULL PASS) |
-| 3. Implementation | ⏳ | Phase A 진행 중 (3개 병렬 에이전트) |
-| 4. QA | ⏳ | |
+| 3. Implementation | ✅ | Phase A/B/C 모두 완료 |
+| 4. UI Integration | ✅ | MainWindow 와이어링 완료 |
+| 5. QA | ⏳ | |
 
 ## PRD Review Status (Final — Round 3)
 | Reviewer | Status | Key Concerns |
@@ -64,19 +65,34 @@ Last Updated: 2026-02-04 06:55 KST
 | Impl-C1 | Feature 1 (대시보드) | ✅ | 40/40 |
 | Impl-C2 | Feature 4 (내보내기) | ✅ | 27/27 |
 
+## MainWindow UI Integration (와이어링)
+
+| Feature | Controller | Menu | Shortcut | Panel | Status |
+|---------|------------|------|----------|-------|--------|
+| 1. Dashboard Mode | DashboardController | View > Dashboard Mode | Ctrl+D | DashboardPanel | ✅ |
+| 2. Streaming | StreamingController | View > Start/Stop Streaming | — | StreamingDialog | ✅ |
+| 3. Computed Column | ComputedColumnDialog | Data > Add Calculated Field | Ctrl+Alt+F | — | ✅ |
+| 4. Export | ExportController | File > Export Report | Ctrl+R | ReportDialog | ✅ |
+| 5. Annotations | AnnotationController | View > Annotations Panel | Ctrl+Shift+A | AnnotationPanel | ✅ |
+| 6. Theme Toggle | ThemeManager | View > Theme | — | — | ✅ |
+| 7. Shortcuts | ShortcutController | Help > Keyboard Shortcuts | Ctrl+/ | — | ✅ |
+| — | UndoStack | — | Ctrl+Z/Y | — | ✅ |
+
 ## Test Results
 | Level | Pass | Fail | Skip |
 |-------|------|------|------|
-| Unit (45) | — | — | — |
+| Unit (v2) | 301+ | 1* | — |
 | Integration (7) | — | — | — |
 | E2E (7) | — | — | — |
 | Performance (3) | — | — | — |
 
+*test_export_excel: openpyxl 의존성 이슈 (와이어링과 무관)
+
 ## Next Actions
-1. Phase A 3개 에이전트 완료 대기
-2. Phase A 완료 → Phase B 2개 에이전트 시작
-3. Phase B 완료 → Phase C 2개 에이전트 시작
-4. 전체 완료 → QA Phase
+1. ✅ Phase A/B/C 구현 완료
+2. ✅ MainWindow 와이어링 완료
+3. ⏳ 전체 통합 테스트 실행
+4. ⏳ E2E 테스트
 
 ---
 
