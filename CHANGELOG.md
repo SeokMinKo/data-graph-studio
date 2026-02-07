@@ -4,6 +4,15 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.20.1] — 2026-02-08
+
+### 🔧 Refactor
+
+- **MainWindow God Object 분리** — 5,248줄 → 3,375줄, 4개 컨트롤러 추출 (IPC, FileLoading, Dataset, ProfileUI)
+- **GraphPanel God Object 분리** — 5,019줄 → 2,133줄, 4개 모듈 추출 (GraphOptionsPanel, LegendSettingsPanel, StatPanel, MainGraph)
+
+---
+
 ## [v0.20.0] — 2026-02-06
 
 ### ✨ Features
