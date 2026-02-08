@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from ...core.state import ComparisonMode
+from ...core.undo_manager import UndoCommand, UndoActionType
 from ...core.comparison_report import ComparisonReport
 from ...core.parsing import ParsingSettings
 
@@ -226,66 +227,157 @@ class DatasetController:
     def _on_dataset_activated(self, dataset_id: str):
         """데이터셋 활성화 요청"""
         w = self._w
-        try:
-            if w.state.active_dataset_id:
-                w.state._sync_to_dataset_state(w.state.active_dataset_id)
-        except Exception:
-            pass
+        prev_id = w.state.active_dataset_id
 
-        if w.engine.activate_dataset(dataset_id):
-            w.state.activate_dataset(dataset_id)
+        def _activate(target_id: str):
+            try:
+                if w.state.active_dataset_id:
+                    w.state._sync_to_dataset_state(w.state.active_dataset_id)
+            except Exception:
+                pass
 
-            w.state.set_data_loaded(True, w.engine.row_count)
-            w.state.set_column_order(w.engine.columns)
+            if w.engine.activate_dataset(target_id):
+                w.state.activate_dataset(target_id)
 
-            w.table_panel.set_data(w.engine.df)
-            w.graph_panel.set_columns(w.engine.columns)
+                w.state.set_data_loaded(True, w.engine.row_count)
+                w.state.set_column_order(w.engine.columns)
 
-            if hasattr(w.graph_panel.options_panel, 'data_tab'):
-                w.graph_panel.options_panel.data_tab.set_columns(
-                    w.engine.columns, w.engine
-                )
+                w.table_panel.set_data(w.engine.df)
+                w.graph_panel.set_columns(w.engine.columns)
 
-            w.graph_panel.refresh()
-            w.summary_panel.refresh()
+                if hasattr(w.graph_panel.options_panel, 'data_tab'):
+                    w.graph_panel.options_panel.data_tab.set_columns(
+                        w.engine.columns, w.engine
+                    )
 
-            if w.engine.profile:
-                w._update_summary_from_profile()
+                w.graph_panel.refresh()
+                w.summary_panel.refresh()
 
-            w.profile_model.refresh()
+                if w.engine.profile:
+                    w._update_summary_from_profile()
 
-            metadata = w.state.get_dataset_metadata(dataset_id)
-            if metadata:
-                w.statusbar.showMessage(
-                    f"Activated: {metadata.name} ({w.engine.row_count:,} rows)",
-                    3000
-                )
+                w.profile_model.refresh()
+
+                metadata = w.state.get_dataset_metadata(target_id)
+                if metadata:
+                    w.statusbar.showMessage(
+                        f"Activated: {metadata.name} ({w.engine.row_count:,} rows)",
+                        3000
+                    )
+
+        if prev_id == dataset_id:
+            _activate(dataset_id)
+            return
+
+        # Record as undoable
+        w._undo_stack.push(
+            UndoCommand(
+                action_type=UndoActionType.DATASET_ACTIVATE,
+                description=f"Dataset: Activate {dataset_id}",
+                do=lambda: _activate(dataset_id),
+                undo=(lambda: _activate(prev_id)) if prev_id else (lambda: None),
+            )
+        )
 
     def _on_dataset_remove_requested(self, dataset_id: str):
-        """데이터셋 제거 요청"""
+        """데이터셋 제거 요청 (Undo 가능)"""
         w = self._w
         metadata = w.state.get_dataset_metadata(dataset_id)
         name = metadata.name if metadata else dataset_id
 
-        if w.engine.remove_dataset(dataset_id):
-            w.state.remove_dataset(dataset_id)
+        # Capture for undo
+        try:
+            dataset_info = w.engine.get_dataset(dataset_id)
+        except Exception:
+            dataset_info = None
 
-            if w.engine.dataset_count > 0:
-                self._on_dataset_activated(w.engine.active_dataset_id)
-            else:
-                w.state.set_data_loaded(False, 0)
-                w._on_data_cleared()
+        state_snapshot = None
+        meta_snapshot = None
+        try:
+            ds_state = w.state.get_dataset_state(dataset_id)
+            if ds_state is not None:
+                import copy
+                state_snapshot = copy.deepcopy(ds_state)
+            if metadata is not None:
+                import copy
+                meta_snapshot = copy.deepcopy(metadata)
+        except Exception:
+            pass
 
-            w.statusbar.showMessage(f"Removed: {name}", 3000)
+        prev_active = w.engine.active_dataset_id
+
+        def _remove():
+            if w.engine.remove_dataset(dataset_id):
+                w.state.remove_dataset(dataset_id)
+
+                if w.engine.dataset_count > 0:
+                    self._on_dataset_activated(w.engine.active_dataset_id)
+                else:
+                    w.state.set_data_loaded(False, 0)
+                    w._on_data_cleared()
+
+                w.statusbar.showMessage(f"Removed: {name}", 3000)
+
+        def _restore():
+            if dataset_info is None or meta_snapshot is None:
+                return
+
+            # Restore engine dataset
+            try:
+                w.engine._datasets[dataset_id] = dataset_info
+            except Exception:
+                return
+
+            # Restore AppState dataset entries
+            try:
+                w.state._dataset_states[dataset_id] = state_snapshot
+                w.state._dataset_metadata[dataset_id] = meta_snapshot
+                if getattr(meta_snapshot, "compare_enabled", True):
+                    if dataset_id not in w.state._comparison_settings.comparison_datasets:
+                        w.state._comparison_settings.comparison_datasets.append(dataset_id)
+                w.state.dataset_added.emit(dataset_id)
+                w.state.dataset_updated.emit(dataset_id)
+            except Exception:
+                pass
+
+            # Activate previous dataset (or restored one)
+            target = prev_active or dataset_id
+            self._on_dataset_activated(target)
+            w.statusbar.showMessage(f"Restored: {name}", 3000)
+
+        w._undo_stack.push(
+            UndoCommand(
+                action_type=UndoActionType.DATASET_REMOVE,
+                description=f"Dataset: Remove {name}",
+                do=_remove,
+                undo=_restore,
+            )
+        )
 
     # ==================== Comparison Mode ====================
 
     def _set_comparison_mode(self, mode: ComparisonMode):
-        """비교 모드 설정 (메뉴에서 호출)"""
+        """비교 모드 설정 (메뉴에서 호출, Undo 가능)"""
         w = self._w
-        w.state.set_comparison_mode(mode)
-        self._on_comparison_mode_changed(mode.value)
-        self._update_comparison_mode_actions(mode)
+        prev = w.state.comparison_mode
+
+        def _apply(m: ComparisonMode):
+            w.state.set_comparison_mode(m)
+            self._on_comparison_mode_changed(m.value)
+            self._update_comparison_mode_actions(m)
+
+        if prev == mode:
+            _apply(mode)
+            return
+
+        w._undo_stack.push(
+            UndoCommand(
+                action_type=UndoActionType.COMPARISON_SETTINGS,
+                description=f"Compare: Mode → {mode.value}",
+                do=lambda: _apply(mode),
+                undo=lambda: _apply(prev),
+            )
+        )
 
     def _update_comparison_mode_actions(self, mode: ComparisonMode):
         """비교 모드 메뉴 액션 상태 업데이트"""
@@ -335,7 +427,19 @@ class DatasetController:
             )
             return
 
-        w.state.set_comparison_datasets(dataset_ids)
+        prev_ids = list(w.state.comparison_dataset_ids)
+
+        def _apply(ids: List[str]):
+            w.state.set_comparison_datasets(ids)
+
+        w._undo_stack.push(
+            UndoCommand(
+                action_type=UndoActionType.COMPARISON_SETTINGS,
+                description=f"Compare: Datasets → {len(dataset_ids)} selected",
+                do=lambda: _apply(dataset_ids),
+                undo=lambda: _apply(prev_ids),
+            )
+        )
 
         if mode == ComparisonMode.OVERLAY:
             self._start_overlay_comparison(dataset_ids)

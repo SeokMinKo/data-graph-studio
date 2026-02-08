@@ -18,7 +18,7 @@ from .dashboard_layout import (
     default_layout,
     validate_layout_json,
 )
-from .undo_manager import UndoAction, UndoActionType, UndoStack
+from .undo_manager import UndoActionType, UndoCommand, UndoStack
 
 
 class DashboardController:
@@ -262,13 +262,22 @@ class DashboardController:
         before: DashboardLayout,
     ) -> None:
         after = self._layout.deep_copy() if self._layout else None
-        self._undo.push(
-            UndoAction(
+        before_dict = before.to_dict() if before else None
+        after_dict = after.to_dict() if after else None
+
+        def _apply(layout_dict: Dict):
+            if layout_dict is None:
+                return
+            self.restore_layout(layout_dict)
+
+        # Layout change already happened before this call, so record.
+        self._undo.record(
+            UndoCommand(
                 action_type=action_type,
-                timestamp=time.time(),
                 description=description,
-                before_state=before.to_dict() if before else None,
-                after_state=after.to_dict() if after else None,
+                do=lambda: _apply(after_dict),
+                undo=lambda: _apply(before_dict),
+                timestamp=time.time(),
             )
         )
 

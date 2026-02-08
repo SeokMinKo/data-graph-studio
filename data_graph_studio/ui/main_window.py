@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget, QColorDialog, QPushButton
+    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
@@ -27,11 +27,19 @@ from ..core.clipboard_manager import ClipboardManager, DragDropHandler
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
 from ..core.undo_manager import UndoStack
+from .panels.history_panel import HistoryPanel
 from ..core.dashboard_controller import DashboardController
 from ..core.annotation_controller import AnnotationController
 from ..core.shortcut_controller import ShortcutController
 from ..core.export_controller import ExportController, ExportFormat
 from ..utils.memory import MemoryMonitor
+from ..core.updater import (
+    get_current_version,
+    check_github_latest,
+    is_update_available,
+    download_asset,
+    run_windows_installer,
+)
 
 # 에러 로깅 설정
 logger = logging.getLogger(__name__)
@@ -143,8 +151,12 @@ class MainWindow(QMainWindow):
         )
 
         # ===== v2 Feature Controllers =====
-        # Undo/Redo stack (shared by dashboard, annotation, column controllers)
-        self._undo_stack = UndoStack(max_depth=50)
+        # Undo/Redo stack (session-only)
+        self._undo_stack = UndoStack(max_depth=200, on_changed=self._on_undo_stack_changed)
+        self.state.set_undo_stack(self._undo_stack)
+
+        self._history_panel: Optional[HistoryPanel] = None
+        self._history_dock: Optional[QDockWidget] = None
 
         # Feature 1: Dashboard Mode
         self._dashboard_controller = DashboardController(self.state, self._undo_stack)
@@ -223,6 +235,9 @@ class MainWindow(QMainWindow):
 
         # Apply initial state
         self._update_ui_state()
+
+        # Auto-update (Windows)
+        QTimer.singleShot(2000, self._auto_check_updates)
     
     def _setup_window(self):
         """윈도우 기본 설정"""
@@ -707,6 +722,11 @@ class MainWindow(QMainWindow):
 
         help_menu.addSeparator()
 
+        check_updates_action = QAction("Check for &Updates...", self)
+        check_updates_action.setStatusTip("Check GitHub Releases and update (Windows)")
+        check_updates_action.triggered.connect(lambda: self._auto_check_updates(force_ui=True))
+        help_menu.addAction(check_updates_action)
+
         about_action = QAction("&About", self)
         about_action.setStatusTip("About Data Graph Studio")
         about_action.triggered.connect(self._show_about)
@@ -1049,7 +1069,50 @@ class MainWindow(QMainWindow):
 
         # Initialize floating graph manager
         self._floating_graph_manager = FloatingGraphManager(self.state, self.engine)
+
+        # History (Undo/Redo) dock
+        self._setup_history_dock()
     
+    def _setup_history_dock(self):
+        if self._history_dock is not None:
+            return
+
+        self._history_panel = HistoryPanel(self._undo_stack, parent=self)
+        self._history_panel.request_undo.connect(self._on_undo)
+        self._history_panel.request_redo.connect(self._on_redo)
+
+        dock = QDockWidget("History", self)
+        dock.setObjectName("HistoryDock")
+        dock.setWidget(self._history_panel)
+        dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self._history_dock = dock
+
+        # Add toggle action to View menu
+        try:
+            for action in self.menuBar().actions():
+                if action.text().replace("&", "") == "View":
+                    view_menu = action.menu()
+                    if view_menu:
+                        view_menu.addSeparator()
+                        toggle_action = dock.toggleViewAction()
+                        toggle_action.setText("History Panel")
+                        view_menu.addAction(toggle_action)
+                    break
+        except Exception:
+            pass
+
+    def _on_undo_stack_changed(self):
+        # Update history UI
+        if self._history_panel is not None:
+            self._history_panel.refresh()
+
+    def _on_undo(self):
+        self._undo_stack.undo()
+
+    def _on_redo(self):
+        self._undo_stack.redo()
+
     def _reset_layout(self):
         """레이아웃 비율 초기화 및 모든 Float 창 Dock"""
         # First, dock all floating panels back to main window
@@ -3742,6 +3805,63 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     # B-6: Theme Persistence
     # ============================================================
 
+    def _auto_check_updates(self, force_ui: bool = False):
+        """Installer-based auto-update for Windows.
+
+        - Checks GitHub latest release for an installer asset
+        - If newer version: optionally downloads and launches installer
+
+        NOTE: This is a pragmatic approach. True background patching is out of scope.
+        """
+        import sys
+        from PySide6.QtCore import QSettings
+
+        if sys.platform != "win32":
+            return
+
+        settings = QSettings("Godol", "DataGraphStudio")
+        auto = settings.value("updates/auto", True, type=bool)
+        if not auto and not force_ui:
+            return
+
+        current = get_current_version()
+        try:
+            info = check_github_latest()
+        except Exception as e:
+            if force_ui:
+                QMessageBox.information(self, "Updates", f"Update check failed:\n{e}")
+            return
+
+        if not info:
+            if force_ui:
+                QMessageBox.information(self, "Updates", "No installer asset found in the latest release.")
+            return
+
+        if not is_update_available(current, info.latest_version):
+            if force_ui:
+                QMessageBox.information(self, "Updates", f"You're up to date.\nCurrent: {current}")
+            return
+
+        # Update available
+        msg = (
+            f"Update available: {current} → {info.latest_version}\n\n"
+            "Download and install now?\n"
+            "(The app may close and reopen after installation.)"
+        )
+        if not auto or force_ui:
+            res = QMessageBox.question(self, "Updates", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if res != QMessageBox.StandardButton.Yes:
+                return
+
+        try:
+            self.statusbar.showMessage(f"Downloading update {info.latest_version}...", 5000)
+            path = download_asset(info.asset_url, info.asset_name)
+            self.statusbar.showMessage("Launching installer...", 5000)
+            run_windows_installer(path, silent=True)
+            self.close()
+        except Exception as e:
+            QMessageBox.warning(self, "Updates", f"Update failed:\n{e}")
+
     def _restore_saved_theme(self):
         """Restore theme from QSettings, default to midnight"""
         from PySide6.QtCore import QSettings
@@ -3772,8 +3892,8 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         sc.connect("file.open", self._on_open_file)
         sc.connect("file.save", self._on_save_project_file)
         sc.connect("file.export", self._on_export_dialog)
-        sc.connect("edit.undo", lambda: self._undo_stack.undo() if self._undo_stack.can_undo else None)
-        sc.connect("edit.redo", lambda: self._undo_stack.redo() if self._undo_stack.can_redo else None)
+        sc.connect("edit.undo", self._on_undo)
+        sc.connect("edit.redo", self._on_redo)
         sc.connect("edit.annotation_mode", self._on_toggle_annotation_panel)
         sc.connect("view.dashboard_toggle", self._on_toggle_dashboard_mode)
         sc.connect("view.theme_toggle", self._on_cycle_theme)

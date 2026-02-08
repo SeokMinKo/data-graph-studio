@@ -4,6 +4,20 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.22.0] — 2026-02-09
+
+### ✨ Features
+
+- **Undo/Redo 확대 (세션 내)** — Filter/Sort/Chart Settings, Dataset Activate/Remove, Compare mode/datasets까지 되돌리기 지원
+- **History Panel** — Undo 타임라인을 Dock 패널로 제공 (View 메뉴에서 토글)
+- **Windows 자동 업데이트 (설치형)** — GitHub Releases 최신 버전 확인 후 installer 다운로드/실행
+
+### 🧰 Build/Release
+
+- **Windows 설치형 배포 파이프라인** — GitHub Actions에서 PyInstaller + Inno Setup으로 `DataGraphStudio-Setup-vX.Y.Z.exe` 생성 후 Release에 업로드
+
+---
+
 ## [v0.21.0] — 2026-02-08
 
 ### 🔧 Refactor

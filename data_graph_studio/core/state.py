@@ -9,7 +9,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 import uuid
+import copy
+import time
 from PySide6.QtCore import QObject, Signal
+
+from .undo_manager import UndoStack, UndoCommand, UndoActionType
 
 if TYPE_CHECKING:
     from .profile import Profile, GraphSetting
@@ -353,6 +357,10 @@ class AppState(QObject):
     def __init__(self):
         super().__init__()
 
+        # Undo/Redo (session-only)
+        self._undo_stack: Optional[UndoStack] = None
+        self._undo_paused: int = 0
+
         # Batch update (signal batching)
         self._batch_depth: int = 0
         self._batch_pending_signals: List[str] = []
@@ -412,6 +420,17 @@ class AppState(QObject):
         self._dataset_color_index: int = 0  # 다음 데이터셋에 할당할 색상 인덱스
 
     # ==================== Batch Update ====================
+
+    def set_undo_stack(self, stack: Optional[UndoStack]) -> None:
+        self._undo_stack = stack
+
+    def _push_undo(self, cmd: UndoCommand) -> None:
+        if not self._undo_stack:
+            return
+        if self._undo_paused > 0:
+            return
+        # AppState methods usually already applied the mutation; only record.
+        self._undo_stack.record(cmd)
 
     def begin_batch_update(self):
         """시그널 일괄 발행을 위한 배치 시작"""
@@ -995,22 +1014,107 @@ class AppState(QObject):
         return self._filters
     
     def add_filter(self, column: str, operator: str, value: Any):
+        before = copy.deepcopy(self._filters)
         self._filters.append(FilterCondition(column, operator, value))
         self.filter_changed.emit()
-    
+        after = copy.deepcopy(self._filters)
+
+        def _apply(value_filters):
+            self._undo_paused += 1
+            try:
+                self._filters = copy.deepcopy(value_filters)
+                self.filter_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.FILTER_CHANGE,
+                description=f"Filter: + {column} {operator} {value}",
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+                timestamp=time.time(),
+            )
+        )
+
     def remove_filter(self, index: int):
-        if 0 <= index < len(self._filters):
-            self._filters.pop(index)
-            self.filter_changed.emit()
-    
+        if not (0 <= index < len(self._filters)):
+            return
+        before = copy.deepcopy(self._filters)
+        removed = self._filters[index]
+        self._filters.pop(index)
+        self.filter_changed.emit()
+        after = copy.deepcopy(self._filters)
+
+        def _apply(value_filters):
+            self._undo_paused += 1
+            try:
+                self._filters = copy.deepcopy(value_filters)
+                self.filter_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.FILTER_CHANGE,
+                description=f"Filter: - {removed.column}",
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+                timestamp=time.time(),
+            )
+        )
+
     def clear_filters(self):
+        if not self._filters:
+            return
+        before = copy.deepcopy(self._filters)
         self._filters.clear()
         self.filter_changed.emit()
-    
+        after = copy.deepcopy(self._filters)
+
+        def _apply(value_filters):
+            self._undo_paused += 1
+            try:
+                self._filters = copy.deepcopy(value_filters)
+                self.filter_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.FILTER_CHANGE,
+                description="Filter: Clear",
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+                timestamp=time.time(),
+            )
+        )
+
     def toggle_filter(self, index: int):
-        if 0 <= index < len(self._filters):
-            self._filters[index].enabled = not self._filters[index].enabled
-            self.filter_changed.emit()
+        if not (0 <= index < len(self._filters)):
+            return
+        before = copy.deepcopy(self._filters)
+        self._filters[index].enabled = not self._filters[index].enabled
+        self.filter_changed.emit()
+        after = copy.deepcopy(self._filters)
+
+        def _apply(value_filters):
+            self._undo_paused += 1
+            try:
+                self._filters = copy.deepcopy(value_filters)
+                self.filter_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.FILTER_CHANGE,
+                description=f"Filter: Toggle {self._filters[index].column}",
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+                timestamp=time.time(),
+            )
+        )
     
     # ==================== Sorts ====================
     
@@ -1019,17 +1123,62 @@ class AppState(QObject):
         return self._sorts
     
     def set_sort(self, column: str, descending: bool = False, add: bool = False):
+        before = copy.deepcopy(self._sorts)
+
         if not add:
             self._sorts.clear()
-        
+
         # 기존 정렬 제거
         self._sorts = [s for s in self._sorts if s.column != column]
         self._sorts.append(SortCondition(column, descending))
         self.sort_changed.emit()
-    
+
+        after = copy.deepcopy(self._sorts)
+        if before != after:
+            def _apply(value):
+                self._undo_paused += 1
+                try:
+                    self._sorts = copy.deepcopy(value)
+                    self.sort_changed.emit()
+                finally:
+                    self._undo_paused = max(0, self._undo_paused - 1)
+
+            self._push_undo(
+                UndoCommand(
+                    action_type=UndoActionType.SORT_CHANGE,
+                    description=f"Sort: {column} ({'DESC' if descending else 'ASC'})",
+                    do=lambda: _apply(after),
+                    undo=lambda: _apply(before),
+                    timestamp=time.time(),
+                )
+            )
+
     def clear_sorts(self):
+        before = copy.deepcopy(self._sorts)
+        if not self._sorts:
+            return
         self._sorts.clear()
         self.sort_changed.emit()
+
+        after = copy.deepcopy(self._sorts)
+
+        def _apply(value):
+            self._undo_paused += 1
+            try:
+                self._sorts = copy.deepcopy(value)
+                self.sort_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.SORT_CHANGE,
+                description="Sort: Clear",
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+                timestamp=time.time(),
+            )
+        )
     
     # ==================== Selection ====================
     
@@ -1077,14 +1226,61 @@ class AppState(QObject):
         return self._chart_settings
     
     def set_chart_type(self, chart_type: ChartType):
+        before = copy.deepcopy(self._chart_settings)
         self._chart_settings.chart_type = chart_type
         self.chart_settings_changed.emit()
-    
+        after = copy.deepcopy(self._chart_settings)
+
+        def _apply(settings: ChartSettings):
+            self._undo_paused += 1
+            try:
+                self._chart_settings = copy.deepcopy(settings)
+                self.chart_settings_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        if before != after:
+            self._push_undo(
+                UndoCommand(
+                    action_type=UndoActionType.CHART_SETTINGS,
+                    description=f"Chart: Type → {chart_type.value}",
+                    do=lambda: _apply(after),
+                    undo=lambda: _apply(before),
+                    timestamp=time.time(),
+                )
+            )
+
     def update_chart_settings(self, **kwargs):
+        before = copy.deepcopy(self._chart_settings)
+        changed = False
         for key, value in kwargs.items():
             if hasattr(self._chart_settings, key):
-                setattr(self._chart_settings, key, value)
+                if getattr(self._chart_settings, key) != value:
+                    setattr(self._chart_settings, key, value)
+                    changed = True
+        if not changed:
+            return
         self.chart_settings_changed.emit()
+        after = copy.deepcopy(self._chart_settings)
+
+        def _apply(settings: ChartSettings):
+            self._undo_paused += 1
+            try:
+                self._chart_settings = copy.deepcopy(settings)
+                self.chart_settings_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        keys = ", ".join(sorted(kwargs.keys()))
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.CHART_SETTINGS,
+                description=f"Chart: Update ({keys})",
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+                timestamp=time.time(),
+            )
+        )
     
     # ==================== Tool Mode ====================
     

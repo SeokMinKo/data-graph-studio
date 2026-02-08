@@ -19,10 +19,10 @@ from .annotation import Annotation, MAX_ANNOTATION_TEXT_LENGTH
 
 # UndoManager는 다른 에이전트가 구현 중 — optional import
 try:
-    from .undo_manager import UndoStack, UndoAction, UndoActionType
+    from .undo_manager import UndoStack, UndoCommand, UndoActionType
 except ImportError:  # pragma: no cover
     UndoStack = None  # type: ignore[assignment,misc]
-    UndoAction = None  # type: ignore[assignment,misc]
+    UndoCommand = None  # type: ignore[assignment,misc]
     UndoActionType = None  # type: ignore[assignment,misc]
 
 
@@ -37,6 +37,26 @@ class AnnotationController:
     def __init__(self, undo_manager: Any = None):
         self._annotations: Dict[str, Annotation] = {}
         self._undo_manager = undo_manager
+
+    def _snapshot_for_undo(self) -> Dict[str, Dict]:
+        """Snapshot all annotations for undo/redo (small enough in practice)."""
+        return {aid: copy.deepcopy(ann.to_dict()) for aid, ann in self._annotations.items()}
+
+    def _restore_from_undo_state(self, state: Any) -> None:
+        """Restore annotations from a snapshot."""
+        if state is None:
+            self._annotations.clear()
+            return
+        if not isinstance(state, dict):
+            return
+
+        self._annotations.clear()
+        for aid, ann_dict in state.items():
+            try:
+                ann = Annotation.from_dict(ann_dict)
+                self._annotations[aid] = ann
+            except Exception:
+                continue
 
     # ── CRUD ──────────────────────────────────────────────────
 
@@ -54,13 +74,15 @@ class AnnotationController:
                 f"(got {len(annotation.text)})"
             )
 
+        before = self._snapshot_for_undo()
         self._annotations[annotation.id] = annotation
+        after = self._snapshot_for_undo()
 
         # Undo 지원
         self._push_undo(
             description=f"Add annotation '{annotation.text[:30]}'",
-            before_state=None,
-            after_state=copy.deepcopy(annotation),
+            before_state=before,
+            after_state=after,
             action_type_name="ANNOTATION_ADD",
         )
 
@@ -94,17 +116,19 @@ class AnnotationController:
                 f"(got {len(new_text)})"
             )
 
-        before = copy.deepcopy(ann)
+        before = self._snapshot_for_undo()
 
         # 필드 업데이트
         for key, value in kwargs.items():
             if hasattr(ann, key):
                 object.__setattr__(ann, key, value)
 
+        after = self._snapshot_for_undo()
+
         self._push_undo(
             description=f"Edit annotation '{ann.text[:30]}'",
             before_state=before,
-            after_state=copy.deepcopy(ann),
+            after_state=after,
             action_type_name="ANNOTATION_EDIT",
         )
 
@@ -117,14 +141,16 @@ class AnnotationController:
         Returns:
             True if deleted, False if not found.
         """
+        before = self._snapshot_for_undo()
         ann = self._annotations.pop(annotation_id, None)
         if ann is None:
             return False
+        after = self._snapshot_for_undo()
 
         self._push_undo(
             description=f"Delete annotation '{ann.text[:30]}'",
-            before_state=copy.deepcopy(ann),
-            after_state=None,
+            before_state=before,
+            after_state=after,
             action_type_name="ANNOTATION_DELETE",
         )
 
@@ -285,7 +311,7 @@ class AnnotationController:
         """UndoManager에 액션 push (존재할 때만)."""
         if self._undo_manager is None:
             return
-        if UndoAction is None or UndoActionType is None:
+        if UndoCommand is None or UndoActionType is None:
             return  # pragma: no cover
 
         try:
@@ -295,11 +321,16 @@ class AnnotationController:
 
         import time
 
-        action = UndoAction(
-            action_type=action_type,
-            timestamp=time.time(),
-            description=description,
-            before_state=before_state,
-            after_state=after_state,
+        # Annotation change already happened; record with do/undo applying snapshots.
+        def _apply(state: Any):
+            self._restore_from_undo_state(state)
+
+        self._undo_manager.record(
+            UndoCommand(
+                action_type=action_type,
+                description=description,
+                do=lambda: _apply(after_state),
+                undo=lambda: _apply(before_state),
+                timestamp=time.time(),
+            )
         )
-        self._undo_manager.push(action)
