@@ -13,7 +13,7 @@ Date: 2026-02-09
 ## 2. Structure Reviewer
 - [AGREE] Undo core를 core(undo_manager)로 분리
 - [AGREE] state 변경은 record, UI mutation은 push/record 분리하는 방향이 합리적
-- [CONCERN] UndoAction 호환 레이어는 장기적으로 제거 필요(테스트/레거시 정리)
+- [RESOLVED] UndoAction 호환 레이어 제거 완료(UndoCommand로 통일)
 
 ## 3. UI Reviewer
 - [AGREE] History Panel이 dock + View 메뉴 토글 제공

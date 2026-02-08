@@ -12,24 +12,36 @@ import pytest
 
 from data_graph_studio.core.undo_manager import (
     UndoActionType,
-    UndoAction,
+    UndoCommand,
     UndoStack,
 )
 
 
-def _make_action(
+def _make_cmd(
     action_type: UndoActionType = UndoActionType.ANNOTATION_ADD,
     description: str = "test action",
     before_state=None,
     after_state=None,
-) -> UndoAction:
-    return UndoAction(
+) -> UndoCommand:
+    # For unit tests we attach before/after snapshots as attributes.
+    state = {"value": after_state}
+
+    def _do():
+        state["value"] = after_state
+
+    def _undo():
+        state["value"] = before_state
+
+    cmd = UndoCommand(
         action_type=action_type,
-        timestamp=time.time(),
         description=description,
-        before_state=before_state,
-        after_state=after_state,
+        do=_do,
+        undo=_undo,
+        timestamp=time.time(),
     )
+    setattr(cmd, "before_state", before_state)
+    setattr(cmd, "after_state", after_state)
+    return cmd
 
 
 # ── UT-8.1: push / undo / redo 기본 동작 ──────────────────────────
@@ -45,14 +57,14 @@ class TestUndoStackBasic:
 
     def test_push_makes_undoable(self):
         stack = UndoStack()
-        action = _make_action(description="add annotation")
-        stack.push(action)
+        cmd = _make_cmd(description="add annotation")
+        stack.push(cmd)
         assert stack.can_undo()
         assert not stack.can_redo()
 
     def test_undo_returns_action(self):
         stack = UndoStack()
-        action = _make_action(description="add annotation", before_state="A", after_state="B")
+        action = _make_cmd(description="add annotation", before_state="A", after_state="B")
         stack.push(action)
 
         result = stack.undo()
@@ -63,7 +75,7 @@ class TestUndoStackBasic:
 
     def test_undo_then_redo(self):
         stack = UndoStack()
-        action = _make_action(description="edit annotation")
+        action = _make_cmd(description="edit annotation")
         stack.push(action)
 
         undone = stack.undo()
@@ -88,7 +100,7 @@ class TestUndoStackBasic:
     def test_multiple_undo_redo(self):
         stack = UndoStack()
         for i in range(5):
-            stack.push(_make_action(description=f"action {i}"))
+            stack.push(_make_cmd(description=f"action {i}"))
 
         # Undo all 5
         descriptions = []
@@ -105,7 +117,7 @@ class TestUndoStackBasic:
 
     def test_clear(self):
         stack = UndoStack()
-        stack.push(_make_action())
+        stack.push(_make_cmd())
         stack.undo()
         stack.clear()
         assert not stack.can_undo()
@@ -129,7 +141,7 @@ class TestUndoStackMaxDepth:
     def test_oldest_removed_when_exceed(self):
         stack = UndoStack(max_depth=5)
         for i in range(7):
-            stack.push(_make_action(description=f"action {i}"))
+            stack.push(_make_cmd(description=f"action {i}"))
 
         # Should only have 5 items (actions 2-6)
         descriptions = []
@@ -143,7 +155,7 @@ class TestUndoStackMaxDepth:
     def test_max_depth_50_exactly(self):
         stack = UndoStack()
         for i in range(50):
-            stack.push(_make_action(description=f"action {i}"))
+            stack.push(_make_cmd(description=f"action {i}"))
 
         count = 0
         while stack.can_undo():
@@ -154,7 +166,7 @@ class TestUndoStackMaxDepth:
     def test_max_depth_51_drops_oldest(self):
         stack = UndoStack()
         for i in range(51):
-            stack.push(_make_action(description=f"action {i}"))
+            stack.push(_make_cmd(description=f"action {i}"))
 
         count = 0
         last_desc = None
@@ -174,19 +186,19 @@ class TestUndoStackRedoClear:
 
     def test_push_clears_redo(self):
         stack = UndoStack()
-        stack.push(_make_action(description="action 1"))
-        stack.push(_make_action(description="action 2"))
+        stack.push(_make_cmd(description="action 1"))
+        stack.push(_make_cmd(description="action 2"))
         stack.undo()
         assert stack.can_redo()
 
         # New push should clear redo stack
-        stack.push(_make_action(description="action 3"))
+        stack.push(_make_cmd(description="action 3"))
         assert not stack.can_redo()
 
     def test_push_after_multiple_undos_clears_all_redo(self):
         stack = UndoStack()
         for i in range(5):
-            stack.push(_make_action(description=f"action {i}"))
+            stack.push(_make_cmd(description=f"action {i}"))
 
         # Undo 3 times → 3 items in redo
         stack.undo()
@@ -195,7 +207,7 @@ class TestUndoStackRedoClear:
         assert stack.can_redo()
 
         # New push clears all 3 from redo
-        stack.push(_make_action(description="new action"))
+        stack.push(_make_cmd(description="new action"))
         assert not stack.can_redo()
 
         # Undo should show "new action" then "action 1" then "action 0"
@@ -215,21 +227,21 @@ class TestUndoStackCompound:
         stack = UndoStack()
 
         # Push a normal action first
-        stack.push(_make_action(description="normal action"))
+        stack.push(_make_cmd(description="normal action"))
 
         # Begin compound — cascade delete
         stack.begin_compound("Delete column with dependents")
-        stack.push(_make_action(
+        stack.push(_make_cmd(
             action_type=UndoActionType.COLUMN_DELETE,
             description="delete col_a",
             before_state={"name": "col_a"},
         ))
-        stack.push(_make_action(
+        stack.push(_make_cmd(
             action_type=UndoActionType.COLUMN_DELETE,
             description="delete col_b (dependent)",
             before_state={"name": "col_b"},
         ))
-        stack.push(_make_action(
+        stack.push(_make_cmd(
             action_type=UndoActionType.COLUMN_DELETE,
             description="delete col_c (dependent)",
             before_state={"name": "col_c"},
@@ -252,8 +264,8 @@ class TestUndoStackCompound:
     def test_compound_redo(self):
         stack = UndoStack()
         stack.begin_compound("Cascade delete")
-        stack.push(_make_action(description="sub-1", before_state="s1"))
-        stack.push(_make_action(description="sub-2", before_state="s2"))
+        stack.push(_make_cmd(description="sub-1", before_state="s1"))
+        stack.push(_make_cmd(description="sub-2", before_state="s2"))
         stack.end_compound()
 
         undone = stack.undo()
@@ -269,7 +281,7 @@ class TestUndoStackCompound:
         stack.begin_compound("outer")
         # Second begin_compound should be ignored or raise
         stack.begin_compound("inner")
-        stack.push(_make_action(description="action"))
+        stack.push(_make_cmd(description="action"))
         stack.end_compound()
 
         # end_compound should close the first one
@@ -287,15 +299,15 @@ class TestUndoStackCompound:
         """compound도 max_depth에서 1개로 취급"""
         stack = UndoStack(max_depth=3)
         for i in range(2):
-            stack.push(_make_action(description=f"normal {i}"))
+            stack.push(_make_cmd(description=f"normal {i}"))
 
         stack.begin_compound("compound")
-        stack.push(_make_action(description="sub-1"))
-        stack.push(_make_action(description="sub-2"))
+        stack.push(_make_cmd(description="sub-1"))
+        stack.push(_make_cmd(description="sub-2"))
         stack.end_compound()
 
         # Now 3 items. Add one more → oldest removed
-        stack.push(_make_action(description="normal 2"))
+        stack.push(_make_cmd(description="normal 2"))
 
         count = 0
         while stack.can_undo():

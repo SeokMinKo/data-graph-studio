@@ -115,7 +115,7 @@
 
 - `UndoCommand { description, do(), undo() }`
 - `UndoStack`: 선형 타임라인 + cursor(index)
-- 호환성: 기존 테스트/코드가 `UndoAction`을 push하는 경우를 위해 no-op 커맨드로 래핑(이행기)
+- (v0.23+) `UndoAction` 호환 레이어 제거 — 모든 undo는 `UndoCommand` 기반으로 통일
 
 AppState 내부 변경은 “이미 mutation이 일어난 뒤”인 경우가 많으므로 `push()`가 아니라 `record()`로 기록한다.
 

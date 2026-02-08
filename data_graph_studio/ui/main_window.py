@@ -38,6 +38,8 @@ from ..core.updater import (
     check_github_latest,
     is_update_available,
     download_asset,
+    read_sha256_file,
+    sha256sum,
     run_windows_installer,
 )
 
@@ -3876,9 +3878,20 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
         try:
             self.statusbar.showMessage(f"Downloading update {info.latest_version}...", 5000)
-            path = download_asset(info.asset_url, info.asset_name)
+            installer_path = download_asset(info.asset_url, info.asset_name)
+            sha_path = download_asset(info.sha256_url, info.sha256_name)
+
+            expected = read_sha256_file(sha_path)
+            actual = sha256sum(installer_path)
+            if not expected or expected != actual:
+                raise RuntimeError(
+                    "Checksum verification failed.\n"
+                    f"Expected: {expected}\n"
+                    f"Actual:   {actual}"
+                )
+
             self.statusbar.showMessage("Launching installer...", 5000)
-            run_windows_installer(path, silent=True)
+            run_windows_installer(installer_path, silent=True)
             self.close()
         except Exception as e:
             QMessageBox.warning(self, "Updates", f"Update failed:\n{e}")

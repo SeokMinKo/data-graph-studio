@@ -291,6 +291,14 @@ class DatasetController:
         except Exception:
             dataset_info = None
 
+        # Memory safety: for large datasets, prefer reload-based undo (no DF snapshot)
+        LARGE_UNDO_BYTES = 300 * 1024 * 1024  # 300MB
+        can_reload = bool(getattr(metadata, "file_path", None))
+        is_large = bool(metadata and getattr(metadata, "memory_bytes", 0) and metadata.memory_bytes > LARGE_UNDO_BYTES)
+        use_reload_undo = bool(is_large and can_reload)
+        if use_reload_undo:
+            dataset_info = None
+
         state_snapshot = None
         meta_snapshot = None
         try:
@@ -319,18 +327,29 @@ class DatasetController:
                 w.statusbar.showMessage(f"Removed: {name}", 3000)
 
         def _restore():
-            if dataset_info is None or meta_snapshot is None:
+            if meta_snapshot is None:
                 return
 
-            # Restore engine dataset
-            try:
-                w.engine._datasets[dataset_id] = dataset_info
-            except Exception:
-                return
+            # If we have a full snapshot, restore it.
+            if dataset_info is not None:
+                try:
+                    w.engine._datasets[dataset_id] = dataset_info
+                except Exception:
+                    return
+            else:
+                # Reload-based undo (large dataset)
+                file_path = getattr(meta_snapshot, "file_path", None)
+                if not file_path:
+                    return
+                try:
+                    w.engine.load_dataset(file_path, name=getattr(meta_snapshot, "name", name), dataset_id=dataset_id)
+                except Exception:
+                    return
 
             # Restore AppState dataset entries
             try:
-                w.state._dataset_states[dataset_id] = state_snapshot
+                if state_snapshot is not None:
+                    w.state._dataset_states[dataset_id] = state_snapshot
                 w.state._dataset_metadata[dataset_id] = meta_snapshot
                 if getattr(meta_snapshot, "compare_enabled", True):
                     if dataset_id not in w.state._comparison_settings.comparison_datasets:

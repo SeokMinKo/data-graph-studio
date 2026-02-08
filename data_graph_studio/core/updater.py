@@ -17,7 +17,21 @@ GITHUB_API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
 
 
 def get_current_version() -> str:
-    """Best-effort current app version."""
+    """Best-effort current app version.
+
+    Priority:
+    1) data_graph_studio._build_version.__version__ (CI-injected; works in PyInstaller)
+    2) importlib.metadata.version("data-graph-studio")
+    """
+
+    try:
+        from data_graph_studio._build_version import __version__ as build_ver
+
+        if build_ver and build_ver != "0.0.0":
+            return build_ver
+    except Exception:
+        pass
+
     try:
         from importlib.metadata import version
 
@@ -34,6 +48,8 @@ class UpdateInfo:
     notes: str
     asset_url: str
     asset_name: str
+    sha256_url: str
+    sha256_name: str
 
 
 def _parse_version(v: str) -> Optional[Version]:
@@ -44,9 +60,9 @@ def _parse_version(v: str) -> Optional[Version]:
 
 
 def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -> Optional[UpdateInfo]:
-    """Check GitHub latest release and find a Windows installer asset.
+    """Check GitHub latest release and find Windows installer + checksum asset.
 
-    Returns UpdateInfo if a compatible asset exists, else None.
+    Returns UpdateInfo if compatible assets exist, else None.
     """
 
     req = urllib.request.Request(
@@ -66,14 +82,29 @@ def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -
     latest = tag.lstrip("v")
     assets = data.get("assets", []) or []
 
-    asset = None
+    installer = None
+    checksum = None
+
     for a in assets:
         name = a.get("name", "")
-        if name.startswith(expected_asset_prefix) and name.endswith(".exe"):
-            asset = a
-            break
+        if installer is None and name.startswith(expected_asset_prefix) and name.endswith(".exe"):
+            installer = a
+            continue
 
-    if not asset:
+    if installer is None:
+        return None
+
+    # Expect checksum asset: same base name + .sha256
+    expected_sha = installer.get("name", "") + ".sha256"
+    for a in assets:
+        name = a.get("name", "")
+        if name == expected_sha or (name.startswith(expected_asset_prefix) and name.endswith(".sha256")):
+            checksum = a
+            # prefer exact match
+            if name == expected_sha:
+                break
+
+    if checksum is None:
         return None
 
     return UpdateInfo(
@@ -81,8 +112,10 @@ def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -
         tag=tag,
         html_url=html_url,
         notes=notes,
-        asset_url=asset.get("browser_download_url", ""),
-        asset_name=asset.get("name", ""),
+        asset_url=installer.get("browser_download_url", ""),
+        asset_name=installer.get("name", ""),
+        sha256_url=checksum.get("browser_download_url", ""),
+        sha256_name=checksum.get("name", ""),
     )
 
 
@@ -100,6 +133,26 @@ def download_asset(url: str, filename: str) -> str:
     out_path = os.path.join(tmp_dir, filename)
     urllib.request.urlretrieve(url, out_path)
     return out_path
+
+
+def read_sha256_file(path: str) -> str:
+    """Parse a .sha256 file content like: '<hash>  <filename>'"""
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        line = f.readline().strip()
+    if not line:
+        return ""
+    # split on whitespace, first token is hash
+    return line.split()[0].lower()
+
+
+def sha256sum(path: str) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest().lower()
 
 
 def run_windows_installer(installer_path: str, silent: bool = True) -> None:

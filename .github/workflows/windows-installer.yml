@@ -47,11 +47,27 @@ jobs:
         run: |
           choco install innosetup --no-progress -y
 
+      - name: Inject build version
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.ver.outputs.ver }}"
+          "__version__ = `"$ver`"" | Out-File -Encoding utf8 data_graph_studio\_build_version.py
+
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
           $ver = "${{ steps.ver.outputs.ver }}"
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" scripts\installer\DataGraphStudio.iss /DMyAppVersion=$ver
+
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist_installer\*.exe | Select-Object -First 1
+          if (-not $exe) { throw "Installer exe not found" }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          $out = "$hash  $($exe.Name)"
+          $shaPath = Join-Path $exe.DirectoryName ("$($exe.BaseName).sha256")
+          $out | Out-File -Encoding ascii $shaPath
 
       - name: Upload installer to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -59,3 +75,4 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           files: |
             dist_installer/*.exe
+            dist_installer/*.sha256

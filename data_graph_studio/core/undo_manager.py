@@ -17,7 +17,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, List, Optional, Any, Union
+from typing import Callable, List, Optional
 
 
 class UndoActionType(Enum):
@@ -48,21 +48,6 @@ class UndoActionType(Enum):
 
 
 @dataclass
-class UndoAction:
-    """Backward-compatible snapshot action (used by older modules/tests).
-
-    NOTE: This does not know how to apply state changes by itself.
-    Prefer UndoCommand for new code.
-    """
-
-    action_type: UndoActionType
-    timestamp: float
-    description: str
-    before_state: Any = None
-    after_state: Any = None
-
-
-@dataclass
 class UndoCommand:
     """Executable command for undo/redo."""
 
@@ -76,15 +61,10 @@ class UndoCommand:
 class UndoStack:
     """Linear undo timeline with a cursor.
 
-    Supports two payloads:
-    - UndoCommand: executable do/undo.
-    - UndoAction: snapshot-only (recorded as no-op command for compatibility).
-
     commands: [0..n)
     index: points to next command to redo (i.e. commands[:index] are applied).
 
-    - push(cmd): if UndoCommand executes cmd.do() and records it.
-                if UndoAction records it (no execution).
+    - push(cmd): executes cmd.do() and records it.
     - record(cmd): records a command already applied.
     - undo()/redo(): replays do/undo and returns the command.
 
@@ -134,53 +114,34 @@ class UndoStack:
         finally:
             self._paused = max(0, self._paused - 1)
 
-    def push(self, item: Union[UndoCommand, UndoAction]) -> None:
-        """Push an undo item.
-
-        - UndoCommand: execute do() then record
-        - UndoAction: record only (no-op do/undo) for compatibility
-        - When compound is active, buffer instead of recording.
-        """
-
-        cmd = self._to_command(item)
-
+    def push(self, cmd: UndoCommand) -> None:
+        """Execute cmd.do() and record it in the timeline."""
         if self._compound_active:
-            # In compound mode, we execute now (if command) and buffer the command.
-            if isinstance(item, UndoCommand):
-                if self._paused:
-                    item.do()
-                else:
-                    with self.pause():
-                        item.do()
+            # Execute now, buffer for compound
+            if self._paused:
+                cmd.do()
+            else:
+                with self.pause():
+                    cmd.do()
             self._compound_buffer.append(cmd)
             return
 
-        if isinstance(item, UndoCommand):
-            if self._paused:
-                item.do()
-                return
-
-            # Cut off future timeline
-            if self._index < len(self._commands):
-                self._commands = self._commands[: self._index]
-
-            with self.pause():
-                item.do()
-
         if self._paused:
+            cmd.do()
             return
 
         if self._index < len(self._commands):
             self._commands = self._commands[: self._index]
 
+        with self.pause():
+            cmd.do()
+
         self._record(cmd)
 
-    def record(self, item: Union[UndoCommand, UndoAction]) -> None:
-        """Record an item that has already been applied (do NOT execute)."""
+    def record(self, cmd: UndoCommand) -> None:
+        """Record a command that has already been applied (do NOT execute)."""
         if self._paused:
             return
-
-        cmd = self._to_command(item)
 
         if self._compound_active:
             self._compound_buffer.append(cmd)
@@ -271,30 +232,7 @@ class UndoStack:
             except Exception:
                 pass
 
-    def _to_command(self, item: Union[UndoCommand, UndoAction]) -> UndoCommand:
-        if isinstance(item, UndoCommand):
-            return item
-
-        # UndoAction compatibility: no-op execution.
-        # We preserve description and embed before/after into closure for tests.
-        action = item
-
-        # Attach before/after for test expectations by storing on the function object.
-        def _noop():
-            return None
-
-        cmd = UndoCommand(
-            action_type=action.action_type,
-            description=action.description,
-            do=_noop,
-            undo=_noop,
-            timestamp=action.timestamp,
-        )
-        # For backward compatibility in tests
-        setattr(cmd, "before_state", action.before_state)
-        setattr(cmd, "after_state", action.after_state)
-        return cmd
-
+# (removed UndoAction compatibility layer)
     def _enforce_max_depth(self) -> None:
         while len(self._commands) > self.max_depth:
             self._commands.pop(0)
