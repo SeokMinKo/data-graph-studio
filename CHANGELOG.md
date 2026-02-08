@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.23.0] — 2026-02-09
+
+### 🔐 Security / Updates
+
+- **Windows 업데이트 무결성 검증** — Release에 `.sha256` 체크섬 파일을 함께 업로드하고, 업데이트 다운로드 후 SHA256 검증 통과 시에만 installer 실행
+- **Frozen 빌드 버전 안정화** — CI에서 `data_graph_studio/_build_version.py`에 버전 주입 (PyInstaller 환경에서도 정확한 버전 판별)
+
+### 🧹 Undo/Redo
+
+- **UndoAction 완전 제거** — Undo 시스템을 `UndoCommand(do/undo)`로 통일, 테스트/레거시 정리
+- **대형 데이터셋 삭제 Undo 메모리 보호** — 대형 데이터셋 삭제는 DF 스냅샷 대신 파일 경로 기반 reload로 복구
+
+### 🧰 CI
+
+- **Windows installer smoke 강화** — installer 체크섬 생성/업로드 포함
+
+---
+
 All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
