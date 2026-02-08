@@ -239,10 +239,48 @@ class DashboardPanel(QWidget):
             w.deleteLater()
         self._cell_widgets.clear()
 
-    # -- keyboard -----------------------------------------------------------
+    # -- keyboard (FR-B1.2) ------------------------------------------------
 
     def keyPressEvent(self, event):  # noqa: N802
-        if event.key() == Qt.Key.Key_Escape:
+        key = event.key()
+        if key == Qt.Key.Key_Escape:
             self.exit_requested.emit()
+            return
+
+        layout = self._controller.current_layout if self._controller else None
+        if layout is None:
+            super().keyPressEvent(event)
+            return
+
+        rows, cols = layout.rows, layout.cols
+        if rows == 0 or cols == 0:
+            super().keyPressEvent(event)
+            return
+
+        r, c = self._focused_cell if self._focused_cell else (0, 0)
+
+        if key == Qt.Key.Key_Up:
+            r = max(0, r - 1)
+        elif key == Qt.Key.Key_Down:
+            r = min(rows - 1, r + 1)
+        elif key == Qt.Key.Key_Left:
+            c = max(0, c - 1)
+        elif key == Qt.Key.Key_Right:
+            c = min(cols - 1, c + 1)
+        elif key == Qt.Key.Key_Tab:
+            # Tab: advance to next cell (left-to-right, top-to-bottom)
+            c += 1
+            if c >= cols:
+                c = 0
+                r += 1
+            if r >= rows:
+                r = 0
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            # Enter: trigger cell click (assign profile)
+            self.cell_clicked.emit(r, c)
+            return
         else:
             super().keyPressEvent(event)
+            return
+
+        self.set_focus_cell(r, c)

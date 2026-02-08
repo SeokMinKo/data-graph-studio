@@ -44,9 +44,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def exception_hook(exc_type, exc_value, exc_tb):
-    """전역 예외 핸들러"""
+    """전역 예외 핸들러 — logs to stderr, app log, and ~/.dgs/crash.log"""
     error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_tb))
     logger.critical(f"Unhandled exception:\n{error_msg}")
+
+    # Append to persistent crash log
+    try:
+        crash_dir = os.path.expanduser("~/.dgs")
+        os.makedirs(crash_dir, exist_ok=True)
+        crash_path = os.path.join(crash_dir, "crash.log")
+        with open(crash_path, "a", encoding="utf-8") as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Python: {sys.version}\n")
+            f.write(error_msg)
+            f.write(f"{'='*60}\n")
+    except OSError:
+        pass
+
     print(f"\n{'='*60}")
     print("CRITICAL ERROR:")
     print('='*60)

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, TYPE_CHECKING
 
 import polars as pl
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -285,21 +285,82 @@ class ComputedColumnDialog(QDialog):
         self._btn_box.rejected.connect(self._on_cancel)
         layout.addWidget(self._btn_box)
 
+        # Debounce timer for preview (FR-B3.6: 300ms debounce)
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(300)
+        self._preview_timer.timeout.connect(self._update_preview)
+
         # Connections
         self._type_group.idClicked.connect(self._on_type_changed)
-        self._formula_edit.textChanged.connect(self._clear_error)
+        self._formula_edit.textChanged.connect(self._on_formula_changed)
 
     # ── Slots ─────────────────────────────────────────────────
 
     def _on_type_changed(self, type_id: int):
         """Update visible parameters based on selected type."""
         self._clear_error()
+        self._preview_timer.start()  # trigger preview update
+
+    def _on_formula_changed(self, text: str):
+        """Formula text changed — debounce preview (FR-B3.6)."""
+        self._clear_error()
+        self._preview_timer.start()
+
+    def _update_preview(self):
+        """Compute preview on 100-row sample (FR-B3.6)."""
+        name = self._name_edit.text().strip() or "_preview"
+        defn = self._build_definition(name)
+        if defn is None:
+            self._preview_text.clear()
+            return
+
+        # Sample max 100 rows
+        sample_df = self._df.head(100) if len(self._df) > 100 else self._df
+        try:
+            worker_defn = defn
+            if worker_defn.kind == 'formula':
+                result = self._parser.evaluate(worker_defn.expression, sample_df)
+            elif worker_defn.kind == 'moving_avg':
+                result = self._parser.evaluate_moving_avg(
+                    worker_defn.expression, worker_defn.params.get('window', 3), sample_df
+                )
+            elif worker_defn.kind == 'difference':
+                result = self._parser.evaluate_diff(
+                    worker_defn.expression, worker_defn.params.get('order', 1), sample_df
+                )
+            elif worker_defn.kind == 'cumsum':
+                result = self._parser.evaluate_cumsum(worker_defn.expression, sample_df)
+            elif worker_defn.kind == 'normalize':
+                result = self._parser.evaluate_normalize(
+                    worker_defn.expression, worker_defn.params.get('method', 'min_max'), sample_df
+                )
+            else:
+                self._preview_text.setText("Unknown type")
+                return
+            preview_vals = result.head(10).to_list()
+            self._preview_text.setText(str(preview_vals))
+        except FormulaColumnError as e:
+            self._show_error(f"컬럼 없음: {e}")
+        except FormulaTypeError as e:
+            self._show_error(f"타입 불일치: {e}")
+        except FormulaSecurityError as e:
+            self._show_error(str(e))
+        except FormulaError as e:
+            self._show_error(f"표현식 문법 오류: {e}")
+        except ZeroDivisionError:
+            self._show_error("0으로 나누기")
+        except Exception as e:
+            self._show_error(str(e))
 
     def _clear_error(self):
         self._error_label.hide()
 
     def _show_error(self, msg: str):
-        self._error_label.setText(msg)
+        """Show inline error with red highlight (FR-B3.4)."""
+        self._error_label.setText(f"⚠ {msg}")
+        self._error_label.setStyleSheet("color: #EF4444; font-size: 12px; padding: 4px; "
+                                        "background: rgba(239,68,68,0.1); border-radius: 3px;")
         self._error_label.show()
 
     def _on_create(self):

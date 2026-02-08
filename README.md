@@ -17,9 +17,9 @@
 - Custom axis formatting (Excel-style: `#,##0`, `0.0%`, `"K"`, etc.)
 
 ### 🎯 Selection & Filtering
-- **Rect Select** - Drag rectangle to select points
-- **Lasso Select** - Draw freeform polygon to select points
-- **Limit to Marking** - Filter table to show only selected rows
+- **Rect Select** — drag rectangle to select points
+- **Lasso Select** — draw freeform polygon to select points
+- **Limit to Marking** — filter table to show only selected rows
 - Selection statistics update in real-time (Mean, Median, Std, Min, Max)
 
 ### 📈 Statistics Panel
@@ -32,44 +32,57 @@
 - Hover data customization
 - Profile save/load system
 - Multi-dataset comparison (Overlay, Side-by-Side)
+- Dashboard mode with multi-cell layouts
+- Real-time streaming (file-watch)
+- Computed columns (expression engine)
+- Annotation system
+- Dark / Light / Midnight themes
+- Customizable keyboard shortcuts
 
-## 🖥️ Screenshot
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  📊 SUMMARY    Rows: 1,000,000 │ Selected: 1,234           │
-├─────────────────────────────────────────────────────────────┤
-│ Options │         📈 MAIN GRAPH                  │ Stats   │
-│ ────────│  🔍 ✋ ▢ 〰️ ✕ 🔄                        │ ────────│
-│ Chart   │         [Interactive Chart]            │ X Dist  │
-│ Axes    │              ●  ●                      │ Y Dist  │
-│ Style   │           ●  ●  ●  ●                   │ Summary │
-│ Legend  │        ●  ●  ●  ●  ●                   │         │
-├─────────────────────────────────────────────────────────────┤
-│ X Zone  │ Group │      📋 TABLE        │ Value │ Hover   │
-│ ────────│ Zone  │ 🔗 Limit to Marking  │ Zone  │ Zone    │
-│ [date]  │ region│  Col1 │ Col2 │ ...  │ sales │ [cols]  │
-│         │       │  ...  │ ...  │      │ (SUM) │         │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                     MainWindow (UI)                      │
+│  ┌─────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐  │
+│  │  Graph   │ │  Table    │ │  Summary  │ │ Dashboard │  │
+│  │  Panel   │ │  Panel    │ │  Panel    │ │  Panel    │  │
+│  └────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘  │
+│       └──────────────┼─────────────┼─────────────┘        │
+│                      ▼                                    │
+│              DataEngine (Facade)                         │
+│  ┌────────────┬────────────┬────────────┬──────────────┐ │
+│  │ FileLoader │ DataQuery  │ DataExporter│DatasetManager│ │
+│  │ (I/O)      │ (stateless)│ (stateless) │ (CRUD)      │ │
+│  └────────────┴────────────┴────────────┴──────┬───────┘ │
+│                                                 │        │
+│                                       ComparisonEngine   │
+│                                       (stats, diff)      │
+└──────────────────────────────────────────────────────────┘
 ```
+
+### Module Responsibilities
+
+| Module | Description |
+|--------|-------------|
+| **FileLoader** | File type detection, CSV/Excel/Parquet/JSON loading, encoding normalisation, progress callbacks, lazy loading |
+| **DataQuery** | Filter, sort, group-aggregate, statistics, profiling — stateless, receives `pl.DataFrame` as argument |
+| **DataExporter** | Export to CSV, Excel, Parquet — stateless |
+| **DatasetManager** | Multi-dataset CRUD, memory management, metadata |
+| **ComparisonEngine** | Comparison statistics, merge, statistical tests, correlation analysis |
+| **DataEngine** | Facade — delegates to the 5 modules above; 100 % backward-compatible API |
 
 ## 🚀 Installation
 
 ```bash
-# Clone repository
 git clone https://github.com/seokmin-ko/data-graph-studio.git
 cd data-graph-studio
 
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
+python -m venv .venv
+source .venv/bin/activate   # Linux/Mac
+# .venv\Scripts\activate    # Windows
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Or install in dev mode
-pip install -e ".[dev]"
 ```
 
 ## 📖 Usage
@@ -77,29 +90,33 @@ pip install -e ".[dev]"
 ### Launch
 
 ```bash
-# Run GUI
-python main.py
-
-# Open with file
-python main.py data.csv
+python main.py              # GUI
+python main.py data.csv     # open file directly
 ```
 
-### Basic Workflow
+### IPC Control (CLI)
 
-1. **Load Data** - Drag & drop file or `File > Open`
-   - Supported: CSV, TSV, Excel, Parquet, JSON
+```bash
+python dgs_client.py ping
+python dgs_client.py state
+python dgs_client.py load path/to/file.csv
+python dgs_client.py chart LINE
+```
 
-2. **Set X-Axis** - Drag column to X Zone (left)
+The IPC server auto-selects a free port (default 52849) and writes
+`~/.dgs/ipc_port` so that `dgs_client.py` discovers it automatically.
 
-3. **Set Y-Axis** - Drag numeric columns to Value Zone (right)
-   - Select aggregation: SUM, AVG, MIN, MAX, COUNT, etc.
-   - Add formula: `y*2`, `LOG(y)`, `y/1000`
+### v2 Features
 
-4. **Group By** - Drag categorical columns to Group Zone
-   - Creates multiple series with different colors
-
-5. **Select Data** - Use Rect/Lasso select tools
-   - Enable "Limit to Marking" to filter table
+| Feature | Access |
+|---------|--------|
+| Dashboard mode | View → Dashboard Mode (or toolbar toggle) |
+| Streaming | Toolbar ▶/⏸/⏹ buttons |
+| Computed columns | Data → Add Calculated Field |
+| Annotations | View → Annotation Panel; right-click graph |
+| Themes | View → Theme → Dark / Light / Midnight |
+| Keyboard shortcuts | Help → Keyboard Shortcuts; customisable via Settings |
+| Export | File → Export → Image / Data / Report |
 
 ### Selection Tools
 
@@ -112,17 +129,6 @@ python main.py data.csv
 | ✕ Clear | Escape | Clear selection |
 | 🔄 Reset | Home | Reset view |
 
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| Ctrl+O | Open file |
-| Ctrl+S | Save project |
-| Ctrl+F | Search |
-| Ctrl+A | Select all |
-| +/- | Zoom in/out |
-| Escape | Clear selection |
-
 ## 🔧 Tech Stack
 
 - **UI**: PySide6 (Qt 6)
@@ -130,63 +136,43 @@ python main.py data.csv
 - **Charts**: PyQtGraph (real-time) + OpenGL
 - **File I/O**: Apache Arrow, OpenPyXL
 
-## 📊 Performance
-
-| Data Size | Load Time | Filter/Sort | Memory |
-|-----------|-----------|-------------|--------|
-| 100K rows | < 1s | < 0.3s | < 200MB |
-| 1M rows | < 5s | < 1s | < 1GB |
-| 10M rows | < 30s | < 3s | < 4GB |
-
 ## 📁 Project Structure
 
 ```
 data-graph-studio/
-├── main.py                    # Entry point
+├── main.py                        # Entry point
+├── dgs_client.py                  # IPC CLI client
 ├── data_graph_studio/
 │   ├── core/
-│   │   ├── data_engine.py     # Polars data engine
-│   │   ├── state.py           # App state management
-│   │   ├── marking.py         # Selection/marking system
-│   │   └── statistics.py      # Statistics calculations
+│   │   ├── data_engine.py         # DataEngine Facade
+│   │   ├── file_loader.py         # FileLoader
+│   │   ├── data_query.py          # DataQuery (stateless)
+│   │   ├── data_exporter.py       # DataExporter (stateless)
+│   │   ├── dataset_manager.py     # DatasetManager
+│   │   ├── comparison_engine.py   # ComparisonEngine
+│   │   ├── ipc_server.py          # IPC server + dynamic port
+│   │   ├── state.py               # App state management
+│   │   ├── marking.py             # Selection/marking
+│   │   └── statistics.py          # Statistics calculations
 │   ├── ui/
-│   │   ├── main_window.py     # Main window
-│   │   └── panels/
-│   │       ├── graph_panel.py # Chart + options + stats
-│   │       └── table_panel.py # Table + zones
+│   │   ├── main_window.py         # Main window
+│   │   ├── controllers/           # Extracted controllers
+│   │   └── panels/                # Graph, Table, Summary, Dashboard
 │   ├── graph/
-│   │   ├── sampling.py        # LTTB, Min-Max sampling
-│   │   └── charts/            # Chart implementations
-│   └── report/                # Export (PDF, PPTX, DOCX)
-├── tests/
-├── test_data/                 # Sample datasets
-├── requirements.txt
-└── PRD.md                     # Product requirements
+│   │   ├── sampling.py            # LTTB, Min-Max sampling
+│   │   └── charts/                # Chart implementations
+│   └── report/                    # Export (HTML, PPTX)
+├── tests/                         # Pytest test suite
+├── test_data/                     # Sample datasets
+└── requirements.txt
 ```
 
 ## 🧪 Testing
 
 ```bash
-# Run tests
 pytest
-
-# With coverage
 pytest --cov=data_graph_studio
 ```
-
-## 🗺️ Roadmap
-
-- [x] Core data engine with Polars
-- [x] Basic charts (Line, Bar, Scatter, Area)
-- [x] Drag & drop zone system
-- [x] Rect Select & Lasso Select
-- [x] Limit to Marking (table filtering)
-- [x] Selection statistics
-- [x] Big data sampling (LTTB, Min-Max)
-- [x] Multi-dataset comparison
-- [ ] Report generation (PDF, PPTX)
-- [ ] Dashboard layout saving
-- [ ] Plugin system
 
 ## 📄 License
 

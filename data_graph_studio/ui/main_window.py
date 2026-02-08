@@ -30,6 +30,7 @@ from ..core.undo_manager import UndoStack
 from ..core.dashboard_controller import DashboardController
 from ..core.annotation_controller import AnnotationController
 from ..core.shortcut_controller import ShortcutController
+from ..core.export_controller import ExportController, ExportFormat
 from ..utils.memory import MemoryMonitor
 
 # 에러 로깅 설정
@@ -149,6 +150,7 @@ class MainWindow(QMainWindow):
         self._dashboard_controller = DashboardController(self.state, self._undo_stack)
         self._dashboard_panel: Optional[DashboardPanel] = None
         self._dashboard_mode_active = False
+        self._dashboard_toggling = False  # FR-B1.8: guard flag
 
         # Feature 5: Annotations/Bookmarks
         self._annotation_controller = AnnotationController(undo_manager=self._undo_stack)
@@ -156,6 +158,11 @@ class MainWindow(QMainWindow):
 
         # Feature 7: Keyboard Shortcuts
         self._shortcut_controller = ShortcutController()
+        self._shortcut_controller.register_defaults()
+        self._shortcut_controller.load_config()
+
+        # Feature 4: Export
+        self._export_controller = ExportController(parent=self)
 
         # Loading thread
         self._loader_thread: Optional[DataLoaderThread] = None
@@ -208,8 +215,11 @@ class MainWindow(QMainWindow):
         # Setup auto-recovery (autosave + restore prompt)
         self._setup_autorecovery()
 
-        # Apply initial theme (reduce glare, improve readability)
-        self._on_theme_changed("midnight")
+        # Wire shortcut callbacks
+        self._wire_shortcut_callbacks()
+
+        # Restore saved theme or default to midnight
+        self._restore_saved_theme()
 
         # Apply initial state
         self._update_ui_state()
@@ -326,8 +336,62 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        # Export submenu
+        export_menu = file_menu.addMenu("&Export")
+
+        # Export Image (PNG/SVG)
+        self._export_image_png_action = QAction("Image (PNG)...", self)
+        self._export_image_png_action.setStatusTip("Export chart as PNG image")
+        self._export_image_png_action.triggered.connect(lambda: self._on_export_image(ExportFormat.PNG))
+        export_menu.addAction(self._export_image_png_action)
+
+        self._export_image_svg_action = QAction("Image (SVG)...", self)
+        self._export_image_svg_action.setStatusTip("Export chart as SVG image")
+        self._export_image_svg_action.triggered.connect(lambda: self._on_export_image(ExportFormat.SVG))
+        export_menu.addAction(self._export_image_svg_action)
+
+        export_menu.addSeparator()
+
+        # Export Data
+        self._export_data_csv_action = QAction("Data (CSV)...", self)
+        self._export_data_csv_action.setStatusTip("Export data as CSV")
+        self._export_data_csv_action.triggered.connect(lambda: self._on_export_data(ExportFormat.CSV))
+        export_menu.addAction(self._export_data_csv_action)
+
+        self._export_data_excel_action = QAction("Data (Excel)...", self)
+        self._export_data_excel_action.setStatusTip("Export data as Excel")
+        self._export_data_excel_action.triggered.connect(lambda: self._on_export_data(ExportFormat.EXCEL))
+        export_menu.addAction(self._export_data_excel_action)
+
+        self._export_data_parquet_action = QAction("Data (Parquet)...", self)
+        self._export_data_parquet_action.setStatusTip("Export data as Parquet")
+        self._export_data_parquet_action.triggered.connect(lambda: self._on_export_data(ExportFormat.PARQUET))
+        export_menu.addAction(self._export_data_parquet_action)
+
+        export_menu.addSeparator()
+
         # Export Report
-        export_report_action = QAction("&Export Report...", self)
+        self._export_report_html_action = QAction("Report (HTML)...", self)
+        self._export_report_html_action.setStatusTip("Export report as HTML")
+        self._export_report_html_action.triggered.connect(self._on_export_report)
+        export_menu.addAction(self._export_report_html_action)
+
+        self._export_report_pptx_action = QAction("Report (PPTX)...", self)
+        self._export_report_pptx_action.setStatusTip("Export report as PowerPoint")
+        self._export_report_pptx_action.triggered.connect(self._on_export_report)
+        export_menu.addAction(self._export_report_pptx_action)
+
+        export_menu.addSeparator()
+
+        # Quick Export (Ctrl+E)
+        self._export_quick_action = QAction("Export...", self)
+        self._export_quick_action.setShortcut("Ctrl+E")
+        self._export_quick_action.setStatusTip("Open export dialog (Ctrl+E)")
+        self._export_quick_action.triggered.connect(self._on_export_dialog)
+        export_menu.addAction(self._export_quick_action)
+
+        # Keep legacy report action for backward compat
+        export_report_action = QAction("Export &Report (Legacy)...", self)
         export_report_action.setShortcut("Ctrl+R")
         export_report_action.setStatusTip("Export data and charts as a report")
         export_report_action.triggered.connect(self._on_export_report)
@@ -491,6 +555,13 @@ class MainWindow(QMainWindow):
         self._annotation_panel_action.triggered.connect(self._on_toggle_annotation_panel)
         view_menu.addAction(self._annotation_panel_action)
 
+        # Add Annotation
+        self._add_annotation_action = QAction("Add A&nnotation", self)
+        self._add_annotation_action.setShortcut("Ctrl+Shift+N")
+        self._add_annotation_action.setStatusTip("Add a new annotation to the chart (Ctrl+Shift+N)")
+        self._add_annotation_action.triggered.connect(self._on_add_annotation)
+        view_menu.addAction(self._add_annotation_action)
+
         view_menu.addSeparator()
 
         # Theme submenu
@@ -519,6 +590,15 @@ class MainWindow(QMainWindow):
         midnight_theme_action.triggered.connect(lambda: self._on_theme_changed("midnight"))
         theme_menu.addAction(midnight_theme_action)
         self._theme_actions["midnight"] = midnight_theme_action
+
+        theme_menu.addSeparator()
+
+        # Cycle theme shortcut
+        cycle_theme_action = QAction("Cycle Theme", self)
+        cycle_theme_action.setShortcut("Ctrl+T")
+        cycle_theme_action.setStatusTip("Cycle through themes (Ctrl+T)")
+        cycle_theme_action.triggered.connect(self._on_cycle_theme)
+        theme_menu.addAction(cycle_theme_action)
 
         view_menu.addSeparator()
 
@@ -617,8 +697,15 @@ class MainWindow(QMainWindow):
         shortcuts_action = QAction("&Keyboard Shortcuts...", self)
         shortcuts_action.setShortcut("Ctrl+/")
         shortcuts_action.setStatusTip("Show keyboard shortcuts reference")
-        shortcuts_action.triggered.connect(self._show_shortcuts)
+        shortcuts_action.triggered.connect(self._show_shortcuts_dialog)
         help_menu.addAction(shortcuts_action)
+
+        edit_shortcuts_action = QAction("&Customize Shortcuts...", self)
+        edit_shortcuts_action.setStatusTip("Customize keyboard shortcuts")
+        edit_shortcuts_action.triggered.connect(self._show_edit_shortcuts_dialog)
+        help_menu.addAction(edit_shortcuts_action)
+
+        help_menu.addSeparator()
 
         about_action = QAction("&About", self)
         about_action.setStatusTip("About Data Graph Studio")
@@ -809,34 +896,44 @@ class MainWindow(QMainWindow):
         self._autofit_btn_action = autofit_btn
 
     # Streaming toolbar event handlers
-    def _on_streaming_play(self, checked: bool):
-        """Start/resume streaming playback"""
-        if hasattr(self, 'streaming_controller') and self.streaming_controller:
-            self.streaming_controller.play()
+    def _on_streaming_play(self, checked: bool = False):
+        """Start/resume streaming — Play 연속 클릭 방어 (FR-B2.6)."""
+        if self._streaming_controller.state == "live":
+            return  # already playing
+        if not self.state.is_data_loaded:
+            self.statusbar.showMessage("⚠ No data loaded — cannot start streaming", 4000)
+            self._streaming_play_action.setChecked(False)
+            return
+        if self._streaming_controller.state == "paused":
+            self._streaming_controller.resume()
+        else:
+            # Open config dialog for fresh start
+            self._on_start_streaming_dialog()
 
     def _on_streaming_pause(self):
-        """Pause streaming playback"""
-        if hasattr(self, 'streaming_controller') and self.streaming_controller:
-            self.streaming_controller.pause()
+        """Pause/resume streaming playback"""
+        if self._streaming_controller.state == "live":
+            self._streaming_controller.pause()
+        elif self._streaming_controller.state == "paused":
+            self._streaming_controller.resume()
 
     def _on_streaming_stop(self):
-        """Stop streaming playback"""
-        if hasattr(self, 'streaming_controller') and self.streaming_controller:
-            self.streaming_controller.stop()
+        """Stop streaming — current data is kept (FR-B2.7)."""
+        self._streaming_controller.stop()
 
     def _on_streaming_speed_changed(self, text: str):
         """Change streaming speed"""
-        if hasattr(self, 'streaming_controller') and self.streaming_controller:
+        try:
             speed = float(text.replace('x', ''))
-            self.streaming_controller.set_speed(speed)
+            self._streaming_controller.set_poll_interval(
+                max(500, int(self._streaming_controller.poll_interval_ms / speed))
+            )
+        except (ValueError, ZeroDivisionError):
+            pass
 
     def _on_streaming_window_changed(self, text: str):
         """Change streaming window size"""
-        if hasattr(self, 'streaming_controller') and self.streaming_controller:
-            if text == "All":
-                self.streaming_controller.set_window_size(None)
-            else:
-                self.streaming_controller.set_window_size(int(text))
+        pass  # Window size is a display-level concept; no-op for now
 
     def _setup_compare_toolbar(self):
         """Setup the Compare Toolbar (hidden by default, auto-shown during comparison)."""
@@ -1112,19 +1209,66 @@ class MainWindow(QMainWindow):
         self._autosave_timer.start()
 
     def _prompt_recovery(self):
-        """Show recovery dialog (deferred via QTimer so IPC is already up)."""
+        """Show recovery dialog (deferred via QTimer so IPC is already up).
+
+        Features:
+        - "Don't show again" checkbox (persisted in QSettings)
+        - On restore failure: backs up to .bak, deletes original, shows toast
+        """
         if not os.path.exists(self._autosave_path):
             return
+
+        from PySide6.QtCore import QSettings
+        settings = QSettings("Godol", "DataGraphStudio")
+        if settings.value("recovery/skip_prompt", False, type=bool):
+            # User opted out — silently discard
+            try:
+                os.remove(self._autosave_path)
+            except OSError:
+                pass
+            return
+
         try:
+            from PySide6.QtWidgets import QCheckBox
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Question)
             msg.setWindowTitle("Recovery")
             msg.setText("A previous session was not closed properly.\nRecover the last autosave?")
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            if msg.exec() == QMessageBox.Yes:
-                self._restore_autosave()
+
+            cb = QCheckBox("Don't show again")
+            msg.setCheckBox(cb)
+
+            result = msg.exec()
+
+            if cb.isChecked():
+                settings.setValue("recovery/skip_prompt", True)
+
+            if result == QMessageBox.Yes:
+                try:
+                    self._restore_autosave()
+                except Exception as exc:
+                    # Backup failed autosave then remove
+                    bak_path = self._autosave_path + ".bak"
+                    try:
+                        import shutil
+                        shutil.copy2(self._autosave_path, bak_path)
+                    except OSError:
+                        pass
+                    try:
+                        os.remove(self._autosave_path)
+                    except OSError:
+                        pass
+                    if hasattr(self, 'statusBar'):
+                        self.statusBar().showMessage(
+                            f"Recovery failed: {exc}. Backup saved to autosave.json.bak",
+                            8000,
+                        )
             else:
-                os.remove(self._autosave_path)
+                try:
+                    os.remove(self._autosave_path)
+                except OSError:
+                    pass
         except Exception:
             pass
 
@@ -1597,6 +1741,9 @@ class MainWindow(QMainWindow):
             self._status_data_label.setObjectName("hintLabel")
         self._status_data_label.style().unpolish(self._status_data_label)
         self._status_data_label.style().polish(self._status_data_label)
+
+        # Export menu enable/disable based on data state
+        self._update_export_menu_state()
     
     def _update_selection_status(self):
         """선택 상태 업데이트"""
@@ -2235,7 +2382,10 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     # ==================== Streaming ====================
 
     def _on_start_streaming_dialog(self):
-        """Open the streaming configuration dialog and start streaming."""
+        """Open the streaming configuration dialog and start streaming (FR-B2.1)."""
+        if not self.state.is_data_loaded:
+            self.statusbar.showMessage("⚠ No data loaded — load data first", 4000)
+            return
         initial_path = self._streaming_controller.current_path or ""
         dlg = StreamingDialog(
             self,
@@ -2273,39 +2423,32 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
     @Slot(str)
     def _on_streaming_state_changed(self, new_state: str):
-        """Handle streaming state transitions — update toolbar and status bar."""
+        """Handle streaming state transitions — update toolbar and status bar (FR-B2.4)."""
         is_active = new_state in ("live", "paused")
 
         # Toolbar buttons
-        self._stream_start_action.setEnabled(new_state == "off")
-        self._stream_pause_action.setEnabled(is_active)
-        self._stream_stop_action.setEnabled(is_active)
+        self._streaming_play_action.setEnabled(new_state != "live")
+        self._streaming_play_action.setChecked(new_state == "live")
+        self._streaming_pause_action.setEnabled(is_active)
+        self._streaming_stop_action.setEnabled(is_active)
 
         # Pause button label
         if new_state == "paused":
-            self._stream_pause_action.setText("▶ Resume")
-            self._stream_pause_action.setToolTip(
-                self._format_tooltip("Resume Streaming", "Resume the paused stream")
-            )
+            self._streaming_pause_action.setText("▶")
+            self._streaming_pause_action.setToolTip("Resume Streaming")
         else:
-            self._stream_pause_action.setText("⏸ Pause")
-            self._stream_pause_action.setToolTip(
-                self._format_tooltip("Pause Streaming", "Pause the live stream")
-            )
+            self._streaming_pause_action.setText("⏸")
+            self._streaming_pause_action.setToolTip("Pause Streaming")
 
         # Menu actions
         self._start_streaming_action.setEnabled(new_state == "off")
         self._stop_streaming_action.setEnabled(is_active)
 
-        # Status label on toolbar
-        label_map = {"off": "off", "live": "🟢 active", "paused": "⏸ paused"}
-        self._stream_status_label.setText(f"  Streaming: {label_map.get(new_state, new_state)}")
-
-        # Status bar
+        # Status bar (FR-B2.4)
         if new_state == "live":
-            self.statusbar.showMessage("Streaming: active", 3000)
+            self.statusbar.showMessage("Streaming: 🟢 active", 3000)
         elif new_state == "paused":
-            self.statusbar.showMessage("Streaming: paused", 3000)
+            self.statusbar.showMessage("Streaming: ⏸ paused", 3000)
         elif new_state == "off":
             self.statusbar.showMessage("Streaming stopped", 3000)
 
@@ -2446,6 +2589,11 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
     def keyPressEvent(self, event):
         """키보드 이벤트 - 클립보드 및 차트 단축키"""
+        # Esc: exit dashboard mode (FR-B1.5)
+        if event.key() == Qt.Key_Escape and self._dashboard_mode_active:
+            self._deactivate_dashboard_mode()
+            return
+
         # Ctrl+V: 붙여넣기
         if event.key() == Qt.Key_V and event.modifiers() == Qt.ControlModifier:
             self._paste_from_clipboard()
@@ -2769,37 +2917,52 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 # self._on_data_loaded()
 
     def _on_add_calculated_field(self):
-        """계산 필드 추가 다이얼로그 (v2 Feature 3)"""
+        """계산 필드 추가 다이얼로그 (FR-B3.1, FR-B3.5)."""
         if not self.state.is_data_loaded:
-            QMessageBox.information(self, "Add Calculated Field", "No data loaded.")
+            QMessageBox.information(self, "Add Calculated Field", "데이터를 먼저 로드하세요.")
             return
 
-        # Get the current dataset's DataFrame
-        dataset_id = self.state.active_dataset_id
-        if not dataset_id:
-            QMessageBox.warning(self, "Add Calculated Field", "No active dataset selected.")
+        df = self.engine.df
+        if df is None or df.is_empty():
+            QMessageBox.warning(self, "Add Calculated Field", "No data available.")
             return
 
-        ds = self.state.dataset_states.get(dataset_id)
-        if ds is None or ds.dataframe is None:
-            QMessageBox.warning(self, "Add Calculated Field", "Dataset has no data.")
-            return
+        dialog = ComputedColumnDialog(df, parent=self)
+        dialog.column_created.connect(self._on_computed_column_created)
+        dialog.exec()
 
-        dialog = ComputedColumnDialog(ds.dataframe, dataset_id=dataset_id, parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            result = dialog.get_result()
-            if result and result.get("series") is not None:
-                # Add the computed column to the dataframe
-                col_name = result["name"]
-                series = result["series"]
-                try:
-                    ds.dataframe = ds.dataframe.with_columns(series.alias(col_name))
-                    self.state.dataset_states[dataset_id] = ds
-                    # Refresh UI
-                    self._on_data_loaded()
-                    self.statusbar.showMessage(f"Computed column '{col_name}' added", 3000)
-                except Exception as e:
-                    QMessageBox.warning(self, "Add Calculated Field", f"Failed to add column:\n{e}")
+    def _on_computed_column_created(self, defn, series):
+        """Handle computed column result — add to engine and refresh UI (FR-B3.2)."""
+        from ..core.undo_manager import UndoAction, UndoActionType
+        try:
+            col_name = defn.name if hasattr(defn, 'name') else str(defn)
+            df = self.engine.df
+            if df is None:
+                return
+
+            new_df = df.with_columns(series.alias(col_name))
+
+            # Store in engine (update the active df)
+            self.engine._df = new_df
+
+            # Push undo action (Computed Column 추가는 Undoable)
+            self._undo_stack.push(
+                UndoAction(
+                    action_type=UndoActionType.COLUMN_ADD,
+                    timestamp=time.time(),
+                    description=f"Add computed column '{col_name}'",
+                    before_state={"column_name": col_name},
+                    after_state={"column_name": col_name},
+                )
+            )
+
+            # Refresh UI
+            self.table_panel.set_data(new_df)
+            self.graph_panel.refresh()
+            self.statusbar.showMessage(f"Computed column '{col_name}' added", 3000)
+        except Exception as e:
+            logger.error(f"Failed to add computed column: {e}", exc_info=True)
+            QMessageBox.warning(self, "Add Calculated Field", f"Failed to add column:\n{e}")
 
     def _on_remove_duplicates(self):
         """중복 제거"""
@@ -2871,7 +3034,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self._fullscreen_action.setChecked(True)
 
     def _on_theme_changed(self, theme_id: str):
-        """테마 변경"""
+        """테마 변경 + QSettings 저장"""
         from .theme import ThemeManager
         
         # 테마 액션 상태 업데이트
@@ -2896,6 +3059,14 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             # Stat panel mini-graphs
             if hasattr(self.graph_panel, 'stat_panel'):
                 self.graph_panel.stat_panel.apply_theme(is_light)
+
+        # Persist to QSettings (B-6)
+        try:
+            from PySide6.QtCore import QSettings
+            settings = QSettings("Godol", "DataGraphStudio")
+            settings.setValue("appearance/theme", theme_id)
+        except Exception:
+            pass
         
         self.statusbar.showMessage(f"Theme changed to {theme_id.title()}", 3000)
 
@@ -3264,21 +3435,25 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
     # ============================================================
 
     def _on_toggle_dashboard_mode(self):
-        """Toggle dashboard mode (v2 Feature 1)"""
-        if not self.state.is_data_loaded:
-            QMessageBox.information(self, "Dashboard Mode", "No data loaded.")
-            self._dashboard_mode_action.setChecked(False)
+        """Toggle dashboard mode (FR-B1.1) with guard flag (FR-B1.8)."""
+        if self._dashboard_toggling:
             return
+        self._dashboard_toggling = True
+        try:
+            if not self.state.is_data_loaded:
+                QMessageBox.information(self, "Dashboard Mode", "No datasets loaded.")
+                self._dashboard_mode_action.setChecked(False)
+                return
 
-        if self._dashboard_mode_active:
-            # Deactivate dashboard mode
-            self._deactivate_dashboard_mode()
-        else:
-            # Activate dashboard mode
-            self._activate_dashboard_mode()
+            if self._dashboard_mode_active:
+                self._deactivate_dashboard_mode()
+            else:
+                self._activate_dashboard_mode()
+        finally:
+            self._dashboard_toggling = False
 
     def _activate_dashboard_mode(self):
-        """Activate dashboard mode - show DashboardPanel"""
+        """Activate dashboard mode — show DashboardPanel (FR-B1.1, FR-B1.7)."""
         if not self._dashboard_controller.activate():
             QMessageBox.warning(
                 self, "Dashboard Mode",
@@ -3287,37 +3462,72 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self._dashboard_mode_action.setChecked(False)
             return
 
-        # Create dashboard panel if not exists
+        # Lazy create once (FR-B1.7)
         if self._dashboard_panel is None:
             self._dashboard_panel = DashboardPanel(
                 controller=self._dashboard_controller,
-                state=self.state,
-                engine=self.engine,
                 parent=self,
             )
             self._dashboard_panel.exit_requested.connect(self._deactivate_dashboard_mode)
+            self._dashboard_panel.cell_clicked.connect(self._on_dashboard_cell_clicked)
+            self._dashboard_panel.preset_changed.connect(self._on_dashboard_preset_changed)
+            # Populate initial layout
+            layout = self._dashboard_controller.current_layout
+            if layout:
+                self._dashboard_panel.populate(layout)
 
-        # Hide normal graph panel, show dashboard panel
+        # Hide normal panels, show dashboard (visibility toggle only)
         self.graph_panel.hide()
-        self.main_splitter.insertWidget(1, self._dashboard_panel)
+        if self._dashboard_panel.parent() != self.main_splitter:
+            self.main_splitter.insertWidget(0, self._dashboard_panel)
         self._dashboard_panel.show()
 
         self._dashboard_mode_active = True
         self._dashboard_mode_action.setChecked(True)
-        self.statusbar.showMessage("Dashboard mode activated", 3000)
+        self.statusbar.showMessage("Dashboard mode activated — Esc to exit", 3000)
 
     def _deactivate_dashboard_mode(self):
-        """Deactivate dashboard mode - restore normal view"""
+        """Deactivate dashboard mode — restore normal view (FR-B1.5: state kept)."""
         self._dashboard_controller.deactivate()
 
         if self._dashboard_panel is not None:
             self._dashboard_panel.hide()
-            # Re-show normal graph panel
-            self.graph_panel.show()
+        self.graph_panel.show()
 
         self._dashboard_mode_active = False
         self._dashboard_mode_action.setChecked(False)
         self.statusbar.showMessage("Dashboard mode deactivated", 3000)
+
+    def _on_dashboard_cell_clicked(self, row: int, col: int):
+        """Handle empty cell click — show profile selection dialog (FR-B1.2)."""
+        profiles = self.profile_store.get_all()
+        if not profiles:
+            QMessageBox.information(self, "Dashboard", "No profiles available. Create a profile first.")
+            return
+
+        names = [p.name for p in profiles]
+        name, ok = QInputDialog.getItem(
+            self, "Select Profile", f"Profile for cell ({row}, {col}):", names, 0, False
+        )
+        if ok and name:
+            idx = names.index(name)
+            profile = profiles[idx]
+            # Ensure cell exists, then assign
+            cell = self._dashboard_controller.get_cell(row, col)
+            if cell is None:
+                self._dashboard_controller.add_cell(row, col, profile_id=profile.id)
+            else:
+                self._dashboard_controller.assign_profile(row, col, profile.id)
+            # Refresh the panel
+            layout = self._dashboard_controller.current_layout
+            if layout and self._dashboard_panel:
+                self._dashboard_panel.populate(layout)
+
+    def _on_dashboard_preset_changed(self, preset_name: str):
+        """Handle layout preset change (FR-B1.3)."""
+        layout = self._dashboard_controller.apply_preset(preset_name)
+        if layout and self._dashboard_panel:
+            self._dashboard_panel.populate(layout)
 
     def _on_toggle_annotation_panel(self):
         """Toggle annotation side panel (v2 Feature 5)"""
@@ -3373,3 +3583,218 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self._annotation_controller.delete(annotation_id)
             if self._annotation_panel:
                 self._annotation_panel.refresh()
+
+    def _on_add_annotation(self):
+        """Add a new annotation (Ctrl+Shift+N or context menu)"""
+        # Check if graph is displayed
+        if not self.state.is_data_loaded:
+            self.statusbar.showMessage("⚠ Load data and display a graph first", 3000)
+            return
+        if not self.state.value_columns and not self.state.x_column:
+            self.statusbar.showMessage("⚠ Display a graph first before adding annotations", 3000)
+            return
+
+        text, ok = QInputDialog.getText(self, "Add Annotation", "Annotation text:")
+        if ok and text:
+            import uuid
+            from ..core.annotation import Annotation
+            ann = Annotation(
+                id=uuid.uuid4().hex[:12],
+                kind="point",
+                x=0.0,
+                y=0.0,
+                text=text,
+                dataset_id=self.state.active_dataset_id or "",
+                profile_id=self.profile_controller.active_profile_id if hasattr(self.profile_controller, 'active_profile_id') else "",
+            )
+            try:
+                self._annotation_controller.add(ann)
+                # Ensure panel is visible
+                if self._annotation_panel is None or not self._annotation_panel.isVisible():
+                    self._on_toggle_annotation_panel()
+                if self._annotation_panel:
+                    self._annotation_panel.refresh()
+                self.statusbar.showMessage(f"Annotation added: {text[:30]}", 3000)
+            except ValueError as e:
+                self.statusbar.showMessage(f"⚠ {e}", 3000)
+
+    # ============================================================
+    # B-4: Export Wiring
+    # ============================================================
+
+    def _update_export_menu_state(self):
+        """Enable/disable export menu items based on data/graph state"""
+        has_data = self.state.is_data_loaded
+        has_graph = has_data and (bool(self.state.value_columns) or bool(self.state.x_column))
+
+        # Image export requires a graph
+        for action in (self._export_image_png_action, self._export_image_svg_action):
+            action.setEnabled(has_graph)
+
+        # Data export requires data
+        for action in (self._export_data_csv_action, self._export_data_excel_action,
+                       self._export_data_parquet_action):
+            action.setEnabled(has_data)
+
+        # Report export requires data
+        for action in (self._export_report_html_action, self._export_report_pptx_action):
+            action.setEnabled(has_data)
+
+        # Quick export
+        self._export_quick_action.setEnabled(has_data)
+
+    def _on_export_dialog(self):
+        """Open ExportDialog (Ctrl+E)"""
+        if not self.state.is_data_loaded:
+            self.statusbar.showMessage("⚠ No data loaded", 3000)
+            return
+
+        from .dialogs.export_dialog import ExportDialog
+        mode = "chart" if (self.state.value_columns or self.state.x_column) else "data"
+        dlg = ExportDialog(self, mode=mode)
+
+        # Connect dialog signals to controller
+        def _handle_export(fmt, path, opts):
+            if mode == "chart":
+                image = self._capture_graph_image()
+                if image and not image.isNull():
+                    self._export_controller.export_chart_async(image, path, fmt, opts)
+                else:
+                    dlg.on_export_failed("No chart image available")
+            else:
+                df = self.engine.df
+                if df is not None:
+                    self._export_controller.export_data_async(df, path, fmt, opts)
+                else:
+                    dlg.on_export_failed("No data available")
+
+        dlg.export_requested.connect(_handle_export)
+        self._export_controller.progress_changed.connect(dlg.update_progress)
+        self._export_controller.export_completed.connect(dlg.on_export_completed)
+        self._export_controller.export_failed.connect(dlg.on_export_failed)
+
+        dlg.exec()
+
+    def _on_export_image(self, fmt: "ExportFormat"):
+        """Export chart as image (PNG/SVG)"""
+        if not self.state.is_data_loaded:
+            return
+
+        ext_map = {ExportFormat.PNG: ("PNG Files (*.png)", ".png"),
+                   ExportFormat.SVG: ("SVG Files (*.svg)", ".svg")}
+        filter_str, ext = ext_map.get(fmt, ("All Files (*)", ""))
+        path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.value.upper()}", f"chart{ext}", filter_str)
+        if not path:
+            return
+
+        image = self._capture_graph_image()
+        if image is None or image.isNull():
+            self.statusbar.showMessage("⚠ No chart to export", 3000)
+            return
+
+        self._export_controller.export_completed.connect(
+            lambda p: self.statusbar.showMessage(f"✓ Exported to {p}", 3000))
+        self._export_controller.export_failed.connect(
+            lambda e: self.statusbar.showMessage(f"⚠ Export failed: {e}", 5000))
+        self._export_controller.export_chart_async(image, path, fmt)
+
+    def _on_export_data(self, fmt: "ExportFormat"):
+        """Export data (CSV/Excel/Parquet)"""
+        if not self.state.is_data_loaded or self.engine.df is None:
+            return
+
+        ext_map = {ExportFormat.CSV: ("CSV Files (*.csv)", ".csv"),
+                   ExportFormat.EXCEL: ("Excel Files (*.xlsx)", ".xlsx"),
+                   ExportFormat.PARQUET: ("Parquet Files (*.parquet)", ".parquet")}
+        filter_str, ext = ext_map.get(fmt, ("All Files (*)", ""))
+        path, _ = QFileDialog.getSaveFileName(self, f"Export {fmt.value.upper()}", f"data{ext}", filter_str)
+        if not path:
+            return
+
+        self._export_controller.export_completed.connect(
+            lambda p: self.statusbar.showMessage(f"✓ Exported to {p}", 3000))
+        self._export_controller.export_failed.connect(
+            lambda e: self.statusbar.showMessage(f"⚠ Export failed: {e}", 5000))
+        self._export_controller.export_data_async(self.engine.df, path, fmt)
+
+    def _capture_graph_image(self):
+        """Capture the current graph panel as QImage"""
+        try:
+            if hasattr(self.graph_panel, 'main_graph') and self.graph_panel.main_graph:
+                from pyqtgraph.exporters import ImageExporter
+                from PySide6.QtGui import QImage
+                import tempfile, os
+                exporter = ImageExporter(self.graph_panel.main_graph.plotItem)
+                exporter.parameters()['width'] = 1920
+                temp_path = os.path.join(tempfile.gettempdir(), 'dgs_export_temp.png')
+                exporter.export(temp_path)
+                image = QImage(temp_path)
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                return image
+        except Exception as e:
+            logger.warning(f"Failed to capture graph image: {e}")
+        return None
+
+    # ============================================================
+    # B-6: Theme Persistence
+    # ============================================================
+
+    def _restore_saved_theme(self):
+        """Restore theme from QSettings, default to midnight"""
+        from PySide6.QtCore import QSettings
+        settings = QSettings("Godol", "DataGraphStudio")
+        theme_id = settings.value("appearance/theme", "midnight", type=str)
+        if theme_id not in ("light", "dark", "midnight"):
+            theme_id = "midnight"
+        self._on_theme_changed(theme_id)
+
+    def _on_cycle_theme(self):
+        """Cycle through themes: light → dark → midnight → light (Ctrl+T)"""
+        cycle = ["light", "dark", "midnight"]
+        current = getattr(self, '_current_theme', 'midnight')
+        try:
+            idx = cycle.index(current)
+        except ValueError:
+            idx = -1
+        next_theme = cycle[(idx + 1) % len(cycle)]
+        self._on_theme_changed(next_theme)
+
+    # ============================================================
+    # B-7: Shortcut Wiring
+    # ============================================================
+
+    def _wire_shortcut_callbacks(self):
+        """Connect ShortcutController callbacks to MainWindow actions"""
+        sc = self._shortcut_controller
+        sc.connect("file.open", self._on_open_file)
+        sc.connect("file.save", self._on_save_project_file)
+        sc.connect("file.export", self._on_export_dialog)
+        sc.connect("edit.undo", lambda: self._undo_stack.undo() if self._undo_stack.can_undo else None)
+        sc.connect("edit.redo", lambda: self._undo_stack.redo() if self._undo_stack.can_redo else None)
+        sc.connect("edit.annotation_mode", self._on_toggle_annotation_panel)
+        sc.connect("view.dashboard_toggle", self._on_toggle_dashboard_mode)
+        sc.connect("view.theme_toggle", self._on_cycle_theme)
+        sc.connect("view.annotation_panel", self._on_toggle_annotation_panel)
+        sc.connect("help.shortcuts", self._show_shortcuts_dialog)
+
+    def _show_shortcuts_dialog(self):
+        """Show keyboard shortcuts help dialog (Ctrl+/)"""
+        from .dialogs.shortcut_help_dialog import ShortcutHelpDialog
+        dlg = ShortcutHelpDialog(self._shortcut_controller, parent=self)
+        dlg.exec()
+
+    def _show_edit_shortcuts_dialog(self):
+        """Show shortcut customization dialog"""
+        from .dialogs.shortcut_edit_dialog import ShortcutEditDialog
+        dlg = ShortcutEditDialog(self._shortcut_controller, parent=self)
+        dlg.shortcut_changed.connect(self._on_shortcut_customized)
+        dlg.exec()
+
+    def _on_shortcut_customized(self, shortcut_id: str, new_keys: str):
+        """Handle shortcut customization - detect conflicts and rebind"""
+        # Conflict detection is handled inside ShortcutEditDialog
+        # Log the change
+        logger.info(f"Shortcut '{shortcut_id}' changed to '{new_keys}'")

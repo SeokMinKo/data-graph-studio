@@ -44,7 +44,13 @@ class ParsingEngine:
         if not encoding:
             encoding = "utf-8"
 
-        return encoding.lower().replace("_", "-")
+        normalized = encoding.lower().replace("_", "-")
+        # ASCII is a strict subset of UTF-8; for our purposes treat it as UTF-8
+        # so that UTF-8 files containing only ASCII characters are handled consistently.
+        if normalized in ("ascii", "us-ascii"):
+            normalized = "utf-8"
+
+        return normalized
 
     @staticmethod
     def parse_preview(settings: ParsingSettings, max_rows: int = 100) -> pd.DataFrame:

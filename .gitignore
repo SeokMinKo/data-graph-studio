@@ -117,12 +117,18 @@ Thumbs.db
 logs/*.log
 *.dgs
 
-# Test screenshots and outputs
-*.png
+# Root-level artifacts (screenshots, reports, ad-hoc test scripts)
+/*.png
+/*.html
+/*.csv
+/test_*.py
+!/tests/test_*.py
+!/tests/unit/test_*.py
 app_*.txt
-test_*.py
-!tests/test_*.py
-!tests/unit/test_*.py
+
+# DGS runtime files
+autosave.json
+.dgs/
 
 # Keep test data samples
 !test_data/

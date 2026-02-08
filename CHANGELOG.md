@@ -4,6 +4,32 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.21.0] — 2026-02-08
+
+### 🔧 Refactor
+
+- **DataEngine God Object 분리** — Facade 패턴으로 5개 모듈 추출:
+  - `FileLoader` — 파일 로딩, 인코딩 감지, lazy loading
+  - `DataQuery` — stateless 필터/정렬/통계
+  - `DataExporter` — CSV/Excel/Parquet 내보내기
+  - `DatasetManager` — 멀티 데이터셋 CRUD
+  - `ComparisonEngine` — 비교 분석, 통계 검정
+
+### ✨ Features
+
+- **IPC 동적 포트** — 기본 52849, 사용 중이면 자동 +1 (최대 100회). `~/.dgs/ipc_port`에 pid:port 기록. `dgs_client.py` 자동 디스커버리
+- **Autosave 복구 개선** — "Don't show again" 체크박스, 복구 실패 시 .bak 백업 + 에러 토스트
+- **글로벌 크래시 로그** — `sys.excepthook`으로 `~/.dgs/crash.log`에 타임스탬프 + traceback 기록
+- **v2 기능 MainWindow 와이어링** — 대시보드, 스트리밍, 계산 컬럼, 내보내기, 주석, 테마, 단축키
+
+### 🧹 Chores
+
+- **루트 정리** — 잡파일 삭제 (screenshot*.png, test_*.py, *.html 리포트, ad-hoc 스크립트)
+- **.gitignore 강화** — 루트 *.png, *.html, *.csv, autosave.json, .dgs/ 등 추가
+- **README 업데이트** — 아키텍처 다이어그램, v2 기능 사용 가이드 추가
+
+---
+
 ## [v0.20.1] — 2026-02-08
 
 ### 🔧 Refactor

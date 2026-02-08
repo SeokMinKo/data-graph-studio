@@ -13,17 +13,37 @@ Usage:
 """
 import sys
 import json
+import os
 import socket
 
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 52849
+_PORT_FILE = os.path.expanduser("~/.dgs/ipc_port")
+
+
+def _discover_port() -> int:
+    """Read port from ~/.dgs/ipc_port (pid:port). Falls back to DEFAULT_PORT."""
+    try:
+        with open(_PORT_FILE) as f:
+            text = f.read().strip()
+        pid_s, port_s = text.split(":", 1)
+        pid, port = int(pid_s), int(port_s)
+        # Check if owning process is alive
+        try:
+            os.kill(pid, 0)
+        except (OSError, ProcessLookupError):
+            return DEFAULT_PORT  # stale
+        return port
+    except (FileNotFoundError, ValueError, OSError):
+        return DEFAULT_PORT
 
 
 def send_command(command: str, **args) -> dict:
     """명령 전송"""
+    port = _discover_port()
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((DEFAULT_HOST, DEFAULT_PORT))
+        sock.connect((DEFAULT_HOST, port))
         sock.settimeout(5.0)
         
         data = json.dumps({'command': command, 'args': args}, ensure_ascii=False)
