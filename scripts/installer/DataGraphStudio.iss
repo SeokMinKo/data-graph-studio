@@ -26,8 +26,8 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-; PyInstaller onedir output
-Source: "dist\DataGraphStudio\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; PyInstaller onedir output (repo root dist/...) — this .iss lives in scripts/installer
+Source: "..\..\dist\DataGraphStudio\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
