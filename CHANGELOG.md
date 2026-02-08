@@ -4,6 +4,14 @@ All notable changes to Data Graph Studio.
 
 Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
+## [v0.22.1] — 2026-02-09
+
+### 🐛 Bug Fixes
+
+- **Computed Column Undo/Redo 복구** — 계산 컬럼 추가 후 Undo/Redo 시 DataFrame이 실제로 되돌아가도록 수정
+
+---
+
 ## [v0.22.0] — 2026-02-09
 
 ### ✨ Features
