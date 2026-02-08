@@ -2996,32 +2996,53 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
 
     def _on_computed_column_created(self, defn, series):
         """Handle computed column result — add to engine and refresh UI (FR-B3.2)."""
-        from ..core.undo_manager import UndoAction, UndoActionType
+        from ..core.undo_manager import UndoCommand, UndoActionType
+
         try:
             col_name = defn.name if hasattr(defn, 'name') else str(defn)
-            df = self.engine.df
-            if df is None:
+            before_df = self.engine.df
+            if before_df is None:
                 return
 
-            new_df = df.with_columns(series.alias(col_name))
+            after_df = before_df.with_columns(series.alias(col_name))
 
-            # Store in engine (update the active df)
-            self.engine._df = new_df
+            def _apply_df(df):
+                # Update engine
+                self.engine._df = df
 
-            # Push undo action (Computed Column 추가는 Undoable)
-            self._undo_stack.push(
-                UndoAction(
+                # Sync state/UI
+                try:
+                    self.state.set_column_order(self.engine.columns)
+                except Exception:
+                    pass
+
+                self.table_panel.set_data(df)
+
+                try:
+                    self.graph_panel.set_columns(self.engine.columns)
+                    if hasattr(self.graph_panel.options_panel, 'data_tab'):
+                        self.graph_panel.options_panel.data_tab.set_columns(
+                            self.engine.columns, self.engine
+                        )
+                except Exception:
+                    pass
+
+                self.graph_panel.refresh()
+
+            # Apply
+            _apply_df(after_df)
+
+            # Record undo/redo
+            self._undo_stack.record(
+                UndoCommand(
                     action_type=UndoActionType.COLUMN_ADD,
-                    timestamp=time.time(),
                     description=f"Add computed column '{col_name}'",
-                    before_state={"column_name": col_name},
-                    after_state={"column_name": col_name},
+                    do=lambda: _apply_df(after_df),
+                    undo=lambda: _apply_df(before_df),
+                    timestamp=time.time(),
                 )
             )
 
-            # Refresh UI
-            self.table_panel.set_data(new_df)
-            self.graph_panel.refresh()
             self.statusbar.showMessage(f"Computed column '{col_name}' added", 3000)
         except Exception as e:
             logger.error(f"Failed to add computed column: {e}", exc_info=True)
