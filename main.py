@@ -25,9 +25,33 @@ if sys.platform == 'darwin':
     os.environ.setdefault('QT_ACCESSIBILITY', '0')
 
 # 로깅 설정
-log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+# - 개발 모드: 프로젝트 폴더의 ./logs
+# - 배포(Windows Program Files 등): 사용자 쓰기 가능 경로(%LOCALAPPDATA% 등)
+
+def _get_writable_log_dir() -> str:
+    # PyInstaller frozen exe (onefile/onedir)일 때는 설치 경로가 Program Files일 수 있어
+    # 실행 중 로그/캐시 생성이 PermissionError로 터진다.
+    is_frozen = bool(getattr(sys, "frozen", False))
+
+    if sys.platform == "win32" and is_frozen:
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "DataGraphStudio", "logs")
+
+    if sys.platform == "darwin" and is_frozen:
+        base = os.path.expanduser("~/Library/Logs")
+        return os.path.join(base, "DataGraphStudio")
+
+    if sys.platform.startswith("linux") and is_frozen:
+        base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+        return os.path.join(base, "data-graph-studio", "logs")
+
+    # Dev / source run
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+
+
+log_dir = _get_writable_log_dir()
 os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f'app_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+log_file = os.path.join(log_dir, f"app_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
 logging.basicConfig(
     level=logging.DEBUG,
