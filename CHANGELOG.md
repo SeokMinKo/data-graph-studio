@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.23.2] — 2026-02-09
+
+### 🐛 Bug Fixes
+
+- **Windows Program Files 설치 권한 문제 해결** — Frozen 빌드에서 로그 저장 경로를 설치 폴더가 아닌 사용자 쓰기 가능 경로로 변경
+  - Logs: `%LOCALAPPDATA%\\DataGraphStudio\\logs`
+  - (Crash fallback): `~/.dgs/crash.log`
+
+### 📝 Docs
+
+- **README 업데이트** — Windows 설치(Program Files) + 로그 경로 안내 추가
+
+---
+
 ## [v0.23.0] — 2026-02-09
 
 ### 🔐 Security / Updates
