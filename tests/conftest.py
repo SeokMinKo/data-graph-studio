@@ -1,6 +1,11 @@
 """Shared test fixtures for data-graph-studio."""
 
 import os
+
+# Headless Qt for CI / non-GUI environments
+# (safe even on developer machines; Qt will still work normally)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 import polars as pl
 import pytest
 
