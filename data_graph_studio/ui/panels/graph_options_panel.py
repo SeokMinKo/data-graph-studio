@@ -2,7 +2,9 @@
 GraphOptionsPanel - Compact Graph Options Panel
 """
 
-from typing import Optional, List, Dict, Any
+from __future__ import annotations
+
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -17,7 +19,8 @@ from .graph_widgets import ColorButton
 from .data_tab import DataTab
 from ...core.state import AppState, ChartType
 
-
+if TYPE_CHECKING:
+    from ...core.data_engine import DataEngine
 
 
 # ==================== Options Panel ====================
