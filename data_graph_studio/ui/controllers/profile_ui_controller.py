@@ -443,8 +443,7 @@ class ProfileUIController:
     # ==================== Project I/O ====================
 
     def _on_open_project(self):
-        """Open Project – .dgs 프로젝트 파일 로드 (프로파일 포함)"""
-        from ...core.project import Project
+        """Open Project – .dgs 프로젝트 파일 로드 (데이터소스 + 프로파일)"""
         w = self._w
         file_path, _ = QFileDialog.getOpenFileName(
             w, "Open Project",
@@ -453,22 +452,8 @@ class ProfileUIController:
         )
         if not file_path:
             return
-        try:
-            project = Project.load(file_path)
-            w._last_project_path = file_path
-
-            for p_data in project.profiles:
-                try:
-                    gs = GraphSetting.from_dict(p_data)
-                    w.profile_store.add(gs)
-                except Exception:
-                    logger.warning("Skipping invalid profile entry in project")
-
-            if hasattr(w, 'profile_model'):
-                w.profile_model.refresh()
-            w.statusbar.showMessage(f"Project loaded: {project.name} ({len(project.profiles)} profiles)", 3000)
-        except Exception as e:
-            QMessageBox.warning(w, "Open Project", f"Failed to load project:\n{e}")
+        # file_loading_controller의 전체 프로젝트 로드 사용
+        w._file_controller._load_project_file(file_path)
 
     def _on_save_project_file(self):
         """Save Project – 프로젝트+프로파일 저장 (마지막 경로)"""

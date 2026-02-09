@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.23.11] — 2026-02-09
+
+### 🐛 Bug Fixes
+
+- **프로젝트 열기(Open Project)가 데이터를 로드하지 않던 버그 수정** — Ctrl+Alt+P로 .dgs 프로젝트를 열 때 프로파일만 복원되고 데이터소스가 로드되지 않던 문제 해결. `file_loading_controller._load_project_file`로 통합하여 데이터 + 프로파일 모두 정상 로드
+
+---
+
 ## [v0.23.2] — 2026-02-09
 
 ### 🐛 Bug Fixes
