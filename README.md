@@ -74,6 +74,8 @@
 
 ## 🚀 Installation
 
+### From source (dev)
+
 ```bash
 git clone https://github.com/seokmin-ko/data-graph-studio.git
 cd data-graph-studio
@@ -85,13 +87,24 @@ source .venv/bin/activate   # Linux/Mac
 pip install -r requirements.txt
 ```
 
+### Windows installer / Program Files
+
+You can install Data Graph Studio under `C:\Program Files\...`.
+Runtime logs are written to a user-writable location (so it works without admin):
+
+- **Logs**: `%LOCALAPPDATA%\DataGraphStudio\logs`
+- (Crash fallback): `~/.dgs/crash.log`
+
 ## 📖 Usage
 
 ### Launch
 
 ```bash
-python main.py              # GUI
+python main.py              # GUI (source run)
 python main.py data.csv     # open file directly
+
+# Optional (module entry point)
+python -m data_graph_studio
 ```
 
 ### IPC Control (CLI)
