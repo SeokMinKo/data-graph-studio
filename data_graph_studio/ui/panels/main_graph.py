@@ -5,8 +5,9 @@ MainGraph - 메인 그래프 위젯 with hover tooltip support
 from typing import Optional, List, Dict, Any
 
 import numpy as np
+import csv
 
-from PySide6.QtWidgets import QDialog, QMenu
+from PySide6.QtWidgets import QDialog, QMenu, QFileDialog
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QAction
 from PySide6.QtWidgets import QApplication
@@ -718,6 +719,64 @@ class MainGraph(pg.PlotWidget):
         except Exception:
             pass
 
+    def _export_plot_image(self):
+        """Save current plot as an image file."""
+        try:
+            default_name = "dgs-plot.png"
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Export Plot Image",
+                default_name,
+                "PNG Image (*.png);;JPEG Image (*.jpg *.jpeg)"
+            )
+            if not path:
+                return
+            pix = self.grab()
+            pix.save(path)
+        except Exception:
+            pass
+
+    def _export_plot_data_csv(self):
+        """Export currently plotted data to CSV (best-effort)."""
+        try:
+            default_name = "dgs-plot-data.csv"
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Export Plot Data (CSV)",
+                default_name,
+                "CSV (*.csv)"
+            )
+            if not path:
+                return
+
+            # Multi-series export
+            if self._multi_series_data:
+                with open(path, 'w', newline='', encoding='utf-8') as f:
+                    w = csv.writer(f)
+                    w.writerow(["series", "x", "y"])
+                    for s in self._multi_series_data:
+                        name = s.get('name', '')
+                        xs = s.get('x')
+                        ys = s.get('y')
+                        if xs is None or ys is None:
+                            continue
+                        n = min(len(xs), len(ys))
+                        for i in range(n):
+                            w.writerow([name, xs[i], ys[i]])
+                return
+
+            # Single-series export
+            if self._data_x is None or self._data_y is None:
+                return
+            n = min(len(self._data_x), len(self._data_y))
+            with open(path, 'w', newline='', encoding='utf-8') as f:
+                w = csv.writer(f)
+                w.writerow(["x", "y"])
+                for i in range(n):
+                    w.writerow([self._data_x[i], self._data_y[i]])
+        except Exception:
+            pass
+
     def contextMenuEvent(self, event):
         """Custom right-click menu (replace pyqtgraph default)."""
         menu = QMenu(self)
@@ -739,6 +798,17 @@ class MainGraph(pg.PlotWidget):
         copy_act = QAction("Copy Image", self)
         copy_act.triggered.connect(self._copy_plot_image)
         menu.addAction(copy_act)
+
+        # Export
+        export_menu = menu.addMenu("Export")
+        export_img = QAction("Save Image…", self)
+        export_img.triggered.connect(self._export_plot_image)
+        export_menu.addAction(export_img)
+
+        export_csv = QAction("Export Data (CSV)…", self)
+        export_csv.setEnabled(self._data_x is not None or bool(self._multi_series_data))
+        export_csv.triggered.connect(self._export_plot_data_csv)
+        export_menu.addAction(export_csv)
 
         menu.addSeparator()
 
