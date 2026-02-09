@@ -46,9 +46,23 @@ def test_apply_pending_wizard_result_profile_cycle(qtbot, monkeypatch, sample_cs
     assert w.engine.df is not None
     w.state.set_data_loaded(True, total_rows=len(w.engine.df))
 
-    # Create a minimal graph setting as if produced by the wizard.
+    # Create a graph setting as if produced by the wizard.
+    # Include realistic columns so we can verify apply_profile → AppState wiring.
     # (dataset_id will be overridden to active_id inside _apply_pending_wizard_result)
     gs = GraphSetting.create_new(name="Wizard Setting", dataset_id="")
+    gs = GraphSetting.from_dict({
+        **gs.to_dict(),
+        "chart_type": "line",
+        "x_column": "age",
+        "value_columns": [
+            {"name": "score", "aggregation": "mean", "color": "#1f77b4", "use_secondary_axis": False, "order": 0, "formula": ""},
+        ],
+        "group_columns": [
+            {"name": "city", "selected_values": [], "order": 0},
+        ],
+        "hover_columns": ["name"],
+        "chart_settings": {"line_width": 3, "marker_size": 7, "show_data_labels": True},
+    })
 
     # Emulate wizard result payload
     w._pending_wizard_result = {
@@ -63,6 +77,12 @@ def test_apply_pending_wizard_result_profile_cycle(qtbot, monkeypatch, sample_cs
     stored = w.profile_store.get(gs.id)
     assert stored is not None
     assert stored.dataset_id == dataset_id
+
+    # After apply_profile, AppState should reflect GraphSetting.
+    assert w.state.x_column == "age"
+    assert any(v.name == "score" for v in w.state.value_columns)
+    assert any(g.name == "city" for g in w.state.group_columns)
+    assert "name" in w.state.hover_columns
 
     # Autofit is scheduled via QTimer.singleShot(50)
     qtbot.wait(120)
