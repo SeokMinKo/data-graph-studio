@@ -28,6 +28,7 @@ import numpy as np
 class DrawingType(Enum):
     """드로잉 객체 타입"""
     LINE = "line"
+    ARROW = "arrow"
     CIRCLE = "circle"
     RECT = "rect"
     TEXT = "text"
@@ -143,6 +144,43 @@ class LineDrawing(DrawingObjectBase):
 
     def move(self, dx: float, dy: float) -> None:
         """Translate the line by (dx, dy)."""
+        self.x1 += dx
+        self.y1 += dy
+        self.x2 += dx
+        self.y2 += dy
+
+
+@dataclass
+class ArrowDrawing(DrawingObjectBase):
+    """Arrow drawing (straight line with arrow head at end)"""
+    type: DrawingType = DrawingType.ARROW
+    x1: float = 0.0
+    y1: float = 0.0
+    x2: float = 0.0
+    y2: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = super().to_dict()
+        data.update({
+            'x1': self.x1, 'y1': self.y1,
+            'x2': self.x2, 'y2': self.y2,
+        })
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ArrowDrawing':
+        base = DrawingObjectBase.from_dict(data)
+        return cls(
+            id=base.id, type=DrawingType.ARROW, style=base.style,
+            visible=base.visible, locked=base.locked, z_order=base.z_order,
+            x1=data['x1'], y1=data['y1'], x2=data['x2'], y2=data['y2'],
+        )
+
+    def get_bounds(self) -> Tuple[float, float, float, float]:
+        return (min(self.x1, self.x2), min(self.y1, self.y2),
+                max(self.x1, self.x2), max(self.y1, self.y2))
+
+    def move(self, dx: float, dy: float) -> None:
         self.x1 += dx
         self.y1 += dy
         self.x2 += dx
@@ -356,6 +394,88 @@ class LineGraphicsItem(pg.GraphicsObject):
 
         for x, y in [(self.drawing.x1, self.drawing.y1),
                      (self.drawing.x2, self.drawing.y2)]:
+            painter.drawRect(QRectF(
+                x - handle_size / 2, y - handle_size / 2,
+                handle_size, handle_size
+            ))
+
+    def set_selected(self, selected: bool):
+        self._selected = selected
+        self.update()
+
+
+class ArrowGraphicsItem(pg.GraphicsObject):
+    """PyQtGraph arrow graphics item"""
+
+    def __init__(self, drawing: ArrowDrawing):
+        super().__init__()
+        self.drawing = drawing
+        self._selected = False
+        self.setZValue(drawing.z_order)
+
+    def boundingRect(self) -> QRectF:
+        x1, y1, x2, y2 = self.drawing.get_bounds()
+        margin = max(6.0, self.drawing.style.stroke_width * 3)
+        return QRectF(x1 - margin, y1 - margin,
+                     (x2 - x1) + 2 * margin, (y2 - y1) + 2 * margin)
+
+    def paint(self, painter, option, widget):
+        if not self.drawing.visible:
+            return
+
+        # Pen
+        pen = QPen(QColor(self.drawing.style.stroke_color))
+        pen.setWidthF(self.drawing.style.stroke_width)
+        pen.setStyle(self.drawing.style.line_style.to_qt())
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        x1, y1, x2, y2 = self.drawing.x1, self.drawing.y1, self.drawing.x2, self.drawing.y2
+
+        # Draw shaft
+        painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+
+        # Arrow head
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy)
+        if length > 1e-9:
+            ux, uy = dx / length, dy / length
+            # head size (in data coords; cosmetic pen keeps stroke width screen-constant)
+            head_len = max(10.0, self.drawing.style.stroke_width * 6.0)
+            head_w = head_len * 0.55
+
+            # perpendicular unit
+            px, py = -uy, ux
+
+            base_x = x2 - ux * head_len
+            base_y = y2 - uy * head_len
+
+            p1 = QPointF(x2, y2)
+            p2 = QPointF(base_x + px * head_w, base_y + py * head_w)
+            p3 = QPointF(base_x - px * head_w, base_y - py * head_w)
+
+            path = QPainterPath()
+            path.moveTo(p1)
+            path.lineTo(p2)
+            path.lineTo(p3)
+            path.closeSubpath()
+
+            painter.setBrush(QBrush(QColor(self.drawing.style.stroke_color)))
+            painter.drawPath(path)
+
+        if self._selected:
+            self._draw_handles(painter)
+
+    def _draw_handles(self, painter):
+        handle_size = 6
+        pen = QPen(QColor("#59B8E3"))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.setBrush(QBrush(QColor("#323D4A")))
+
+        for x, y in [(self.drawing.x1, self.drawing.y1), (self.drawing.x2, self.drawing.y2)]:
             painter.drawRect(QRectF(
                 x - handle_size / 2, y - handle_size / 2,
                 handle_size, handle_size
@@ -911,6 +1031,8 @@ class DrawingManager:
 
         if isinstance(drawing, LineDrawing):
             item = LineGraphicsItem(drawing)
+        elif isinstance(drawing, ArrowDrawing):
+            item = ArrowGraphicsItem(drawing)
         elif isinstance(drawing, CircleDrawing):
             item = CircleGraphicsItem(drawing)
         elif isinstance(drawing, RectDrawing):
@@ -1024,6 +1146,8 @@ class DrawingManager:
         try:
             if drawing_type == 'line':
                 return LineDrawing.from_dict(data)
+            elif drawing_type == 'arrow':
+                return ArrowDrawing.from_dict(data)
             elif drawing_type == 'circle':
                 return CircleDrawing.from_dict(data)
             elif drawing_type == 'rect':

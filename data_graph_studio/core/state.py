@@ -135,6 +135,7 @@ class ToolMode(Enum):
     LASSO_SELECT = "lasso_select"
     # Drawing modes
     LINE_DRAW = "line_draw"
+    ARROW_DRAW = "arrow_draw"
     CIRCLE_DRAW = "circle_draw"
     RECT_DRAW = "rect_draw"
     TEXT_DRAW = "text_draw"

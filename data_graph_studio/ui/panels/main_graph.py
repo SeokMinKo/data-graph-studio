@@ -6,15 +6,16 @@ from typing import Optional, List, Dict, Any
 
 import numpy as np
 
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog, QMenu
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtGui import QColor, QBrush, QAction
+from PySide6.QtWidgets import QApplication
 
 from .graph_widgets import FormattedAxisItem
 from ...core.state import AppState, ChartType, ToolMode
 from ..drawing import (
     DrawingManager, DrawingStyle, LineStyle,
-    LineDrawing, CircleDrawing, RectDrawing, TextDrawing,
+    LineDrawing, ArrowDrawing, CircleDrawing, RectDrawing, TextDrawing,
     DrawingStyleDialog, RectStyleDialog, TextInputDialog,
     snap_to_angle
 )
@@ -117,6 +118,14 @@ class MainGraph(pg.PlotWidget):
         self.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
+        # Replace pyqtgraph default right-click menu with our own
+        try:
+            self.plotItem.vb.setMenuEnabled(False)
+        except Exception:
+            pass
+
+        self._grid_visible = True
+
         # Connect to tool mode changes
         self.state.tool_mode_changed.connect(self._on_tool_mode_changed)
 
@@ -200,7 +209,7 @@ class MainGraph(pg.PlotWidget):
             vb.setMouseMode(pg.ViewBox.PanMode)  # Disable rect zoom
             vb.setMouseEnabled(x=False, y=False)  # Disable panning
             self.setCursor(Qt.CrossCursor)
-        elif mode in [ToolMode.LINE_DRAW, ToolMode.CIRCLE_DRAW, 
+        elif mode in [ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW, ToolMode.CIRCLE_DRAW, 
                       ToolMode.RECT_DRAW, ToolMode.TEXT_DRAW]:
             # Drawing mode: disable default interactions
             vb.setMouseMode(pg.ViewBox.PanMode)
@@ -665,7 +674,150 @@ class MainGraph(pg.PlotWidget):
         except Exception:
             self.autoRange()
         self.setLogMode(x=False, y=False)
-    
+
+    def _fit_to_selection(self):
+        """Fit view range to selected points (best-effort)."""
+        if self._data_x is None or self._data_y is None:
+            self.reset_view()
+            return
+
+        sel = list(self.state.selection.selected_rows)
+        if not sel:
+            self.reset_view()
+            return
+
+        try:
+            valid = [i for i in sel if 0 <= i < len(self._data_x)]
+            if not valid:
+                self.reset_view()
+                return
+            xs = self._data_x[valid]
+            ys = self._data_y[valid]
+            xs = xs[~np.isnan(xs.astype(float))] if hasattr(xs, 'astype') else xs
+            ys = ys[~np.isnan(ys.astype(float))] if hasattr(ys, 'astype') else ys
+            if len(xs) == 0 or len(ys) == 0:
+                self.reset_view()
+                return
+            x_min, x_max = float(np.min(xs)), float(np.max(xs))
+            y_min, y_max = float(np.min(ys)), float(np.max(ys))
+            x_pad = (x_max - x_min) * 0.08 or 1.0
+            y_pad = (y_max - y_min) * 0.08 or 1.0
+            self.setXRange(x_min - x_pad, x_max + x_pad, padding=0)
+            self.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
+        except Exception:
+            self.reset_view()
+
+    def _toggle_grid(self):
+        self._grid_visible = not getattr(self, '_grid_visible', True)
+        self.showGrid(x=self._grid_visible, y=self._grid_visible, alpha=0.15)
+
+    def _copy_plot_image(self):
+        try:
+            pix = self.grab()
+            QApplication.clipboard().setPixmap(pix)
+        except Exception:
+            pass
+
+    def contextMenuEvent(self, event):
+        """Custom right-click menu (replace pyqtgraph default)."""
+        menu = QMenu(self)
+
+        # View
+        fit_act = QAction("Fit (Auto)", self)
+        fit_act.triggered.connect(self.reset_view)
+        menu.addAction(fit_act)
+
+        fit_sel_act = QAction("Fit to Selection", self)
+        fit_sel_act.setEnabled(bool(self.state.selection.selected_rows))
+        fit_sel_act.triggered.connect(self._fit_to_selection)
+        menu.addAction(fit_sel_act)
+
+        grid_act = QAction("Toggle Grid", self)
+        grid_act.triggered.connect(self._toggle_grid)
+        menu.addAction(grid_act)
+
+        copy_act = QAction("Copy Image", self)
+        copy_act.triggered.connect(self._copy_plot_image)
+        menu.addAction(copy_act)
+
+        menu.addSeparator()
+
+        # Tools
+        tools_menu = menu.addMenu("Tool")
+        for label, mode in [
+            ("Pan", ToolMode.PAN),
+            ("Zoom", ToolMode.ZOOM),
+            ("Rect Select", ToolMode.RECT_SELECT),
+            ("Lasso Select", ToolMode.LASSO_SELECT),
+        ]:
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.setChecked(self.state.tool_mode == mode)
+            act.triggered.connect(lambda checked=False, m=mode: self.state.set_tool_mode(m))
+            tools_menu.addAction(act)
+
+        # Draw
+        draw_menu = menu.addMenu("Draw")
+        for label, mode in [
+            ("Line", ToolMode.LINE_DRAW),
+            ("Arrow", ToolMode.ARROW_DRAW),
+            ("Circle", ToolMode.CIRCLE_DRAW),
+            ("Rectangle", ToolMode.RECT_DRAW),
+            ("Text", ToolMode.TEXT_DRAW),
+        ]:
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.setChecked(self.state.tool_mode == mode)
+            act.triggered.connect(lambda checked=False, m=mode: self.state.set_tool_mode(m))
+            draw_menu.addAction(act)
+
+        draw_menu.addSeparator()
+
+        style_act = QAction("Drawing Style…", self)
+        def _open_style():
+            try:
+                dlg = DrawingStyleDialog("Drawing Style", self)
+                dlg.set_style(self._current_drawing_style)
+                if dlg.exec() == QDialog.Accepted:
+                    self.set_drawing_style(dlg.get_style())
+            except Exception:
+                pass
+        style_act.triggered.connect(_open_style)
+        draw_menu.addAction(style_act)
+
+        # Drawing ops
+        if self._drawing_manager:
+            draw_menu.addSeparator()
+            undo_d = QAction("Undo Drawing", self)
+            undo_d.setEnabled(True)
+            undo_d.triggered.connect(self._drawing_manager.undo)
+            draw_menu.addAction(undo_d)
+
+            redo_d = QAction("Redo Drawing", self)
+            redo_d.setEnabled(True)
+            redo_d.triggered.connect(self._drawing_manager.redo)
+            draw_menu.addAction(redo_d)
+
+            del_sel = QAction("Delete Selected Drawing", self)
+            del_sel.setEnabled(self._drawing_manager.get_selected_id() is not None)
+            del_sel.triggered.connect(self._drawing_manager.delete_selected)
+            draw_menu.addAction(del_sel)
+
+            clear_d = QAction("Clear All Drawings", self)
+            clear_d.triggered.connect(self._drawing_manager.clear)
+            draw_menu.addAction(clear_d)
+
+        menu.addSeparator()
+
+        # Selection
+        sel_menu = menu.addMenu("Selection")
+        clear_sel = QAction("Clear Selection", self)
+        clear_sel.setEnabled(bool(self.state.selection.selected_rows))
+        clear_sel.triggered.connect(self.state.clear_selection)
+        sel_menu.addAction(clear_sel)
+
+        menu.exec(event.globalPos())
+
     def _on_mouse_clicked(self, event):
         """Handle mouse click - selection/drawing is handled via press/move/release"""
         # Selection and drawing modes are fully handled by
@@ -711,7 +863,7 @@ class MainGraph(pg.PlotWidget):
                 return
         
         # Drawing modes
-        elif self.state.tool_mode in [ToolMode.LINE_DRAW, ToolMode.CIRCLE_DRAW, 
+        elif self.state.tool_mode in [ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW, ToolMode.CIRCLE_DRAW, 
                                        ToolMode.RECT_DRAW]:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
@@ -736,7 +888,7 @@ class MainGraph(pg.PlotWidget):
         # Check for drawing click+drag (when not in a drawing-creation mode)
         if (
             self.state.tool_mode not in (
-                ToolMode.LINE_DRAW, ToolMode.CIRCLE_DRAW,
+                ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW, ToolMode.CIRCLE_DRAW,
                 ToolMode.RECT_DRAW, ToolMode.TEXT_DRAW,
                 ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT,
             )
@@ -822,8 +974,9 @@ class MainGraph(pg.PlotWidget):
             return
         
         # Drawing mode preview
-        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW, 
-                                                            ToolMode.CIRCLE_DRAW, 
+        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW,
+                                                            ToolMode.ARROW_DRAW,
+                                                            ToolMode.CIRCLE_DRAW,
                                                             ToolMode.RECT_DRAW]:
             pos = self.plotItem.vb.mapSceneToView(event.position())
             self._update_drawing_preview(pos.x(), pos.y())
@@ -866,8 +1019,9 @@ class MainGraph(pg.PlotWidget):
                 handled = True
         
         # Drawing mode finish
-        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW, 
-                                                            ToolMode.CIRCLE_DRAW, 
+        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW,
+                                                            ToolMode.ARROW_DRAW,
+                                                            ToolMode.CIRCLE_DRAW,
                                                             ToolMode.RECT_DRAW]:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
@@ -1220,7 +1374,7 @@ class MainGraph(pg.PlotWidget):
 
         # Apply Shift constraint
         if self._shift_pressed:
-            if self.state.tool_mode == ToolMode.LINE_DRAW:
+            if self.state.tool_mode in (ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW):
                 # Snap to 45-degree angles
                 x2, y2 = snap_to_angle(x1, y1, x2, y2, 45.0)
             elif self.state.tool_mode == ToolMode.CIRCLE_DRAW:
@@ -1251,8 +1405,8 @@ class MainGraph(pg.PlotWidget):
         except Exception:
             pass
 
-        if self.state.tool_mode == ToolMode.LINE_DRAW:
-            # Line preview
+        if self.state.tool_mode in (ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW):
+            # Line/Arrow preview (arrow head is drawn on final object)
             from PySide6.QtCore import QLineF
             line = pg.QtWidgets.QGraphicsLineItem(QLineF(x1, y1, x2, y2))
             line.setPen(pen)
@@ -1302,7 +1456,7 @@ class MainGraph(pg.PlotWidget):
 
         # Apply Shift constraint
         if self._shift_pressed:
-            if self.state.tool_mode == ToolMode.LINE_DRAW:
+            if self.state.tool_mode in (ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW):
                 x2, y2 = snap_to_angle(x1, y1, x2, y2, 45.0)
             elif self.state.tool_mode == ToolMode.CIRCLE_DRAW:
                 radius = max(abs(x2 - x1), abs(y2 - y1))
@@ -1326,6 +1480,11 @@ class MainGraph(pg.PlotWidget):
 
         if self.state.tool_mode == ToolMode.LINE_DRAW:
             drawing = LineDrawing(
+                x1=x1, y1=y1, x2=x2, y2=y2,
+                style=style
+            )
+        elif self.state.tool_mode == ToolMode.ARROW_DRAW:
+            drawing = ArrowDrawing(
                 x1=x1, y1=y1, x2=x2, y2=y2,
                 style=style
             )

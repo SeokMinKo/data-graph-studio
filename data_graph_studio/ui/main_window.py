@@ -789,6 +789,7 @@ class MainWindow(QMainWindow):
         # === Drawing Tools ===
         draw_tools = [
             (ToolMode.LINE_DRAW, "🖊️", "Line Draw", "Shift+L"),
+            (ToolMode.ARROW_DRAW, "➡", "Arrow Draw", "Shift+A"),
             (ToolMode.CIRCLE_DRAW, "⭕", "Circle Draw", "Shift+C"),
             (ToolMode.RECT_DRAW, "▢", "Rectangle Draw", "Shift+R"),
             (ToolMode.TEXT_DRAW, "📝", "Text Draw", "Shift+T"),
