@@ -3,7 +3,6 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtWidgets import QWizard, QWizardPage
 
-from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.ui.wizards.finish_step import FinishStep
 
 
@@ -25,15 +24,6 @@ class DummyParsingPage(QWizardPage):
         return self._preview
 
 
-class DummyGraphPage(QWizardPage):
-    def __init__(self, setting):
-        super().__init__()
-        self._setting = setting
-
-    def get_graph_setting(self):
-        return self._setting
-
-
 @pytest.mark.parametrize("has_header", [True])
 def test_finish_step_renders_summary(qtbot, tmp_path, has_header):
     file_path = tmp_path / "sales_data.csv"
@@ -50,20 +40,8 @@ def test_finish_step_renders_summary(qtbot, tmp_path, has_header):
 
     preview = DummyPreview(["a", "b", "c", "d"])
 
-    graph_setting = GraphSetting(
-        id="setting-1",
-        name="Default",
-        dataset_id="dataset-1",
-        chart_type="line",
-        x_column="date",
-        value_columns=("sales", "profit"),
-        group_columns=("region",),
-        hover_columns=("name", "id"),
-    )
-
     wizard = QWizard()
     wizard.addPage(DummyParsingPage(parsing_settings, preview))
-    wizard.addPage(DummyGraphPage(graph_setting))
 
     finish_step = FinishStep()
     wizard.addPage(finish_step)
@@ -82,11 +60,6 @@ def test_finish_step_renders_summary(qtbot, tmp_path, has_header):
     assert "헤더: 있음" in parsing_text
 
     assert finish_step._columns_info_label.text() == "4개 (2개 제외)"
-    assert finish_step._chart_type_label.text() == "line"
-    assert finish_step._x_axis_label.text() == "date"
-    assert finish_step._y_axis_label.text() == "sales, profit"
-    assert finish_step._group_label.text() == "region"
-    assert finish_step._hover_label.text() == "name, id"
 
 
 def test_finish_step_keeps_existing_project_name(qtbot, tmp_path):
@@ -102,18 +75,8 @@ def test_finish_step_keeps_existing_project_name(qtbot, tmp_path):
     )
     preview = DummyPreview(["a", "b"])
 
-    graph_setting = GraphSetting(
-        id="setting-2",
-        name="Default",
-        dataset_id="dataset-1",
-        chart_type="bar",
-        x_column="a",
-        value_columns=("b",),
-    )
-
     wizard = QWizard()
     wizard.addPage(DummyParsingPage(parsing_settings, preview))
-    wizard.addPage(DummyGraphPage(graph_setting))
 
     finish_step = FinishStep()
     wizard.addPage(finish_step)

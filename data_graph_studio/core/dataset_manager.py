@@ -156,6 +156,49 @@ class DatasetManager:
         logger.info(f"Dataset loaded: {dataset_id} ({name}), {dataset.row_count:,} rows")
         return dataset_id
 
+    def load_dataset_from_dataframe(
+        self,
+        df: pl.DataFrame,
+        name: str = "Untitled",
+        dataset_id: Optional[str] = None,
+        source_path: Optional[str] = None,
+    ) -> Optional[str]:
+        """DataFrame을 직접 데이터셋으로 등록한다.
+
+        Args:
+            df: 로드할 polars DataFrame.
+            name: 표시 이름.
+            dataset_id: 데이터셋 ID (None이면 자동 생성).
+            source_path: 원본 파일 경로 (메타데이터용).
+
+        Returns:
+            생성된 dataset_id. 실패 시 None.
+        """
+        if dataset_id is None:
+            dataset_id = str(uuid.uuid4())[:8]
+
+        color = self.DEFAULT_COLORS[self._color_index % len(self.DEFAULT_COLORS)]
+        self._color_index += 1
+
+        dataset = DatasetInfo(
+            id=dataset_id,
+            name=name,
+            color=color,
+        )
+        dataset.df = df
+        dataset.lazy_df = df.lazy()
+        dataset.source = DataSource(
+            path=source_path or "",
+        )
+
+        self._datasets[dataset_id] = dataset
+
+        if self._active_dataset_id is None:
+            self._active_dataset_id = dataset_id
+
+        logger.info(f"Dataset from DataFrame: {dataset_id} ({name}), {dataset.row_count:,} rows")
+        return dataset_id
+
     def remove_dataset(self, dataset_id: str) -> bool:
         """데이터셋을 제거한다.
 

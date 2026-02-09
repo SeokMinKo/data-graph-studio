@@ -64,10 +64,8 @@ class NewProjectWizard(QWizard):
             self.addPage(WprConvertStep(file_path))
 
         self._parsing_step = ParsingStep(file_path)
-        self._graph_step = GraphSetupStep()
         self._finish_step = FinishStep()
         self.addPage(self._parsing_step)
-        self.addPage(self._graph_step)
         self.addPage(self._finish_step)
 
     def cleanupPage(self, page_id: int) -> None:
@@ -84,11 +82,9 @@ class NewProjectWizard(QWizard):
         """마법사 완료 (Finish 버튼)"""
         # 각 단계에서 설정 수집
         parsing_page = self._parsing_step
-        graph_page = self._graph_step
         finish_page = self._finish_step
         
         parsing_settings = None
-        graph_setting = None
         preview_df = None
         project_name = None
         
@@ -98,16 +94,13 @@ class NewProjectWizard(QWizard):
         if parsing_page and hasattr(parsing_page, "get_preview_df"):
             preview_df = parsing_page.get_preview_df()
         
-        if graph_page and hasattr(graph_page, "get_graph_setting"):
-            graph_setting = graph_page.get_graph_setting()
-        
         if finish_page and hasattr(finish_page, "get_project_name"):
             project_name = finish_page.get_project_name()
         
         # 시그널 발생
         result = {
             'parsing_settings': parsing_settings,
-            'graph_setting': graph_setting,
+            'graph_setting': None,
             'preview_df': preview_df,
             'project_name': project_name,
         }

@@ -315,6 +315,16 @@ class DataEngine:
         self._clear_cache()
         return self._datasets_mgr.load_dataset(path, name, dataset_id, **kw)
 
+    def load_dataset_from_dataframe(self, df, name="Untitled", dataset_id=None, source_path=None):
+        """DataFrame을 직접 데이터셋으로 로드한다."""
+        self._clear_cache()
+        result = self._datasets_mgr.load_dataset_from_dataframe(
+            df, name=name, dataset_id=dataset_id, source_path=source_path
+        )
+        if result:
+            self._sync_active_dataset()
+        return result
+
     def remove_dataset(self, dataset_id):
         self._clear_cache()
         result = self._datasets_mgr.remove_dataset(dataset_id)

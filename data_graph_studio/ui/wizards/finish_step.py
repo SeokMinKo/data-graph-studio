@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 
 class FinishStep(QWizardPage):
-    """Step 3: 완료"""
+    """Step 2: 완료"""
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -32,11 +32,6 @@ class FinishStep(QWizardPage):
         self._file_info_label = QLabel("-")
         self._parsing_info_label = QLabel("-")
         self._columns_info_label = QLabel("-")
-        self._chart_type_label = QLabel("-")
-        self._x_axis_label = QLabel("-")
-        self._y_axis_label = QLabel("-")
-        self._group_label = QLabel("-")
-        self._hover_label = QLabel("-")
 
         self._setup_ui()
 
@@ -57,11 +52,6 @@ class FinishStep(QWizardPage):
         summary_layout.addRow("📁 파일:", self._file_info_label)
         summary_layout.addRow("📊 파싱:", self._parsing_info_label)
         summary_layout.addRow("📈 컬럼:", self._columns_info_label)
-        summary_layout.addRow("🎨 차트 타입:", self._chart_type_label)
-        summary_layout.addRow("➡️ X축:", self._x_axis_label)
-        summary_layout.addRow("⬆️ Y축:", self._y_axis_label)
-        summary_layout.addRow("🏷️ Group:", self._group_label)
-        summary_layout.addRow("💬 Hover:", self._hover_label)
 
         layout.addWidget(summary_group)
         layout.addStretch(1)
@@ -70,7 +60,6 @@ class FinishStep(QWizardPage):
     def initializePage(self) -> None:
         wizard = self.wizard()
         parsing_settings = None
-        graph_setting = None
         preview_df = None
 
         if wizard is not None:
@@ -79,10 +68,6 @@ class FinishStep(QWizardPage):
                 parsing_settings = parsing_page.get_parsing_settings()
             if parsing_page is not None and hasattr(parsing_page, "get_preview_df"):
                 preview_df = parsing_page.get_preview_df()
-
-            graph_page = wizard.page(1)
-            if graph_page is not None and hasattr(graph_page, "get_graph_setting"):
-                graph_setting = graph_page.get_graph_setting()
 
         file_path = getattr(parsing_settings, "file_path", None)
         if file_path:
@@ -116,21 +101,6 @@ class FinishStep(QWizardPage):
             self._columns_info_label.setText(
                 f"알 수 없음 ({excluded_count}개 제외)"
             )
-
-        chart_type = getattr(graph_setting, "chart_type", "-")
-        self._chart_type_label.setText(str(chart_type))
-
-        x_column = getattr(graph_setting, "x_column", None)
-        self._x_axis_label.setText(x_column or "없음")
-
-        y_columns = getattr(graph_setting, "value_columns", ())
-        self._y_axis_label.setText(self._format_columns(y_columns))
-
-        group_columns = getattr(graph_setting, "group_columns", ())
-        self._group_label.setText(self._format_columns(group_columns))
-
-        hover_columns = getattr(graph_setting, "hover_columns", ())
-        self._hover_label.setText(self._format_columns(hover_columns))
 
     def get_project_name(self) -> str:
         return self._project_name_input.text().strip()

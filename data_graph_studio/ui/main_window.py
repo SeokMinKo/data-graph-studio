@@ -650,6 +650,16 @@ class MainWindow(QMainWindow):
         data_menu.addAction(remove_field_action)
 
         # ============================================================
+        # Parser Menu
+        # ============================================================
+        parser_menu = menubar.addMenu("&Parser")
+
+        ftrace_action = QAction("&Ftrace Parser...", self)
+        ftrace_action.setStatusTip("Parse ftrace log file and load into table")
+        ftrace_action.triggered.connect(lambda: self._on_run_parser("ftrace"))
+        parser_menu.addAction(ftrace_action)
+
+        # ============================================================
         # Graph Menu
         # ============================================================
         graph_menu = menubar.addMenu("&Graph")
@@ -1826,6 +1836,61 @@ class MainWindow(QMainWindow):
     # ==================== Actions ====================
     
     # ==================== File Loading Delegates (-> FileLoadingController) ====================
+
+    def _on_run_parser(self, parser_key: str):
+        """Run a custom parser: select profile → open file → parse → load."""
+        from pathlib import Path
+        from data_graph_studio.parsers import FtraceParser, ParserProfileStore
+        from data_graph_studio.ui.dialogs.parser_profile_dialog import ParserProfileDialog
+
+        parsers = {
+            "ftrace": FtraceParser,
+        }
+
+        parser_cls = parsers.get(parser_key)
+        if parser_cls is None:
+            QMessageBox.warning(self, "Parser", f"Unknown parser: {parser_key}")
+            return
+
+        parser = parser_cls()
+
+        if not hasattr(self, '_parser_profile_store'):
+            self._parser_profile_store = ParserProfileStore()
+
+        # Show profile selection dialog
+        dialog = ParserProfileDialog(parser, self._parser_profile_store, self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        settings = dialog.get_selected_settings()
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, f"{parser.name} - Open File", "", parser.file_filter
+        )
+        if not file_path:
+            return
+
+        try:
+            df = parser.parse(file_path, settings=settings)
+        except NotImplementedError as e:
+            QMessageBox.information(self, parser.name, str(e))
+            return
+        except Exception as e:
+            QMessageBox.critical(self, parser.name, f"Parse failed:\n{e}")
+            return
+
+        # Load the parsed DataFrame into the engine
+        dataset_name = Path(file_path).stem
+        dataset_id = self.engine.load_dataset_from_dataframe(
+            df, name=dataset_name, source_path=file_path
+        )
+        if dataset_id:
+            self._on_data_loaded()
+            self.statusBar().showMessage(
+                f"{parser.name}: loaded {len(df)} rows from {Path(file_path).name}", 5000
+            )
+        else:
+            QMessageBox.warning(self, parser.name, "Failed to load parsed data.")
 
     def _on_open_file(self):
         self._file_controller._on_open_file()
