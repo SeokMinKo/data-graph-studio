@@ -1508,12 +1508,27 @@ class GraphPanel(QWidget):
 
             total_points += len(x_sampled)
 
+            # Hover data for compare overlay
+            hover_columns = self.state.hover_columns
+            series_hover = {}
+            if hover_columns:
+                for col in hover_columns:
+                    if col in df.columns:
+                        col_data = df[col].to_list()
+                        if len(col_data) > max_points and len(x_sampled) < len(col_data):
+                            step = max(1, len(col_data) // max(1, len(x_sampled)))
+                            col_data = col_data[::step][:len(x_sampled)]
+                        else:
+                            col_data = col_data[:len(x_sampled)]
+                        series_hover[col] = col_data
+
             all_series_data.append({
                 'x': x_sampled,
                 'y': y_sampled,
                 'name': name,
                 'color': color,
-                'dataset_id': dataset_id
+                'dataset_id': dataset_id,
+                'hover_data': series_hover,
             })
 
         # Plot all series
@@ -1524,6 +1539,15 @@ class GraphPanel(QWidget):
                 options=options,
                 legend_settings=legend_settings
             )
+
+            # Enable hover in compare overlay
+            hover_columns = self.state.hover_columns
+            if hover_columns:
+                # For multi-series hover we embed hover_data in each series dict.
+                # set_hover_data is still used to set which columns are shown.
+                self.main_graph.set_hover_data(hover_columns, {})
+            else:
+                self.main_graph.set_hover_data([], {})
 
             # Update sampling status
             self.main_graph.update_sampling_status(

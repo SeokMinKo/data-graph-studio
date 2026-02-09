@@ -58,6 +58,10 @@ class MainGraph(pg.PlotWidget):
         self._data_x = None
         self._data_y = None
 
+        # Multi-series (Compare/Overlay) hover support
+        # series: [{'x': np.ndarray, 'y': np.ndarray, 'name': str, 'hover_data': {col: list}}, ...]
+        self._multi_series_data: Optional[List[Dict[str, Any]]] = None
+
         # Selection highlight scatter
         self._selection_scatter = None
 
@@ -236,6 +240,7 @@ class MainGraph(pg.PlotWidget):
 
         self._data_x = x_data
         self._data_y = y_data
+        self._multi_series_data = None
 
         options = options or {}
         legend_settings = legend_settings or {'show': True, 'series': []}
@@ -619,10 +624,11 @@ class MainGraph(pg.PlotWidget):
                 item = self.plot(x, y, pen=pen, name=name)
                 self._plot_items.append(item)
 
-        # Store first series data for selection
+        # Store multi-series data for hover; keep first series as selection baseline
+        self._multi_series_data = series_data or None
         if series_data:
-            self._data_x = series_data[0]['x']
-            self._data_y = series_data[0]['y']
+            self._data_x = series_data[0].get('x')
+            self._data_y = series_data[0].get('y')
 
         # Update legend settings
         if legend_settings:
@@ -976,11 +982,7 @@ class MainGraph(pg.PlotWidget):
 
     def _on_mouse_moved(self, pos):
         """Handle mouse move for hover tooltip"""
-        if self._data_x is None or self._data_y is None:
-            self._hide_tooltip()
-            return
-
-        if not self._hover_columns or not self._hover_data:
+        if not self._hover_columns:
             self._hide_tooltip()
             return
 
@@ -988,57 +990,106 @@ class MainGraph(pg.PlotWidget):
         mouse_point = self.plotItem.vb.mapSceneToView(pos)
         mx, my = mouse_point.x(), mouse_point.y()
 
-        # Find nearest point
-        if len(self._data_x) == 0:
-            self._hide_tooltip()
-            return
-
         # Calculate distance to each point (normalized)
         view_range = self.viewRange()
         x_range = view_range[0][1] - view_range[0][0]
         y_range = view_range[1][1] - view_range[1][0]
-
         if x_range == 0 or y_range == 0:
             self._hide_tooltip()
             return
 
-        # Normalized distance (handle NaN values)
+        # Multi-series hover (Compare/Overlay)
+        if self._multi_series_data:
+            best = None  # (dist, series_name, idx, x, y, hover_data)
+            try:
+                for series in self._multi_series_data:
+                    x = series.get('x')
+                    y = series.get('y')
+                    if x is None or y is None or len(x) == 0:
+                        continue
+
+                    dx = (x - mx) / x_range
+                    dy = (y - my) / y_range
+                    distances = np.sqrt(dx**2 + dy**2)
+                    distances = np.where(np.isnan(distances), np.inf, distances)
+                    if np.all(np.isinf(distances)):
+                        continue
+
+                    idx = int(np.argmin(distances))
+                    dist = float(distances[idx])
+                    if np.isinf(dist):
+                        continue
+
+                    if best is None or dist < best[0]:
+                        best = (
+                            dist,
+                            series.get('name', ''),
+                            idx,
+                            float(x[idx]),
+                            float(y[idx]),
+                            series.get('hover_data') or {},
+                        )
+
+                if best and best[0] < 0.05:
+                    _, series_name, idx, x_val, y_val, hover_data = best
+                    self._show_tooltip(idx, x_val, y_val, series_name=series_name, hover_data=hover_data)
+                else:
+                    self._hide_tooltip()
+            except Exception:
+                self._hide_tooltip()
+            return
+
+        # Single-series hover
+        if self._data_x is None or self._data_y is None or self._hover_data is None:
+            self._hide_tooltip()
+            return
+        if len(self._data_x) == 0:
+            self._hide_tooltip()
+            return
+
         try:
             dx = (self._data_x - mx) / x_range
             dy = (self._data_y - my) / y_range
             distances = np.sqrt(dx**2 + dy**2)
-
-            # Replace NaN distances with infinity so they're not selected
             distances = np.where(np.isnan(distances), np.inf, distances)
-
             if np.all(np.isinf(distances)):
                 self._hide_tooltip()
                 return
 
-            nearest_idx = np.argmin(distances)
-            min_dist = distances[nearest_idx]
-
-            # Only show tooltip if close enough (within 5% of view range)
+            nearest_idx = int(np.argmin(distances))
+            min_dist = float(distances[nearest_idx])
             if min_dist < 0.05 and not np.isinf(min_dist):
-                self._show_tooltip(nearest_idx, self._data_x[nearest_idx], self._data_y[nearest_idx])
+                self._show_tooltip(nearest_idx, float(self._data_x[nearest_idx]), float(self._data_y[nearest_idx]))
             else:
                 self._hide_tooltip()
         except Exception:
             self._hide_tooltip()
 
-    def _show_tooltip(self, idx: int, x_val: float, y_val: float):
+    def _show_tooltip(
+        self,
+        idx: int,
+        x_val: float,
+        y_val: float,
+        series_name: str = "",
+        hover_data: Optional[Dict[str, list]] = None,
+    ):
         """Show tooltip at data point"""
         if self._tooltip_item is None:
             self._tooltip_item = pg.TextItem(anchor=(0, 1), fill='w', border='k')
             self._tooltip_item.setZValue(1000)
             self.addItem(self._tooltip_item)
 
+        hover_data = hover_data if hover_data is not None else (self._hover_data or {})
+
         # Build tooltip text
-        lines = [f"X: {self._format_value(x_val)}", f"Y: {self._format_value(y_val)}"]
+        lines = []
+        if series_name:
+            lines.append(f"Series: {series_name}")
+        lines.extend([f"X: {self._format_value(x_val)}", f"Y: {self._format_value(y_val)}"])
 
         for col in self._hover_columns:
-            if col in self._hover_data and idx < len(self._hover_data[col]):
-                val = self._hover_data[col][idx]
+            if col in hover_data and idx < len(hover_data[col]):
+                val = hover_data[col][idx]
                 lines.append(f"{col}: {self._format_value(val)}")
 
         self._tooltip_item.setText("\n".join(lines))

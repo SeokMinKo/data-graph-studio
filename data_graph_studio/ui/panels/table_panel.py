@@ -1401,17 +1401,34 @@ class TablePanel(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(6)
         
-        expand_btn = QPushButton("▼ Expand")
-        expand_btn.setObjectName("smallButton")
-        expand_btn.setToolTip("Expand all groups")
-        expand_btn.clicked.connect(self._expand_all)
-        toolbar.addWidget(expand_btn)
+        self.expand_btn = QPushButton("▼ Expand")
+        self.expand_btn.setObjectName("smallButton")
+        self.expand_btn.setToolTip("Expand all groups")
+        self.expand_btn.clicked.connect(self._expand_all)
+        toolbar.addWidget(self.expand_btn)
         
-        collapse_btn = QPushButton("▶ Collapse")
-        collapse_btn.setObjectName("smallButton")
-        collapse_btn.setToolTip("Collapse all groups")
-        collapse_btn.clicked.connect(self._collapse_all)
-        toolbar.addWidget(collapse_btn)
+        self.collapse_btn = QPushButton("▶ Collapse")
+        self.collapse_btn.setObjectName("smallButton")
+        self.collapse_btn.setToolTip("Collapse all groups")
+        self.collapse_btn.clicked.connect(self._collapse_all)
+        toolbar.addWidget(self.collapse_btn)
+
+        # Table view mode
+        toolbar.addWidget(QLabel("Table:"))
+        self.table_view_mode_combo = QComboBox()
+        self.table_view_mode_combo.setMinimumWidth(120)
+        self.table_view_mode_combo.setMaximumWidth(180)
+        self.table_view_mode_combo.addItem("Grouped", "grouped")
+        self.table_view_mode_combo.addItem("Rows (pre-group)", "pre_group")
+        self.table_view_mode_combo.addItem("Source Raw", "source_raw")
+        self.table_view_mode_combo.setToolTip(
+            "Choose how the table is displayed when Group By is configured.\n"
+            "- Grouped: hierarchical grouped table (current behavior)\n"
+            "- Rows (pre-group): show row-level data before grouping\n"
+            "- Source Raw: show the dataset as-loaded (ignore table filters/marking)"
+        )
+        self.table_view_mode_combo.currentIndexChanged.connect(self._on_table_view_mode_changed)
+        toolbar.addWidget(self.table_view_mode_combo)
         
         # Limit to Marking toggle button
         self.limit_marking_btn = QPushButton("🔗 Limit to Marking")
@@ -1582,7 +1599,20 @@ class TablePanel(QWidget):
             if visible_cols:
                 df = df.select(visible_cols)
 
-        if self.state.group_columns:
+        # Table view mode
+        view_mode = None
+        try:
+            view_mode = self.table_view_mode_combo.currentData()
+        except Exception:
+            view_mode = None
+
+        # "Source Raw" means: ignore table-level filters/marking/search and show engine.df as-is.
+        if view_mode == "source_raw":
+            df = self.engine.df if self.engine.is_loaded else df
+
+        show_grouped = bool(self.state.group_columns) and view_mode != "pre_group" and view_mode != "source_raw"
+
+        if show_grouped:
             if self.grouped_model is None:
                 self.grouped_model = GroupedTableModel()
             
@@ -1598,15 +1628,31 @@ class TablePanel(QWidget):
             )
             
             self.table_view.setModel(self.grouped_model)
-            
+
             group_names = " → ".join(group_cols)
             self.group_info_label.setText(f"Grouped: {group_names}")
             self.group_info_label.setProperty("state", "grouped")
             self.group_info_label.style().unpolish(self.group_info_label)
             self.group_info_label.style().polish(self.group_info_label)
+
+            # Grouped-only controls
+            try:
+                self.expand_btn.setEnabled(True)
+                self.collapse_btn.setEnabled(True)
+            except Exception:
+                pass
         else:
+            # Row-level table view
             self.table_model.set_dataframe(df)
             self.table_view.setModel(self.table_model)
+
+            # Disable grouped-only controls
+            try:
+                self.expand_btn.setEnabled(False)
+                self.collapse_btn.setEnabled(False)
+            except Exception:
+                pass
+
             # 데이터가 잘렸는지 표시
             actual_rows = self.table_model.get_actual_row_count()
             displayed_rows = self.table_model.rowCount()
@@ -1995,7 +2041,39 @@ class TablePanel(QWidget):
         """Update hidden columns bar"""
         hidden = list(self.state._hidden_columns)
         self.hidden_bar.update_hidden_columns(hidden)
-    
+
+    # ==================== Table View Mode ====================
+
+    def _on_table_view_mode_changed(self):
+        """Handle table view mode changes."""
+        if not self.engine.is_loaded:
+            return
+
+        mode = None
+        try:
+            mode = self.table_view_mode_combo.currentData()
+        except Exception:
+            mode = None
+
+        # Grouped mode only makes sense when Group By is configured.
+        if mode == "grouped" and not self.state.group_columns:
+            # Auto-fallback to row view when no group columns.
+            idx = self.table_view_mode_combo.findData("pre_group")
+            if idx >= 0:
+                self.table_view_mode_combo.blockSignals(True)
+                self.table_view_mode_combo.setCurrentIndex(idx)
+                self.table_view_mode_combo.blockSignals(False)
+
+        # Re-apply current table pipeline
+        if mode == "source_raw":
+            self._update_table_model(self.engine.df)
+            return
+
+        if self.state.limit_to_marking:
+            self._apply_limit_to_marking()
+        else:
+            self._apply_filters_and_update()
+
     # ==================== Limit to Marking ====================
     
     def _on_limit_marking_toggled(self, checked: bool):
