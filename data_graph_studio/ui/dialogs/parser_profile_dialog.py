@@ -57,7 +57,9 @@ class ParserProfileDialog(QDialog):
     # ------------------------------------------------------------------ UI
 
     def _build_ui(self) -> None:
-        root = QHBoxLayout(self)
+        wrapper = QVBoxLayout(self)
+
+        root = QHBoxLayout()
 
         # --- Left: profile list ---
         left = QVBoxLayout()
@@ -90,17 +92,13 @@ class ParserProfileDialog(QDialog):
 
         root.addLayout(right, 2)
 
+        wrapper.addLayout(root)
+
         # --- Bottom buttons ---
         self._button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
-        # Span full width below both panels
-        wrapper = QVBoxLayout()
-        wrapper.addLayout(root)
         wrapper.addWidget(self._button_box)
-        # Re-set layout
-        QWidget().setLayout(self.layout())  # detach old
-        self.setLayout(wrapper)
 
     def _connect_signals(self) -> None:
         self._list.currentRowChanged.connect(self._on_profile_selected)
