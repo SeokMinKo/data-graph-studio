@@ -206,7 +206,12 @@ class PerfettoTraceController(QObject):
 
     @staticmethod
     def find_trace_processor() -> str:
-        """trace_processor_shell 실행 파일 경로를 찾는다.
+        """trace_processor_shell 또는 래퍼 스크립트 경로를 찾는다.
+
+        탐색 순서:
+        1. 프로젝트 assets/bin/trace_processor (Python 래퍼, 자동 다운로드)
+        2. PATH에서 trace_processor_shell (네이티브 바이너리)
+        3. PATH에서 trace_processor (래퍼)
 
         Returns:
             실행 파일 경로.
@@ -214,15 +219,23 @@ class PerfettoTraceController(QObject):
         Raises:
             FileNotFoundError: 찾을 수 없을 때.
         """
-        name = "trace_processor_shell"
-        # Windows에서는 .exe
-        for candidate in [name, f"{name}.exe"]:
-            path = shutil.which(candidate)
+        # 1. 프로젝트 내부 assets
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        bundled = project_root / "assets" / "bin" / "trace_processor"
+        if bundled.exists():
+            return str(bundled)
+
+        # 2. PATH 탐색
+        for name in ["trace_processor_shell", "trace_processor_shell.exe",
+                      "trace_processor"]:
+            path = shutil.which(name)
             if path:
                 return path
+
         raise FileNotFoundError(
-            f"{name} not found in PATH.\n\n"
-            "Download from: https://perfetto.dev/docs/quickstart/traceconv"
+            "trace_processor_shell not found.\n\n"
+            "Run: curl -LO https://get.perfetto.dev/trace_processor\n"
+            "and place in assets/bin/"
         )
 
     def start_trace(self, serial: str, config: dict[str, Any]) -> None:
@@ -341,8 +354,7 @@ class PerfettoTraceController(QObject):
             tp_result = subprocess.run(
                 [
                     self._tp_shell,
-                    "--query", self.FTRACE_QUERY,
-                    "--csv",
+                    "-Q", self.FTRACE_QUERY,
                     trace_local,
                 ],
                 capture_output=True, text=True, timeout=120,
