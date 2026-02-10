@@ -1983,10 +1983,7 @@ data_sources: {
         ftrace_config {
             ftrace_events: "block/block_rq_issue"
             ftrace_events: "block/block_rq_complete"
-            ftrace_events: "block/block_rq_insert"
-            ftrace_events: "block/block_rq_requeue"
-            ftrace_events: "block/block_bio_queue"
-            ftrace_events: "block/block_bio_complete"
+            ftrace_events: "ufs/ufshcd_command"
             buffer_size_kb: 32768
         }
     }
