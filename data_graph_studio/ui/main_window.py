@@ -650,6 +650,19 @@ class MainWindow(QMainWindow):
         data_menu.addAction(remove_field_action)
 
         # ============================================================
+        # Logger Menu
+        # ============================================================
+        logger_menu = menubar.addMenu("&Logger")
+
+        self._blk_trace_action = QAction("Start &Block Layer Trace...", self)
+        self._blk_trace_action.setStatusTip("Start Perfetto block layer tracing via ADB")
+        self._blk_trace_action.triggered.connect(self._on_blk_trace_toggle)
+        logger_menu.addAction(self._blk_trace_action)
+
+        self._blk_trace_running = False
+        self._blk_trace_process = None
+
+        # ============================================================
         # Parser Menu
         # ============================================================
         parser_menu = menubar.addMenu("&Parser")
@@ -658,6 +671,13 @@ class MainWindow(QMainWindow):
         ftrace_action.setStatusTip("Parse ftrace log file and load into table")
         ftrace_action.triggered.connect(lambda: self._on_run_parser("ftrace"))
         parser_menu.addAction(ftrace_action)
+
+        parser_menu.addSeparator()
+
+        manage_profiles_action = QAction("Manage &Profiles...", self)
+        manage_profiles_action.setStatusTip("Manage parser profiles")
+        manage_profiles_action.triggered.connect(self._on_manage_parser_profiles)
+        parser_menu.addAction(manage_profiles_action)
 
         # ============================================================
         # Graph Menu
@@ -1837,11 +1857,22 @@ class MainWindow(QMainWindow):
     
     # ==================== File Loading Delegates (-> FileLoadingController) ====================
 
-    def _on_run_parser(self, parser_key: str):
-        """Run a custom parser: select profile → open file → parse → load."""
-        from pathlib import Path
+    def _on_manage_parser_profiles(self):
+        """Open parser profile manager dialog."""
         from data_graph_studio.parsers import FtraceParser, ParserProfileStore
         from data_graph_studio.ui.dialogs.parser_profile_dialog import ParserProfileDialog
+
+        parser = FtraceParser()
+        if not hasattr(self, '_parser_profile_store'):
+            self._parser_profile_store = ParserProfileStore()
+
+        dialog = ParserProfileDialog(parser, self._parser_profile_store, self)
+        dialog.exec()
+
+    def _on_run_parser(self, parser_key: str):
+        """Run a custom parser: open file → parse → load."""
+        from pathlib import Path
+        from data_graph_studio.parsers import FtraceParser, ParserProfileStore
 
         parsers = {
             "ftrace": FtraceParser,
@@ -1854,21 +1885,15 @@ class MainWindow(QMainWindow):
 
         parser = parser_cls()
 
-        if not hasattr(self, '_parser_profile_store'):
-            self._parser_profile_store = ParserProfileStore()
-
-        # Show profile selection dialog
-        dialog = ParserProfileDialog(parser, self._parser_profile_store, self)
-        if dialog.exec() != dialog.DialogCode.Accepted:
-            return
-
-        settings = dialog.get_selected_settings()
-
+        # Open file first
         file_path, _ = QFileDialog.getOpenFileName(
             self, f"{parser.name} - Open File", "", parser.file_filter
         )
         if not file_path:
             return
+
+        # Use default settings (user can manage profiles separately)
+        settings = parser.default_settings()
 
         try:
             df = parser.parse(file_path, settings=settings)
@@ -1891,6 +1916,165 @@ class MainWindow(QMainWindow):
             )
         else:
             QMessageBox.warning(self, parser.name, "Failed to load parsed data.")
+
+    # ================================================================
+    # Logger — ADB + Perfetto block layer tracing
+    # ================================================================
+
+    def _on_blk_trace_toggle(self):
+        """Toggle block layer trace start/stop."""
+        if self._blk_trace_running:
+            self._stop_blk_trace()
+        else:
+            self._start_blk_trace()
+
+    def _start_blk_trace(self):
+        """Start Perfetto block layer tracing via ADB."""
+        import subprocess
+        import shutil
+
+        # Check ADB is available
+        if not shutil.which("adb"):
+            QMessageBox.warning(
+                self, "Logger",
+                "adb not found in PATH.\n\n"
+                "Install Android SDK Platform Tools and ensure 'adb' is in your PATH."
+            )
+            return
+
+        # Check device connected
+        try:
+            result = subprocess.run(
+                ["adb", "devices"], capture_output=True, text=True, timeout=5
+            )
+            lines = [l for l in result.stdout.strip().split('\n')[1:] if l.strip() and 'device' in l]
+            if not lines:
+                QMessageBox.warning(
+                    self, "Logger",
+                    "No Android device connected.\n\n"
+                    "Connect a device via USB and enable USB debugging."
+                )
+                return
+        except Exception as e:
+            QMessageBox.warning(self, "Logger", f"ADB check failed: {e}")
+            return
+
+        # Ask for output file location
+        import os
+        default_name = f"blktrace_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}.perfetto-trace"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Trace File", default_name,
+            "Perfetto Trace (*.perfetto-trace);;All Files (*)"
+        )
+        if not save_path:
+            return
+
+        self._blk_trace_output = save_path
+
+        # Perfetto config for block layer events
+        perfetto_config = """
+buffers: {
+    size_kb: 65536
+    fill_policy: RING_BUFFER
+}
+data_sources: {
+    config {
+        name: "linux.ftrace"
+        ftrace_config {
+            ftrace_events: "block/block_rq_issue"
+            ftrace_events: "block/block_rq_complete"
+            ftrace_events: "block/block_rq_insert"
+            ftrace_events: "block/block_rq_requeue"
+            ftrace_events: "block/block_bio_queue"
+            ftrace_events: "block/block_bio_complete"
+            buffer_size_kb: 32768
+        }
+    }
+}
+duration_ms: 0
+"""
+        # Push config to device
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.pbtxt', delete=False) as f:
+            f.write(perfetto_config)
+            config_path = f.name
+
+        try:
+            subprocess.run(
+                ["adb", "push", config_path, "/data/local/tmp/blk_trace_config.pbtxt"],
+                capture_output=True, text=True, timeout=10, check=True
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Logger", f"Failed to push config: {e}")
+            os.unlink(config_path)
+            return
+
+        os.unlink(config_path)
+
+        # Start Perfetto trace
+        try:
+            self._blk_trace_process = subprocess.Popen(
+                ["adb", "shell", "perfetto", "-c", "/data/local/tmp/blk_trace_config.pbtxt",
+                 "-o", "/data/local/tmp/blk_trace.perfetto-trace"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Logger", f"Failed to start trace: {e}")
+            return
+
+        self._blk_trace_running = True
+        self._blk_trace_action.setText("Stop &Block Layer Trace")
+        self._blk_trace_action.setStatusTip("Stop the running block layer trace")
+        self.statusBar().showMessage("Block layer trace started...", 5000)
+
+    def _stop_blk_trace(self):
+        """Stop block layer trace and pull the file."""
+        import subprocess
+
+        if self._blk_trace_process:
+            # Send SIGINT to perfetto via ADB
+            try:
+                subprocess.run(
+                    ["adb", "shell", "pkill", "-SIGINT", "perfetto"],
+                    capture_output=True, text=True, timeout=5
+                )
+                self._blk_trace_process.wait(timeout=10)
+            except Exception:
+                try:
+                    self._blk_trace_process.kill()
+                except Exception:
+                    pass
+
+        # Pull trace file from device
+        try:
+            subprocess.run(
+                ["adb", "pull", "/data/local/tmp/blk_trace.perfetto-trace",
+                 self._blk_trace_output],
+                capture_output=True, text=True, timeout=30, check=True
+            )
+            self.statusBar().showMessage(
+                f"Trace saved: {self._blk_trace_output}", 5000
+            )
+
+            # Ask if user wants to parse now
+            reply = QMessageBox.question(
+                self, "Logger",
+                f"Trace saved to:\n{self._blk_trace_output}\n\n"
+                "Open with Ftrace Parser now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._on_run_parser("ftrace")
+
+        except Exception as e:
+            QMessageBox.warning(self, "Logger", f"Failed to pull trace: {e}")
+
+        # Cleanup
+        self._blk_trace_process = None
+        self._blk_trace_running = False
+        self._blk_trace_action.setText("Start &Block Layer Trace...")
+        self._blk_trace_action.setStatusTip("Start Perfetto block layer tracing via ADB")
 
     def _on_open_file(self):
         self._file_controller._on_open_file()
