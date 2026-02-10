@@ -357,7 +357,10 @@ class MiniGraphWidget(QWidget):
 
         color_idx = 0
         for group_val in groups:
-            mask = df[grp_col] == group_val
+            if group_val is None:
+                mask = df[grp_col].is_null().to_numpy().astype(bool)
+            else:
+                mask = (df[grp_col] == group_val).to_numpy().astype(bool)
             indices = np.where(mask)[0]
 
             if len(indices) == 0:

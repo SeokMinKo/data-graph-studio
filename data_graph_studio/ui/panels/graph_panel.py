@@ -1689,7 +1689,10 @@ class GraphPanel(QWidget):
             
             for val in unique_values:
                 group_name = str(val) if val is not None else "(Empty)"
-                mask = (df[col] == val).to_numpy()
+                if val is None:
+                    mask = df[col].is_null().to_numpy().astype(bool)
+                else:
+                    mask = (df[col] == val).to_numpy().astype(bool)
                 groups[group_name] = mask
         else:
             combined = df.select(group_cols)
@@ -1702,9 +1705,9 @@ class GraphPanel(QWidget):
                 mask = np.ones(n_rows, dtype=bool)
                 for col, val in zip(group_cols, row):
                     if val is None:
-                        mask &= df[col].is_null().to_numpy()
+                        mask &= df[col].is_null().to_numpy().astype(bool)
                     else:
-                        mask &= (df[col] == val).to_numpy()
+                        mask &= (df[col] == val).to_numpy().astype(bool)
                 
                 groups[group_name] = mask
         
