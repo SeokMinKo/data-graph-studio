@@ -219,11 +219,13 @@ class PerfettoTraceController(QObject):
         Raises:
             FileNotFoundError: 찾을 수 없을 때.
         """
-        # 1. 프로젝트 내부 assets
+        # 1. 프로젝트 내부 assets (네이티브 바이너리 우선)
         project_root = Path(__file__).resolve().parent.parent.parent.parent
-        bundled = project_root / "assets" / "bin" / "trace_processor"
-        if bundled.exists():
-            return str(bundled)
+        bin_dir = project_root / "assets" / "bin"
+        for name in ["trace_processor_shell", "trace_processor"]:
+            bundled = bin_dir / name
+            if bundled.exists():
+                return str(bundled)
 
         # 2. PATH 탐색
         for name in ["trace_processor_shell", "trace_processor_shell.exe",
