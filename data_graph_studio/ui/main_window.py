@@ -1951,6 +1951,7 @@ class MainWindow(QMainWindow):
         from data_graph_studio.ui.dialogs.android_logger_wizard import load_logger_config
         from data_graph_studio.ui.dialogs.trace_progress_dialog import (
             AdbTraceController,
+            PerfettoTraceController,
             TraceProgressDialog,
         )
 
@@ -1974,19 +1975,36 @@ class MainWindow(QMainWindow):
             )
             return
 
+        capture_mode = logger_cfg.get("capture_mode", "perfetto")
+        is_perfetto = capture_mode == "perfetto"
+
+        # 저장 경로 결정
         save_path = logger_cfg.get("save_path", "")
         if not save_path:
-            default_name = (
-                f"ftrace_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            )
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            if is_perfetto:
+                default_name = f"trace_{ts}.csv"
+                file_filter = "CSV (*.csv);;All Files (*)"
+            else:
+                default_name = f"ftrace_{ts}.txt"
+                file_filter = "Ftrace Text (*.txt);;All Files (*)"
             save_path, _ = QFileDialog.getSaveFileName(
-                self, "Save Trace File", default_name,
-                "Ftrace Text (*.txt);;All Files (*)",
+                self, "Save Trace File", default_name, file_filter,
             )
             if not save_path:
                 return
 
-        controller = AdbTraceController(self)
+        # 컨트롤러 생성 (캡처 모드에 따라)
+        if is_perfetto:
+            try:
+                PerfettoTraceController.find_trace_processor()
+            except FileNotFoundError as e:
+                QMessageBox.warning(self, "Logger", str(e))
+                return
+            controller = PerfettoTraceController(self)
+        else:
+            controller = AdbTraceController(self)
+
         try:
             controller.start_trace(serial, logger_cfg)
         except Exception as e:
@@ -1999,15 +2017,73 @@ class MainWindow(QMainWindow):
 
         if result == QDialog.DialogCode.Accepted:
             self.statusBar().showMessage(f"Trace saved: {save_path}", 5000)
-            reply = QMessageBox.question(
-                self, "Logger",
-                f"Trace saved to:\n{save_path}\n\n"
-                "Open with Ftrace Parser now?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
+
+            if is_perfetto:
+                # Perfetto → CSV → polars로 직접 로드
+                self._load_csv_async(save_path)
+            else:
+                # Raw ftrace → regex 파싱
+                reply = QMessageBox.question(
+                    self, "Logger",
+                    f"Trace saved to:\n{save_path}\n\n"
+                    "Open with Ftrace Parser now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self._parse_ftrace_async(save_path)
+
+    def _load_csv_async(self, csv_path: str) -> None:
+        """Load a CSV file (from trace_processor_shell) in a background thread.
+
+        Args:
+            csv_path: Path to the CSV file.
+        """
+        from pathlib import Path
+        from PySide6.QtCore import QThread, Signal as QtSignal
+
+        import polars as pl
+
+        class _CsvWorker(QThread):
+            finished = QtSignal(object)
+            error = QtSignal(str)
+
+            def run(self_w):
+                try:
+                    df = pl.read_csv(csv_path)
+                    # ts is in nanoseconds, convert to seconds
+                    if "ts" in df.columns:
+                        df = df.with_columns(
+                            (pl.col("ts").cast(pl.Float64) / 1e9).alias("timestamp")
+                        ).drop("ts")
+                    self_w.finished.emit(df)
+                except Exception as e:
+                    self_w.error.emit(str(e))
+
+        self.statusBar().showMessage("Loading CSV...", 0)
+        worker = _CsvWorker(self)
+
+        def on_finished(df):
+            name = Path(csv_path).stem
+            did = self.engine.load_dataset_from_dataframe(
+                df, name=name, source_path=csv_path
             )
-            if reply == QMessageBox.StandardButton.Yes:
-                self._parse_ftrace_async(save_path)
+            if did:
+                self._on_data_loaded()
+                self.statusBar().showMessage(
+                    f"Perfetto trace: loaded {len(df)} rows", 5000,
+                )
+            else:
+                QMessageBox.warning(self, "Logger", "Failed to load CSV data.")
+
+        def on_error(msg):
+            QMessageBox.critical(self, "Logger", f"CSV load failed:\n{msg}")
+            self.statusBar().clearMessage()
+
+        worker.finished.connect(on_finished)
+        worker.error.connect(on_error)
+        self._csv_worker = worker
+        worker.start()
 
     def _parse_ftrace_async(self, file_path: str) -> None:
         """Parse an ftrace text file in a background thread.

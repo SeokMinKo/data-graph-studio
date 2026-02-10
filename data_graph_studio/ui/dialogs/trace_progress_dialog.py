@@ -1,12 +1,14 @@
 """ADB Trace Controller and Progress Dialog.
 
-Raw ftrace 캡처를 위한 ADB 명령 컨트롤러와 진행 상황 다이얼로그.
+Raw ftrace / Perfetto 캡처를 위한 ADB 명령 컨트롤러와 진행 상황 다이얼로그.
 """
 
 from __future__ import annotations
 
 import shlex
+import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -159,6 +161,224 @@ class AdbTraceController(QObject):
         except Exception:
             pass
         self._disable_events()
+
+
+class PerfettoTraceController(QObject):
+    """Perfetto 기반 캡처 + trace_processor_shell CSV 변환 컨트롤러.
+
+    Flow:
+        1. perfetto config push → perfetto 실행 (adb shell)
+        2. Stop 시 SIGINT → pull .perfetto-trace
+        3. trace_processor_shell로 CSV 변환
+        4. CSV 경로 emit
+
+    Signals:
+        log_message: 로그 메시지.
+        progress: 현재 단계.
+        finished: 완료 시 CSV 파일 경로.
+        error: 에러 메시지.
+    """
+
+    log_message = Signal(str)
+    progress = Signal(str)
+    finished = Signal(str)
+    error = Signal(str)
+
+    # ftrace_event 테이블 쿼리 — ts(나노초), cpu, event name, args
+    FTRACE_QUERY = (
+        "SELECT fe.ts, c.cpu, fe.name, t.name AS task, t.tid AS pid, "
+        "group_concat(a.key || '=' || a.display_value, ' ') AS details "
+        "FROM ftrace_event fe "
+        "LEFT JOIN cpu c ON fe.ucpu = c.id "
+        "LEFT JOIN thread t ON fe.utid = t.id "
+        "LEFT JOIN args a ON fe.arg_set_id = a.arg_set_id "
+        "GROUP BY fe.id "
+        "ORDER BY fe.ts"
+    )
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._serial: str = ""
+        self._process: subprocess.Popen | None = None
+        self._tracing: bool = False
+        self._trace_device_path = "/data/local/tmp/dgs_trace.perfetto-trace"
+        self._tp_shell: str = ""
+
+    @staticmethod
+    def find_trace_processor() -> str:
+        """trace_processor_shell 실행 파일 경로를 찾는다.
+
+        Returns:
+            실행 파일 경로.
+
+        Raises:
+            FileNotFoundError: 찾을 수 없을 때.
+        """
+        name = "trace_processor_shell"
+        # Windows에서는 .exe
+        for candidate in [name, f"{name}.exe"]:
+            path = shutil.which(candidate)
+            if path:
+                return path
+        raise FileNotFoundError(
+            f"{name} not found in PATH.\n\n"
+            "Download from: https://perfetto.dev/docs/quickstart/traceconv"
+        )
+
+    def start_trace(self, serial: str, config: dict[str, Any]) -> None:
+        """Perfetto 트레이스를 시작한다.
+
+        Args:
+            serial: 기기 시리얼 번호.
+            config: 트레이스 설정 (buffer_size_mb, events).
+        """
+        self._serial = serial
+        self._tp_shell = self.find_trace_processor()
+
+        buffer_kb = config.get("buffer_size_mb", 64) * 1024
+        events = config.get("events", [
+            "block/block_rq_issue",
+            "block/block_rq_complete",
+            "ufs/ufshcd_command",
+        ])
+
+        events_str = "\n".join(f'            ftrace_events: "{e}"' for e in events)
+        perfetto_config = (
+            f"buffers: {{\n"
+            f"    size_kb: {buffer_kb}\n"
+            f"    fill_policy: RING_BUFFER\n"
+            f"}}\n"
+            f"data_sources: {{\n"
+            f"    config {{\n"
+            f'        name: "linux.ftrace"\n'
+            f"        ftrace_config {{\n"
+            f"{events_str}\n"
+            f"            buffer_size_kb: {buffer_kb // 2}\n"
+            f"        }}\n"
+            f"    }}\n"
+            f"}}\n"
+            f"duration_ms: 0\n"
+        )
+
+        # Push config
+        self.progress.emit("Pushing perfetto config...")
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".pbtxt", delete=False
+        ) as f:
+            f.write(perfetto_config)
+            config_path = f.name
+
+        adb = ["adb", "-s", serial]
+        device_config = "/data/local/tmp/dgs_perfetto.pbtxt"
+        try:
+            subprocess.run(
+                adb + ["push", config_path, device_config],
+                capture_output=True, text=True, timeout=10, check=True,
+            )
+        finally:
+            Path(config_path).unlink(missing_ok=True)
+
+        # Start perfetto
+        self.progress.emit("Starting perfetto...")
+        self.log_message.emit(
+            f"$ adb -s {serial} shell perfetto -c {device_config} "
+            f"-o {self._trace_device_path}"
+        )
+        self._process = subprocess.Popen(
+            adb + [
+                "shell", "perfetto",
+                "-c", device_config,
+                "-o", self._trace_device_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self._tracing = True
+        self.log_message.emit("Perfetto tracing started.")
+
+    def stop_trace(self, save_path: str) -> None:
+        """트레이스 중지 → pull → trace_processor_shell CSV 변환.
+
+        Args:
+            save_path: 최종 CSV 파일 저장 경로.
+        """
+        adb = ["adb", "-s", self._serial]
+        trace_local = str(Path(save_path).with_suffix(".perfetto-trace"))
+
+        try:
+            # 1. Stop perfetto (SIGINT)
+            self.progress.emit("Stopping perfetto...")
+            subprocess.run(
+                adb + ["shell", "kill", "-SIGINT",
+                       "$(pidof perfetto)"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if self._process:
+                try:
+                    self._process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+            self._tracing = False
+
+            # 2. Pull binary trace
+            self.progress.emit("Pulling trace file...")
+            result = subprocess.run(
+                adb + ["pull", self._trace_device_path, trace_local],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Failed to pull trace: {result.stderr.strip()}"
+                )
+            self.log_message.emit(f"Binary trace: {trace_local}")
+
+            # 3. Convert to CSV via trace_processor_shell
+            self.progress.emit("Converting to CSV...")
+            csv_path = str(Path(save_path).with_suffix(".csv"))
+            self.log_message.emit(
+                f"$ {self._tp_shell} -q '...' {trace_local}"
+            )
+            tp_result = subprocess.run(
+                [
+                    self._tp_shell,
+                    "--query", self.FTRACE_QUERY,
+                    "--csv",
+                    trace_local,
+                ],
+                capture_output=True, text=True, timeout=120,
+            )
+            if tp_result.returncode != 0:
+                raise RuntimeError(
+                    f"trace_processor_shell failed: {tp_result.stderr.strip()}"
+                )
+
+            Path(csv_path).write_text(tp_result.stdout, encoding="utf-8")
+            self.log_message.emit(f"CSV saved: {csv_path}")
+            self.finished.emit(csv_path)
+
+        except Exception as e:
+            self.error.emit(str(e))
+        finally:
+            self._process = None
+
+    def cleanup(self) -> None:
+        """Perfetto 프로세스를 정리한다 (idempotent)."""
+        if self._process:
+            try:
+                self._process.kill()
+            except Exception:
+                pass
+            self._process = None
+        if self._tracing and self._serial:
+            try:
+                subprocess.run(
+                    ["adb", "-s", self._serial, "shell",
+                     "kill", "-9", "$(pidof perfetto)"],
+                    capture_output=True, text=True, timeout=5,
+                )
+            except Exception:
+                pass
+            self._tracing = False
 
 
 class _StopWorker(QThread):
