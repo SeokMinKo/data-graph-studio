@@ -18,7 +18,7 @@ from PySide6.QtCore import (
     Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
     QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QEvent, QSize
 )
-from PySide6.QtGui import QDrag, QAction, QDropEvent, QDragEnterEvent
+from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnterEvent
 
 from ...core.state import AppState, AggregationType, GroupColumn, ValueColumn
 from ...core.data_engine import DataEngine
@@ -53,6 +53,9 @@ class PolarsTableModel(QAbstractTableModel):
         self._sort_column: Optional[int] = None
         self._sort_order: Optional[Qt.SortOrder] = None
         self._sort_indices: Optional[pl.Series] = None  # 원본 인덱스 매핑
+        # Focusing 하이라이트
+        self._focused_rows: set = set()
+        self._focus_brush = QBrush(QColor(200, 240, 200))  # 연한 초록색
 
     def set_dataframe(self, df: Optional[pl.DataFrame]):
         self.beginResetModel()
@@ -85,6 +88,11 @@ class PolarsTableModel(QAbstractTableModel):
         if not index.isValid() or self._df is None:
             return None
 
+        if role == Qt.BackgroundRole:
+            if index.row() in self._focused_rows:
+                return self._focus_brush
+            return None
+
         if role == Qt.DisplayRole or role == Qt.EditRole:
             row = index.row()
             col = index.column()
@@ -105,6 +113,23 @@ class PolarsTableModel(QAbstractTableModel):
                     return str(value)
 
         return None
+
+    def set_focused_rows(self, rows: set):
+        """Set rows to highlight with focus color."""
+        old = self._focused_rows
+        self._focused_rows = set(rows)
+        # Emit dataChanged for affected rows
+        changed = old.symmetric_difference(self._focused_rows)
+        if changed and self._row_count > 0:
+            min_row = min(r for r in changed if r < self._row_count) if any(r < self._row_count for r in changed) else 0
+            max_row = max(r for r in changed if r < self._row_count) if any(r < self._row_count for r in changed) else 0
+            col_count = len(self._visible_columns)
+            if col_count > 0:
+                self.dataChanged.emit(
+                    self.index(min_row, 0),
+                    self.index(max_row, col_count - 1),
+                    [Qt.BackgroundRole],
+                )
 
     def _cache_column(self, col: int):
         """컬럼 데이터를 캐시에 로드 (한 번만 변환)"""
@@ -1439,6 +1464,40 @@ class TablePanel(QWidget):
         self.limit_marking_btn.clicked.connect(self._on_limit_marking_toggled)
         toolbar.addWidget(self.limit_marking_btn)
 
+        # Focus navigation
+        self.focus_btn = QPushButton("🔍 Focus")
+        self.focus_btn.setCheckable(True)
+        self.focus_btn.setChecked(False)
+        self.focus_btn.setObjectName("focusBtn")
+        self.focus_btn.setToolTip("Auto-scroll to selected rows and highlight them")
+        self.focus_btn.clicked.connect(self._on_focus_toggled)
+        toolbar.addWidget(self.focus_btn)
+
+        self.focus_prev_btn = QPushButton("◀")
+        self.focus_prev_btn.setFixedWidth(30)
+        self.focus_prev_btn.setToolTip("Previous selected row")
+        self.focus_prev_btn.setEnabled(False)
+        self.focus_prev_btn.clicked.connect(self._on_focus_prev)
+        toolbar.addWidget(self.focus_prev_btn)
+
+        self.focus_label = QLabel("")
+        self.focus_label.setFixedWidth(50)
+        self.focus_label.setAlignment(Qt.AlignCenter)
+        self.focus_label.setStyleSheet("font-size: 10px;")
+        toolbar.addWidget(self.focus_label)
+
+        self.focus_next_btn = QPushButton("▶")
+        self.focus_next_btn.setFixedWidth(30)
+        self.focus_next_btn.setToolTip("Next selected row")
+        self.focus_next_btn.setEnabled(False)
+        self.focus_next_btn.clicked.connect(self._on_focus_next)
+        toolbar.addWidget(self.focus_next_btn)
+
+        # Focus internal state
+        self._focus_enabled = False
+        self._focus_sorted_rows: List[int] = []
+        self._focus_current_idx = 0
+
         # GroupBy comboboxes (최대 2개)
         toolbar.addWidget(QLabel("Group:"))
 
@@ -2089,6 +2148,8 @@ class TablePanel(QWidget):
         """Update table when selection changes and limit to marking is enabled"""
         if self.state.limit_to_marking:
             self._apply_limit_to_marking()
+        if self._focus_enabled:
+            self._update_focus_from_selection()
     
     def _apply_limit_to_marking(self):
         """Apply limit to marking filter to table"""
@@ -2130,6 +2191,92 @@ class TablePanel(QWidget):
             # Show all data
             self._apply_filters_and_update()
     
+    # ==================== Focusing ====================
+
+    def _on_focus_toggled(self, checked: bool):
+        """Toggle focus mode."""
+        self._focus_enabled = checked
+        if checked:
+            self._update_focus_from_selection()
+        else:
+            self._clear_focus()
+
+    def _update_focus_from_selection(self):
+        """Update focus state from current selection."""
+        if not self._focus_enabled or not self.engine.is_loaded:
+            self._clear_focus()
+            return
+
+        selected = self.state.selection.selected_rows
+        if not selected:
+            self._clear_focus()
+            return
+
+        max_row = len(self.engine.df) if self.engine.df is not None else 0
+        valid = sorted(r for r in selected if 0 <= r < max_row)
+        if not valid:
+            self._clear_focus()
+            return
+
+        self._focus_sorted_rows = valid
+        self._focus_current_idx = 0
+
+        # Highlight rows in model
+        model = self.table_view.model()
+        if isinstance(model, PolarsTableModel):
+            model.set_focused_rows(set(valid))
+
+        self._update_focus_nav()
+        self._scroll_to_focus_current()
+
+    def _clear_focus(self):
+        """Clear all focus state."""
+        self._focus_sorted_rows = []
+        self._focus_current_idx = 0
+        self.focus_prev_btn.setEnabled(False)
+        self.focus_next_btn.setEnabled(False)
+        self.focus_label.setText("")
+
+        model = self.table_view.model()
+        if isinstance(model, PolarsTableModel):
+            model.set_focused_rows(set())
+
+    def _update_focus_nav(self):
+        """Update back/next buttons and label."""
+        count = len(self._focus_sorted_rows)
+        if count == 0:
+            self.focus_prev_btn.setEnabled(False)
+            self.focus_next_btn.setEnabled(False)
+            self.focus_label.setText("")
+            return
+
+        idx = self._focus_current_idx
+        self.focus_prev_btn.setEnabled(idx > 0)
+        self.focus_next_btn.setEnabled(idx < count - 1)
+        self.focus_label.setText(f"{idx + 1}/{count}")
+
+    def _scroll_to_focus_current(self):
+        """Scroll table to the current focus row."""
+        if not self._focus_sorted_rows:
+            return
+        row = self._focus_sorted_rows[self._focus_current_idx]
+        model = self.table_view.model()
+        if model and row < model.rowCount():
+            index = model.index(row, 0)
+            self.table_view.scrollTo(index, QAbstractItemView.PositionAtCenter)
+
+    def _on_focus_prev(self):
+        if self._focus_current_idx > 0:
+            self._focus_current_idx -= 1
+            self._update_focus_nav()
+            self._scroll_to_focus_current()
+
+    def _on_focus_next(self):
+        if self._focus_current_idx < len(self._focus_sorted_rows) - 1:
+            self._focus_current_idx += 1
+            self._update_focus_nav()
+            self._scroll_to_focus_current()
+
     # ==================== Windowed Loading ====================
 
     def _update_window_controls(self):
