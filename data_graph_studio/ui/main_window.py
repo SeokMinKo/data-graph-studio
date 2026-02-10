@@ -662,6 +662,13 @@ class MainWindow(QMainWindow):
         self._blk_trace_running = False
         self._blk_trace_process = None
 
+        logger_menu.addSeparator()
+
+        setup_android_action = QAction("Setup &Android Logger...", self)
+        setup_android_action.setStatusTip("Open the Android Logger Setup Wizard")
+        setup_android_action.triggered.connect(self._on_setup_android_logger)
+        logger_menu.addAction(setup_android_action)
+
         # ============================================================
         # Parser Menu
         # ============================================================
@@ -1918,6 +1925,20 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, parser.name, "Failed to load parsed data.")
 
     # ================================================================
+    # Logger — Android Logger Setup Wizard
+    # ================================================================
+
+    def _on_setup_android_logger(self) -> None:
+        """Open the Android Logger Setup Wizard."""
+        from data_graph_studio.ui.dialogs.android_logger_wizard import AndroidLoggerWizard
+
+        wizard = AndroidLoggerWizard(self)
+        wizard.exec()
+
+        if wizard.start_requested:
+            self._start_blk_trace()
+
+    # ================================================================
     # Logger — ADB + Perfetto block layer tracing
     # ================================================================
 
@@ -1929,65 +1950,90 @@ class MainWindow(QMainWindow):
             self._start_blk_trace()
 
     def _start_blk_trace(self):
-        """Start Perfetto block layer tracing via ADB."""
+        """Start Perfetto block layer tracing via ADB.
+
+        Wizard에서 저장한 config가 있으면 해당 설정을 사용한다.
+        """
         import subprocess
         import shutil
+
+        from data_graph_studio.ui.dialogs.android_logger_wizard import load_logger_config
+
+        # Wizard config 로드 (있으면 사용)
+        logger_cfg = load_logger_config()
 
         # Check ADB is available
         if not shutil.which("adb"):
             QMessageBox.warning(
                 self, "Logger",
                 "adb not found in PATH.\n\n"
-                "Install Android SDK Platform Tools and ensure 'adb' is in your PATH."
+                "Install Android SDK Platform Tools and ensure 'adb' is in your PATH.\n"
+                "Or use Logger → Setup Android Logger... to configure."
             )
             return
+
+        # 기기 시리얼 (config에서 가져오거나 자동 감지)
+        adb_prefix = ["adb"]
+        device_serial = logger_cfg.get("device_serial", "")
+        if device_serial:
+            adb_prefix = ["adb", "-s", device_serial]
 
         # Check device connected
         try:
             result = subprocess.run(
-                ["adb", "devices"], capture_output=True, text=True, timeout=5
+                adb_prefix + ["get-state"], capture_output=True, text=True, timeout=5
             )
-            lines = [l for l in result.stdout.strip().split('\n')[1:] if l.strip() and 'device' in l]
-            if not lines:
+            if "device" not in result.stdout:
                 QMessageBox.warning(
                     self, "Logger",
                     "No Android device connected.\n\n"
-                    "Connect a device via USB and enable USB debugging."
+                    "Connect a device via USB and enable USB debugging.\n"
+                    "Or use Logger → Setup Android Logger... to configure."
                 )
                 return
         except Exception as e:
             QMessageBox.warning(self, "Logger", f"ADB check failed: {e}")
             return
 
-        # Ask for output file location
+        # 저장 경로 결정
         import os
-        default_name = f"blktrace_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}.perfetto-trace"
-        save_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Trace File", default_name,
-            "Perfetto Trace (*.perfetto-trace);;All Files (*)"
-        )
+        save_path = logger_cfg.get("save_path", "")
         if not save_path:
-            return
+            default_name = f"blktrace_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}.perfetto-trace"
+            save_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Trace File", default_name,
+                "Perfetto Trace (*.perfetto-trace);;All Files (*)"
+            )
+            if not save_path:
+                return
 
         self._blk_trace_output = save_path
 
-        # Perfetto config for block layer events
-        perfetto_config = """
-buffers: {
-    size_kb: 65536
+        # Config에서 설정값 읽기
+        buffer_size_kb = logger_cfg.get("buffer_size_mb", 64) * 1024
+        events = logger_cfg.get("events", [
+            "block/block_rq_issue",
+            "block/block_rq_complete",
+            "ufs/ufshcd_command",
+        ])
+        ftrace_buffer_kb = buffer_size_kb // 2
+
+        # Perfetto config 생성
+        events_str = "\n".join(f'            ftrace_events: "{e}"' for e in events)
+        perfetto_config = f"""
+buffers: {{
+    size_kb: {buffer_size_kb}
     fill_policy: RING_BUFFER
-}
-data_sources: {
-    config {
+}}
+data_sources: {{
+    config {{
         name: "linux.ftrace"
-        ftrace_config {
-            ftrace_events: "block/block_rq_issue"
-            ftrace_events: "block/block_rq_complete"
-            ftrace_events: "ufs/ufshcd_command"
-            buffer_size_kb: 32768
-        }
-    }
-}
+        ftrace_config {{
+{events_str}
+            buffer_size_kb: {ftrace_buffer_kb}
+        }}
+    }}
+}}
 duration_ms: 0
 """
         # Push config to device
@@ -1998,7 +2044,7 @@ duration_ms: 0
 
         try:
             subprocess.run(
-                ["adb", "push", config_path, "/data/local/tmp/blk_trace_config.pbtxt"],
+                adb_prefix + ["push", config_path, "/data/local/tmp/blk_trace_config.pbtxt"],
                 capture_output=True, text=True, timeout=10, check=True
             )
         except Exception as e:
@@ -2011,7 +2057,7 @@ duration_ms: 0
         # Start Perfetto trace
         try:
             self._blk_trace_process = subprocess.Popen(
-                ["adb", "shell", "perfetto", "-c", "/data/local/tmp/blk_trace_config.pbtxt",
+                adb_prefix + ["shell", "perfetto", "-c", "/data/local/tmp/blk_trace_config.pbtxt",
                  "-o", "/data/local/tmp/blk_trace.perfetto-trace"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
