@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -48,14 +49,32 @@ DEFAULT_EVENTS = [
 ]
 
 
+def migrate_config(config: dict[str, Any]) -> dict[str, Any]:
+    """설정을 최신 버전으로 마이그레이션한다.
+
+    Args:
+        config: 원본 설정 딕셔너리.
+
+    Returns:
+        마이그레이션된 설정.
+    """
+    version = config.get("version", 0)
+    if version < 1:
+        config.setdefault("capture_mode", "perfetto")
+        config.setdefault("sysfs_path", "/sys/kernel/tracing")
+        config["version"] = 1
+    return config
+
+
 def load_logger_config() -> dict[str, Any]:
     """저장된 logger 설정을 로드한다. 없으면 기본값 반환."""
     if CONFIG_PATH.exists():
         try:
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            return migrate_config(config)
         except (json.JSONDecodeError, OSError):
             pass
-    return {}
+    return migrate_config({})
 
 
 def save_logger_config(config: dict[str, Any]) -> None:
@@ -268,6 +287,80 @@ class PerfettoCheckPage(QWizardPage):
 
 
 # ============================================================
+# Page 3b: Root Check
+# ============================================================
+class RootCheckPage(QWizardPage):
+    """선택된 기기의 root 접근을 확인하는 페이지."""
+
+    def __init__(self, parent: QWizard | None = None) -> None:
+        super().__init__(parent)
+        self.setTitle("Root Check")
+        self.setSubTitle("Verify root access on the device.")
+
+        layout = QVBoxLayout(self)
+
+        self._status_label = QLabel()
+        self._status_label.setWordWrap(True)
+        layout.addWidget(self._status_label)
+
+        self._info_label = QLabel()
+        self._info_label.setWordWrap(True)
+        layout.addWidget(self._info_label)
+
+        check_btn = QPushButton("Re-check")
+        check_btn.clicked.connect(self._do_check)
+        layout.addWidget(check_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        layout.addStretch()
+
+        self._root_found = False
+        self._serial = ""
+
+    def initializePage(self) -> None:  # noqa: N802
+        """페이지 초기화 시 root 확인을 실행한다."""
+        wizard: AndroidLoggerWizard = self.wizard()  # type: ignore[assignment]
+        self._serial = wizard.device_page.selected_serial()
+        self._do_check()
+
+    def _do_check(self) -> None:
+        """root 확인을 실행한다."""
+        self._check_root()
+        self.completeChanged.emit()
+
+    def _check_root(self) -> None:
+        """ADB를 통해 root 접근을 확인한다."""
+        if not self._serial:
+            self._root_found = False
+            self._status_label.setText("❌ No device selected.")
+            return
+
+        for su_cmd in ['su -c "id"', 'su 0 id']:
+            try:
+                result = subprocess.run(
+                    ["adb", "-s", self._serial, "shell", *su_cmd.split()],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode == 0 and "uid=0" in result.stdout:
+                    self._root_found = True
+                    self._status_label.setText("✅ Root access confirmed")
+                    self._info_label.setText("")
+                    return
+            except Exception:
+                pass
+
+        self._root_found = False
+        self._status_label.setText("❌ Root access not available.")
+        self._info_label.setText(
+            "기기에 root 접근이 필요합니다.\n"
+            "Magisk 또는 SuperSU가 설치되어 있는지 확인하세요."
+        )
+
+    def isComplete(self) -> bool:  # noqa: N802
+        """root 확인 완료 여부를 반환한다."""
+        return self._root_found
+
+
+# ============================================================
 # Page 4: Trace Config
 # ============================================================
 class TraceConfigPage(QWizardPage):
@@ -279,6 +372,16 @@ class TraceConfigPage(QWizardPage):
         self.setSubTitle("Configure the trace parameters.")
 
         layout = QVBoxLayout(self)
+
+        # Capture mode
+        mode_group = QGroupBox("Capture Mode")
+        mode_layout = QHBoxLayout(mode_group)
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItem("Perfetto (no root needed)", "perfetto")
+        self._mode_combo.addItem("Raw Ftrace (requires root)", "raw_ftrace")
+        mode_layout.addWidget(self._mode_combo)
+        mode_layout.addStretch()
+        layout.addWidget(mode_group)
 
         # Buffer size
         buf_group = QGroupBox("Buffer Size")
@@ -316,9 +419,17 @@ class TraceConfigPage(QWizardPage):
 
         layout.addStretch()
 
+    def capture_mode(self) -> str:
+        """선택된 캡처 모드를 반환한다."""
+        return self._mode_combo.currentData() or "perfetto"
+
     def initializePage(self) -> None:  # noqa: N802
         # 기존 config에서 로드
         config = load_logger_config()
+        mode = config.get("capture_mode", "perfetto")
+        idx = self._mode_combo.findData(mode)
+        if idx >= 0:
+            self._mode_combo.setCurrentIndex(idx)
         if "buffer_size_mb" in config:
             self._buffer_spin.setValue(config["buffer_size_mb"])
         if "events" in config:
@@ -394,6 +505,7 @@ class SummaryPage(QWizardPage):
 
         summary = (
             f"Device:       {serial}\n"
+            f"Capture mode: {cfg.capture_mode()}\n"
             f"Buffer size:  {cfg.buffer_size_mb()} MB\n"
             f"Events:       {', '.join(events)}\n"
             f"Save path:    {cfg.save_path()}\n"
@@ -403,13 +515,17 @@ class SummaryPage(QWizardPage):
         self._start_requested = False
 
     def _build_config(self) -> dict[str, Any]:
+        """현재 위자드 설정을 딕셔너리로 빌드한다."""
         wizard: AndroidLoggerWizard = self.wizard()  # type: ignore[assignment]
         cfg = wizard.config_page
         return {
+            "version": 1,
             "device_serial": wizard.device_page.selected_serial(),
+            "capture_mode": cfg.capture_mode(),
             "buffer_size_mb": cfg.buffer_size_mb(),
             "events": cfg.selected_events(),
             "save_path": cfg.save_path(),
+            "sysfs_path": "/sys/kernel/tracing",
         }
 
     def _on_save_config(self) -> None:
@@ -422,13 +538,26 @@ class SummaryPage(QWizardPage):
         )
 
     def _on_start_trace(self) -> None:
-        # 먼저 config 저장
+        """Start Trace 버튼 클릭 핸들러."""
+        from data_graph_studio.ui.dialogs.trace_progress_dialog import (
+            AdbTraceController,
+            TraceProgressDialog,
+        )
+
         config = self._build_config()
         save_logger_config(config)
         self._config_saved = True
         self._start_requested = True
-        # Wizard 닫기 — 호출자가 start_requested를 확인
-        self.wizard().accept()
+
+        if config.get("capture_mode") == "raw_ftrace":
+            wizard: AndroidLoggerWizard = self.wizard()  # type: ignore[assignment]
+            ctrl = AdbTraceController()
+            serial = wizard.device_page.selected_serial()
+            ctrl.start_trace(serial, config)
+            dlg = TraceProgressDialog(ctrl, config["save_path"], self)
+            dlg.exec()
+        else:
+            self.wizard().accept()
 
     @property
     def start_requested(self) -> bool:
@@ -441,10 +570,21 @@ class SummaryPage(QWizardPage):
 class AndroidLoggerWizard(QWizard):
     """Android Logger Setup Wizard.
 
-    Perfetto 기반 블록 레이어 트레이스를 설정하는 5단계 위자드.
+    Perfetto/Ftrace 기반 블록 레이어 트레이스를 설정하는 위자드.
+
+    Page IDs:
+        0: AdbCheck, 1: Device, 2: Config,
+        3: PerfettoCheck, 4: RootCheck, 5: Summary
     """
 
-    def __init__(self, parent=None) -> None:
+    PAGE_ADB = 0
+    PAGE_DEVICE = 1
+    PAGE_CONFIG = 2
+    PAGE_PERFETTO = 3
+    PAGE_ROOT = 4
+    PAGE_SUMMARY = 5
+
+    def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Android Logger Setup")
         self.setMinimumSize(560, 420)
@@ -452,15 +592,33 @@ class AndroidLoggerWizard(QWizard):
         # Pages
         self.adb_page = AdbCheckPage(self)
         self.device_page = DeviceConnectionPage(self)
-        self.perfetto_page = PerfettoCheckPage(self)
         self.config_page = TraceConfigPage(self)
+        self.perfetto_page = PerfettoCheckPage(self)
+        self.root_page = RootCheckPage(self)
         self.summary_page = SummaryPage(self)
 
-        self.addPage(self.adb_page)
-        self.addPage(self.device_page)
-        self.addPage(self.perfetto_page)
-        self.addPage(self.config_page)
-        self.addPage(self.summary_page)
+        self.setPage(self.PAGE_ADB, self.adb_page)
+        self.setPage(self.PAGE_DEVICE, self.device_page)
+        self.setPage(self.PAGE_CONFIG, self.config_page)
+        self.setPage(self.PAGE_PERFETTO, self.perfetto_page)
+        self.setPage(self.PAGE_ROOT, self.root_page)
+        self.setPage(self.PAGE_SUMMARY, self.summary_page)
+
+    def nextId(self) -> int:  # noqa: N802
+        """캡처 모드에 따라 페이지 분기를 처리한다."""
+        current = self.currentId()
+        if current == self.PAGE_DEVICE:
+            return self.PAGE_CONFIG
+        if current == self.PAGE_CONFIG:
+            mode = self.config_page.capture_mode()
+            if mode == "raw_ftrace":
+                return self.PAGE_ROOT
+            return self.PAGE_PERFETTO
+        if current in (self.PAGE_PERFETTO, self.PAGE_ROOT):
+            return self.PAGE_SUMMARY
+        if current == self.PAGE_SUMMARY:
+            return -1
+        return super().nextId()
 
     @property
     def start_requested(self) -> bool:

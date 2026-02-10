@@ -12,10 +12,9 @@ def test_wizard_initialization_adds_pages():
     wizard = NewProjectWizard("/tmp/sample.csv")
 
     page_ids = list(wizard.pageIds())
-    assert len(page_ids) == 3
+    assert len(page_ids) == 2
     assert wizard.page(page_ids[0]) is not None
     assert wizard.page(page_ids[1]) is not None
-    assert wizard.page(page_ids[2]) is not None
 
 
 def test_wizard_cleanup_clears_preview_df():

@@ -1,316 +1,395 @@
-# PRD v2: Zone을 Chart Options로 이전 + UI 개선
-
-> **v2 변경사항**: 리뷰 Round 1 피드백 반영 (Group By 다중선택, Formula 입력, 스크롤 전략 등)
+# PRD: Android Perfetto Logging + Ftrace Parser 완성 (v2)
 
 ## 1. 목표
-데이터 Zone (X-Axis, Value/Y-Axis, Group-By, Hover)을 Table Panel에서 제거하고 Chart Options 패널의 "Data" 탭으로 통합. 칩 기반 UI를 콤보박스/체크박스 기반으로 교체하여 가독성과 사용성 개선.
+Android 기기에서 ftrace 블록 레이어 이벤트를 캡처하고, 텍스트 ftrace 로그를 regex로 파싱하여 DGS 데이터셋으로 로드하는 end-to-end 파이프라인 완성.
 
 ## 2. 배경
-### 현재 구조
-```
-TablePanel:
-┌──────────┬──────────┬─────────────────────┬────────────┬──────────┐
-│  X Zone  │  Group   │     Data Table      │   Values   │  Hover   │
-│ (150px)  │  Zone    │                     │   Zone     │  Zone    │
-│          │ (150px)  │                     │  (180px)   │ (150px)  │
-└──────────┴──────────┴─────────────────────┴────────────┴──────────┘
-```
+- AndroidLoggerWizard (5페이지) 존재하지만, 트레이스 실행 중 진행 상태 표시/중지 기능 없음
+- `_start_blk_trace()`/`_stop_blk_trace()` — subprocess.Popen 직접 사용 → UI 블로킹
+- `FtraceParser.parse_raw()` = NotImplementedError (스켈레톤)
+- 현재 wizard는 perfetto binary를 생성 → traceconv 없이 파싱 불가
 
-### 문제점
-- Zone들이 테이블 좌우 공간을 차지 (~640px) → 테이블 데이터 볼 공간 부족
-- ValueChipWidget 내 콤보박스/수식 입력이 180px zone에 맞지 않아 깨짐
-- 드래그 앤 드롭 방식이 직관적이지 않음 (칩이 작고 다루기 어려움)
-- Chart Options 패널과 데이터 설정이 분리되어 있어 왔다갔다 해야 함
+**타겟 사용자**: 스토리지/커널 엔지니어 — Android 기기의 블록 레이어 성능 분석 (주 2-5회 사용 예상)
 
-### 변경 후 구조
-```
-TablePanel (Zone 제거됨):
-┌─────────────────────────────────────────────────────────┐
-│                      Data Table                         │
-│                  (전체 너비 활용)                          │
-└─────────────────────────────────────────────────────────┘
+## 3. 캡처 방식 전환
 
-GraphOptionsPanel (Data 탭 추가, 너비 260~320px):
-┌─────────────────────────────────┐
-│  ⚙️ Chart Options               │
-│  ┌────┬─────┬──────┬────┬─────┐ │
-│  │Data│Chart│Legend│Axes│Style│ │
-│  ├──────────────────────────┤  │
-│  │ [Data 탭 내용 - 아래 참고] │  │
-│  └──────────────────────────┘  │
-└─────────────────────────────────┘
-```
+### 기존 perfetto 경로와의 공존
+- **캡처 방식 선택 UI 추가**: TraceConfigPage에 "Capture Mode" 콤보박스
+  - `Raw Ftrace (requires root)` — 텍스트 직접 출력, parse_raw()로 파싱 가능
+  - `Perfetto (no root needed)` — 기존 바이너리 캡처 유지 (파싱은 향후 지원)
+- 기존 perfetto 워크플로우 **제거하지 않음** (breaking change 방지)
+- Page 3: PerfettoCheckPage 유지 + RootCheckPage 추가 → 캡처 모드에 따라 표시
 
-## 3. 요구사항
+### logger_config.json 마이그레이션
+- `version` 필드 도입 (기본값 1)
+- 기존 config (version 없음) → `capture_mode: "perfetto"` 자동 설정
+- 새 config: `capture_mode: "raw_ftrace"` 추가
+- 새 필드 기본값: `capture_mode: "perfetto"`, `sysfs_path: "/sys/kernel/tracing"`
 
-### 3.1 기능 요구사항
-- [ ] FR-1: GraphOptionsPanel에 "Data" 탭 추가 (첫 번째 탭)
-- [ ] FR-2: X-Axis → QComboBox 드롭다운 (컬럼 목록 + "(Index)" 옵션, 내부값은 None)
-- [ ] FR-3: Y-Axis(Values) → 스크롤 가능한 체크박스 리스트 (숫자형 컬럼만)
-  - 각 체크된 항목: Aggregation 콤보 (SUM/AVG/COUNT/MIN/MAX) 인라인 표시
-  - 각 체크된 항목: Formula 입력 (접기/펼치기 가능, 기본 접힘)
-  - 전체 선택/해제 토글 버튼
-- [ ] FR-4: Group By → 스크롤 가능한 체크박스 리스트 (다중 선택, 순서 유지)
-  - 전체 선택/해제 토글 버튼
-- [ ] FR-5: Hover → 스크롤 가능한 체크박스 리스트 (다중 선택)
-  - 전체 선택/해제 토글 버튼
-- [ ] FR-6: TablePanel에서 Zone 위젯 4개 제거 (XAxisZone, ValueZone, GroupZone, HoverZone)
-- [ ] FR-7: TablePanel splitter 제거 → 단일 테이블 위젯만 남김
-- [ ] FR-8: 테이블 헤더 우클릭 메뉴 기능 유지 ("Set as X" / "Add to Y-Axis" / "Add to Group" / "Add to Hover")
-  - 우클릭 액션 후 Data 탭이 아닌 다른 탭이 활성화 상태여도 동작
-  - 상태바에 "Added 'col1' to Y-Axis" 등 피드백 메시지 표시
-- [ ] FR-9: Data 탭의 컬럼 목록은 engine.columns에서 자동으로 가져옴. 숫자형 여부는 engine.df.dtypes로 판별.
-- [ ] FR-10: 기존 state 연동 유지 (state.x_column, state.value_columns, state.group_columns, state.hover_columns)
-- [ ] FR-11: 데이터셋 전환 시 Data 탭 초기화 (이전 체크 상태 클리어, 새 컬럼으로 재구성)
-- [ ] FR-12: 데이터 클리어 시 Data 탭 비활성화 (빈 상태)
-- [ ] FR-13: 테이블 헤더에서 Ctrl+드래그 Zone 기능 제거 (코드 정리)
+## 4. 요구사항
 
-### 3.2 비기능 요구사항
-- [ ] NFR-1: GraphOptionsPanel 너비 260~320px (기존 200~240px에서 확대)
-- [ ] NFR-2: Data 탭 로딩 시 컬럼 200개에서 < 100ms
-- [ ] NFR-3: 테마 (다크/라이트) 지원 유지
-- [ ] NFR-4: 위젯 정리 시 signal disconnect 처리 (메모리 누수 방지)
+### 4.1 기능 요구사항 (FR)
+- [x] FR-1: `parse_raw()` — regex로 ftrace 텍스트 파싱 → polars DataFrame
+  - 컬럼: timestamp(f64), cpu(i32), task(str), pid(i32), flags(str), event(str), details(str)
+  - `#` 주석 라인 스킵 (settings.skip_comments)
+  - 필터링은 **polars 벡터 연산**으로 수행 (Python 루프 아님)
+- [x] FR-2: Wizard 캡처 모드 선택 (perfetto / raw_ftrace)
+- [x] FR-3: RootCheckPage 추가 (raw_ftrace 모드 시만 표시)
+- [x] FR-4: AdbTraceController — adb 명령 순차 실행 + sysfs 상태 관리 (SRP)
+- [x] FR-5: TraceProgressDialog — AdbTraceController의 signal만 구독하여 UI 표시
+  - 경과 시간 라벨, 로그 영역 (auto-scroll), Stop 버튼
+  - Stop 더블클릭 방어 (버튼 disable)
+  - Esc → Stop 확인, 최소 크기 480×320
+- [x] FR-6: 트레이스 중지 후 자동 파싱 제안 (raw_ftrace 모드만)
+- [x] FR-7: parse_raw()를 **QThread 워커**에서 실행 (메인스레드 블로킹 방지)
+- [x] FR-8: sysfs 상태 복원 보장 — try/finally로 tracing_on=0 + events disable
 
-## 4. 범위
+### 4.2 비기능 요구사항 (NFR)
+- [x] NFR-1: parse_raw() — 100만 라인 파싱 < 5초 (M1 16GB 기준)
+- [x] NFR-2: UI — 트레이스 중 + 파싱 중 메인 윈도우 블로킹 없음
+- [x] NFR-3: 에러 메시지 — 모든 실패 케이스에 복구 안내 포함
+- [x] NFR-4: 메모리 — 입력 파일의 3배 이내 피크 메모리
+- [x] NFR-5: 모든 신규 public 함수/클래스에 Google-style docstring + 타입 힌트 100%
+- [x] NFR-6: adb 명령 조립 시 shlex.quote() 적용 (shell injection 방어)
 
+## 5. 범위
 ### 포함
-- GraphOptionsPanel에 Data 탭 추가
-- DataTab 새 파일 생성 (`data_graph_studio/ui/panels/data_tab.py`)
-- TablePanel에서 Zone 위젯 제거 및 레이아웃 단순화
-- 테이블 헤더 우클릭 메뉴 연동
-- 기존 state 시그널 연동
-- Zone 관련 Ctrl+드래그 코드 제거
+- parse_raw() regex 구현 (최적화: finditer + 컬럼별 리스트)
+- AdbTraceController (프로세스 관리 분리)
+- TraceProgressDialog (UI only)
+- RootCheckPage + 캡처 모드 선택
+- main_window.py 연결 교체
+- QThread 워커로 파싱 실행
 
 ### 제외
-- Zone 관련 기존 클래스 파일 삭제 (dead code 유지, 추후 정리)
-- 새로운 데이터 변환/피벗 기능
-- 가상 스크롤 (500+ 컬럼용, 현재 불필요)
+- blocklayer converter
+- perfetto binary parsing (향후)
+- trace-cmd 지원
+- 커스텀 settings UI 위젯
 
-## 5. UI/UX 상세
+## 6. 기술 설계
 
-### Data 탭 레이아웃 (전체 QScrollArea 안에)
+### 아키텍처
 ```
-┌─ Data ────────────────────────────┐
-│ ┌───────────── QScrollArea ─────┐ │
-│ │                               │ │
-│ │ X-Axis                        │ │
-│ │ ┌───────────────────────────┐ │ │
-│ │ │ (Index)                ▼  │ │ │
-│ │ └───────────────────────────┘ │ │
-│ │                               │ │
-│ │ ─── separator (QFrame HLine) ─│ │
-│ │                               │ │
-│ │ Y-Axis (Values)    [All][None]│ │
-│ │ ┌── max-height 200px, scroll ┐│ │
-│ │ │ ☑ Temperature              ││ │
-│ │ │   [SUM ▼] [▶ f(y)]        ││ │
-│ │ │ ☑ Humidity                 ││ │
-│ │ │   [AVG ▼] [▶ f(y)]        ││ │
-│ │ │ □ Pressure                 ││ │
-│ │ │ □ WindSpeed                ││ │
-│ │ └────────────────────────────┘│ │
-│ │                               │ │
-│ │ ─── separator ────────────────│ │
-│ │                               │ │
-│ │ Group By             [All][None]│
-│ │ ┌── max-height 120px, scroll ┐│ │
-│ │ │ ☑ Region                   ││ │
-│ │ │ □ Category                 ││ │
-│ │ │ □ Date                     ││ │
-│ │ └────────────────────────────┘│ │
-│ │                               │ │
-│ │ ─── separator ────────────────│ │
-│ │                               │ │
-│ │ Hover Columns        [All][None]│
-│ │ ┌── max-height 120px, scroll ┐│ │
-│ │ │ ☑ col1                     ││ │
-│ │ │ ☑ col2                     ││ │
-│ │ │ □ col3                     ││ │
-│ │ └────────────────────────────┘│ │
-│ └───────────────────────────────┘ │
-└───────────────────────────────────┘
+AndroidLoggerWizard (6 pages)
+  ├── AdbCheckPage (기존 유지)
+  ├── DeviceConnectionPage (기존 유지)
+  ├── PerfettoCheckPage (기존 유지, perfetto 모드 시)
+  ├── RootCheckPage (신규, raw_ftrace 모드 시)
+  ├── TraceConfigPage (수정: capture_mode 콤보박스 추가)
+  └── SummaryPage (수정: Start → TraceProgressDialog 열기)
+
+AdbTraceController(QObject) — 신규
+  ├── signals: log_message(str), progress(str), finished(str), error(str)
+  ├── start_trace(serial, config) → QProcess 순차 실행
+  ├── stop_trace() → tracing_on=0 + pull text + disable events
+  ├── _detect_sysfs_path() → /sys/kernel/tracing 또는 /sys/kernel/debug/tracing
+  ├── _run_adb_cmd(args) → QProcess + shlex.quote
+  └── cleanup() → try/finally sysfs 상태 복원
+
+TraceProgressDialog(QDialog) — 신규
+  ├── controller: AdbTraceController 참조
+  ├── _elapsed_timer: QTimer (1초 간격)
+  ├── _log_area: QTextEdit (readonly, auto-scroll)
+  ├── _stop_btn: QPushButton (클릭 시 disable → controller.stop_trace)
+  ├── closeEvent → controller.stop_trace() + waitForFinished(3000) + kill
+  └── placeholder: "트레이스를 시작합니다..."
+
+FtraceParser.parse_raw() — 구현
+  ├── Path.read_text("utf-8") 또는 50MB+ → chunk 스트리밍
+  ├── re.finditer(PATTERN, text) — splitlines 제거
+  ├── 컬럼별 리스트 수집 (dict 생성 제거)
+  ├── pl.DataFrame({"col": list}) 생성
+  └── df.filter() 로 events/cpus 필터링 (벡터 연산)
+
+ParseWorker(QThread) — 신규
+  ├── run() → parse_raw() 실행
+  ├── finished signal → 메인스레드에서 DataEngine.load_dataset_from_dataframe()
+  └── error signal → 메인스레드에서 에러 다이얼로그
 ```
 
-### Y-Axis 항목 상세 (체크된 상태)
-```
-┌─────────────────────────────┐
-│ ☑ Temperature               │  ← 체크박스 + 컬럼명
-│   [SUM ▼]  [▶ f(y)=...]     │  ← Agg 콤보 + Formula 토글
-└─────────────────────────────┘
-```
-- 체크 해제 시: Agg/Formula 행 숨김 (체크박스 + 컬럼명만 표시)
-- Formula 토글 `▶`: 클릭 시 `▼`로 변경되며 QLineEdit 표시
-- Formula 기본값: 접힌 상태 (▶)
+### 파일 변경 목록
+| 파일 | 변경 유형 | 설명 |
+|------|----------|------|
+| `parsers/ftrace_parser.py` | 수정 | parse_raw() regex 구현 (finditer + 컬럼별 리스트) |
+| `ui/dialogs/android_logger_wizard.py` | 수정 | RootCheckPage 추가, 캡처 모드 선택, config 마이그레이션 |
+| `ui/dialogs/trace_progress_dialog.py` | 신규 | TraceProgressDialog + AdbTraceController |
+| `ui/main_window.py` | 수정 | _start/_stop_blk_trace 교체, ParseWorker 연결 |
+| `tests/unit/test_ftrace_parser.py` | 신규 | parse_raw() 단위 테스트 |
+| `tests/unit/test_trace_progress.py` | 신규 | AdbTraceController + Dialog 테스트 |
 
-### 인터랙션
-- **X-Axis 콤보박스**: "(Index)" 선택 시 `state.set_x_column(None)`. 내부적으로 "(Index)"는 sentinel None 값 사용.
-- **Y-Axis 체크박스**: 체크 시 `state.add_value_column(name)`, 해제 시 `state.remove_value_column(name)`
-- **Y-Axis Aggregation**: 변경 시 해당 ValueColumn의 aggregation 업데이트
-- **Y-Axis Formula**: 편집 완료(editingFinished) 시 해당 ValueColumn의 formula 업데이트
-- **Group By 체크박스**: 체크 시 `state.add_group_column(name)`, 해제 시 `state.remove_group_column(name)`. 다중 선택 지원.
-- **Hover 체크박스**: 체크/해제 시 `state.hover_columns` 갱신
-- **[All] 버튼**: 해당 섹션의 모든 항목 체크 (Y-Axis는 숫자형 컬럼만)
-- **[None] 버튼**: 해당 섹션의 모든 항목 체크 해제
-- **blockSignals**: 벌크 작업 시 (All/None, set_columns, _sync_from_state) blockSignals 사용
-- **setUpdatesEnabled(False)**: 벌크 UI 업데이트 시 레이아웃 재계산 방지
-
-### 테이블 헤더 우클릭 동작
-- "Set as X-Axis" → Data 탭 X 콤보박스 변경 (활성 탭 전환 안 함)
-- "Add to Y-Axis" → 해당 컬럼 체크 (이미 체크면 무시)
-- "Add to Group" → 해당 컬럼 체크
-- "Add to Hover" → 해당 컬럼 체크
-- 모든 액션 후 상태바에 `"Added 'Temperature' to Y-Axis"` 피드백
-
-### Separator 스타일
-- `QFrame` with `HLine` shape
-- 다크 테마: `#3E4A59` (border color)
-- 라이트 테마: `#E2E8F0`
-
-## 6. 데이터 구조
-
-### 기존 State 인터페이스 (변경 없음)
+### parse_raw() 상세 설계
 ```python
-state.x_column: Optional[str]
-state.value_columns: List[ValueColumn]
-state.group_columns: List[GroupColumn]
-state.hover_columns: List[str]
+import re
+from pathlib import Path
+import polars as pl
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Ftrace 라인 포맷 참조:
+# https://docs.kernel.org/trace/ftrace.html#the-file-system
+# 형태: <task>-<pid> [<cpu>] <flags> <timestamp>: <event>: <details>
+# tgid 변형: <task>-<pid> (<tgid>) [<cpu>] ...
+FTRACE_LINE_RE = re.compile(
+    r"^\s*(?P<task>.+?)-(?P<pid>\d+)"       # task-pid
+    r"\s+(?:\([\s\d-]+\)\s+)?"              # optional tgid (ignored)
+    r"\[(?P<cpu>\d+)\]"                      # [cpu]
+    r"\s+(?P<flags>[a-zA-Z.]{4,5})"         # flags (d..1, dNh2, etc)
+    r"\s+(?P<timestamp>\d+\.\d+):"          # timestamp:
+    r"\s+(?P<event>[\w:]+):"                # event:
+    r"\s+(?P<details>.*?)$",                # details
+    re.MULTILINE
+)
+
+STREAMING_THRESHOLD = 50 * 1024 * 1024  # 50MB
+
+def parse_raw(self, file_path: str, settings: Dict[str, Any]) -> pl.DataFrame:
+    """Parse raw ftrace text into structured event DataFrame.
+
+    Args:
+        file_path: Path to ftrace log file.
+        settings: Parser settings dict.
+
+    Returns:
+        polars DataFrame with columns:
+        timestamp(f64), cpu(i32), task(str), pid(i32),
+        flags(str), event(str), details(str)
+
+    Raises:
+        ValueError: If no valid events found.
+        FileNotFoundError: If file doesn't exist.
+        UnicodeDecodeError: If file isn't valid UTF-8.
+    """
+    path = Path(file_path)
+    text = path.read_text("utf-8")
+    skip_comments = settings.get("skip_comments", True)
+
+    # 컬럼별 리스트 수집 (dict 오버헤드 제거)
+    timestamps: list[float] = []
+    cpus: list[int] = []
+    tasks: list[str] = []
+    pids: list[int] = []
+    flags_list: list[str] = []
+    events: list[str] = []
+    details_list: list[str] = []
+    skipped = 0
+
+    for m in FTRACE_LINE_RE.finditer(text):
+        # skip_comments: finditer with MULTILINE skips non-matching lines
+        # but we should check if the line starts with #
+        line_start = text.rfind('\n', 0, m.start()) + 1
+        if skip_comments and text[line_start:line_start+1] == '#':
+            continue
+
+        timestamps.append(float(m.group("timestamp")))
+        cpus.append(int(m.group("cpu")))
+        tasks.append(m.group("task").strip())
+        pids.append(int(m.group("pid")))
+        flags_list.append(m.group("flags"))
+        events.append(m.group("event"))
+        details_list.append(m.group("details").strip())
+
+    if not timestamps:
+        logger.warning(f"No valid ftrace events found in {file_path}")
+
+    df = pl.DataFrame({
+        "timestamp": pl.Series("timestamp", timestamps, dtype=pl.Float64),
+        "cpu": pl.Series("cpu", cpus, dtype=pl.Int32),
+        "task": pl.Series("task", tasks, dtype=pl.Utf8),
+        "pid": pl.Series("pid", pids, dtype=pl.Int32),
+        "flags": pl.Series("flags", flags_list, dtype=pl.Utf8),
+        "event": pl.Series("event", events, dtype=pl.Utf8),
+        "details": pl.Series("details", details_list, dtype=pl.Utf8),
+    })
+
+    # Polars 벡터 필터링
+    event_filter = settings.get("events", [])
+    cpu_filter = settings.get("cpus", [])
+    if event_filter:
+        df = df.filter(pl.col("event").is_in(event_filter))
+    if cpu_filter:
+        df = df.filter(pl.col("cpu").is_in(cpu_filter))
+
+    return df
 ```
 
-### 새로운 DataTab 클래스 (`data_graph_studio/ui/panels/data_tab.py`)
+### AdbTraceController 상세 설계
 ```python
-class DataTab(QWidget):
-    """Chart Options의 Data 탭 - X/Y/Group/Hover 설정"""
-    
-    def __init__(self, state: AppState):
+class AdbTraceController(QObject):
+    """adb를 통한 ftrace 캡처 제어.
+
+    모든 adb 명령은 QProcess로 비동기 실행.
+    sysfs 상태 복원은 try/finally로 보장.
+
+    Signals:
+        log_message(str): 로그 메시지
+        progress(str): 현재 단계 ("enabling events", "tracing", "pulling")
+        finished(str): 완료 시 파일 경로
+        error(str): 에러 메시지
+    """
+
+    SYSFS_PATHS = ["/sys/kernel/tracing", "/sys/kernel/debug/tracing"]
+
+    def _detect_sysfs_path(self, serial: str) -> str:
+        """두 경로를 시도하여 사용 가능한 sysfs 경로 반환."""
+        for path in self.SYSFS_PATHS:
+            # adb shell su -c "cat {path}/tracing_on"
+            ...
+
+    def _run_adb_cmd(self, serial: str, shell_cmd: str) -> subprocess.CompletedProcess:
+        """adb shell su -c 명령 실행. shlex.quote 적용."""
+        import shlex
+        # shlex.quote로 shell_cmd 래핑
         ...
-    
-    def set_columns(self, columns: List[str], engine: DataEngine):
-        """데이터 로드 시 컬럼 목록 설정.
-        engine.df.dtypes로 숫자형 여부 판별.
-        기존 체크 상태 클리어 후 재구성."""
-        ...
-    
-    def clear(self):
-        """데이터 클리어 시 호출. 모든 위젯 비활성화."""
-        ...
-    
-    def sync_from_state(self):
-        """외부 state 변경(프로파일 적용 등) 시 UI 동기화"""
-        ...
-    
-    def cleanup(self):
-        """위젯 파괴 시 signal disconnect"""
-        ...
+
+    def start_trace(self, serial: str, config: dict) -> None:
+        """트레이스 시작. 비동기."""
+        # 1. detect sysfs path
+        # 2. clear buffer
+        # 3. set buffer size
+        # 4. enable events (try/finally로 cleanup 보장)
+        # 5. tracing_on = 1
+        # 6. emit progress("tracing")
+
+    def stop_trace(self, serial: str, save_path: str) -> None:
+        """트레이스 중지 + pull + cleanup."""
+        try:
+            # 1. tracing_on = 0
+            # 2. cat trace > save_path
+            # 3. emit finished(save_path)
+        finally:
+            # 4. disable all events
+            # 5. emit progress("cleanup done")
+
+    def cleanup(self) -> None:
+        """강제 정리 (앱 종료/크래시 시)."""
+        # tracing_on = 0, events disable
 ```
 
-## 7. 성능 & 메모리 요구사항
-- 컬럼 200개 데이터셋에서 Data 탭 `set_columns()` < 100ms
-- 체크박스 토글 시 state 변경 < 10ms
-- 벌크 작업 시 `blockSignals` + `setUpdatesEnabled(False)` 필수
-- 위젯 재생성 시 `deleteLater()` 사용
-- Signal 연결은 `functools.partial` 선호 (lambda GC 이슈 방지)
-- `cleanup()` 메서드로 명시적 signal disconnect
-- 메모리 추가 < 1MB
+### 시퀀스 다이어그램
+```
+SummaryPage
+  │ click "Start Trace"
+  ├─► TraceProgressDialog(serial, config)
+  │     │ show() + controller.start_trace()
+  │     │
+  │     │ controller.log_message ──► _log_area.append()
+  │     │ controller.progress ────► _status_label.setText()
+  │     │ _elapsed_timer.timeout ─► _update_elapsed()
+  │     │
+  │     │ [user clicks Stop]
+  │     │ _stop_btn.setEnabled(False)
+  │     │ controller.stop_trace(save_path)
+  │     │
+  │     │ controller.finished(file_path) ──► accept()
+  │     │ controller.error(msg) ───────────► QMessageBox + reject()
+  │     │
+  │     │ [closeEvent]
+  │     │ controller.stop_trace() + controller.cleanup()
+  │     ▼
+  │ dialog.result() == Accepted
+  │ file_path = dialog.trace_file_path
+  │
+  ├─► QMessageBox.question("Open with Ftrace Parser?")
+  │     │ Yes
+  │     ├─► ParseWorker(FtraceParser, file_path, settings)
+  │     │     │ worker.finished(df) → DataEngine.load_dataset_from_dataframe(df)
+  │     │     │ worker.error(msg) → QMessageBox.critical()
+  │     │     ▼
+  │     │   _on_data_loaded()
+  │     │
+  │     │ No → done
+  ▼
+```
 
-## 8. 테스트 시나리오
+## 7. 엣지 케이스 & 에러 처리
+- EC-1: 빈 trace (이벤트 0건) → 빈 DataFrame 반환 + QMessageBox "No events captured"
+- EC-2: root/su 불가 → RootCheckPage에서 차단 + "기기에 root 접근이 필요합니다. Magisk/SuperSU 설치 확인" 메시지
+- EC-3: ADB 연결 중 기기 분리 → QProcess.errorOccurred → "기기 연결이 끊어졌습니다. USB 케이블 확인" 다이얼로그
+- EC-4: 대용량 trace (50MB+) → STREAMING_THRESHOLD 초과 시 chunk 파싱 (향후, v1은 전체 로드)
+- EC-5: 비표준 ftrace 라인 → skip + 파싱 완료 후 "N lines skipped (not matching ftrace format)" statusbar
+- EC-6: Stop 버튼 더블클릭 → 첫 클릭 시 setEnabled(False), controller.stop_trace()는 idempotent
+- EC-7: 트레이스 중 다이얼로그 닫기 (X/Esc) → closeEvent에서 "트레이스가 진행 중입니다. 중지하시겠습니까?" 확인
+- EC-8: adb shell su 타임아웃 → QProcess 10초 타임아웃 + "기기 응답 없음. 연결 확인" 메시지
+- EC-9: sysfs 경로 없음 (커널 비지원) → "이 기기에서는 ftrace를 사용할 수 없습니다" + perfetto 모드 안내
+- EC-10: 이전 세션 tracing_on 잔류 → start_trace 시작 시 tracing_on 상태 확인, 켜져있으면 먼저 끄기
+- EC-11: 캡처 성공 → pull 실패 → "트레이스 캡처는 완료되었으나 파일 다운로드 실패. 재시도?" + 임시 파일 정리
+- EC-12: timestamp 오버플로 (부팅 수백일) → f64 범위 내 (최대 ~1e15초), 문제 없음
 
+## 8. 알려진 리스크
+| 리스크 | 확률 | 영향 | 대응 |
+|--------|------|------|------|
+| sysfs 경로 차이 | 중 | 중 | _detect_sysfs_path()로 두 경로 시도 |
+| su 명령 차이 (su -c vs su 0) | 중 | 중 | RootCheckPage에서 `su -c id` 시도, 실패 시 `su 0 id` 시도 |
+| 대용량 pull 타임아웃 | 저 | 중 | QProcess 타임아웃 60초, 실패 시 재시도 안내 |
+| ftrace 비활성화 커널 | 저 | 고 | sysfs 탐색 실패 → perfetto 모드 권장 |
+| 앱 크래시 시 tracing_on 잔류 | 저 | 중 | 다음 start 시 guard check, atexit 등록은 과도 |
+
+## 9. 성능 목표
+- parse_raw(): 100만 라인 < 5초 (Apple M1, 16GB 기준)
+- 메모리: 입력 파일의 3배 이내 피크 (100MB 파일 → 피크 300MB)
+- UI: 트레이스 중 + 파싱 중 메인 윈도우 반응성 유지 (0 블로킹)
+- trace pull: 50MB 이내 < 30초
+
+## 10. 테스트 시나리오
 ### Unit Tests
-- [ ] UT-1: DataTab 초기화 시 빈 상태로 생성
-- [ ] UT-2: set_columns() 호출 시 콤보박스/체크리스트에 컬럼 반영
-- [ ] UT-3: X-Axis 콤보박스 변경 시 state.set_x_column() 호출
-- [ ] UT-4: Y-Axis 체크박스 토글 시 state.value_columns 변경
-- [ ] UT-5: Aggregation 변경 시 해당 ValueColumn 업데이트
-- [ ] UT-6: Formula 편집 시 해당 ValueColumn 업데이트
-- [ ] UT-7: Group By 체크박스 다중 선택 시 state.group_columns 변경 (순서 유지)
-- [ ] UT-8: Hover 체크박스 토글 시 state.hover_columns 변경
-- [ ] UT-9: State 외부 변경 시 UI 동기화 (sync_from_state)
-- [ ] UT-10: [All]/[None] 버튼 동작
-- [ ] UT-11: 데이터셋 전환 시 Data 탭 초기화
-- [ ] UT-12: cleanup() 호출 시 signal disconnect
+- [x] UT-1: parse_raw() — 정상 ftrace 텍스트 → 올바른 DataFrame (컬럼 타입/값 검증)
+- [x] UT-2: parse_raw() — 주석 라인 (#) 스킵
+- [x] UT-3: parse_raw() — events 필터 적용 (polars filter)
+- [x] UT-4: parse_raw() — cpus 필터 적용 (polars filter)
+- [x] UT-5: parse_raw() — events + cpus 동시 필터 조합
+- [x] UT-6: parse_raw() — 빈 파일 → 빈 DataFrame (에러 없이)
+- [x] UT-7: parse_raw() — 헤더만 있는 파일 (이벤트 0건)
+- [x] UT-8: parse_raw() — 비표준 라인 스킵 (에러 없이, 경고 로그)
+- [x] UT-9: parse_raw() — tgid 포맷 `(  123)` 지원
+- [x] UT-10: parse_raw() — FileNotFoundError 발생
+- [x] UT-11: AdbTraceController — _detect_sysfs_path (mock adb, 두 경로)
+- [x] UT-12: AdbTraceController — start/stop 시퀀스 (mock QProcess)
+- [x] UT-13: AdbTraceController — cleanup 보장 (에러 시에도)
+- [x] UT-14: AdbTraceController — shlex.quote 적용 확인
+- [x] UT-15: TraceProgressDialog — 생성/표시/Stop 버튼 disable
+- [x] UT-16: RootCheckPage — root 확인 성공/실패 (mock adb)
+- [x] UT-17: logger_config.json 마이그레이션 (version 없음 → v1)
 
 ### Integration Tests
-- [ ] IT-1: 데이터 로드 → Data 탭에 컬럼 표시 → 선택 → 그래프 갱신
-- [ ] IT-2: 프로파일 적용 시 Data 탭 UI 동기화
-- [ ] IT-3: 테이블 헤더 우클릭 → state 변경 → Data 탭 반영
-- [ ] IT-4: 위자드 완료 → state 변경 → Data 탭 반영
+- [x] IT-1: Wizard → Start Trace → Stop → 파일 생성 (mock adb)
+- [x] IT-2: parse_raw() → DataEngine.load_dataset_from_dataframe() → 데이터셋 로드
 
-### E2E Tests
-- [ ] E2E-1: 파일 로드 → Data 탭에서 X/Y/Group 설정 → 차트 올바르게 표시
-- [ ] E2E-2: Data 탭에서 Y축 컬럼 여러 개 선택 → 멀티라인 차트 표시
-- [ ] E2E-3: 프로파일 저장 → 다시 로드 → Data 탭 상태 복원
+## 11. 성공 기준
+- [x] 텍스트 ftrace 파일을 열면 파싱되어 테이블에 표시
+- [x] Wizard에서 캡처 모드 선택 가능 (perfetto / raw_ftrace)
+- [x] raw_ftrace 모드: Start → 진행 표시 → Stop → 파일 저장 → 파싱 제안
+- [x] root 없는 기기에서 명확한 안내 + perfetto 모드 권장
+- [x] 100만 라인 파싱 5초 이내 (M1 16GB)
+- [x] 트레이스/파싱 중 UI 프리즈 없음
+- [x] sysfs 상태 복원 보장
 
-### Performance Tests
-- [ ] PT-1: 200개 컬럼 데이터셋 로드 시 Data 탭 렌더링 < 100ms
-- [ ] PT-2: 체크박스 연속 토글 10회 시 UI 응답성 유지
+## 12. 미해결 질문
+- (없음)
 
-## 9. 성공 기준
-- [ ] Zone이 TablePanel에서 완전 제거되고 테이블이 전체 너비 사용
-- [ ] Data 탭에서 X/Y/Group/Hover 모두 설정 가능 (기존 기능 100% 커버)
-- [ ] Group By 다중 선택 동작
-- [ ] Y-Axis Formula 입력 동작
-- [ ] 프로파일 저장/로드/위자드 연동 정상 동작
-- [ ] 깔끔한 UI (깨짐 없음)
-- [ ] 모든 테스트 통과
+## 13. 실행 계획
 
-## 10. 미해결 질문
-- 없음 (Round 1 리뷰 피드백 모두 반영됨)
+### 구현 순서
+1. `parsers/ftrace_parser.py` — parse_raw() 구현 (독립, 의존성 없음)
+2. `ui/dialogs/trace_progress_dialog.py` — AdbTraceController + TraceProgressDialog (독립)
+3. `ui/dialogs/android_logger_wizard.py` — RootCheckPage 추가, 캡처 모드, config 마이그레이션
+4. `ui/main_window.py` — 연결 교체, ParseWorker
+5. `tests/` — 전체 테스트
 
----
+### 병렬 가능 그룹
+- Group 1 (병렬): 모듈 1 (parser) + 모듈 2 (dialog/controller)
+- Group 2 (순차): 모듈 3 (wizard) → 모듈 4 (main_window)
+- Group 3: 모듈 5 (tests) — 모두 완료 후
 
-# PRD 부록: WPR ETL 단계별 로딩 (Import Wizard)
+### 예상 파일 변경
+- 신규: trace_progress_dialog.py, test_ftrace_parser.py, test_trace_progress.py
+- 수정: ftrace_parser.py, android_logger_wizard.py, main_window.py
 
-## 1. 목표
-- WPR(Window Performance Recorder) 파일을 **단계별로 명시적으로 로딩**한다.
-- 대용량 WPR에서도 Import Wizard가 버벅이지 않도록 **변환/미리보기/본 로딩**을 분리한다.
-
-## 2. 배경
-- WPR 파일이 대용량이라 Import Wizard에서 한번에 로딩하면 UI가 멈춘다.
-- WPAExporter 기반 변환 단계가 필요하다.
-
-## 3. 요구사항
-### 3.1 기능 요구사항
-- [ ] FR-1: Import Wizard에 **WPR 변환 단계**를 추가한다.
-- [ ] FR-2: 변환 도구는 **WPAExporter**를 기본 사용한다.
-- [ ] FR-3: 변환 결과는 **Parquet**으로 저장한다.
-- [ ] FR-4: 변환 후 **미리보기/샘플링**을 제공한다.
-- [ ] FR-5: 변환 단계 진행 상태(진행 중/완료/실패)를 명확히 표시한다.
-
-### 3.2 비기능 요구사항
-- [ ] NFR-1: 변환 실패 시 오류 메시지를 사용자에게 명확히 보여준다.
-- [ ] NFR-2: 변환 중에도 UI가 멈추지 않는다.
-
-## 4. 범위
-### 포함
-- Import Wizard 단계 추가
-- WPAExporter 경로 자동 탐색(환경변수/Path)
-- Parquet 산출물 경로 저장
-
-### 제외
-- ETL 파서 내부 알고리즘 변경
-- 분석/시각화 로직 변경
-
-## 5. UI/UX 상세
-- Wizard Step 순서: **파일 선택 → WPR 변환 → 미리보기/파싱 → 그래프 설정 → 완료**
-- 변환 단계에서:
-  - 입력 파일/출력 파일 경로 표시
-  - "변환 시작" 버튼
-  - 진행바(불확정/확정)
-  - 실패 시 재시도 가능
-
-## 6. 데이터 구조
-- 변환 결과 파일: `{원본명}_wpr.parquet`
-
-## 7. 성능 & 메모리 요구사항
-- 변환 단계는 별도 프로세스로 실행(서브프로세스)
-
-## 8. 테스트 시나리오
-### Unit Tests
-- [ ] UT-1: WPR 파일 경로 → Parquet 출력 경로 생성 로직
-- [ ] UT-2: WPR 파일이면 Wizard에 변환 단계가 삽입됨
-
-## 9. 성공 기준
-- [ ] WPR 파일을 Import Wizard에서 단계별로 로딩 가능
-- [ ] 변환 단계에서 UI 멈춤 없이 진행
-
-## 10. 미해결 질문
-- 없음
+### CHANGELOG
+- Added: FtraceParser.parse_raw() — regex-based ftrace text parser
+- Added: AdbTraceController — non-blocking adb trace management
+- Added: TraceProgressDialog — progress display with stop capability
+- Added: RootCheckPage in Android Logger Wizard
+- Added: Capture mode selection (Perfetto / Raw Ftrace)
+- Changed: Block layer trace uses QThread worker for parsing
