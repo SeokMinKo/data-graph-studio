@@ -1473,7 +1473,7 @@ class TablePanel(QWidget):
         self.focus_btn.clicked.connect(self._on_focus_toggled)
         toolbar.addWidget(self.focus_btn)
 
-        self.focus_prev_btn = QPushButton("◀")
+        self.focus_prev_btn = QPushButton("<")
         self.focus_prev_btn.setFixedWidth(30)
         self.focus_prev_btn.setToolTip("Previous selected row")
         self.focus_prev_btn.setEnabled(False)
@@ -1486,7 +1486,7 @@ class TablePanel(QWidget):
         self.focus_label.setStyleSheet("font-size: 10px;")
         toolbar.addWidget(self.focus_label)
 
-        self.focus_next_btn = QPushButton("▶")
+        self.focus_next_btn = QPushButton(">")
         self.focus_next_btn.setFixedWidth(30)
         self.focus_next_btn.setToolTip("Next selected row")
         self.focus_next_btn.setEnabled(False)
