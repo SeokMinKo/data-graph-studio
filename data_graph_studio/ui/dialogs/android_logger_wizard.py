@@ -2,8 +2,6 @@
 Android Logger Setup Wizard
 
 ADB/Perfetto 기반 블록 레이어 트레이스 설정을 위한 단계별 위자드.
-Redesigned with a professional look: merged ADB+Device page, dynamic config,
-clean summary table, and step progress indicators.
 """
 
 from __future__ import annotations
@@ -17,12 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QProcess
-from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -32,10 +28,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QStackedWidget,
     QTextEdit,
     QVBoxLayout,
-    QWidget,
     QWizard,
     QWizardPage,
 )
@@ -56,7 +50,14 @@ DEFAULT_EVENTS = [
 
 
 def migrate_config(config: dict[str, Any]) -> dict[str, Any]:
-    """설정을 최신 버전으로 마이그레이션한다."""
+    """설정을 최신 버전으로 마이그레이션한다.
+
+    Args:
+        config: 원본 설정 딕셔너리.
+
+    Returns:
+        마이그레이션된 설정.
+    """
     version = config.get("version", 0)
     if version < 1:
         config.setdefault("capture_mode", "perfetto")
@@ -85,79 +86,32 @@ def save_logger_config(config: dict[str, Any]) -> None:
     )
 
 
-def _make_heading(text: str) -> QLabel:
-    """Create a styled heading label."""
-    lbl = QLabel(text)
-    font = lbl.font()
-    font.setPointSize(font.pointSize() + 1)
-    font.setBold(True)
-    lbl.setFont(font)
-    return lbl
-
-
-def _make_separator() -> QFrame:
-    """Create a horizontal line separator."""
-    line = QFrame()
-    line.setFrameShape(QFrame.Shape.HLine)
-    line.setFrameShadow(QFrame.Shadow.Sunken)
-    return line
-
-
 # ============================================================
-# Page 1: ADB Check + Device Selection (merged)
+# Page 1: ADB Check
 # ============================================================
 class AdbCheckPage(QWizardPage):
-    """ADB 설치 확인 + 디바이스 선택을 하나의 페이지에서 처리."""
+    """ADB 설치 여부를 확인하는 페이지."""
 
     def __init__(self, parent: QWizard | None = None) -> None:
         super().__init__(parent)
-        self.setTitle("🔌  Connect Device")
-        self.setSubTitle(
-            "Verify ADB is installed and select a connected Android device."
-        )
+        self.setTitle("ADB Check")
+        self.setSubTitle("Check that Android Debug Bridge (adb) is available.")
 
         layout = QVBoxLayout(self)
 
-        # --- ADB status section ---
-        self._adb_status = QLabel()
-        self._adb_status.setWordWrap(True)
-        layout.addWidget(self._adb_status)
+        self._status_label = QLabel()
+        self._status_label.setWordWrap(True)
+        layout.addWidget(self._status_label)
 
-        self._adb_info = QLabel()
-        self._adb_info.setWordWrap(True)
-        self._adb_info.setTextFormat(Qt.TextFormat.RichText)
-        self._adb_info.setOpenExternalLinks(True)
-        layout.addWidget(self._adb_info)
+        self._info_label = QLabel()
+        self._info_label.setWordWrap(True)
+        self._info_label.setTextFormat(Qt.TextFormat.RichText)
+        self._info_label.setOpenExternalLinks(True)
+        layout.addWidget(self._info_label)
 
-        layout.addWidget(_make_separator())
-
-        # --- Device list section ---
-        dev_heading = _make_heading("Connected Devices")
-        layout.addWidget(dev_heading)
-
-        self._device_list = QListWidget()
-        self._device_list.setMaximumHeight(120)
-        self._device_list.currentItemChanged.connect(
-            lambda *_: self.completeChanged.emit()
-        )
-        layout.addWidget(self._device_list)
-
-        self._device_info = QLabel()
-        self._device_info.setWordWrap(True)
-        self._device_info.setStyleSheet("color: #888;")
-        layout.addWidget(self._device_info)
-
-        # Buttons
-        btn_row = QHBoxLayout()
-        recheck_btn = QPushButton("🔄 Re-check ADB")
-        recheck_btn.clicked.connect(self._check_adb)
-        btn_row.addWidget(recheck_btn)
-
-        refresh_btn = QPushButton("🔄 Refresh Devices")
-        refresh_btn.clicked.connect(self._refresh_devices)
-        btn_row.addWidget(refresh_btn)
-        btn_row.addStretch()
-        layout.addLayout(btn_row)
+        check_btn = QPushButton("Re-check")
+        check_btn.clicked.connect(self._check_adb)
+        layout.addWidget(check_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         layout.addStretch()
 
@@ -165,35 +119,61 @@ class AdbCheckPage(QWizardPage):
 
     def initializePage(self) -> None:  # noqa: N802
         self._check_adb()
-        if self._adb_found:
-            self._refresh_devices()
 
     def _check_adb(self) -> None:
         adb_path = shutil.which("adb")
         if adb_path:
             self._adb_found = True
-            self._adb_status.setText(f"✅  ADB found: <code>{adb_path}</code>")
-            self._adb_status.setTextFormat(Qt.TextFormat.RichText)
-            self._adb_info.setText("")
-            self._refresh_devices()
+            self._status_label.setText(f"✅ adb found: {adb_path}")
+            self._info_label.setText("")
         else:
             self._adb_found = False
-            self._adb_status.setText("❌  ADB not found in PATH")
-            self._adb_status.setTextFormat(Qt.TextFormat.PlainText)
-            self._adb_info.setText(
+            self._status_label.setText("❌ adb not found in PATH.")
+            self._info_label.setText(
                 "<b>Install Android SDK Platform Tools:</b><br>"
                 "<code>brew install android-platform-tools</code><br><br>"
                 "Or download from: "
                 '<a href="https://developer.android.com/tools/releases/platform-tools">'
                 "Android Platform Tools</a>"
             )
-            self._device_list.clear()
         self.completeChanged.emit()
+
+    def isComplete(self) -> bool:  # noqa: N802
+        return self._adb_found
+
+
+# ============================================================
+# Page 2: Device Connection
+# ============================================================
+class DeviceConnectionPage(QWizardPage):
+    """연결된 Android 기기를 선택하는 페이지."""
+
+    def __init__(self, parent: QWizard | None = None) -> None:
+        super().__init__(parent)
+        self.setTitle("Device Connection")
+        self.setSubTitle("Select a connected Android device.")
+
+        layout = QVBoxLayout(self)
+
+        self._device_list = QListWidget()
+        self._device_list.currentItemChanged.connect(lambda *_: self.completeChanged.emit())
+        layout.addWidget(self._device_list)
+
+        self._info_label = QLabel()
+        self._info_label.setWordWrap(True)
+        layout.addWidget(self._info_label)
+
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self._refresh_devices)
+        layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        layout.addStretch()
+
+    def initializePage(self) -> None:  # noqa: N802
+        self._refresh_devices()
 
     def _refresh_devices(self) -> None:
         self._device_list.clear()
-        if not self._adb_found:
-            return
         try:
             result = subprocess.run(
                 ["adb", "devices", "-l"],
@@ -208,48 +188,44 @@ class AdbCheckPage(QWizardPage):
                 status = parts[1] if len(parts) > 1 else "unknown"
                 desc = " ".join(parts[2:]) if len(parts) > 2 else ""
                 if status == "device":
-                    display = f"📱  {serial}"
-                    if desc:
-                        display += f"   ({desc})"
-                    item = QListWidgetItem(display)
+                    item = QListWidgetItem(f"{serial}  {desc}")
                     item.setData(Qt.ItemDataRole.UserRole, serial)
                     self._device_list.addItem(item)
         except Exception as e:
-            self._device_info.setText(f"Error: {e}")
+            self._info_label.setText(f"Error: {e}")
             return
 
         if self._device_list.count() == 0:
-            self._device_info.setText(
-                "No devices found. Connect via USB, enable USB Debugging,\n"
-                "and accept the RSA key prompt on the device."
+            self._info_label.setText(
+                "No devices found.\n\n"
+                "1. Connect your device via USB\n"
+                "2. Enable USB Debugging in Developer Options\n"
+                "3. Accept the RSA key prompt on the device"
             )
         else:
-            self._device_info.setText(f"{self._device_list.count()} device(s) found")
+            self._info_label.setText("")
             self._device_list.setCurrentRow(0)
 
         self.completeChanged.emit()
 
     def isComplete(self) -> bool:  # noqa: N802
-        return self._adb_found and self._device_list.currentItem() is not None
+        return self._device_list.currentItem() is not None
 
     def selected_serial(self) -> str:
+        """선택된 기기의 시리얼 번호를 반환한다."""
         item = self._device_list.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item else ""
 
 
-# Keep old name as alias for backward compat (device_page reference)
-DeviceConnectionPage = AdbCheckPage
-
-
 # ============================================================
-# Page 2: Perfetto Check
+# Page 3: Perfetto Check
 # ============================================================
 class PerfettoCheckPage(QWizardPage):
     """선택된 기기에 Perfetto가 있는지 확인하는 페이지."""
 
     def __init__(self, parent: QWizard | None = None) -> None:
         super().__init__(parent)
-        self.setTitle("🔍  Perfetto Check")
+        self.setTitle("Perfetto Check")
         self.setSubTitle("Verify that Perfetto is available on the device.")
 
         layout = QVBoxLayout(self)
@@ -262,7 +238,7 @@ class PerfettoCheckPage(QWizardPage):
         self._info_label.setWordWrap(True)
         layout.addWidget(self._info_label)
 
-        check_btn = QPushButton("🔄 Re-check")
+        check_btn = QPushButton("Re-check")
         check_btn.clicked.connect(self._check_perfetto)
         layout.addWidget(check_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -290,11 +266,11 @@ class PerfettoCheckPage(QWizardPage):
             path = result.stdout.strip()
             if path and result.returncode == 0:
                 self._perfetto_found = True
-                self._status_label.setText(f"✅  Perfetto found: {path}")
+                self._status_label.setText(f"✅ perfetto found: {path}")
                 self._info_label.setText("")
             else:
                 self._perfetto_found = False
-                self._status_label.setText("❌  Perfetto not found on device.")
+                self._status_label.setText("❌ perfetto not found on device.")
                 self._info_label.setText(
                     "Perfetto is included in Android 9 (Pie) and later.\n"
                     "Make sure your device runs Android 9+ or install Perfetto manually."
@@ -311,15 +287,15 @@ class PerfettoCheckPage(QWizardPage):
 
 
 # ============================================================
-# Page 2b: Root Check
+# Page 3b: Root Check
 # ============================================================
 class RootCheckPage(QWizardPage):
     """선택된 기기의 root 접근을 확인하는 페이지."""
 
     def __init__(self, parent: QWizard | None = None) -> None:
         super().__init__(parent)
-        self.setTitle("🔑  Root Check")
-        self.setSubTitle("Verify root access on the device for raw ftrace capture.")
+        self.setTitle("Root Check")
+        self.setSubTitle("Verify root access on the device.")
 
         layout = QVBoxLayout(self)
 
@@ -331,7 +307,7 @@ class RootCheckPage(QWizardPage):
         self._info_label.setWordWrap(True)
         layout.addWidget(self._info_label)
 
-        check_btn = QPushButton("🔄 Re-check")
+        check_btn = QPushButton("Re-check")
         check_btn.clicked.connect(self._do_check)
         layout.addWidget(check_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -341,15 +317,18 @@ class RootCheckPage(QWizardPage):
         self._serial = ""
 
     def initializePage(self) -> None:  # noqa: N802
+        """페이지 초기화 시 root 확인을 실행한다."""
         wizard: AndroidLoggerWizard = self.wizard()  # type: ignore[assignment]
         self._serial = wizard.device_page.selected_serial()
         self._do_check()
 
     def _do_check(self) -> None:
+        """root 확인을 실행한다."""
         self._check_root()
         self.completeChanged.emit()
 
     def _check_root(self) -> None:
+        """ADB를 통해 root 접근을 확인한다."""
         if not self._serial:
             self._root_found = False
             self._status_label.setText("❌ No device selected.")
@@ -363,51 +342,48 @@ class RootCheckPage(QWizardPage):
                 )
                 if result.returncode == 0 and "uid=0" in result.stdout:
                     self._root_found = True
-                    self._status_label.setText("✅  Root access confirmed")
+                    self._status_label.setText("✅ Root access confirmed")
                     self._info_label.setText("")
                     return
             except Exception:
                 pass
 
         self._root_found = False
-        self._status_label.setText("❌  Root access not available.")
+        self._status_label.setText("❌ Root access not available.")
         self._info_label.setText(
             "기기에 root 접근이 필요합니다.\n"
             "Magisk 또는 SuperSU가 설치되어 있는지 확인하세요."
         )
 
     def isComplete(self) -> bool:  # noqa: N802
+        """root 확인 완료 여부를 반환한다."""
         return self._root_found
 
 
 # ============================================================
-# Page 3: Trace Configuration (dynamic layout based on mode)
+# Page 4: Trace Config
 # ============================================================
 class TraceConfigPage(QWizardPage):
-    """트레이스 설정 페이지: 캡처 모드에 따라 동적 옵션 표시."""
+    """트레이스 설정 페이지: 버퍼 크기, 이벤트, 저장 경로."""
 
     def __init__(self, parent: QWizard | None = None) -> None:
         super().__init__(parent)
-        self.setTitle("⚙️  Trace Configuration")
-        self.setSubTitle("Configure capture mode and trace parameters.")
+        self.setTitle("Trace Configuration")
+        self.setSubTitle("Configure the trace parameters.")
 
         layout = QVBoxLayout(self)
 
-        # --- Capture Mode ---
+        # Capture mode
         mode_group = QGroupBox("Capture Mode")
-        mode_layout = QVBoxLayout(mode_group)
+        mode_layout = QHBoxLayout(mode_group)
         self._mode_combo = QComboBox()
-        self._mode_combo.addItem("⚡ Perfetto  —  no root needed, recommended", "perfetto")
-        self._mode_combo.addItem("🔧 Raw Ftrace  —  requires root, lower overhead", "raw_ftrace")
-        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        self._mode_combo.addItem("Perfetto (no root needed)", "perfetto")
+        self._mode_combo.addItem("Raw Ftrace (requires root)", "raw_ftrace")
         mode_layout.addWidget(self._mode_combo)
-        self._mode_desc = QLabel()
-        self._mode_desc.setWordWrap(True)
-        self._mode_desc.setStyleSheet("color: #666; margin-left: 4px;")
-        mode_layout.addWidget(self._mode_desc)
+        mode_layout.addStretch()
         layout.addWidget(mode_group)
 
-        # --- Buffer Size ---
+        # Buffer size
         buf_group = QGroupBox("Buffer Size")
         buf_layout = QHBoxLayout(buf_group)
         self._buffer_spin = QSpinBox()
@@ -419,18 +395,18 @@ class TraceConfigPage(QWizardPage):
         buf_layout.addStretch()
         layout.addWidget(buf_group)
 
-        # --- Ftrace Events ---
-        self._evt_group = QGroupBox("Ftrace Events")
-        evt_layout = QVBoxLayout(self._evt_group)
+        # Events
+        evt_group = QGroupBox("Ftrace Events")
+        evt_layout = QVBoxLayout(evt_group)
         self._event_checks: list[tuple[str, QCheckBox]] = []
         for event_name, default_on in DEFAULT_EVENTS:
             cb = QCheckBox(event_name)
             cb.setChecked(default_on)
             evt_layout.addWidget(cb)
             self._event_checks.append((event_name, cb))
-        layout.addWidget(self._evt_group)
+        layout.addWidget(evt_group)
 
-        # --- Output Path ---
+        # Save path
         path_group = QGroupBox("Output")
         path_layout = QHBoxLayout(path_group)
         self._save_path_edit = QLineEdit()
@@ -444,37 +420,11 @@ class TraceConfigPage(QWizardPage):
         layout.addStretch()
 
     def capture_mode(self) -> str:
+        """선택된 캡처 모드를 반환한다."""
         return self._mode_combo.currentData() or "perfetto"
 
-    def _on_mode_changed(self) -> None:
-        mode = self.capture_mode()
-        if mode == "perfetto":
-            self._mode_desc.setText(
-                "Uses Android's built-in Perfetto daemon. No root required.\n"
-                "Output is converted to CSV via trace_processor_shell."
-            )
-            self._evt_group.setVisible(True)
-        else:
-            self._mode_desc.setText(
-                "Directly reads /sys/kernel/tracing via su. Requires root.\n"
-                "Lower overhead, raw text output."
-            )
-            self._evt_group.setVisible(True)
-        self._update_default_path()
-
-    def _update_default_path(self) -> None:
-        """Update the default file extension based on mode."""
-        current = self._save_path_edit.text()
-        if not current:
-            return
-        p = Path(current)
-        mode = self.capture_mode()
-        if mode == "perfetto" and p.suffix == ".txt":
-            self._save_path_edit.setText(str(p.with_suffix(".csv")))
-        elif mode == "raw_ftrace" and p.suffix in (".csv", ".perfetto-trace"):
-            self._save_path_edit.setText(str(p.with_suffix(".txt")))
-
     def initializePage(self) -> None:  # noqa: N802
+        # 기존 config에서 로드
         config = load_logger_config()
         mode = config.get("capture_mode", "perfetto")
         idx = self._mode_combo.findData(mode)
@@ -491,26 +441,16 @@ class TraceConfigPage(QWizardPage):
 
         if not self._save_path_edit.text():
             import datetime
-            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            if self.capture_mode() == "perfetto":
-                default_name = f"trace_{ts}.csv"
-            else:
-                default_name = f"ftrace_{ts}.txt"
+            default = f"blktrace_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.perfetto-trace"
             self._save_path_edit.setText(
-                str(Path.home() / "Downloads" / default_name)
+                str(Path.home() / "Downloads" / default)
             )
 
-        self._on_mode_changed()
-
     def _browse_save_path(self) -> None:
-        mode = self.capture_mode()
-        if mode == "perfetto":
-            filt = "CSV (*.csv);;All Files (*)"
-        else:
-            filt = "Ftrace Text (*.txt);;All Files (*)"
         path, _ = QFileDialog.getSaveFileName(
             self, "Save Trace File",
-            self._save_path_edit.text(), filt,
+            self._save_path_edit.text(),
+            "Perfetto Trace (*.perfetto-trace);;All Files (*)",
         )
         if path:
             self._save_path_edit.setText(path)
@@ -526,38 +466,28 @@ class TraceConfigPage(QWizardPage):
 
 
 # ============================================================
-# Page 4: Summary
+# Page 5: Summary & Finish
 # ============================================================
 class SummaryPage(QWizardPage):
-    """설정 요약 — 깔끔한 테이블 형식."""
+    """설정 요약 및 완료 페이지."""
 
     def __init__(self, parent: QWizard | None = None) -> None:
         super().__init__(parent)
-        self.setTitle("📋  Summary")
-        self.setSubTitle("Review your configuration and start tracing.")
+        self.setTitle("Summary")
+        self.setSubTitle("Review your configuration.")
 
         layout = QVBoxLayout(self)
 
         self._summary_text = QTextEdit()
         self._summary_text.setReadOnly(True)
-        self._summary_text.setStyleSheet(
-            "QTextEdit { font-family: monospace; font-size: 13px; }"
-        )
         layout.addWidget(self._summary_text)
 
-        layout.addWidget(_make_separator())
-
         btn_layout = QHBoxLayout()
-        self._start_btn = QPushButton("▶  Start Trace")
-        self._start_btn.setStyleSheet(
-            "QPushButton { background-color: #2d7d46; color: white; "
-            "padding: 8px 20px; border-radius: 4px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #358a4f; }"
-        )
+        self._start_btn = QPushButton("Start Trace")
         self._start_btn.clicked.connect(self._on_start_trace)
         btn_layout.addWidget(self._start_btn)
 
-        self._save_btn = QPushButton("💾  Save Config Only")
+        self._save_btn = QPushButton("Save Config")
         self._save_btn.clicked.connect(self._on_save_config)
         btn_layout.addWidget(self._save_btn)
 
@@ -572,35 +502,20 @@ class SummaryPage(QWizardPage):
         serial = wizard.device_page.selected_serial()
         cfg = wizard.config_page
         events = cfg.selected_events()
-        mode = cfg.capture_mode()
 
-        rows = [
-            ("Device", serial),
-            ("Capture Mode", "Perfetto" if mode == "perfetto" else "Raw Ftrace"),
-            ("Buffer Size", f"{cfg.buffer_size_mb()} MB"),
-            ("Events", ", ".join(events) if events else "(none)"),
-            ("Output", cfg.save_path()),
-        ]
-
-        # Build HTML table
-        html = (
-            '<table style="border-collapse: collapse; width: 100%;">'
+        summary = (
+            f"Device:       {serial}\n"
+            f"Capture mode: {cfg.capture_mode()}\n"
+            f"Buffer size:  {cfg.buffer_size_mb()} MB\n"
+            f"Events:       {', '.join(events)}\n"
+            f"Save path:    {cfg.save_path()}\n"
         )
-        for label, value in rows:
-            html += (
-                f'<tr>'
-                f'<td style="padding: 6px 12px 6px 0; font-weight: bold; '
-                f'white-space: nowrap; vertical-align: top;">{label}</td>'
-                f'<td style="padding: 6px 0; color: #333;">{value}</td>'
-                f'</tr>'
-            )
-        html += '</table>'
-
-        self._summary_text.setHtml(html)
+        self._summary_text.setPlainText(summary)
         self._config_saved = False
         self._start_requested = False
 
     def _build_config(self) -> dict[str, Any]:
+        """현재 위자드 설정을 딕셔너리로 빌드한다."""
         wizard: AndroidLoggerWizard = self.wizard()  # type: ignore[assignment]
         cfg = wizard.config_page
         return {
@@ -623,18 +538,18 @@ class SummaryPage(QWizardPage):
         )
 
     def _on_start_trace(self) -> None:
-        """Start Trace 버튼 — config 저장 후 위자드 accept."""
+        """Start Trace 버튼 클릭 핸들러."""
+        from data_graph_studio.ui.dialogs.trace_progress_dialog import (
+            AdbTraceController,
+            TraceProgressDialog,
+        )
+
         config = self._build_config()
         save_logger_config(config)
         self._config_saved = True
         self._start_requested = True
 
         if config.get("capture_mode") == "raw_ftrace":
-            # Raw ftrace: start inline (legacy behavior)
-            from data_graph_studio.ui.dialogs.trace_progress_dialog import (
-                AdbTraceController,
-                TraceProgressDialog,
-            )
             wizard: AndroidLoggerWizard = self.wizard()  # type: ignore[assignment]
             ctrl = AdbTraceController()
             serial = wizard.device_page.selected_serial()
@@ -642,7 +557,6 @@ class SummaryPage(QWizardPage):
             dlg = TraceProgressDialog(ctrl, config["save_path"], self)
             dlg.exec()
         else:
-            # Perfetto: let main_window handle via accept()
             self.wizard().accept()
 
     @property
@@ -658,46 +572,42 @@ class AndroidLoggerWizard(QWizard):
 
     Perfetto/Ftrace 기반 블록 레이어 트레이스를 설정하는 위자드.
 
-    Page flow:
-        ADB+Device → Config → Perfetto/Root check → Summary
+    Page IDs:
+        0: AdbCheck, 1: Device, 2: Config,
+        3: PerfettoCheck, 4: RootCheck, 5: Summary
     """
 
-    PAGE_ADB_DEVICE = 0
-    PAGE_CONFIG = 1
-    PAGE_PERFETTO = 2
-    PAGE_ROOT = 3
-    PAGE_SUMMARY = 4
-
-    # Legacy aliases
     PAGE_ADB = 0
-    PAGE_DEVICE = 0
+    PAGE_DEVICE = 1
+    PAGE_CONFIG = 2
+    PAGE_PERFETTO = 3
+    PAGE_ROOT = 4
+    PAGE_SUMMARY = 5
 
-    def __init__(self, parent: Any = None, *, configure_only: bool = False) -> None:
+    def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Android Logger Setup")
-        self.setMinimumSize(600, 480)
-        self._configure_only = configure_only
-
-        # Style the wizard
-        self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
+        self.setMinimumSize(560, 420)
 
         # Pages
         self.adb_page = AdbCheckPage(self)
-        self.device_page = self.adb_page  # same page now
+        self.device_page = DeviceConnectionPage(self)
         self.config_page = TraceConfigPage(self)
         self.perfetto_page = PerfettoCheckPage(self)
         self.root_page = RootCheckPage(self)
         self.summary_page = SummaryPage(self)
 
-        self.setPage(self.PAGE_ADB_DEVICE, self.adb_page)
+        self.setPage(self.PAGE_ADB, self.adb_page)
+        self.setPage(self.PAGE_DEVICE, self.device_page)
         self.setPage(self.PAGE_CONFIG, self.config_page)
         self.setPage(self.PAGE_PERFETTO, self.perfetto_page)
         self.setPage(self.PAGE_ROOT, self.root_page)
         self.setPage(self.PAGE_SUMMARY, self.summary_page)
 
     def nextId(self) -> int:  # noqa: N802
+        """캡처 모드에 따라 페이지 분기를 처리한다."""
         current = self.currentId()
-        if current == self.PAGE_ADB_DEVICE:
+        if current == self.PAGE_DEVICE:
             return self.PAGE_CONFIG
         if current == self.PAGE_CONFIG:
             mode = self.config_page.capture_mode()
