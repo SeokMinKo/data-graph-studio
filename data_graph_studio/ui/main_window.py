@@ -654,17 +654,15 @@ class MainWindow(QMainWindow):
         # ============================================================
         logger_menu = menubar.addMenu("&Logger")
 
-        blk_trace_action = QAction("Start &Block Layer Trace...", self)
-        blk_trace_action.setStatusTip("Start raw ftrace block layer tracing via ADB")
-        blk_trace_action.triggered.connect(self._on_start_blk_trace)
-        logger_menu.addAction(blk_trace_action)
+        start_trace_action = QAction("&Start Trace...", self)
+        start_trace_action.setStatusTip("Start block layer tracing (auto-configure if needed)")
+        start_trace_action.triggered.connect(self._on_start_trace)
+        logger_menu.addAction(start_trace_action)
 
-        logger_menu.addSeparator()
-
-        setup_android_action = QAction("Setup &Android Logger...", self)
-        setup_android_action.setStatusTip("Open the Android Logger Setup Wizard")
-        setup_android_action.triggered.connect(self._on_setup_android_logger)
-        logger_menu.addAction(setup_android_action)
+        configure_action = QAction("&Configure...", self)
+        configure_action.setStatusTip("Open the trace configuration wizard")
+        configure_action.triggered.connect(self._on_configure_trace)
+        logger_menu.addAction(configure_action)
 
         # ============================================================
         # Parser Menu
@@ -1922,28 +1920,24 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, parser.name, "Failed to load parsed data.")
 
     # ================================================================
-    # Logger — Android Logger Setup Wizard
+    # Logger — Trace (unified)
     # ================================================================
 
-    def _on_setup_android_logger(self) -> None:
-        """Open the Android Logger Setup Wizard."""
+    def _on_configure_trace(self) -> None:
+        """Open the trace configuration wizard (configure only)."""
         from data_graph_studio.ui.dialogs.android_logger_wizard import AndroidLoggerWizard
 
-        wizard = AndroidLoggerWizard(self)
+        wizard = AndroidLoggerWizard(self, configure_only=True)
         wizard.exec()
 
         if wizard.start_requested:
-            self._on_start_blk_trace()
+            self._on_start_trace()
 
-    # ================================================================
-    # Logger — ADB + Perfetto block layer tracing
-    # ================================================================
+    def _on_start_trace(self):
+        """Start block layer tracing via ADB.
 
-    def _on_start_blk_trace(self):
-        """Start raw ftrace block layer tracing via ADB.
-
-        Uses AdbTraceController + TraceProgressDialog for non-blocking
-        capture with progress display and stop capability.
+        If no config exists, opens the setup wizard first.
+        Uses AdbTraceController/PerfettoTraceController + TraceProgressDialog.
         """
         import shutil
         import datetime
@@ -1957,23 +1951,19 @@ class MainWindow(QMainWindow):
 
         logger_cfg = load_logger_config()
 
-        if not shutil.which("adb"):
-            QMessageBox.warning(
-                self, "Logger",
-                "adb not found in PATH.\n\n"
-                "Install Android SDK Platform Tools and ensure 'adb' is in your PATH.\n"
-                "Or use Logger → Setup Android Logger... to configure.",
-            )
-            return
-
         serial = logger_cfg.get("device_serial", "")
-        if not serial:
-            QMessageBox.warning(
-                self, "Logger",
-                "No device configured.\n\n"
-                "Use Logger → Setup Android Logger... to select a device.",
-            )
-            return
+        if not shutil.which("adb") or not serial:
+            # No ADB or no device configured — open wizard automatically
+            from data_graph_studio.ui.dialogs.android_logger_wizard import AndroidLoggerWizard
+            wizard = AndroidLoggerWizard(self)
+            wizard.exec()
+            if not wizard.start_requested:
+                return
+            # Reload config after wizard
+            logger_cfg = load_logger_config()
+            serial = logger_cfg.get("device_serial", "")
+            if not serial:
+                return
 
         capture_mode = logger_cfg.get("capture_mode", "perfetto")
         is_perfetto = capture_mode == "perfetto"
