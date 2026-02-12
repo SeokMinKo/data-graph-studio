@@ -209,36 +209,81 @@ class PerfettoTraceController(QObject):
         """trace_processor_shell 또는 래퍼 스크립트 경로를 찾는다.
 
         탐색 순서:
-        1. 프로젝트 assets/bin/trace_processor (Python 래퍼, 자동 다운로드)
-        2. PATH에서 trace_processor_shell (네이티브 바이너리)
-        3. PATH에서 trace_processor (래퍼)
+        1. ~/.data_graph_studio/bin/ (사용자 로컬 캐시)
+        2. 프로젝트 assets/bin/ (개발 모드)
+        3. PATH에서 trace_processor_shell / trace_processor
+        4. 자동 다운로드 → ~/.data_graph_studio/bin/
 
         Returns:
             실행 파일 경로.
 
         Raises:
-            FileNotFoundError: 찾을 수 없을 때.
+            FileNotFoundError: 다운로드도 실패했을 때.
         """
-        # 1. 프로젝트 내부 assets (네이티브 바이너리 우선)
+        names = ["trace_processor_shell", "trace_processor"]
+
+        # 1. 사용자 로컬 캐시
+        user_bin = Path.home() / ".data_graph_studio" / "bin"
+        for name in names:
+            cached = user_bin / name
+            if cached.exists():
+                return str(cached)
+
+        # 2. 프로젝트 내부 assets (개발 모드)
         project_root = Path(__file__).resolve().parent.parent.parent.parent
         bin_dir = project_root / "assets" / "bin"
-        for name in ["trace_processor_shell", "trace_processor"]:
+        for name in names:
             bundled = bin_dir / name
             if bundled.exists():
                 return str(bundled)
 
-        # 2. PATH 탐색
+        # 3. PATH 탐색
         for name in ["trace_processor_shell", "trace_processor_shell.exe",
                       "trace_processor"]:
             path = shutil.which(name)
             if path:
                 return path
 
-        raise FileNotFoundError(
-            "trace_processor_shell not found.\n\n"
-            "Run: curl -LO https://get.perfetto.dev/trace_processor\n"
-            "and place in assets/bin/"
-        )
+        # 4. 자동 다운로드
+        return PerfettoTraceController._download_trace_processor(user_bin)
+
+    @staticmethod
+    def _download_trace_processor(dest_dir: Path) -> str:
+        """Perfetto trace_processor를 자동 다운로드한다.
+
+        https://get.perfetto.dev/trace_processor 래퍼 스크립트를 받아서
+        실행 권한을 부여한다.
+
+        Returns:
+            다운로드된 파일 경로.
+
+        Raises:
+            FileNotFoundError: 다운로드 실패 시.
+        """
+        import urllib.request
+
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / "trace_processor"
+        url = "https://get.perfetto.dev/trace_processor"
+
+        logger.info("Downloading trace_processor from %s ...", url)
+        try:
+            urllib.request.urlretrieve(url, str(dest))
+            dest.chmod(0o755)
+            logger.info("Downloaded trace_processor to %s", dest)
+            return str(dest)
+        except Exception as e:
+            logger.error("Failed to download trace_processor: %s", e)
+            # Clean up partial download
+            dest.unlink(missing_ok=True)
+            raise FileNotFoundError(
+                "trace_processor_shell not found and auto-download failed.\n\n"
+                f"Error: {e}\n\n"
+                "Manual install:\n"
+                "  curl -LO https://get.perfetto.dev/trace_processor\n"
+                "  chmod +x trace_processor\n"
+                f"  mv trace_processor {dest_dir}/"
+            ) from e
 
     def start_trace(self, serial: str, config: dict[str, Any]) -> None:
         """Perfetto 트레이스를 시작한다.
