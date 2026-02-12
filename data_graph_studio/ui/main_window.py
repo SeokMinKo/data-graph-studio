@@ -2068,7 +2068,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Trace saved: {save_path}", 5000)
 
             if is_perfetto:
-                self._load_csv_async(save_path)
+                # PerfettoTraceController saves CSV with .csv suffix
+                csv_path = str(Path(save_path).with_suffix(".csv"))
+                self._load_csv_async(csv_path)
             else:
                 reply = QMessageBox.question(
                     self, "Logger",
@@ -2122,6 +2124,7 @@ class MainWindow(QMainWindow):
                 )
             else:
                 QMessageBox.warning(self, "Logger", "Failed to load CSV data.")
+                self.statusBar().clearMessage()
 
         def on_error(msg):
             QMessageBox.critical(self, "Logger", f"CSV load failed:\n{msg}")

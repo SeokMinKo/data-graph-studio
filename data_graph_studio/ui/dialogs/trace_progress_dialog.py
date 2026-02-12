@@ -5,6 +5,7 @@ Raw ftrace / Perfetto 캡처를 위한 ADB 명령 컨트롤러와 진행 상황 
 
 from __future__ import annotations
 
+import logging
 import shlex
 import shutil
 import subprocess
@@ -22,6 +23,8 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class AdbTraceController(QObject):
@@ -368,11 +371,19 @@ class PerfettoTraceController(QObject):
         try:
             # 1. Stop perfetto (SIGINT)
             self.progress.emit("Stopping perfetto...")
-            subprocess.run(
-                adb + ["shell", "kill", "-SIGINT",
-                       "$(pidof perfetto)"],
+            # Get PID first to avoid empty $(pidof) expansion
+            pid_result = subprocess.run(
+                adb + ["shell", "pidof", "perfetto"],
                 capture_output=True, text=True, timeout=5,
             )
+            perfetto_pid = pid_result.stdout.strip()
+            if perfetto_pid:
+                subprocess.run(
+                    adb + ["shell", "kill", "-SIGINT", perfetto_pid],
+                    capture_output=True, text=True, timeout=5,
+                )
+            else:
+                logger.warning("perfetto process not found on device")
             if self._process:
                 try:
                     self._process.wait(timeout=10)
@@ -430,11 +441,17 @@ class PerfettoTraceController(QObject):
             self._process = None
         if self._tracing and self._serial:
             try:
-                subprocess.run(
-                    ["adb", "-s", self._serial, "shell",
-                     "kill", "-9", "$(pidof perfetto)"],
+                pid_result = subprocess.run(
+                    ["adb", "-s", self._serial, "shell", "pidof", "perfetto"],
                     capture_output=True, text=True, timeout=5,
                 )
+                pid = pid_result.stdout.strip()
+                if pid:
+                    subprocess.run(
+                        ["adb", "-s", self._serial, "shell",
+                         "kill", "-9", pid],
+                        capture_output=True, text=True, timeout=5,
+                    )
             except Exception:
                 pass
             self._tracing = False
