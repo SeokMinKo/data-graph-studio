@@ -2271,7 +2271,7 @@ class MainWindow(QMainWindow):
             for col_name in preset.y_columns:
                 value_cols.append({
                     "name": col_name,
-                    "aggregation": "none",
+                    "aggregation": "sum",
                     "color": "#1f77b4",
                     "use_secondary_axis": False,
                     "order": len(value_cols),
