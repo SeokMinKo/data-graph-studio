@@ -38,19 +38,18 @@ def controller(store, state) -> ProfileController:
 
 
 SAMPLE_BLOCKLAYER_DF = pl.DataFrame({
-    "timestamp": [1000.0, 1000.001, 1000.002],
-    "latency_ms": [0.5, 1.2, 0.8],
-    "d2c_ms": [0.5, 1.2, 0.8],
-    "d2d_ms": [0.6, 1.3, 0.9],
-    "c2c_ms": [None, 0.5, 0.3],
-    "issue_time": [1000.0, 1000.001, 1000.002],
+    "send_time": [1000.0, 1000.001, 1000.002],
     "complete_time": [1000.0005, 1000.0022, 1000.0028],
+    "lba_mb": [0.024, 0.049, 0.073],
+    "d2c_ms": [0.5, 1.2, 0.8],
+    "d2d_ms": [None, 1.0, 1.0],
+    "c2c_ms": [None, 1.7, 0.6],
+    "size_kb": [4.0, 8.0, 4.0],
+    "cmd": ["R", "W", "R"],
+    "queue_depth": [1, 2, 1],
     "sector": [100, 200, 300],
     "nr_sectors": [8, 16, 8],
-    "rwbs": ["R", "W", "R"],
-    "size_bytes": [4096, 8192, 4096],
     "device": ["8,0", "8,0", "8,0"],
-    "queue_depth": [1, 2, 1],
 })
 
 DATASET_ID = "test-dataset-001"
@@ -93,14 +92,14 @@ class TestPresetToGraphSetting:
         )
 
     def test_latency_scatter_setting(self):
-        preset = BUILTIN_PRESETS["blocklayer"][0]  # D2C Latency
+        preset = BUILTIN_PRESETS["blocklayer"][0]  # LBA Map
         gs = self._make_setting(preset)
         assert gs.chart_type == "scatter"
-        assert gs.x_column == "timestamp"
+        assert gs.x_column == "send_time"
         assert len(gs.value_columns) == 1
-        assert gs.value_columns[0]["name"] == "d2c_ms"
+        assert gs.value_columns[0]["name"] == "lba_mb"
         assert len(gs.group_columns) == 1
-        assert gs.group_columns[0]["name"] == "rwbs"
+        assert gs.group_columns[0]["name"] == "cmd"
 
     def test_all_blocklayer_presets_create_valid_settings(self):
         for preset in BUILTIN_PRESETS["blocklayer"]:
@@ -120,11 +119,11 @@ class TestGraphSettingToAppState:
     def test_scatter_chart_type_applied(self, state):
         gs = GraphSetting(
             id="test-1", name="D2C Latency", dataset_id=DATASET_ID,
-            chart_type="scatter", x_column="timestamp",
+            chart_type="scatter", x_column="send_time",
             value_columns=({"name": "d2c_ms", "aggregation": "sum",
                             "color": "#1f77b4", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
-            group_columns=({"name": "rwbs", "selected_values": [], "order": 0},),
+            group_columns=({"name": "cmd", "selected_values": [], "order": 0},),
         )
         GraphSettingMapper.to_app_state(gs, state)
         assert state._chart_settings.chart_type == ChartType.SCATTER
@@ -132,18 +131,18 @@ class TestGraphSettingToAppState:
     def test_x_column_applied(self, state):
         gs = GraphSetting(
             id="test-2", name="Test", dataset_id=DATASET_ID,
-            chart_type="line", x_column="timestamp",
+            chart_type="line", x_column="send_time",
             value_columns=({"name": "queue_depth", "aggregation": "sum",
                             "color": "#1f77b4", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
         )
         GraphSettingMapper.to_app_state(gs, state)
-        assert state._x_column == "timestamp"
+        assert state._x_column == "send_time"
 
     def test_value_columns_applied(self, state):
         gs = GraphSetting(
             id="test-3", name="Test", dataset_id=DATASET_ID,
-            chart_type="scatter", x_column="timestamp",
+            chart_type="scatter", x_column="send_time",
             value_columns=(
                 {"name": "d2c_ms", "aggregation": "sum",
                  "color": "#ff0000", "use_secondary_axis": False,
@@ -160,17 +159,17 @@ class TestGraphSettingToAppState:
     def test_group_columns_applied(self, state):
         gs = GraphSetting(
             id="test-4", name="Test", dataset_id=DATASET_ID,
-            chart_type="scatter", x_column="timestamp",
+            chart_type="scatter", x_column="send_time",
             value_columns=({"name": "d2c_ms", "aggregation": "sum",
                             "color": "#1f77b4", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
-            group_columns=({"name": "rwbs", "selected_values": [], "order": 0},),
+            group_columns=({"name": "cmd", "selected_values": [], "order": 0},),
         )
         GraphSettingMapper.to_app_state(gs, state)
         assert len(state._group_columns) == 1
         gc = state._group_columns[0]
         assert isinstance(gc, GroupColumn)
-        assert gc.name == "rwbs"
+        assert gc.name == "cmd"
 
     def test_histogram_chart_type(self, state):
         gs = GraphSetting(
@@ -187,7 +186,7 @@ class TestGraphSettingToAppState:
         """Invalid aggregation value should fallback to SUM, not crash."""
         gs = GraphSetting(
             id="test-6", name="Test", dataset_id=DATASET_ID,
-            chart_type="scatter", x_column="timestamp",
+            chart_type="scatter", x_column="send_time",
             value_columns=({"name": "d2c_ms", "aggregation": "none",
                             "color": "#1f77b4", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
@@ -207,31 +206,31 @@ class TestProfileControllerApply:
     def test_apply_sets_state(self, store, controller, state):
         gs = GraphSetting(
             id="p-1", name="D2C Latency", dataset_id=DATASET_ID,
-            chart_type="scatter", x_column="timestamp",
+            chart_type="scatter", x_column="send_time",
             value_columns=({"name": "d2c_ms", "aggregation": "sum",
                             "color": "#1f77b4", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
-            group_columns=({"name": "rwbs", "selected_values": [], "order": 0},),
+            group_columns=({"name": "cmd", "selected_values": [], "order": 0},),
         )
         store.add(gs)
         ok = controller.apply_profile("p-1")
         assert ok is True
         assert state._chart_settings.chart_type == ChartType.SCATTER
-        assert state._x_column == "timestamp"
+        assert state._x_column == "send_time"
         assert len(state._value_columns) == 1
         assert state._value_columns[0].name == "d2c_ms"
 
     def test_switch_between_profiles(self, store, controller, state):
         gs1 = GraphSetting(
             id="p-1", name="Scatter", dataset_id=DATASET_ID,
-            chart_type="scatter", x_column="timestamp",
+            chart_type="scatter", x_column="send_time",
             value_columns=({"name": "d2c_ms", "aggregation": "sum",
                             "color": "#1f77b4", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
         )
         gs2 = GraphSetting(
             id="p-2", name="Line", dataset_id=DATASET_ID,
-            chart_type="line", x_column="timestamp",
+            chart_type="line", x_column="send_time",
             value_columns=({"name": "queue_depth", "aggregation": "sum",
                             "color": "#ff7f0e", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
@@ -250,7 +249,7 @@ class TestProfileControllerApply:
     def test_save_active_preserves_state(self, store, controller, state):
         gs = GraphSetting(
             id="p-1", name="Test", dataset_id=DATASET_ID,
-            chart_type="scatter", x_column="timestamp",
+            chart_type="scatter", x_column="send_time",
             value_columns=({"name": "d2c_ms", "aggregation": "sum",
                             "color": "#1f77b4", "use_secondary_axis": False,
                             "order": 0, "formula": ""},),
@@ -313,17 +312,17 @@ class TestE2EBlocklayerPresets:
 
     def test_creates_4_profiles(self, store):
         ids = self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
-        assert len(ids) == 6
+        assert len(ids) == 7
 
     def test_profiles_retrievable_by_dataset(self, store):
         self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
         profiles = store.get_by_dataset(DATASET_ID)
-        assert len(profiles) == 6
+        assert len(profiles) == 7
         names = {p.name for p in profiles}
+        assert "LBA Map" in names
         assert "D2C Latency" in names
-        assert "IOPS Timeline" in names
-        assert "Latency Distribution" in names
-        assert "Size vs Latency" in names
+        assert "Queue Depth" in names
+        assert "I/O Size" in names
 
     def test_apply_each_profile_no_crash(self, store, controller, state):
         ids = self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)

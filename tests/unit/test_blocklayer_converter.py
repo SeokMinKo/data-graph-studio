@@ -112,7 +112,7 @@ class TestBlocklayerBasic:
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        latency = df["latency_ms"][0]
+        latency = df["d2c_ms"][0]
         assert abs(latency - 1.0) < 0.01  # 1000.001 - 1000.000 = 0.001s = 1ms
 
     def test_has_required_columns(self, parser: FtraceParser):
@@ -120,8 +120,8 @@ class TestBlocklayerBasic:
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        required = {"timestamp", "latency_ms", "sector", "nr_sectors", "rwbs",
-                     "size_bytes", "device", "queue_depth"}
+        required = {"send_time", "d2c_ms", "sector", "nr_sectors", "cmd",
+                     "size_kb", "device", "queue_depth"}
         assert required.issubset(set(df.columns))
 
     def test_sector_and_size_parsed(self, parser: FtraceParser):
@@ -131,14 +131,14 @@ class TestBlocklayerBasic:
         df = parser.parse(path, settings)
         assert df["sector"][0] == 1000
         assert df["nr_sectors"][0] == 8
-        assert df["size_bytes"][0] == 4096
+        assert df["size_kb"][0] == 4.0  # 4096 bytes = 4 KB
 
     def test_rwbs_parsed(self, parser: FtraceParser):
         path = _write_trace(BLOCK_TRACE_SIMPLE)
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        assert df["rwbs"][0] == "R"
+        assert df["cmd"][0] == "R"
 
 
 class TestBlocklayerMulti:
@@ -158,15 +158,15 @@ class TestBlocklayerMulti:
         df = parser.parse(path, settings)
         # R: 1000.001 - 1000.000 = 1ms, W: 1000.003 - 1000.0005 = 2.5ms
         df_sorted = df.sort("sector")
-        assert abs(df_sorted["latency_ms"][0] - 1.0) < 0.01
-        assert abs(df_sorted["latency_ms"][1] - 2.5) < 0.01
+        assert abs(df_sorted["d2c_ms"][0] - 1.0) < 0.01
+        assert abs(df_sorted["d2c_ms"][1] - 2.5) < 0.01
 
     def test_multi_ordered_by_issue_time(self, parser: FtraceParser):
         path = _write_trace(BLOCK_TRACE_MULTI)
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        timestamps = df["timestamp"].to_list()
+        timestamps = df["send_time"].to_list()
         assert timestamps == sorted(timestamps)
 
 
@@ -215,7 +215,7 @@ class TestBlocklayerNewColumns:
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        new_cols = {"d2c_ms", "d2d_ms", "c2c_ms", "issue_time", "complete_time"}
+        new_cols = {"d2c_ms", "d2d_ms", "c2c_ms", "send_time", "complete_time"}
 
         assert new_cols.issubset(set(df.columns)), f"Missing: {new_cols - set(df.columns)}"
 
@@ -271,7 +271,7 @@ class TestBlocklayerNewColumns:
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        assert abs(df["issue_time"][0] - 1000.000000) < 0.0001
+        assert abs(df["send_time"][0] - 1000.000000) < 0.0001
         assert abs(df["complete_time"][0] - 1000.001000) < 0.0001
 
     def test_latency_ms_equals_d2c(self, parser: FtraceParser):
@@ -281,7 +281,7 @@ class TestBlocklayerNewColumns:
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
         for i in range(len(df)):
-            assert abs(df["latency_ms"][i] - df["d2c_ms"][i]) < 0.001
+            assert abs(df["d2c_ms"][i] - df["d2c_ms"][i]) < 0.001
 
 
 class TestBlocklayerEmpty:
@@ -320,31 +320,31 @@ class TestGraphPreset:
         p = GraphPreset(
             name="test",
             chart_type="scatter",
-            x_column="timestamp",
-            y_columns=["latency_ms"],
+            x_column="send_time",
+            y_columns=["d2c_ms"],
         )
         assert p.name == "test"
         assert p.chart_type == "scatter"
-        assert p.x_column == "timestamp"
-        assert p.y_columns == ["latency_ms"]
+        assert p.x_column == "send_time"
+        assert p.y_columns == ["d2c_ms"]
 
     def test_preset_optional_group(self):
         p = GraphPreset(
             name="test",
             chart_type="scatter",
-            x_column="timestamp",
-            y_columns=["latency_ms"],
-            group_column="rwbs",
+            x_column="send_time",
+            y_columns=["d2c_ms"],
+            group_column="cmd",
         )
-        assert p.group_column == "rwbs"
+        assert p.group_column == "cmd"
 
     def test_preset_to_dict_roundtrip(self):
         p = GraphPreset(
             name="test",
             chart_type="scatter",
-            x_column="timestamp",
-            y_columns=["latency_ms", "size_bytes"],
-            group_column="rwbs",
+            x_column="send_time",
+            y_columns=["d2c_ms", "size_kb"],
+            group_column="cmd",
         )
         d = p.to_dict()
         p2 = GraphPreset.from_dict(d)
@@ -366,7 +366,7 @@ class TestBuiltinPresets:
         assert "D2C Latency" in presets
         p = presets["D2C Latency"]
         assert p.chart_type == "scatter"
-        assert p.x_column == "timestamp"
+        assert p.x_column == "send_time"
         assert "d2c_ms" in p.y_columns
 
     def test_d2d_interval_preset(self):
@@ -380,11 +380,11 @@ class TestBuiltinPresets:
         presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
         assert "C2C Interval" in presets
 
-    def test_iops_timeline_preset(self):
+    def test_queue_depth_preset(self):
         presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
-        assert "IOPS Timeline" in presets
-        p = presets["IOPS Timeline"]
-        assert p.x_column == "timestamp"
+        assert "Queue Depth" in presets
+        p = presets["Queue Depth"]
+        assert p.x_column == "send_time"
 
     def test_all_presets_have_valid_chart_types(self):
         valid_types = {"line", "scatter", "bar", "area", "histogram", "heatmap", "box"}
@@ -403,25 +403,24 @@ from data_graph_studio.parsers.graph_preset import select_preset
 class TestSelectPreset:
     """select_preset() picks the right preset for a DataFrame."""
 
-    def test_selects_d2c_for_blocklayer(self):
+    def test_selects_lba_map_for_blocklayer(self):
         df = pl.DataFrame({
-            "timestamp": [1.0, 2.0],
-            "latency_ms": [0.5, 1.0],
-            "d2c_ms": [0.5, 1.0],
-            "d2d_ms": [0.6, 1.1],
-            "c2c_ms": [None, 0.5],
-            "issue_time": [1.0, 2.0],
+            "send_time": [1.0, 2.0],
             "complete_time": [1.0005, 2.001],
+            "lba_mb": [0.024, 0.049],
+            "d2c_ms": [0.5, 1.0],
+            "d2d_ms": [None, 1.0],
+            "c2c_ms": [None, 0.5],
+            "size_kb": [4.0, 8.0],
+            "cmd": ["R", "W"],
+            "queue_depth": [1, 2],
             "sector": [100, 200],
             "nr_sectors": [8, 8],
-            "rwbs": ["R", "W"],
-            "size_bytes": [4096, 4096],
             "device": ["8,0", "8,0"],
-            "queue_depth": [1, 2],
         })
         preset = select_preset(df, converter="blocklayer")
         assert preset is not None
-        assert preset.name == "D2C Latency"
+        assert preset.name == "LBA Map"
 
     def test_returns_none_for_unknown_converter(self):
         df = pl.DataFrame({"a": [1]})
@@ -435,6 +434,6 @@ class TestSelectPreset:
 
     def test_returns_none_when_columns_missing(self):
         # Missing latency_ms
-        df = pl.DataFrame({"timestamp": [1.0], "sector": [100]})
+        df = pl.DataFrame({"send_time": [1.0], "sector": [100]})
         preset = select_preset(df, converter="blocklayer")
         assert preset is None

@@ -214,19 +214,18 @@ class FtraceParser(BaseParser):
     )
 
     _RESULT_SCHEMA = {
-        "timestamp": pl.Float64,
-        "latency_ms": pl.Float64,
+        "send_time": pl.Float64,
+        "complete_time": pl.Float64,
+        "lba_mb": pl.Float64,
         "d2c_ms": pl.Float64,
         "d2d_ms": pl.Float64,
         "c2c_ms": pl.Float64,
-        "issue_time": pl.Float64,
-        "complete_time": pl.Float64,
+        "size_kb": pl.Float64,
+        "cmd": pl.Utf8,
+        "queue_depth": pl.Int32,
         "sector": pl.Int64,
         "nr_sectors": pl.Int32,
-        "rwbs": pl.Utf8,
-        "size_bytes": pl.Int64,
         "device": pl.Utf8,
-        "queue_depth": pl.Int32,
     }
 
     def _convert_blocklayer(
@@ -344,20 +343,22 @@ class FtraceParser(BaseParser):
                 c2c_ms = (complete_ts - prev_complete_ts) * 1000.0
             prev_complete_ts = complete_ts
 
+            sector = entry["sector"]
+            size_bytes = entry["size_bytes"]
+
             result_rows.append({
-                "timestamp": issue_ts,
-                "latency_ms": d2c_s * 1000.0,  # backward compat
+                "send_time": issue_ts,
+                "complete_time": complete_ts,
+                "lba_mb": sector * 512.0 / (1024.0 * 1024.0),
                 "d2c_ms": d2c_s * 1000.0,
                 "d2d_ms": d2d_ms,
                 "c2c_ms": c2c_ms,
-                "issue_time": issue_ts,
-                "complete_time": complete_ts,
-                "sector": entry["sector"],
-                "nr_sectors": entry["nr_sectors"],
-                "rwbs": entry["rwbs"],
-                "size_bytes": entry["size_bytes"],
-                "device": entry["device"],
+                "size_kb": size_bytes / 1024.0,
+                "cmd": entry["rwbs"],
                 "queue_depth": entry["queue_depth"],
+                "sector": sector,
+                "nr_sectors": entry["nr_sectors"],
+                "device": entry["device"],
             })
 
         matched = len(result_rows)
@@ -369,7 +370,7 @@ class FtraceParser(BaseParser):
         if not result_rows:
             return pl.DataFrame(schema=self._RESULT_SCHEMA)
 
-        return pl.DataFrame(result_rows).sort("timestamp")
+        return pl.DataFrame(result_rows).sort("send_time")
 
     # Map converter name → method
     _converters: Dict[str, Any] = {
