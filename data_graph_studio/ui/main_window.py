@@ -1929,8 +1929,11 @@ class MainWindow(QMainWindow):
         """Open the Trace Configuration dialog (always)."""
         from data_graph_studio.ui.dialogs.trace_config_dialog import TraceConfigDialog
 
+        logger.debug("[Logger] opening TraceConfigDialog")
         dialog = TraceConfigDialog(self)
         result = dialog.exec()
+        logger.debug("[Logger] TraceConfigDialog result=%s, start_requested=%s",
+                     result, dialog.start_requested)
 
         if result == QDialog.DialogCode.Accepted and dialog.start_requested:
             self._run_trace(dialog.get_config())
@@ -1955,6 +1958,8 @@ class MainWindow(QMainWindow):
         has_events = bool(logger_cfg.get("events"))
         has_adb = bool(shutil.which("adb"))
         has_save_path = bool(logger_cfg.get("save_path"))
+        logger.debug("[Logger] start_trace check: adb=%s, device=%s, events=%s, save=%s",
+                     has_adb, has_device, has_events, has_save_path)
 
         if has_device and has_events and has_adb and has_save_path:
             # Bug fix: verify capture mode prerequisites before starting
@@ -2006,6 +2011,11 @@ class MainWindow(QMainWindow):
             TraceProgressDialog,
         )
 
+        logger.info("[Logger] _run_trace: mode=%s, device=%s, events=%d",
+                     logger_cfg.get("capture_mode", "?"),
+                     logger_cfg.get("device_serial", "?"),
+                     len(logger_cfg.get("events", [])))
+
         if not shutil.which("adb"):
             QMessageBox.warning(
                 self, "Logger",
@@ -2055,8 +2065,10 @@ class MainWindow(QMainWindow):
             controller = AdbTraceController(self)
 
         try:
+            logger.debug("[Logger] starting %s trace on %s", capture_mode, serial)
             controller.start_trace(serial, logger_cfg)
         except Exception as e:
+            logger.error("[Logger] start_trace failed: %s", e, exc_info=True)
             QMessageBox.warning(self, "Logger", f"Failed to start trace:\n{e}")
             controller.cleanup()
             return
@@ -2064,12 +2076,14 @@ class MainWindow(QMainWindow):
         dialog = TraceProgressDialog(controller, save_path, self)
         result = dialog.exec()
 
+        logger.debug("[Logger] TraceProgressDialog result=%s", result)
         if result == QDialog.DialogCode.Accepted:
             self.statusBar().showMessage(f"Trace saved: {save_path}", 5000)
 
             if is_perfetto:
                 # PerfettoTraceController saves CSV with .csv suffix
                 csv_path = str(Path(save_path).with_suffix(".csv"))
+                logger.info("[Logger] loading perfetto CSV: %s", csv_path)
                 self._load_csv_async(csv_path)
             else:
                 reply = QMessageBox.question(
@@ -2109,24 +2123,30 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self_w.error.emit(str(e))
 
+        logger.debug("[Logger] _load_csv_async: %s", csv_path)
         self.statusBar().showMessage("Loading CSV...", 0)
         worker = _CsvWorker(self)
 
         def on_finished(df):
+            logger.info("[Logger] CSV loaded: %d rows, %d cols, columns=%s",
+                        len(df), len(df.columns), list(df.columns)[:10])
             name = Path(csv_path).stem
             did = self.engine.load_dataset_from_dataframe(
                 df, name=name, source_path=csv_path
             )
             if did:
+                logger.info("[Logger] dataset created: id=%s, name=%s", did, name)
                 self._on_data_loaded()
                 self.statusBar().showMessage(
                     f"Perfetto trace: loaded {len(df)} rows", 5000,
                 )
             else:
+                logger.error("[Logger] load_dataset_from_dataframe returned None for %s", csv_path)
                 QMessageBox.warning(self, "Logger", "Failed to load CSV data.")
                 self.statusBar().clearMessage()
 
         def on_error(msg):
+            logger.error("[Logger] CSV load failed: %s", msg)
             QMessageBox.critical(self, "Logger", f"CSV load failed:\n{msg}")
             self.statusBar().clearMessage()
 
@@ -2162,24 +2182,31 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self_w.error.emit(str(e))
 
+        logger.debug("[Logger] _parse_ftrace_async: %s", file_path)
         self.statusBar().showMessage("Parsing ftrace file...", 0)
         worker = _ParseWorker(self)
 
         def on_finished(df):
+            logger.info("[Logger] ftrace parsed: %d rows, %d cols, columns=%s",
+                        len(df), len(df.columns), list(df.columns)[:10])
             dataset_name = Path(file_path).stem
             dataset_id = self.engine.load_dataset_from_dataframe(
                 df, name=dataset_name, source_path=file_path
             )
             if dataset_id:
+                logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
                 self._on_data_loaded()
                 self.statusBar().showMessage(
                     f"Ftrace: loaded {len(df)} rows from {Path(file_path).name}",
                     5000,
                 )
             else:
+                logger.error("[Logger] ftrace load_dataset_from_dataframe returned None")
                 QMessageBox.warning(self, "Ftrace Parser", "Failed to load parsed data.")
+                self.statusBar().clearMessage()
 
         def on_error(msg):
+            logger.error("[Logger] ftrace parse failed: %s", msg)
             QMessageBox.critical(self, "Ftrace Parser", f"Parse failed:\n{msg}")
             self.statusBar().clearMessage()
 

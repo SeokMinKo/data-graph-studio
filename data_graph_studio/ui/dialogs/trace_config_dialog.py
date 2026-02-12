@@ -151,6 +151,7 @@ class ConnectionPanel(QWidget):
 
     def initialize(self) -> None:
         """Check ADB and scan devices."""
+        logger.debug("[TraceConfig] ConnectionPanel.initialize()")
         self._check_adb()
         if self._adb_found:
             self.refresh_devices()
@@ -218,6 +219,7 @@ class ConnectionPanel(QWidget):
 
     def _parse_device_output(self, stdout: str) -> None:
         """Parse `adb devices -l` output into list items."""
+        logger.debug("[TraceConfig] parsing device output:\n%s", stdout[:500])
         for line in stdout.strip().split("\n")[1:]:
             line = line.strip()
             if not line or "offline" in line:
@@ -736,6 +738,11 @@ class TraceConfigDialog(QDialog):
 
     def _validate(self) -> bool:
         """Validate config. On failure, navigate to problem category."""
+        logger.debug("[TraceConfig] validating: adb=%s, device=%s, events=%d, save=%s",
+                     self.connection_panel.adb_found,
+                     self.connection_panel.selected_serial(),
+                     len(self.events_panel.selected_events()),
+                     self.output_panel.save_path())
         # EC-1: ADB not installed
         if not self.connection_panel.adb_found:
             self._category_list.setCurrentRow(CAT_CONNECTION)
@@ -790,13 +797,18 @@ class TraceConfigDialog(QDialog):
 
     def _on_start(self) -> None:
         """Start Recording: validate → save → disable button → accept."""
+        logger.debug("[TraceConfig] Start Recording clicked")
         if not self._validate():
+            logger.debug("[TraceConfig] validation failed, aborting start")
             return
         # FR-14: immediate disable to prevent double-click
         self._start_btn.setEnabled(False)
         self._start_requested = True
 
         config = self.get_config()
+        logger.info("[TraceConfig] starting with config: mode=%s, device=%s, events=%d, save=%s",
+                    config.get("capture_mode"), config.get("device_serial"),
+                    len(config.get("events", [])), config.get("save_path"))
         save_logger_config(config)
         self._saved_config = dict(config)
         self._dirty = False
