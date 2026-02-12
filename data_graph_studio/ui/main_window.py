@@ -654,17 +654,17 @@ class MainWindow(QMainWindow):
         # ============================================================
         logger_menu = menubar.addMenu("&Logger")
 
-        blk_trace_action = QAction("Start &Block Layer Trace...", self)
-        blk_trace_action.setStatusTip("Start raw ftrace block layer tracing via ADB")
-        blk_trace_action.triggered.connect(self._on_start_blk_trace)
-        logger_menu.addAction(blk_trace_action)
+        start_trace_action = QAction("&Start Trace...", self)
+        start_trace_action.setStatusTip("Start block layer tracing (uses saved config or opens Configure)")
+        start_trace_action.triggered.connect(self._on_start_trace)
+        logger_menu.addAction(start_trace_action)
 
         logger_menu.addSeparator()
 
-        setup_android_action = QAction("Setup &Android Logger...", self)
-        setup_android_action.setStatusTip("Open the Android Logger Setup Wizard")
-        setup_android_action.triggered.connect(self._on_setup_android_logger)
-        logger_menu.addAction(setup_android_action)
+        configure_action = QAction("&Configure...", self)
+        configure_action.setStatusTip("Open the Trace Configuration dialog")
+        configure_action.triggered.connect(self._on_configure_trace)
+        logger_menu.addAction(configure_action)
 
         # ============================================================
         # Parser Menu
@@ -1925,44 +1925,59 @@ class MainWindow(QMainWindow):
     # Logger — Android Logger Setup Wizard
     # ================================================================
 
-    def _on_setup_android_logger(self) -> None:
-        """Open the Android Logger Setup Wizard."""
-        from data_graph_studio.ui.dialogs.android_logger_wizard import AndroidLoggerWizard
+    def _on_configure_trace(self) -> None:
+        """Open the Trace Configuration dialog (always)."""
+        from data_graph_studio.ui.dialogs.trace_config_dialog import TraceConfigDialog
 
-        wizard = AndroidLoggerWizard(self)
-        wizard.exec()
+        dialog = TraceConfigDialog(self)
+        result = dialog.exec()
 
-        if wizard.start_requested:
-            self._on_start_blk_trace()
+        if result == QDialog.DialogCode.Accepted and dialog.start_requested:
+            self._run_trace(dialog.get_config())
 
     # ================================================================
     # Logger — ADB + Perfetto block layer tracing
     # ================================================================
 
-    def _on_start_blk_trace(self):
-        """Start raw ftrace block layer tracing via ADB.
+    def _on_start_trace(self) -> None:
+        """Start trace using saved config, or open Configure if none."""
+        import shutil
 
-        Uses AdbTraceController + TraceProgressDialog for non-blocking
-        capture with progress display and stop capability.
-        """
+        from data_graph_studio.ui.dialogs.trace_config_dialog import (
+            load_logger_config,
+            TraceConfigDialog,
+        )
+
+        logger_cfg = load_logger_config()
+
+        # If config looks valid (has device + events), start directly
+        has_device = bool(logger_cfg.get("device_serial"))
+        has_events = bool(logger_cfg.get("events"))
+        has_adb = bool(shutil.which("adb"))
+
+        if has_device and has_events and has_adb:
+            self._run_trace(logger_cfg)
+        else:
+            # Open configure dialog
+            self._on_configure_trace()
+
+    def _run_trace(self, logger_cfg: dict) -> None:
+        """Execute trace with given config (Perfetto/Raw Ftrace)."""
         import shutil
         import datetime
 
-        from data_graph_studio.ui.dialogs.android_logger_wizard import load_logger_config
         from data_graph_studio.ui.dialogs.trace_progress_dialog import (
             AdbTraceController,
             PerfettoTraceController,
             TraceProgressDialog,
         )
 
-        logger_cfg = load_logger_config()
-
         if not shutil.which("adb"):
             QMessageBox.warning(
                 self, "Logger",
                 "adb not found in PATH.\n\n"
                 "Install Android SDK Platform Tools and ensure 'adb' is in your PATH.\n"
-                "Or use Logger → Setup Android Logger... to configure.",
+                "Or use Logger → Configure... to set up.",
             )
             return
 
@@ -1971,7 +1986,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "Logger",
                 "No device configured.\n\n"
-                "Use Logger → Setup Android Logger... to select a device.",
+                "Use Logger → Configure... to select a device.",
             )
             return
 
@@ -2019,10 +2034,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Trace saved: {save_path}", 5000)
 
             if is_perfetto:
-                # Perfetto → CSV → polars로 직접 로드
                 self._load_csv_async(save_path)
             else:
-                # Raw ftrace → regex 파싱
                 reply = QMessageBox.question(
                     self, "Logger",
                     f"Trace saved to:\n{save_path}\n\n"

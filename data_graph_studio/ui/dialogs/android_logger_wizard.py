@@ -1,5 +1,9 @@
 """
-Android Logger Setup Wizard
+Android Logger Setup Wizard (DEPRECATED)
+
+.. deprecated:: 2.0
+    Use :class:`~data_graph_studio.ui.dialogs.trace_config_dialog.TraceConfigDialog` instead.
+    This module is kept for import compatibility only.
 
 ADB/Perfetto 기반 블록 레이어 트레이스 설정을 위한 단계별 위자드.
 """
@@ -624,3 +628,7 @@ class AndroidLoggerWizard(QWizard):
     def start_requested(self) -> bool:
         """Wizard 완료 후 바로 트레이스를 시작할지 여부."""
         return self.summary_page.start_requested
+
+
+# Re-export new dialog for import compatibility
+from data_graph_studio.ui.dialogs.trace_config_dialog import TraceConfigDialog  # noqa: E402, F401

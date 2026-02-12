@@ -1,4 +1,4 @@
-"""Tests for AdbTraceController, TraceProgressDialog, RootCheckPage, and config migration."""
+"""Tests for AdbTraceController, TraceProgressDialog, and legacy compatibility."""
 
 from __future__ import annotations
 
