@@ -208,14 +208,15 @@ class TestBlocklayerMixedEvents:
 
 
 class TestBlocklayerNewColumns:
-    """New latency columns: d2c, q2c, c2c, issue_time, complete_time."""
+    """New latency columns: d2c, d2d, c2c, issue_time, complete_time."""
 
     def test_has_new_columns(self, parser: FtraceParser):
         path = _write_trace(BLOCK_TRACE_WITH_INSERT)
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        new_cols = {"d2c_ms", "q2c_ms", "c2c_ms", "issue_time", "complete_time"}
+        new_cols = {"d2c_ms", "d2d_ms", "c2c_ms", "issue_time", "complete_time"}
+
         assert new_cols.issubset(set(df.columns)), f"Missing: {new_cols - set(df.columns)}"
 
     def test_d2c_latency(self, parser: FtraceParser):
@@ -230,25 +231,25 @@ class TestBlocklayerNewColumns:
         # sector 2000: issue=0.0025, complete=0.004 → d2c=1.5ms
         assert abs(df_sorted["d2c_ms"][1] - 1.5) < 0.01
 
-    def test_q2c_latency_with_insert(self, parser: FtraceParser):
-        """Q2C = queue(insert) → complete. Full I/O time."""
+    def test_d2d_interval(self, parser: FtraceParser):
+        """D2D = dispatch-to-dispatch (time between consecutive issues)."""
         path = _write_trace(BLOCK_TRACE_WITH_INSERT)
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        df_sorted = df.sort("sector")
-        # sector 1000: insert=0.0, complete=0.001 → q2c=1.0ms
-        assert abs(df_sorted["q2c_ms"][0] - 1.0) < 0.01
-        # sector 2000: insert=0.002, complete=0.004 → q2c=2.0ms
-        assert abs(df_sorted["q2c_ms"][1] - 2.0) < 0.01
+        d2d = df["d2d_ms"].to_list()
+        # First issue has no previous → None
+        assert d2d[0] is None
+        # sector 1000 issue=0.0003, sector 2000 issue=0.0025 → d2d=2.2ms
+        assert abs(d2d[1] - 2.2) < 0.01
 
-    def test_q2c_falls_back_to_d2c_without_insert(self, parser: FtraceParser):
-        """When no insert event, q2c should equal d2c."""
+    def test_d2d_none_for_single_io(self, parser: FtraceParser):
+        """Single I/O has no D2D (no previous dispatch)."""
         path = _write_trace(BLOCK_TRACE_SIMPLE)
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        assert abs(df["q2c_ms"][0] - df["d2c_ms"][0]) < 0.001
+        assert df["d2d_ms"][0] is None
 
     def test_c2c_latency(self, parser: FtraceParser):
         """C2C = time between consecutive completes."""
@@ -368,12 +369,12 @@ class TestBuiltinPresets:
         assert p.x_column == "timestamp"
         assert "d2c_ms" in p.y_columns
 
-    def test_q2c_latency_preset(self):
+    def test_d2d_interval_preset(self):
         presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
-        assert "Q2C Latency" in presets
-        p = presets["Q2C Latency"]
+        assert "D2D Interval" in presets
+        p = presets["D2D Interval"]
         assert p.chart_type == "scatter"
-        assert "q2c_ms" in p.y_columns
+        assert "d2d_ms" in p.y_columns
 
     def test_c2c_interval_preset(self):
         presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
@@ -407,7 +408,7 @@ class TestSelectPreset:
             "timestamp": [1.0, 2.0],
             "latency_ms": [0.5, 1.0],
             "d2c_ms": [0.5, 1.0],
-            "q2c_ms": [0.6, 1.1],
+            "d2d_ms": [0.6, 1.1],
             "c2c_ms": [None, 0.5],
             "issue_time": [1.0, 2.0],
             "complete_time": [1.0005, 2.001],

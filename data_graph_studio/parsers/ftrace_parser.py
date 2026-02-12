@@ -217,7 +217,7 @@ class FtraceParser(BaseParser):
         "timestamp": pl.Float64,
         "latency_ms": pl.Float64,
         "d2c_ms": pl.Float64,
-        "q2c_ms": pl.Float64,
+        "d2d_ms": pl.Float64,
         "c2c_ms": pl.Float64,
         "issue_time": pl.Float64,
         "complete_time": pl.Float64,
@@ -240,7 +240,7 @@ class FtraceParser(BaseParser):
 
         Computes:
         - **d2c_ms** (D2C): dispatch-to-complete latency
-        - **q2c_ms** (Q2C): queue-to-complete latency (falls back to D2C if no insert)
+        - **d2d_ms** (D2D): dispatch-to-dispatch (time between consecutive issues)
         - **c2c_ms** (C2C): inter-completion time (time between consecutive completes)
         - **latency_ms**: alias for d2c_ms (backward compat)
         - **issue_time**: absolute timestamp of dispatch (issue)
@@ -271,7 +271,6 @@ class FtraceParser(BaseParser):
             return pl.DataFrame(schema=self._RESULT_SCHEMA)
 
         # Track per-request state: key=(dev:sector:nr_sectors)
-        inserts: Dict[str, float] = {}      # key → insert timestamp
         issues: Dict[str, Dict[str, Any]] = {}  # key → issue info
         issue_order: List[Dict[str, Any]] = []
         outstanding = 0
@@ -281,16 +280,7 @@ class FtraceParser(BaseParser):
             details = row["details"]
             ts = row["timestamp"]
 
-            if event == "block_rq_insert":
-                m = self._ISSUE_RE.match(details)
-                if not m:
-                    logger.debug("[blocklayer] insert parse fail: %s", details[:100])
-                    continue
-                key = f"{m.group('dev')}:{m.group('sector')}:{m.group('nr_sectors')}"
-                inserts[key] = ts
-                logger.debug("[blocklayer] insert: %s @ %.6f", key, ts)
-
-            elif event == "block_rq_issue":
+            if event == "block_rq_issue":
                 m = self._ISSUE_RE.match(details)
                 if not m:
                     logger.debug("[blocklayer] issue parse fail: %s", details[:100])
@@ -302,7 +292,6 @@ class FtraceParser(BaseParser):
 
                 outstanding += 1
                 entry = {
-                    "insert_ts": inserts.pop(key, None),  # may be None
                     "issue_ts": ts,
                     "sector": sector,
                     "nr_sectors": nr_sectors,
@@ -331,6 +320,7 @@ class FtraceParser(BaseParser):
         # Build result from matched pairs, computing all latencies
         result_rows: List[Dict[str, Any]] = []
         prev_complete_ts: Optional[float] = None
+        prev_issue_ts: Optional[float] = None
 
         for entry in issue_order:
             if "complete_ts" not in entry:
@@ -339,12 +329,16 @@ class FtraceParser(BaseParser):
 
             issue_ts = entry["issue_ts"]
             complete_ts = entry["complete_ts"]
-            insert_ts = entry.get("insert_ts")
 
             d2c_s = complete_ts - issue_ts
-            q2c_s = (complete_ts - insert_ts) if insert_ts is not None else d2c_s
 
-            # C2C: time since previous complete (sorted by complete_ts later)
+            # D2D: time between consecutive dispatches
+            d2d_ms: Optional[float] = None
+            if prev_issue_ts is not None:
+                d2d_ms = (issue_ts - prev_issue_ts) * 1000.0
+            prev_issue_ts = issue_ts
+
+            # C2C: time between consecutive completes
             c2c_ms: Optional[float] = None
             if prev_complete_ts is not None:
                 c2c_ms = (complete_ts - prev_complete_ts) * 1000.0
@@ -354,7 +348,7 @@ class FtraceParser(BaseParser):
                 "timestamp": issue_ts,
                 "latency_ms": d2c_s * 1000.0,  # backward compat
                 "d2c_ms": d2c_s * 1000.0,
-                "q2c_ms": q2c_s * 1000.0,
+                "d2d_ms": d2d_ms,
                 "c2c_ms": c2c_ms,
                 "issue_time": issue_ts,
                 "complete_time": complete_ts,
@@ -368,10 +362,9 @@ class FtraceParser(BaseParser):
 
         matched = len(result_rows)
         total_issues = len(issue_order)
-        logger.info("[blocklayer] matched %d/%d issues (%.0f%%), inserts=%d",
+        logger.info("[blocklayer] matched %d/%d issues (%.0f%%)",
                     matched, total_issues,
-                    (matched / total_issues * 100) if total_issues else 0,
-                    sum(1 for e in issue_order if e.get("insert_ts") is not None))
+                    (matched / total_issues * 100) if total_issues else 0)
 
         if not result_rows:
             return pl.DataFrame(schema=self._RESULT_SCHEMA)

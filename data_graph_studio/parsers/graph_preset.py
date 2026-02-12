@@ -89,12 +89,12 @@ BUILTIN_PRESETS: Dict[str, List[GraphPreset]] = {
             description="Dispatch-to-Complete latency over time (R/W colored)",
         ),
         GraphPreset(
-            name="Q2C Latency",
+            name="D2D Interval",
             chart_type="scatter",
             x_column="timestamp",
-            y_columns=["q2c_ms"],
+            y_columns=["d2d_ms"],
             group_column="rwbs",
-            description="Queue-to-Complete latency (full I/O time incl. queue wait)",
+            description="Dispatch-to-Dispatch interval (time between consecutive issues)",
         ),
         GraphPreset(
             name="C2C Interval",
