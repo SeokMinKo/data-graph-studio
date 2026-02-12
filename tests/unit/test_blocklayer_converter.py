@@ -284,6 +284,76 @@ class TestBlocklayerNewColumns:
             assert abs(df["d2c_ms"][i] - df["d2c_ms"][i]) < 0.001
 
 
+class TestBlocklayerSequentiality:
+    """LBA sequentiality: sequential if current_sector == prev_sector + prev_nr_sectors."""
+
+    def test_has_is_sequential_column(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_SIMPLE)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert "is_sequential" in df.columns
+
+    def test_first_io_is_random(self, parser: FtraceParser):
+        """First I/O has no predecessor → random."""
+        path = _write_trace(BLOCK_TRACE_SIMPLE)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert df["is_sequential"][0] == "random"
+
+    def test_sequential_detection(self, parser: FtraceParser):
+        """Second I/O starts exactly where first ended → sequential."""
+        # sector=1000 nr_sectors=8, then sector=1008 nr_sectors=8
+        trace = """\
+# tracer: nop
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 1008 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
+     kworker/0:1-100 [000] .... 1000.001100: block_rq_complete: 8,0 R () 1008 + 8 [0]
+"""
+        path = _write_trace(trace)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert df["is_sequential"][0] == "random"  # first has no prev
+        assert df["is_sequential"][1] == "sequential"
+
+    def test_random_detection(self, parser: FtraceParser):
+        """Non-contiguous sectors → random."""
+        # sector=1000 nr_sectors=8 (ends at 1008), then sector=5000
+        trace = """\
+# tracer: nop
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 5000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
+     kworker/0:1-100 [000] .... 1000.001100: block_rq_complete: 8,0 R () 5000 + 8 [0]
+"""
+        path = _write_trace(trace)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert df["is_sequential"][0] == "random"
+        assert df["is_sequential"][1] == "random"
+
+    def test_sequentiality_per_device(self, parser: FtraceParser):
+        """Sequentiality tracked per device — different devices don't chain."""
+        trace = """\
+# tracer: nop
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,16 R 4096 () 1008 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
+     kworker/0:1-100 [000] .... 1000.001100: block_rq_complete: 8,16 R () 1008 + 8 [0]
+"""
+        path = _write_trace(trace)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        # Both are first on their device → random
+        assert df["is_sequential"][0] == "random"
+        assert df["is_sequential"][1] == "random"
+
+
 class TestBlocklayerEmpty:
     """Edge case: no block events."""
 

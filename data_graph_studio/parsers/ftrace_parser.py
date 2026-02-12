@@ -226,6 +226,7 @@ class FtraceParser(BaseParser):
         "sector": pl.Int64,
         "nr_sectors": pl.Int32,
         "device": pl.Utf8,
+        "is_sequential": pl.Utf8,
     }
 
     def _convert_blocklayer(
@@ -320,6 +321,8 @@ class FtraceParser(BaseParser):
         result_rows: List[Dict[str, Any]] = []
         prev_complete_ts: Optional[float] = None
         prev_issue_ts: Optional[float] = None
+        # LBA sequentiality: per-device tracking of (sector + nr_sectors)
+        prev_lba_end: Dict[str, int] = {}  # device → sector + nr_sectors
 
         for entry in issue_order:
             if "complete_ts" not in entry:
@@ -344,7 +347,16 @@ class FtraceParser(BaseParser):
             prev_complete_ts = complete_ts
 
             sector = entry["sector"]
+            nr_sects = entry["nr_sectors"]
             size_bytes = entry["size_bytes"]
+            dev = entry["device"]
+
+            # LBA sequentiality
+            if dev in prev_lba_end and sector == prev_lba_end[dev]:
+                is_seq = "sequential"
+            else:
+                is_seq = "random"
+            prev_lba_end[dev] = sector + nr_sects
 
             result_rows.append({
                 "send_time": issue_ts,
@@ -358,7 +370,8 @@ class FtraceParser(BaseParser):
                 "queue_depth": entry["queue_depth"],
                 "sector": sector,
                 "nr_sectors": entry["nr_sectors"],
-                "device": entry["device"],
+                "device": dev,
+                "is_sequential": is_seq,
             })
 
         matched = len(result_rows)
