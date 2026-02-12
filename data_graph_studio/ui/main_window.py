@@ -2137,6 +2137,7 @@ class MainWindow(QMainWindow):
             if did:
                 logger.info("[Logger] dataset created: id=%s, name=%s", did, name)
                 self._on_data_loaded()
+                self._apply_graph_preset(df, converter="blocklayer")
                 self.statusBar().showMessage(
                     f"Perfetto trace: loaded {len(df)} rows", 5000,
                 )
@@ -2155,13 +2156,14 @@ class MainWindow(QMainWindow):
         self._csv_worker = worker
         worker.start()
 
-    def _parse_ftrace_async(self, file_path: str) -> None:
+    def _parse_ftrace_async(self, file_path: str, converter: str = "blocklayer") -> None:
         """Parse an ftrace text file in a background thread.
 
         Avoids blocking the UI during large file parsing.
 
         Args:
             file_path: Path to the ftrace text file.
+            converter: Converter to apply (default: "blocklayer").
         """
         from pathlib import Path
         from PySide6.QtCore import QThread, Signal as QtSignal
@@ -2170,6 +2172,7 @@ class MainWindow(QMainWindow):
 
         parser = FtraceParser()
         settings = parser.default_settings()
+        settings["converter"] = converter
 
         class _ParseWorker(QThread):
             finished = QtSignal(object)
@@ -2182,7 +2185,7 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self_w.error.emit(str(e))
 
-        logger.debug("[Logger] _parse_ftrace_async: %s", file_path)
+        logger.debug("[Logger] _parse_ftrace_async: %s, converter=%s", file_path, converter)
         self.statusBar().showMessage("Parsing ftrace file...", 0)
         worker = _ParseWorker(self)
 
@@ -2196,6 +2199,7 @@ class MainWindow(QMainWindow):
             if dataset_id:
                 logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
                 self._on_data_loaded()
+                self._apply_graph_preset(df, converter)
                 self.statusBar().showMessage(
                     f"Ftrace: loaded {len(df)} rows from {Path(file_path).name}",
                     5000,
@@ -2215,6 +2219,49 @@ class MainWindow(QMainWindow):
         # prevent GC
         self._parse_worker = worker
         worker.start()
+
+    def _apply_graph_preset(self, df, converter: str = "") -> None:
+        """Auto-apply a graph preset based on the converter and DataFrame columns.
+
+        Args:
+            df: The loaded polars DataFrame.
+            converter: Converter name (e.g. "blocklayer").
+        """
+        from data_graph_studio.parsers.graph_preset import select_preset
+        from data_graph_studio.core.state import ChartType
+
+        preset = select_preset(df, converter=converter)
+        if preset is None:
+            logger.debug("[Logger] no preset matched for converter=%s", converter)
+            return
+
+        logger.info("[Logger] applying graph preset: %s (chart=%s, x=%s, y=%s, group=%s)",
+                    preset.name, preset.chart_type, preset.x_column,
+                    preset.y_columns, preset.group_column)
+        try:
+            # Set chart type
+            chart_type = ChartType(preset.chart_type)
+            self.state.set_chart_type(chart_type)
+
+            # Set X column
+            self.state.set_x_column(preset.x_column)
+
+            # Set Y / value columns
+            self.state.clear_value_zone()
+            for col in preset.y_columns:
+                self.state.add_value_column(col)
+
+            # Set group column
+            if preset.group_column:
+                self.state.clear_group_zone()
+                self.state.add_group_column(preset.group_column)
+
+            # Refresh graph
+            self.graph_panel.refresh()
+            self.graph_panel.autofit()
+            logger.info("[Logger] preset '%s' applied successfully", preset.name)
+        except Exception as e:
+            logger.warning("[Logger] failed to apply preset '%s': %s", preset.name, e, exc_info=True)
 
     def _on_open_file(self):
         self._file_controller._on_open_file()

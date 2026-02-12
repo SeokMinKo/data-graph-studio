@@ -3,12 +3,11 @@
 Step 1 (parse_raw): raw ftrace text → structured event DataFrame
 Step 2 (convert):   event DataFrame → analysis-ready DataFrame
                     (e.g. block layer: send/complete → latency, queue depth)
-
-고돌이 기존 코드를 여기에 넣을 예정.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,6 +15,8 @@ from typing import Any, Dict, List, Optional
 import polars as pl
 
 from .base import BaseParser
+
+logger = logging.getLogger(__name__)
 
 # Ftrace line format reference: https://docs.kernel.org/trace/ftrace.html
 # Standard:  <task>-<pid>   [<cpu>] <flags> <timestamp>: <event>: <details>
@@ -201,25 +202,147 @@ class FtraceParser(BaseParser):
     # Converter registry — add new converters here
     # ------------------------------------------------------------------
 
+    # block_rq_issue details:   <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
+    # block_rq_complete details: <dev> <rwbs> () <sector> + <nr_sectors> [<errno>]
+    _ISSUE_RE = re.compile(
+        r"^(?P<dev>\S+)\s+(?P<rwbs>\S+)\s+(?P<bytes>\d+)\s+\(\)\s+"
+        r"(?P<sector>\d+)\s*\+\s*(?P<nr_sectors>\d+)"
+    )
+    _COMPLETE_RE = re.compile(
+        r"^(?P<dev>\S+)\s+(?P<rwbs>\S+)\s+\(\)\s+"
+        r"(?P<sector>\d+)\s*\+\s*(?P<nr_sectors>\d+)"
+    )
+
     def _convert_blocklayer(
         self, raw_df: pl.DataFrame, options: Dict[str, Any]
     ) -> pl.DataFrame:
-        """Block layer converter.
+        """Block layer converter — matches issue/complete pairs.
 
-        Matches send/complete pairs → computes latency, queue depth, etc.
+        Parses ``block_rq_issue`` and ``block_rq_complete`` events,
+        matches them by (device, sector, nr_sectors), and computes:
+        - latency_ms: complete_time - issue_time
+        - queue_depth: number of outstanding I/Os at issue time
+        - size_bytes, rwbs, device from the issue event
 
-        TODO: 고돌 기존 코드 여기에
+        Unmatched issues (no corresponding complete) are dropped.
 
         Args:
-            raw_df: Raw event DataFrame.
-            options: Converter-specific options.
+            raw_df: Raw event DataFrame from parse_raw().
+            options: Converter-specific options (currently unused).
 
         Returns:
-            DataFrame with latency, queue depth columns.
+            Analysis-ready DataFrame sorted by issue timestamp.
         """
-        raise NotImplementedError(
-            "blocklayer converter not yet implemented."
+        logger.info("[blocklayer] converting %d raw events", len(raw_df))
+
+        # Filter to block events only
+        block_events = raw_df.filter(
+            pl.col("event").is_in(["block_rq_issue", "block_rq_complete"])
         )
+        logger.debug("[blocklayer] block events: %d", len(block_events))
+
+        if len(block_events) == 0:
+            logger.info("[blocklayer] no block events found, returning empty")
+            return pl.DataFrame(schema={
+                "timestamp": pl.Float64,
+                "latency_ms": pl.Float64,
+                "sector": pl.Int64,
+                "nr_sectors": pl.Int32,
+                "rwbs": pl.Utf8,
+                "size_bytes": pl.Int64,
+                "device": pl.Utf8,
+                "queue_depth": pl.Int32,
+            })
+
+        # Parse issue events
+        issues: Dict[str, Dict[str, Any]] = {}  # key=(dev,sector,nr_sectors) → info
+        issue_order: List[Dict[str, Any]] = []
+
+        # Track outstanding I/Os for queue depth
+        outstanding = 0
+
+        for row in block_events.iter_rows(named=True):
+            event = row["event"]
+            details = row["details"]
+            ts = row["timestamp"]
+
+            if event == "block_rq_issue":
+                m = self._ISSUE_RE.match(details)
+                if not m:
+                    logger.debug("[blocklayer] issue parse fail: %s", details[:100])
+                    continue
+                dev = m.group("dev")
+                sector = int(m.group("sector"))
+                nr_sectors = int(m.group("nr_sectors"))
+                key = f"{dev}:{sector}:{nr_sectors}"
+
+                outstanding += 1
+                entry = {
+                    "issue_ts": ts,
+                    "sector": sector,
+                    "nr_sectors": nr_sectors,
+                    "rwbs": m.group("rwbs"),
+                    "size_bytes": int(m.group("bytes")),
+                    "device": dev,
+                    "queue_depth": outstanding,
+                    "key": key,
+                }
+                issues[key] = entry
+                issue_order.append(entry)
+
+            elif event == "block_rq_complete":
+                m = self._COMPLETE_RE.match(details)
+                if not m:
+                    logger.debug("[blocklayer] complete parse fail: %s", details[:100])
+                    continue
+                dev = m.group("dev")
+                sector = int(m.group("sector"))
+                nr_sectors = int(m.group("nr_sectors"))
+                key = f"{dev}:{sector}:{nr_sectors}"
+
+                if key in issues:
+                    issues[key]["complete_ts"] = ts
+                    outstanding = max(0, outstanding - 1)
+                else:
+                    logger.debug("[blocklayer] orphan complete: %s", key)
+
+        # Build result from matched pairs
+        result_rows: List[Dict[str, Any]] = []
+        for entry in issue_order:
+            if "complete_ts" not in entry:
+                logger.debug("[blocklayer] unmatched issue: %s", entry["key"])
+                continue
+            latency_s = entry["complete_ts"] - entry["issue_ts"]
+            result_rows.append({
+                "timestamp": entry["issue_ts"],
+                "latency_ms": latency_s * 1000.0,
+                "sector": entry["sector"],
+                "nr_sectors": entry["nr_sectors"],
+                "rwbs": entry["rwbs"],
+                "size_bytes": entry["size_bytes"],
+                "device": entry["device"],
+                "queue_depth": entry["queue_depth"],
+            })
+
+        matched = len(result_rows)
+        total_issues = len(issue_order)
+        logger.info("[blocklayer] matched %d/%d issues (%.0f%%)",
+                    matched, total_issues,
+                    (matched / total_issues * 100) if total_issues else 0)
+
+        if not result_rows:
+            return pl.DataFrame(schema={
+                "timestamp": pl.Float64,
+                "latency_ms": pl.Float64,
+                "sector": pl.Int64,
+                "nr_sectors": pl.Int32,
+                "rwbs": pl.Utf8,
+                "size_bytes": pl.Int64,
+                "device": pl.Utf8,
+                "queue_depth": pl.Int32,
+            })
+
+        return pl.DataFrame(result_rows).sort("timestamp")
 
     # Map converter name → method
     _converters: Dict[str, Any] = {
