@@ -1950,16 +1950,50 @@ class MainWindow(QMainWindow):
 
         logger_cfg = load_logger_config()
 
-        # If config looks valid (has device + events), start directly
+        # If config looks valid, start directly; otherwise open configure
         has_device = bool(logger_cfg.get("device_serial"))
         has_events = bool(logger_cfg.get("events"))
         has_adb = bool(shutil.which("adb"))
+        has_save_path = bool(logger_cfg.get("save_path"))
 
-        if has_device and has_events and has_adb:
+        if has_device and has_events and has_adb and has_save_path:
+            # Bug fix: verify capture mode prerequisites before starting
+            capture_mode = logger_cfg.get("capture_mode", "perfetto")
+            serial = logger_cfg["device_serial"]
+            if not self._verify_capture_mode(serial, capture_mode):
+                self._on_configure_trace()
+                return
             self._run_trace(logger_cfg)
         else:
-            # Open configure dialog
             self._on_configure_trace()
+
+    @staticmethod
+    def _verify_capture_mode(serial: str, capture_mode: str) -> bool:
+        """Check if device supports the capture mode (perfetto/root).
+
+        Returns True if check passes or is inconclusive (timeout).
+        """
+        import subprocess
+
+        try:
+            if capture_mode == "perfetto":
+                result = subprocess.run(
+                    ["adb", "-s", serial, "shell", "which", "perfetto"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                return result.returncode == 0 and bool(result.stdout.strip())
+            else:
+                # Try both su variants (some devices need 'su 0 id')
+                for cmd in [["su", "-c", "id"], ["su", "0", "id"]]:
+                    result = subprocess.run(
+                        ["adb", "-s", serial, "shell", *cmd],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if result.returncode == 0 and "uid=0" in result.stdout:
+                        return True
+                return False
+        except (subprocess.TimeoutExpired, OSError):
+            return True  # Inconclusive — let it proceed
 
     def _run_trace(self, logger_cfg: dict) -> None:
         """Execute trace with given config (Perfetto/Raw Ftrace)."""

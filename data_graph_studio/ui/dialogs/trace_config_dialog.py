@@ -66,7 +66,11 @@ ADB_SCAN_TIMEOUT_MS = 5000
 # ── Config utilities ──────────────────────────────────────────
 
 def migrate_config(config: dict[str, Any]) -> dict[str, Any]:
-    """Migrate config from v0 (no version key) to v1."""
+    """Migrate config from v0 (no version key) to v1.
+
+    Returns a new dict — does not mutate the input.
+    """
+    config = dict(config)  # Shallow copy to avoid mutating caller's dict
     version = config.get("version", 0)
     if version < 1:
         config.setdefault("capture_mode", "perfetto")
@@ -201,7 +205,15 @@ class ConnectionPanel(QWidget):
             return
 
         stdout = bytes(self._scan_process.readAllStandardOutput()).decode(errors="replace")
+        stderr = bytes(self._scan_process.readAllStandardError()).decode(errors="replace")
         self._scan_process = None
+
+        if exit_code != 0:
+            msg = stderr.strip() or f"adb exited with code {exit_code}"
+            self._adb_info.setText(f"⚠️ ADB error: {msg}")
+            logger.warning("ADB device scan failed (exit %d): %s", exit_code, msg)
+            return
+
         self._parse_device_output(stdout)
 
     def _parse_device_output(self, stdout: str) -> None:
@@ -312,6 +324,7 @@ class CaptureModePanel(QWidget):
         self._check_process: QProcess | None = None
         self._check_timer: QTimer | None = None
         self._check_passed = False
+        self._root_fallback_tried = False
         self._serial_getter: Any = None  # callable returning serial
 
         self._update_description()
@@ -368,9 +381,11 @@ class CaptureModePanel(QWidget):
         if mode == "perfetto":
             proc.setArguments(["-s", serial, "shell", "which", "perfetto"])
         else:
+            # Try 'su -c id' first; fallback to 'su 0 id' in _on_check_finished
             proc.setArguments(["-s", serial, "shell", "su", "-c", "id"])
         proc.finished.connect(self._on_check_finished)
         self._check_process = proc
+        self._root_fallback_tried = False
 
         timer = QTimer(self)
         timer.setSingleShot(True)
@@ -404,6 +419,23 @@ class CaptureModePanel(QWidget):
             if exit_code == 0 and "uid=0" in stdout:
                 self._check_passed = True
                 self._check_label.setText("✅ Root access confirmed.")
+            elif not self._root_fallback_tried:
+                # Fallback: try 'su 0 id' for older Magisk/SuperSU
+                self._root_fallback_tried = True
+                serial = self._serial_getter() if self._serial_getter else ""
+                if serial:
+                    proc = QProcess(self)
+                    proc.setProgram("adb")
+                    proc.setArguments(["-s", serial, "shell", "su", "0", "id"])
+                    proc.finished.connect(self._on_check_finished)
+                    self._check_process = proc
+                    proc.start()
+                    return  # Wait for fallback result
+                else:
+                    self._check_passed = False
+                    self._check_label.setText(
+                        "❌ Root access not available. Install Magisk or SuperSU."
+                    )
             else:
                 self._check_passed = False
                 self._check_label.setText(
@@ -648,9 +680,9 @@ class TraceConfigDialog(QDialog):
         # Auto-run check on mode change
         self.capture_panel.mode_changed.connect(lambda _: self.capture_panel.run_check())
 
-        # Dirty tracking
+        # Dirty tracking (lambda wrappers to discard signal args safely)
         self.connection_panel.device_changed.connect(self._mark_dirty)
-        self.capture_panel.mode_changed.connect(self._mark_dirty)
+        self.capture_panel.mode_changed.connect(lambda _mode: self._mark_dirty())
         self.events_panel.events_changed.connect(self._mark_dirty)
         self.output_panel.output_changed.connect(self._mark_dirty)
 

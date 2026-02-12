@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QProcess, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 
 app = QApplication.instance()
@@ -211,6 +211,17 @@ class TestRootNotAvailable:
         panel.set_serial_getter(lambda: "SERIAL")
         panel.set_capture_mode("raw_ftrace")
 
+        # First attempt: su -c id fails
+        panel._check_process = MagicMock()
+        panel._check_process.readAllStandardOutput.return_value = b"uid=1000"
+        panel._root_fallback_tried = False
+
+        with patch.object(QProcess, "start"), patch.object(QProcess, "setProgram"), \
+             patch.object(QProcess, "setArguments"):
+            panel._on_check_finished(1, None)
+
+        # Fallback attempt was started; simulate it also failing
+        assert panel._root_fallback_tried
         panel._check_process = MagicMock()
         panel._check_process.readAllStandardOutput.return_value = b"uid=1000"
         panel._on_check_finished(1, None)
