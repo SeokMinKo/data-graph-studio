@@ -2137,7 +2137,7 @@ class MainWindow(QMainWindow):
             if did:
                 logger.info("[Logger] dataset created: id=%s, name=%s", did, name)
                 self._on_data_loaded()
-                self._apply_graph_preset(df, converter="blocklayer")
+                self._apply_graph_presets(df, converter="blocklayer")
                 self.statusBar().showMessage(
                     f"Perfetto trace: loaded {len(df)} rows", 5000,
                 )
@@ -2199,7 +2199,7 @@ class MainWindow(QMainWindow):
             if dataset_id:
                 logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
                 self._on_data_loaded()
-                self._apply_graph_preset(df, converter)
+                self._apply_graph_presets(df, converter)
                 self.statusBar().showMessage(
                     f"Ftrace: loaded {len(df)} rows from {Path(file_path).name}",
                     5000,
@@ -2220,48 +2220,112 @@ class MainWindow(QMainWindow):
         self._parse_worker = worker
         worker.start()
 
-    def _apply_graph_preset(self, df, converter: str = "") -> None:
-        """Auto-apply a graph preset based on the converter and DataFrame columns.
+    def _apply_graph_presets(self, df, converter: str = "") -> None:
+        """Create DGS profiles from graph presets and apply the first one.
+
+        Each GraphPreset becomes a real GraphSetting (profile) in the
+        project's profile_store, visible in the Project Explorer sidebar.
+        The first matching preset is auto-applied.
 
         Args:
             df: The loaded polars DataFrame.
             converter: Converter name (e.g. "blocklayer").
         """
-        from data_graph_studio.parsers.graph_preset import select_preset
-        from data_graph_studio.core.state import ChartType
+        from data_graph_studio.parsers.graph_preset import BUILTIN_PRESETS
+        from data_graph_studio.core.profile import GraphSetting
+        from data_graph_studio.core.state import ChartType, AggregationType
 
-        preset = select_preset(df, converter=converter)
-        if preset is None:
-            logger.debug("[Logger] no preset matched for converter=%s", converter)
+        presets = BUILTIN_PRESETS.get(converter, [])
+        if not presets:
+            logger.debug("[Logger] no presets for converter=%s", converter)
             return
 
-        logger.info("[Logger] applying graph preset: %s (chart=%s, x=%s, y=%s, group=%s)",
-                    preset.name, preset.chart_type, preset.x_column,
-                    preset.y_columns, preset.group_column)
-        try:
-            # Set chart type
-            chart_type = ChartType(preset.chart_type)
-            self.state.set_chart_type(chart_type)
+        dataset_id = self.state.active_dataset_id
+        if not dataset_id:
+            logger.warning("[Logger] no active dataset, cannot create profiles")
+            return
 
-            # Set X column
-            self.state.set_x_column(preset.x_column)
+        # Skip if profiles already exist for this dataset (avoid duplicates on re-parse)
+        existing = self.profile_store.get_by_dataset(dataset_id)
+        existing_names = {s.name for s in existing}
 
-            # Set Y / value columns
-            self.state.clear_value_zone()
-            for col in preset.y_columns:
-                self.state.add_value_column(col)
+        first_profile_id = None
+        created_count = 0
 
-            # Set group column
+        for preset in presets:
+            if not preset.columns_present(df):
+                logger.debug("[Logger] preset '%s' skipped: columns missing", preset.name)
+                continue
+            if preset.name in existing_names:
+                logger.debug("[Logger] preset '%s' already exists, skipping", preset.name)
+                # Use existing profile as first if none yet
+                if first_profile_id is None:
+                    for s in existing:
+                        if s.name == preset.name:
+                            first_profile_id = s.id
+                            break
+                continue
+
+            # Build value_columns as dicts (GraphSettingMapper format)
+            value_cols = []
+            for col_name in preset.y_columns:
+                value_cols.append({
+                    "name": col_name,
+                    "aggregation": "none",
+                    "color": "#1f77b4",
+                    "use_secondary_axis": False,
+                    "order": len(value_cols),
+                    "formula": "",
+                })
+
+            # Build group_columns
+            group_cols = []
             if preset.group_column:
-                self.state.clear_group_zone()
-                self.state.add_group_column(preset.group_column)
+                group_cols.append({
+                    "name": preset.group_column,
+                    "selected_values": [],
+                    "order": 0,
+                })
 
-            # Refresh graph
-            self.graph_panel.refresh()
-            self.graph_panel.autofit()
-            logger.info("[Logger] preset '%s' applied successfully", preset.name)
-        except Exception as e:
-            logger.warning("[Logger] failed to apply preset '%s': %s", preset.name, e, exc_info=True)
+            import uuid
+            profile_id = str(uuid.uuid4())
+            gs = GraphSetting(
+                id=profile_id,
+                name=preset.name,
+                dataset_id=dataset_id,
+                chart_type=preset.chart_type,
+                x_column=preset.x_column,
+                value_columns=tuple(value_cols),
+                group_columns=tuple(group_cols),
+                icon="📈" if preset.chart_type in ("line", "area") else "📊",
+                description=preset.description,
+            )
+            self.profile_store.add(gs)
+            created_count += 1
+            logger.info("[Logger] created profile '%s' (id=%s, chart=%s, x=%s, y=%s)",
+                        preset.name, profile_id, preset.chart_type,
+                        preset.x_column, preset.y_columns)
+
+            if first_profile_id is None:
+                first_profile_id = profile_id
+
+        # Refresh project tree to show new profiles
+        if created_count > 0 and hasattr(self, 'profile_model'):
+            self.profile_model.refresh()
+            logger.info("[Logger] %d profiles created for dataset %s", created_count, dataset_id)
+
+        # Apply the first profile
+        if first_profile_id:
+            try:
+                ok = self.profile_controller.apply_profile(first_profile_id)
+                if ok:
+                    self.graph_panel.refresh()
+                    self.graph_panel.autofit()
+                    logger.info("[Logger] auto-applied profile: %s", first_profile_id)
+                else:
+                    logger.warning("[Logger] failed to apply profile: %s", first_profile_id)
+            except Exception as e:
+                logger.warning("[Logger] error applying profile: %s", e, exc_info=True)
 
     def _on_open_file(self):
         self._file_controller._on_open_file()
