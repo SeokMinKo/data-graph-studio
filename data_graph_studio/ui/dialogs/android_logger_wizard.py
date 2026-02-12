@@ -44,6 +44,7 @@ CONFIG_PATH = CONFIG_DIR / "logger_config.json"
 
 # 기본 이벤트 목록
 DEFAULT_EVENTS = [
+    ("block/block_rq_insert", True),
     ("block/block_rq_issue", True),
     ("block/block_rq_complete", True),
     ("ufs/ufshcd_command", True),

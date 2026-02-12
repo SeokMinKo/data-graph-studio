@@ -81,12 +81,27 @@ class GraphPreset:
 BUILTIN_PRESETS: Dict[str, List[GraphPreset]] = {
     "blocklayer": [
         GraphPreset(
-            name="Latency Scatter",
+            name="D2C Latency",
             chart_type="scatter",
             x_column="timestamp",
-            y_columns=["latency_ms"],
+            y_columns=["d2c_ms"],
             group_column="rwbs",
-            description="I/O latency over time, colored by R/W",
+            description="Dispatch-to-Complete latency over time (R/W colored)",
+        ),
+        GraphPreset(
+            name="Q2C Latency",
+            chart_type="scatter",
+            x_column="timestamp",
+            y_columns=["q2c_ms"],
+            group_column="rwbs",
+            description="Queue-to-Complete latency (full I/O time incl. queue wait)",
+        ),
+        GraphPreset(
+            name="C2C Interval",
+            chart_type="scatter",
+            x_column="timestamp",
+            y_columns=["c2c_ms"],
+            description="Inter-completion time (time between consecutive completes)",
         ),
         GraphPreset(
             name="IOPS Timeline",
@@ -98,17 +113,17 @@ BUILTIN_PRESETS: Dict[str, List[GraphPreset]] = {
         GraphPreset(
             name="Latency Distribution",
             chart_type="histogram",
-            x_column="latency_ms",
-            y_columns=["latency_ms"],
-            description="Latency distribution histogram",
+            x_column="d2c_ms",
+            y_columns=["d2c_ms"],
+            description="D2C latency distribution histogram",
         ),
         GraphPreset(
             name="Size vs Latency",
             chart_type="scatter",
             x_column="size_bytes",
-            y_columns=["latency_ms"],
+            y_columns=["d2c_ms"],
             group_column="rwbs",
-            description="I/O size vs latency correlation",
+            description="I/O size vs D2C latency correlation",
         ),
     ],
 }

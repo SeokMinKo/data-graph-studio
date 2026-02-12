@@ -56,6 +56,29 @@ BLOCK_TRACE_MIXED_EVENTS = """\
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
 """
 
+# Full lifecycle: insert → issue → complete
+# block_rq_insert details format same as issue: <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
+BLOCK_TRACE_WITH_INSERT = """\
+# tracer: nop
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_insert: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000300: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
+     kworker/0:1-100 [000] .... 1000.002000: block_rq_insert: 8,0 W 8192 () 2000 + 16 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.002500: block_rq_issue: 8,0 W 8192 () 2000 + 16 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.004000: block_rq_complete: 8,0 W () 2000 + 16 [0]
+"""
+
+# C2C: multiple completes in sequence
+BLOCK_TRACE_C2C = """\
+# tracer: nop
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 200 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000200: block_rq_issue: 8,0 R 4096 () 300 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 100 + 8 [0]
+     kworker/0:1-100 [000] .... 1000.001500: block_rq_complete: 8,0 R () 200 + 8 [0]
+     kworker/0:1-100 [000] .... 1000.003000: block_rq_complete: 8,0 R () 300 + 8 [0]
+"""
+
 
 @pytest.fixture
 def parser() -> FtraceParser:
@@ -184,6 +207,82 @@ class TestBlocklayerMixedEvents:
         assert len(df) == 1
 
 
+class TestBlocklayerNewColumns:
+    """New latency columns: d2c, q2c, c2c, issue_time, complete_time."""
+
+    def test_has_new_columns(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_WITH_INSERT)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        new_cols = {"d2c_ms", "q2c_ms", "c2c_ms", "issue_time", "complete_time"}
+        assert new_cols.issubset(set(df.columns)), f"Missing: {new_cols - set(df.columns)}"
+
+    def test_d2c_latency(self, parser: FtraceParser):
+        """D2C = dispatch(issue) → complete."""
+        path = _write_trace(BLOCK_TRACE_WITH_INSERT)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        df_sorted = df.sort("sector")
+        # sector 1000: issue=0.0003, complete=0.001 → d2c=0.7ms
+        assert abs(df_sorted["d2c_ms"][0] - 0.7) < 0.01
+        # sector 2000: issue=0.0025, complete=0.004 → d2c=1.5ms
+        assert abs(df_sorted["d2c_ms"][1] - 1.5) < 0.01
+
+    def test_q2c_latency_with_insert(self, parser: FtraceParser):
+        """Q2C = queue(insert) → complete. Full I/O time."""
+        path = _write_trace(BLOCK_TRACE_WITH_INSERT)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        df_sorted = df.sort("sector")
+        # sector 1000: insert=0.0, complete=0.001 → q2c=1.0ms
+        assert abs(df_sorted["q2c_ms"][0] - 1.0) < 0.01
+        # sector 2000: insert=0.002, complete=0.004 → q2c=2.0ms
+        assert abs(df_sorted["q2c_ms"][1] - 2.0) < 0.01
+
+    def test_q2c_falls_back_to_d2c_without_insert(self, parser: FtraceParser):
+        """When no insert event, q2c should equal d2c."""
+        path = _write_trace(BLOCK_TRACE_SIMPLE)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert abs(df["q2c_ms"][0] - df["d2c_ms"][0]) < 0.001
+
+    def test_c2c_latency(self, parser: FtraceParser):
+        """C2C = time between consecutive completes."""
+        path = _write_trace(BLOCK_TRACE_C2C)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        c2c = df["c2c_ms"].to_list()
+        # First complete has no previous → NaN or 0
+        assert c2c[0] is None or c2c[0] == 0.0 or str(c2c[0]) == "NaN"
+        # Second: 1000.001500 - 1000.001000 = 0.5ms
+        assert abs(c2c[1] - 0.5) < 0.01
+        # Third: 1000.003000 - 1000.001500 = 1.5ms
+        assert abs(c2c[2] - 1.5) < 0.01
+
+    def test_issue_and_complete_times(self, parser: FtraceParser):
+        """issue_time and complete_time are absolute timestamps."""
+        path = _write_trace(BLOCK_TRACE_SIMPLE)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert abs(df["issue_time"][0] - 1000.000000) < 0.0001
+        assert abs(df["complete_time"][0] - 1000.001000) < 0.0001
+
+    def test_latency_ms_equals_d2c(self, parser: FtraceParser):
+        """latency_ms should now be the same as d2c_ms (backward compat)."""
+        path = _write_trace(BLOCK_TRACE_WITH_INSERT)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        for i in range(len(df)):
+            assert abs(df["latency_ms"][i] - df["d2c_ms"][i]) < 0.001
+
+
 class TestBlocklayerEmpty:
     """Edge case: no block events."""
 
@@ -259,15 +358,26 @@ class TestBuiltinPresets:
     def test_blocklayer_presets_exist(self):
         assert "blocklayer" in BUILTIN_PRESETS
         presets = BUILTIN_PRESETS["blocklayer"]
-        assert len(presets) >= 2
+        assert len(presets) >= 6
 
-    def test_latency_scatter_preset(self):
+    def test_d2c_latency_preset(self):
         presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
-        assert "Latency Scatter" in presets
-        p = presets["Latency Scatter"]
+        assert "D2C Latency" in presets
+        p = presets["D2C Latency"]
         assert p.chart_type == "scatter"
         assert p.x_column == "timestamp"
-        assert "latency_ms" in p.y_columns
+        assert "d2c_ms" in p.y_columns
+
+    def test_q2c_latency_preset(self):
+        presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
+        assert "Q2C Latency" in presets
+        p = presets["Q2C Latency"]
+        assert p.chart_type == "scatter"
+        assert "q2c_ms" in p.y_columns
+
+    def test_c2c_interval_preset(self):
+        presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
+        assert "C2C Interval" in presets
 
     def test_iops_timeline_preset(self):
         presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
@@ -292,10 +402,15 @@ from data_graph_studio.parsers.graph_preset import select_preset
 class TestSelectPreset:
     """select_preset() picks the right preset for a DataFrame."""
 
-    def test_selects_latency_scatter_for_blocklayer(self):
+    def test_selects_d2c_for_blocklayer(self):
         df = pl.DataFrame({
             "timestamp": [1.0, 2.0],
             "latency_ms": [0.5, 1.0],
+            "d2c_ms": [0.5, 1.0],
+            "q2c_ms": [0.6, 1.1],
+            "c2c_ms": [None, 0.5],
+            "issue_time": [1.0, 2.0],
+            "complete_time": [1.0005, 2.001],
             "sector": [100, 200],
             "nr_sectors": [8, 8],
             "rwbs": ["R", "W"],
@@ -305,7 +420,7 @@ class TestSelectPreset:
         })
         preset = select_preset(df, converter="blocklayer")
         assert preset is not None
-        assert preset.name == "Latency Scatter"
+        assert preset.name == "D2C Latency"
 
     def test_returns_none_for_unknown_converter(self):
         df = pl.DataFrame({"a": [1]})

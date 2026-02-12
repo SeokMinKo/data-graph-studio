@@ -202,8 +202,8 @@ class FtraceParser(BaseParser):
     # Converter registry — add new converters here
     # ------------------------------------------------------------------
 
-    # block_rq_issue details:   <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
-    # block_rq_complete details: <dev> <rwbs> () <sector> + <nr_sectors> [<errno>]
+    # block_rq_issue/insert details: <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
+    # block_rq_complete details:     <dev> <rwbs> () <sector> + <nr_sectors> [<errno>]
     _ISSUE_RE = re.compile(
         r"^(?P<dev>\S+)\s+(?P<rwbs>\S+)\s+(?P<bytes>\d+)\s+\(\)\s+"
         r"(?P<sector>\d+)\s*\+\s*(?P<nr_sectors>\d+)"
@@ -213,16 +213,39 @@ class FtraceParser(BaseParser):
         r"(?P<sector>\d+)\s*\+\s*(?P<nr_sectors>\d+)"
     )
 
+    _RESULT_SCHEMA = {
+        "timestamp": pl.Float64,
+        "latency_ms": pl.Float64,
+        "d2c_ms": pl.Float64,
+        "q2c_ms": pl.Float64,
+        "c2c_ms": pl.Float64,
+        "issue_time": pl.Float64,
+        "complete_time": pl.Float64,
+        "sector": pl.Int64,
+        "nr_sectors": pl.Int32,
+        "rwbs": pl.Utf8,
+        "size_bytes": pl.Int64,
+        "device": pl.Utf8,
+        "queue_depth": pl.Int32,
+    }
+
     def _convert_blocklayer(
         self, raw_df: pl.DataFrame, options: Dict[str, Any]
     ) -> pl.DataFrame:
-        """Block layer converter — matches issue/complete pairs.
+        """Block layer converter — matches insert/issue/complete events.
 
-        Parses ``block_rq_issue`` and ``block_rq_complete`` events,
-        matches them by (device, sector, nr_sectors), and computes:
-        - latency_ms: complete_time - issue_time
-        - queue_depth: number of outstanding I/Os at issue time
-        - size_bytes, rwbs, device from the issue event
+        Tracks the full block I/O lifecycle::
+
+            block_rq_insert (Q) → block_rq_issue (D) → block_rq_complete (C)
+
+        Computes:
+        - **d2c_ms** (D2C): dispatch-to-complete latency
+        - **q2c_ms** (Q2C): queue-to-complete latency (falls back to D2C if no insert)
+        - **c2c_ms** (C2C): inter-completion time (time between consecutive completes)
+        - **latency_ms**: alias for d2c_ms (backward compat)
+        - **issue_time**: absolute timestamp of dispatch (issue)
+        - **complete_time**: absolute timestamp of completion
+        - **queue_depth**: outstanding I/Os at dispatch time
 
         Unmatched issues (no corresponding complete) are dropped.
 
@@ -237,28 +260,20 @@ class FtraceParser(BaseParser):
 
         # Filter to block events only
         block_events = raw_df.filter(
-            pl.col("event").is_in(["block_rq_issue", "block_rq_complete"])
+            pl.col("event").is_in([
+                "block_rq_insert", "block_rq_issue", "block_rq_complete",
+            ])
         )
-        logger.debug("[blocklayer] block events: %d", len(block_events))
+        logger.debug("[blocklayer] block events: %d (insert+issue+complete)", len(block_events))
 
         if len(block_events) == 0:
             logger.info("[blocklayer] no block events found, returning empty")
-            return pl.DataFrame(schema={
-                "timestamp": pl.Float64,
-                "latency_ms": pl.Float64,
-                "sector": pl.Int64,
-                "nr_sectors": pl.Int32,
-                "rwbs": pl.Utf8,
-                "size_bytes": pl.Int64,
-                "device": pl.Utf8,
-                "queue_depth": pl.Int32,
-            })
+            return pl.DataFrame(schema=self._RESULT_SCHEMA)
 
-        # Parse issue events
-        issues: Dict[str, Dict[str, Any]] = {}  # key=(dev,sector,nr_sectors) → info
+        # Track per-request state: key=(dev:sector:nr_sectors)
+        inserts: Dict[str, float] = {}      # key → insert timestamp
+        issues: Dict[str, Dict[str, Any]] = {}  # key → issue info
         issue_order: List[Dict[str, Any]] = []
-
-        # Track outstanding I/Os for queue depth
         outstanding = 0
 
         for row in block_events.iter_rows(named=True):
@@ -266,7 +281,16 @@ class FtraceParser(BaseParser):
             details = row["details"]
             ts = row["timestamp"]
 
-            if event == "block_rq_issue":
+            if event == "block_rq_insert":
+                m = self._ISSUE_RE.match(details)
+                if not m:
+                    logger.debug("[blocklayer] insert parse fail: %s", details[:100])
+                    continue
+                key = f"{m.group('dev')}:{m.group('sector')}:{m.group('nr_sectors')}"
+                inserts[key] = ts
+                logger.debug("[blocklayer] insert: %s @ %.6f", key, ts)
+
+            elif event == "block_rq_issue":
                 m = self._ISSUE_RE.match(details)
                 if not m:
                     logger.debug("[blocklayer] issue parse fail: %s", details[:100])
@@ -278,6 +302,7 @@ class FtraceParser(BaseParser):
 
                 outstanding += 1
                 entry = {
+                    "insert_ts": inserts.pop(key, None),  # may be None
                     "issue_ts": ts,
                     "sector": sector,
                     "nr_sectors": nr_sectors,
@@ -295,10 +320,7 @@ class FtraceParser(BaseParser):
                 if not m:
                     logger.debug("[blocklayer] complete parse fail: %s", details[:100])
                     continue
-                dev = m.group("dev")
-                sector = int(m.group("sector"))
-                nr_sectors = int(m.group("nr_sectors"))
-                key = f"{dev}:{sector}:{nr_sectors}"
+                key = f"{m.group('dev')}:{m.group('sector')}:{m.group('nr_sectors')}"
 
                 if key in issues:
                     issues[key]["complete_ts"] = ts
@@ -306,16 +328,36 @@ class FtraceParser(BaseParser):
                 else:
                     logger.debug("[blocklayer] orphan complete: %s", key)
 
-        # Build result from matched pairs
+        # Build result from matched pairs, computing all latencies
         result_rows: List[Dict[str, Any]] = []
+        prev_complete_ts: Optional[float] = None
+
         for entry in issue_order:
             if "complete_ts" not in entry:
                 logger.debug("[blocklayer] unmatched issue: %s", entry["key"])
                 continue
-            latency_s = entry["complete_ts"] - entry["issue_ts"]
+
+            issue_ts = entry["issue_ts"]
+            complete_ts = entry["complete_ts"]
+            insert_ts = entry.get("insert_ts")
+
+            d2c_s = complete_ts - issue_ts
+            q2c_s = (complete_ts - insert_ts) if insert_ts is not None else d2c_s
+
+            # C2C: time since previous complete (sorted by complete_ts later)
+            c2c_ms: Optional[float] = None
+            if prev_complete_ts is not None:
+                c2c_ms = (complete_ts - prev_complete_ts) * 1000.0
+            prev_complete_ts = complete_ts
+
             result_rows.append({
-                "timestamp": entry["issue_ts"],
-                "latency_ms": latency_s * 1000.0,
+                "timestamp": issue_ts,
+                "latency_ms": d2c_s * 1000.0,  # backward compat
+                "d2c_ms": d2c_s * 1000.0,
+                "q2c_ms": q2c_s * 1000.0,
+                "c2c_ms": c2c_ms,
+                "issue_time": issue_ts,
+                "complete_time": complete_ts,
                 "sector": entry["sector"],
                 "nr_sectors": entry["nr_sectors"],
                 "rwbs": entry["rwbs"],
@@ -326,21 +368,13 @@ class FtraceParser(BaseParser):
 
         matched = len(result_rows)
         total_issues = len(issue_order)
-        logger.info("[blocklayer] matched %d/%d issues (%.0f%%)",
+        logger.info("[blocklayer] matched %d/%d issues (%.0f%%), inserts=%d",
                     matched, total_issues,
-                    (matched / total_issues * 100) if total_issues else 0)
+                    (matched / total_issues * 100) if total_issues else 0,
+                    sum(1 for e in issue_order if e.get("insert_ts") is not None))
 
         if not result_rows:
-            return pl.DataFrame(schema={
-                "timestamp": pl.Float64,
-                "latency_ms": pl.Float64,
-                "sector": pl.Int64,
-                "nr_sectors": pl.Int32,
-                "rwbs": pl.Utf8,
-                "size_bytes": pl.Int64,
-                "device": pl.Utf8,
-                "queue_depth": pl.Int32,
-            })
+            return pl.DataFrame(schema=self._RESULT_SCHEMA)
 
         return pl.DataFrame(result_rows).sort("timestamp")
 

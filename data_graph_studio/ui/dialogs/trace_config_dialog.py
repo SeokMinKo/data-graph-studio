@@ -42,6 +42,7 @@ CONFIG_PATH = CONFIG_DIR / "logger_config.json"
 
 # ── Default events ────────────────────────────────────────────
 DEFAULT_EVENTS: list[tuple[str, bool]] = [
+    ("block/block_rq_insert", True),
     ("block/block_rq_issue", True),
     ("block/block_rq_complete", True),
     ("ufs/ufshcd_command", True),
