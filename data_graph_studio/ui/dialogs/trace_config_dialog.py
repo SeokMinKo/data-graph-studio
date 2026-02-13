@@ -624,7 +624,12 @@ class TraceConfigDialog(QDialog):
         self._category_list = QListWidget()
         self._category_list.setFixedWidth(180)
         self._category_list.setStyleSheet(
-            "QListWidget { background-color: palette(alternate-base); }"
+            "QListWidget { background-color: palette(alternate-base); "
+            "color: palette(text); }"
+            "QListWidget::item { padding: 6px 8px; }"
+            "QListWidget::item:selected { "
+            "  background-color: palette(highlight); "
+            "  color: palette(highlighted-text); }"
         )
         for label, _idx in _CATEGORIES:
             self._category_list.addItem(label)
