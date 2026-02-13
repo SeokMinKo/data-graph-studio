@@ -394,23 +394,38 @@ class PerfettoTraceController(QObject):
         finally:
             Path(config_path).unlink(missing_ok=True)
 
-        # Start perfetto
+        # Start perfetto (--txt for text-format config)
         self.progress.emit("Starting perfetto...")
+        perfetto_cmd = adb + [
+            "shell", "perfetto",
+            "--txt",
+            "-c", device_config,
+            "-o", self._trace_device_path,
+        ]
         self.log_message.emit(
-            f"$ adb -s {serial} shell perfetto -c {device_config} "
+            f"$ adb -s {serial} shell perfetto --txt -c {device_config} "
             f"-o {self._trace_device_path}"
         )
         self._process = subprocess.Popen(
-            adb + [
-                "shell", "perfetto",
-                "-c", device_config,
-                "-o", self._trace_device_path,
-            ],
+            perfetto_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+
+        # Give perfetto a moment to start (or fail)
+        import time
+        time.sleep(1)
+        if self._process.poll() is not None:
+            # Exited immediately — read stderr for error
+            _, stderr = self._process.communicate(timeout=5)
+            err_msg = stderr.decode(errors="replace").strip() if stderr else "unknown error"
+            logger.error("[Perfetto] exited immediately: rc=%s, stderr=%s",
+                         self._process.returncode, err_msg)
+            self._process = None
+            raise RuntimeError(f"Perfetto failed to start: {err_msg}")
+
         self._tracing = True
-        logger.info("[Perfetto] tracing started (pid=%s)", self._process.pid if self._process else "?")
+        logger.info("[Perfetto] tracing started (pid=%s)", self._process.pid)
         self.log_message.emit("Perfetto tracing started.")
 
     def stop_trace(self, save_path: str) -> None:
