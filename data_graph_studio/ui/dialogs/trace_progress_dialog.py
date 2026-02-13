@@ -443,19 +443,35 @@ class PerfettoTraceController(QObject):
                 logger.warning("[Perfetto] perfetto process not found on device")
             if self._process:
                 try:
-                    rc = self._process.wait(timeout=10)
+                    rc = self._process.wait(timeout=20)
                     logger.debug("[Perfetto] local process exited: rc=%s", rc)
                 except subprocess.TimeoutExpired:
                     logger.warning("[Perfetto] local process timeout, killing")
                     self._process.kill()
             self._tracing = False
 
-            # 2. Pull binary trace
+            # 2. Wait for trace file to be flushed, then pull
+            self.progress.emit("Waiting for trace file...")
+            import time
+            for attempt in range(5):
+                check = subprocess.run(
+                    adb + ["shell", "ls", "-l", self._trace_device_path],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if check.returncode == 0 and self._trace_device_path in check.stdout:
+                    logger.debug("[Perfetto] trace file exists (attempt %d): %s",
+                                 attempt, check.stdout.strip())
+                    break
+                logger.debug("[Perfetto] trace file not ready (attempt %d), waiting 2s...", attempt)
+                time.sleep(2)
+            else:
+                logger.warning("[Perfetto] trace file not found after 5 attempts")
+
             self.progress.emit("Pulling trace file...")
             logger.debug("[Perfetto] pulling %s → %s", self._trace_device_path, trace_local)
             result = subprocess.run(
                 adb + ["pull", self._trace_device_path, trace_local],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True, text=True, timeout=120,
             )
             if result.returncode != 0:
                 logger.error("[Perfetto] pull failed: rc=%d, stderr=%s",
