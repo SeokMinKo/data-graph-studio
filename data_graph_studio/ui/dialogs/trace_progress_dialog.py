@@ -281,7 +281,7 @@ class PerfettoTraceController(QObject):
         """Perfetto trace_processor를 자동 다운로드한다.
 
         https://get.perfetto.dev/trace_processor 래퍼 스크립트를 받아서
-        실행 권한을 부여한다.
+        실행 권한을 부여한다. GitHub raw mirror를 fallback으로 사용.
 
         Returns:
             다운로드된 파일 경로.
@@ -289,30 +289,50 @@ class PerfettoTraceController(QObject):
         Raises:
             FileNotFoundError: 다운로드 실패 시.
         """
+        import ssl
         import urllib.request
 
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / "trace_processor"
-        url = "https://get.perfetto.dev/trace_processor"
 
-        logger.info("Downloading trace_processor from %s ...", url)
-        try:
-            urllib.request.urlretrieve(url, str(dest))
-            dest.chmod(0o755)
-            logger.info("Downloaded trace_processor to %s", dest)
-            return str(dest)
-        except Exception as e:
-            logger.error("Failed to download trace_processor: %s", e)
-            # Clean up partial download
-            dest.unlink(missing_ok=True)
-            raise FileNotFoundError(
-                "trace_processor_shell not found and auto-download failed.\n\n"
-                f"Error: {e}\n\n"
-                "Manual install:\n"
-                "  curl -LO https://get.perfetto.dev/trace_processor\n"
-                "  chmod +x trace_processor\n"
-                f"  mv trace_processor {dest_dir}/"
-            ) from e
+        urls = [
+            "https://get.perfetto.dev/trace_processor",
+            "https://raw.githubusercontent.com/nicmcd/trace_processor_shell/master/trace_processor",
+        ]
+
+        headers = {"User-Agent": "DataGraphStudio/1.0"}
+        last_error: Exception | None = None
+
+        for url in urls:
+            logger.info("Downloading trace_processor from %s ...", url)
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                # Allow up to 30s connection timeout
+                ctx = ssl.create_default_context()
+                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                    data = resp.read()
+                dest.write_bytes(data)
+                # chmod on non-Windows; on Windows just ensure file exists
+                try:
+                    dest.chmod(0o755)
+                except OSError:
+                    pass
+                logger.info("Downloaded trace_processor to %s (%d bytes)", dest, len(data))
+                return str(dest)
+            except Exception as e:
+                logger.warning("Failed to download from %s: %s", url, e)
+                last_error = e
+                dest.unlink(missing_ok=True)
+                continue
+
+        raise FileNotFoundError(
+            "trace_processor_shell not found and auto-download failed.\n\n"
+            f"Error: {last_error}\n\n"
+            "Manual install:\n"
+            "  curl -LO https://get.perfetto.dev/trace_processor\n"
+            "  chmod +x trace_processor\n"
+            f"  mv trace_processor {dest_dir}/"
+        ) from last_error
 
     def start_trace(self, serial: str, config: dict[str, Any]) -> None:
         """Perfetto 트레이스를 시작한다.
