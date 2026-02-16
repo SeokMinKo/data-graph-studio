@@ -18,6 +18,12 @@ setup(
     url="https://github.com/SeokMinKo/data-graph-studio",
     packages=find_packages(),
     include_package_data=True,
+    package_data={
+        "data_graph_studio": [
+            "assets/bin/trace_processor",
+            "assets/bin/trace_processor_shell",
+        ],
+    },
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",

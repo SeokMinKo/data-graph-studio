@@ -258,7 +258,15 @@ class PerfettoTraceController(QObject):
             if cached.exists():
                 return str(cached)
 
-        # 2. 프로젝트 내부 assets (개발 모드)
+        # 2. 패키지 내부 assets (pip install 포함)
+        pkg_bin = Path(__file__).resolve().parent.parent.parent / "assets" / "bin"
+        for name in names:
+            bundled = pkg_bin / name
+            if bundled.exists():
+                logger.debug("[trace_processor] found bundled: %s", bundled)
+                return str(bundled)
+
+        # 2b. 프로젝트 루트 assets (개발 모드 레거시)
         project_root = Path(__file__).resolve().parent.parent.parent.parent
         bin_dir = project_root / "assets" / "bin"
         for name in names:
