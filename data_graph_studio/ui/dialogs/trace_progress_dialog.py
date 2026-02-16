@@ -6,9 +6,11 @@ Raw ftrace / Perfetto 캡처를 위한 ADB 명령 컨트롤러와 진행 상황 
 from __future__ import annotations
 
 import logging
+import platform as _platform
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -234,6 +236,20 @@ class PerfettoTraceController(QObject):
         self._tp_shell: str = ""
 
     @staticmethod
+    def _platform_bin_dir() -> str:
+        """Return platform subdirectory name for bundled binaries."""
+        import platform as _platform
+        s = sys.platform
+        m = _platform.machine().lower()
+        if s == "darwin":
+            return "darwin-arm64" if m == "arm64" else "darwin-amd64"
+        elif s == "linux":
+            return "linux-arm64" if m == "aarch64" else "linux-amd64"
+        elif s == "win32":
+            return "win-amd64"
+        return ""
+
+    @staticmethod
     def find_trace_processor() -> str:
         """trace_processor_shell 또는 래퍼 스크립트 경로를 찾는다.
 
@@ -258,19 +274,21 @@ class PerfettoTraceController(QObject):
             if cached.exists():
                 return str(cached)
 
-        # 2. 패키지 내부 assets (pip install 포함)
+        # 2. 패키지 내부 assets — 플랫폼별 바이너리
         pkg_bin = Path(__file__).resolve().parent.parent.parent / "assets" / "bin"
-        for name in names:
-            bundled = pkg_bin / name
+        plat_dir = PerfettoTraceController._platform_bin_dir()
+        if plat_dir:
+            plat_bin = pkg_bin / plat_dir
+            exe_name = "trace_processor_shell.exe" if sys.platform == "win32" else "trace_processor_shell"
+            bundled = plat_bin / exe_name
             if bundled.exists():
                 logger.debug("[trace_processor] found bundled: %s", bundled)
                 return str(bundled)
 
         # 2b. 프로젝트 루트 assets (개발 모드 레거시)
         project_root = Path(__file__).resolve().parent.parent.parent.parent
-        bin_dir = project_root / "assets" / "bin"
-        for name in names:
-            bundled = bin_dir / name
+        if plat_dir:
+            bundled = project_root / "assets" / "bin" / plat_dir / ("trace_processor_shell.exe" if sys.platform == "win32" else "trace_processor_shell")
             if bundled.exists():
                 return str(bundled)
 

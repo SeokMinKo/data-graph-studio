@@ -20,8 +20,11 @@ setup(
     include_package_data=True,
     package_data={
         "data_graph_studio": [
-            "assets/bin/trace_processor",
-            "assets/bin/trace_processor_shell",
+            "assets/bin/darwin-arm64/*",
+            "assets/bin/darwin-amd64/*",
+            "assets/bin/linux-amd64/*",
+            "assets/bin/linux-arm64/*",
+            "assets/bin/win-amd64/*",
         ],
     },
     classifiers=[
