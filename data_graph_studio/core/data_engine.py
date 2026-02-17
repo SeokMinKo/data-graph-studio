@@ -361,7 +361,7 @@ class DataEngine:
     def align_datasets(self, dataset_ids, key_column, fill_strategy="null"): return self._comparison.align_datasets(dataset_ids, key_column, fill_strategy)
     def calculate_difference(self, dataset_a_id, dataset_b_id, value_column, key_column=None): return self._comparison.calculate_difference(dataset_a_id, dataset_b_id, value_column, key_column)
     def get_comparison_statistics(self, dataset_ids, value_column): return self._comparison.get_comparison_statistics(dataset_ids, value_column)
-    def merge_datasets(self, dataset_ids, key_column=None, how="outer"): return self._comparison.merge_datasets(dataset_ids, key_column, how)
+    def merge_datasets(self, dataset_ids, key_column=None, how="full"): return self._comparison.merge_datasets(dataset_ids, key_column, how)
     def perform_statistical_test(self, dataset_a_id, dataset_b_id, value_column, test_type="auto"): return self._comparison.perform_statistical_test(dataset_a_id, dataset_b_id, value_column, test_type)
     def _select_test_type(self, data_a, data_b): return self._comparison._select_test_type(data_a, data_b)
     def _interpret_test_result(self, *args): return self._comparison._interpret_test_result(*args)
