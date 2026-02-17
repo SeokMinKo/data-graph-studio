@@ -105,6 +105,21 @@ def save_logger_config(config: dict[str, Any]) -> None:
 
 # ── Panels ────────────────────────────────────────────────────
 
+def _section_header(title: str, description: str = "") -> QVBoxLayout:
+    """Create a section header with bold title and optional description."""
+    header = QVBoxLayout()
+    header.setSpacing(4)
+    title_label = QLabel(title)
+    title_label.setStyleSheet("font-size: 15px; font-weight: bold;")
+    header.addWidget(title_label)
+    if description:
+        desc_label = QLabel(description)
+        desc_label.setStyleSheet("font-size: 12px; color: palette(dark);")
+        desc_label.setWordWrap(True)
+        header.addWidget(desc_label)
+    return header
+
+
 class ConnectionPanel(QWidget):
     """ADB status + device selection panel."""
 
@@ -113,6 +128,14 @@ class ConnectionPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+
+        # Section header
+        layout.addLayout(_section_header(
+            "Device Connection",
+            "Connect an Android device via USB with USB Debugging enabled.",
+        ))
+        layout.addSpacing(8)
 
         # ADB status
         self._adb_status = QLabel()
@@ -294,8 +317,15 @@ class CaptureModePanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
 
-        mode_group = QGroupBox("Capture Mode")
+        layout.addLayout(_section_header(
+            "Capture Mode",
+            "Choose how to capture trace data from the device.",
+        ))
+        layout.addSpacing(8)
+
+        mode_group = QGroupBox("Mode")
         mode_layout = QVBoxLayout(mode_group)
 
         self._mode_combo = QComboBox()
@@ -478,16 +508,39 @@ class EventsPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
 
-        layout.addWidget(QLabel("Select ftrace events to capture:"))
+        layout.addLayout(_section_header(
+            "Trace Events",
+            "Select which kernel events to capture during tracing.",
+        ))
+        layout.addSpacing(8)
 
         self._event_checks: list[tuple[str, QCheckBox]] = []
+
+        # Group: Block I/O
+        block_group = QGroupBox("Block I/O")
+        block_layout = QVBoxLayout(block_group)
         for name, default_on in DEFAULT_EVENTS:
-            cb = QCheckBox(name)
-            cb.setChecked(default_on)
-            cb.stateChanged.connect(lambda *_: self.events_changed.emit())
-            layout.addWidget(cb)
-            self._event_checks.append((name, cb))
+            if name.startswith("block/"):
+                cb = QCheckBox(name.split("/", 1)[1])
+                cb.setChecked(default_on)
+                cb.stateChanged.connect(lambda *_: self.events_changed.emit())
+                block_layout.addWidget(cb)
+                self._event_checks.append((name, cb))
+        layout.addWidget(block_group)
+
+        # Group: UFS / Storage
+        ufs_group = QGroupBox("UFS / Storage")
+        ufs_layout = QVBoxLayout(ufs_group)
+        for name, default_on in DEFAULT_EVENTS:
+            if not name.startswith("block/"):
+                cb = QCheckBox(name.split("/", 1)[1] if "/" in name else name)
+                cb.setChecked(default_on)
+                cb.stateChanged.connect(lambda *_: self.events_changed.emit())
+                ufs_layout.addWidget(cb)
+                self._event_checks.append((name, cb))
+        layout.addWidget(ufs_group)
 
         self._warning_label = QLabel()
         self._warning_label.setStyleSheet("color: red;")
@@ -524,6 +577,13 @@ class OutputPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+
+        layout.addLayout(_section_header(
+            "Output Settings",
+            "Configure buffer size and where to save the trace file.",
+        ))
+        layout.addSpacing(8)
 
         # Buffer size
         buf_group = QGroupBox("Buffer Size")
@@ -612,21 +672,44 @@ class TraceConfigDialog(QDialog):
 
     # ── UI construction ───────────────────────────────────────
 
+    # ── Completion tracking ─────────────────────────────────────
+
+    _CHECK_MARK = " ✓"
+
+    def _update_category_status(self) -> None:
+        """Update sidebar items with completion indicators."""
+        checks = [
+            self.connection_panel.adb_found and bool(self.connection_panel.selected_serial()),
+            True,  # Capture mode always has a default
+            self.events_panel.has_events,
+            bool(self.output_panel.save_path()),
+        ]
+        for i, (label, _idx) in enumerate(_CATEGORIES):
+            item = self._category_list.item(i)
+            if item:
+                base = label.rstrip(" ✓")
+                item.setText(base + (self._CHECK_MARK if checks[i] else ""))
+
+    # ── UI construction ───────────────────────────────────────
+
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(12, 12, 12, 0)
 
         # Main area: sidebar + stacked panels
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         # Left sidebar
         self._category_list = QListWidget()
         self._category_list.setFixedWidth(180)
         self._category_list.setStyleSheet(
             "QListWidget { background-color: palette(alternate-base); "
-            "color: palette(text); }"
-            "QListWidget::item { padding: 6px 8px; }"
+            "color: palette(text); "
+            "border-right: 1px solid palette(mid); "
+            "font-size: 13px; }"
+            "QListWidget::item { padding: 10px 12px; }"
             "QListWidget::item:selected { "
             "  background-color: palette(highlight); "
             "  color: palette(highlighted-text); }"
@@ -663,9 +746,11 @@ class TraceConfigDialog(QDialog):
 
         self._start_btn = QPushButton("Start Recording")
         self._start_btn.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: white; "
-            "padding: 6px 16px; font-weight: bold; }"
-            "QPushButton:disabled { background-color: #A5D6A7; }"
+            "QPushButton { background-color: #2E7D32; color: white; "
+            "padding: 8px 20px; font-weight: bold; font-size: 13px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #388E3C; }"
+            "QPushButton:disabled { background-color: #81C784; color: #E0E0E0; }"
         )
         self._save_btn = QPushButton("Save Config")
         self._close_btn = QPushButton("Close")
@@ -688,11 +773,14 @@ class TraceConfigDialog(QDialog):
         # Auto-run check on mode change
         self.capture_panel.mode_changed.connect(lambda _: self.capture_panel.run_check())
 
-        # Dirty tracking (lambda wrappers to discard signal args safely)
+        # Dirty tracking + completion status
         self.connection_panel.device_changed.connect(self._mark_dirty)
+        self.connection_panel.device_changed.connect(self._update_category_status)
         self.capture_panel.mode_changed.connect(lambda _mode: self._mark_dirty())
         self.events_panel.events_changed.connect(self._mark_dirty)
+        self.events_panel.events_changed.connect(self._update_category_status)
         self.output_panel.output_changed.connect(self._mark_dirty)
+        self.output_panel.output_changed.connect(self._update_category_status)
 
     # ── Config management ─────────────────────────────────────
 
@@ -702,6 +790,7 @@ class TraceConfigDialog(QDialog):
         self._saved_config = dict(config)
         self._dirty = False
         self.connection_panel.initialize()
+        self._update_category_status()
 
     def get_config(self) -> dict[str, Any]:
         """Collect current config from all panels."""
