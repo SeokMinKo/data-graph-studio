@@ -1,0 +1,463 @@
+"""TraceController - extracted from MainWindow."""
+from __future__ import annotations
+
+import os
+import gc
+import json
+import logging
+import time
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, Optional, List, Any
+
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
+    QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
+    QProgressDialog, QApplication, QLabel, QDialog, QFrame,
+    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget
+)
+from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
+
+from ...core.state import ToolMode, ChartType, ComparisonMode, AggregationType
+from ...core.export_controller import ExportFormat
+from ...core.updater import (
+    get_current_version, check_github_latest, is_update_available,
+    download_asset, read_sha256_file, sha256sum, run_windows_installer,
+)
+from ..dialogs.streaming_dialog import StreamingDialog
+from ..dialogs.command_palette_dialog import CommandPaletteDialog
+from ..dialogs.computed_column_dialog import ComputedColumnDialog
+from ..dialogs.profile_manager_dialog import ProfileManagerDialog
+from ..panels.side_by_side_layout import SideBySideLayout
+from ..panels.comparison_stats_panel import ComparisonStatsPanel
+from ..panels.overlay_stats_widget import OverlayStatsWidget
+from ..panels.annotation_panel import AnnotationPanel
+from ..panels.dashboard_panel import DashboardPanel
+from ..toolbars.compare_toolbar import CompareToolbar
+from ..dialogs.parsing_preview_dialog import ParsingPreviewDialog
+from ..dialogs.save_setting_dialog import SaveSettingDialog
+from ..dialogs.multi_file_dialog import open_multi_file_dialog
+from ..wizards.new_project_wizard import NewProjectWizard
+from ...core.parsing import ParsingSettings
+
+logger = logging.getLogger(__name__)
+
+
+if TYPE_CHECKING:
+    from ..main_window import MainWindow
+
+class TraceController:
+    """Controller extracted from MainWindow."""
+
+    def __init__(self, main_window: 'MainWindow'):
+        self.w = main_window
+
+    def _on_configure_trace(self) -> None:
+        """Open the Trace Configuration dialog (always)."""
+        from data_graph_studio.ui.dialogs.trace_config_dialog import TraceConfigDialog
+
+        logger.debug("[Logger] opening TraceConfigDialog")
+        dialog = TraceConfigDialog(self.w)
+        result = dialog.exec()
+        logger.debug("[Logger] TraceConfigDialog result=%s, start_requested=%s",
+                     result, dialog.start_requested)
+
+        if result == QDialog.DialogCode.Accepted and dialog.start_requested:
+            self.w._run_trace(dialog.get_config())
+
+    # ================================================================
+    # Logger — ADB + Perfetto block layer tracing
+    # ================================================================
+
+
+    def _on_start_trace(self) -> None:
+        """Start trace using saved config, or open Configure if none."""
+        import shutil
+
+        from data_graph_studio.ui.dialogs.trace_config_dialog import (
+            load_logger_config,
+            TraceConfigDialog,
+        )
+
+        logger_cfg = load_logger_config()
+
+        # If config looks valid, start directly; otherwise open configure
+        has_device = bool(logger_cfg.get("device_serial"))
+        has_events = bool(logger_cfg.get("events"))
+        has_adb = bool(shutil.which("adb"))
+        has_save_path = bool(logger_cfg.get("save_path"))
+        logger.debug("[Logger] start_trace check: adb=%s, device=%s, events=%s, save=%s",
+                     has_adb, has_device, has_events, has_save_path)
+
+        if has_device and has_events and has_adb and has_save_path:
+            # Bug fix: verify capture mode prerequisites before starting
+            capture_mode = logger_cfg.get("capture_mode", "perfetto")
+            serial = logger_cfg["device_serial"]
+            if not self.w._verify_capture_mode(serial, capture_mode):
+                self.w._on_configure_trace()
+                return
+            self.w._run_trace(logger_cfg)
+        else:
+            self.w._on_configure_trace()
+
+    @staticmethod
+
+    def _verify_capture_mode(serial: str, capture_mode: str) -> bool:
+        """Check if device supports the capture mode (perfetto/root).
+
+        Returns True if check passes or is inconclusive (timeout).
+        """
+        import subprocess
+
+        try:
+            if capture_mode == "perfetto":
+                result = subprocess.run(
+                    ["adb", "-s", serial, "shell", "which", "perfetto"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                return result.returncode == 0 and bool(result.stdout.strip())
+            else:
+                # Try both su variants (some devices need 'su 0 id')
+                for cmd in [["su", "-c", "id"], ["su", "0", "id"]]:
+                    result = subprocess.run(
+                        ["adb", "-s", serial, "shell", *cmd],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if result.returncode == 0 and "uid=0" in result.stdout:
+                        return True
+                return False
+        except (subprocess.TimeoutExpired, OSError):
+            return True  # Inconclusive — let it proceed
+
+
+    def _run_trace(self, logger_cfg: dict) -> None:
+        """Execute trace with given config (Perfetto/Raw Ftrace)."""
+        import shutil
+        import datetime
+
+        from data_graph_studio.ui.dialogs.trace_progress_dialog import (
+            AdbTraceController,
+            PerfettoTraceController,
+            TraceProgressDialog,
+        )
+
+        logger.info("[Logger] _run_trace: mode=%s, device=%s, events=%d",
+                     logger_cfg.get("capture_mode", "?"),
+                     logger_cfg.get("device_serial", "?"),
+                     len(logger_cfg.get("events", [])))
+
+        if not shutil.which("adb"):
+            QMessageBox.warning(
+                self, "Logger",
+                "adb not found in PATH.\n\n"
+                "Install Android SDK Platform Tools and ensure 'adb' is in your PATH.\n"
+                "Or use Logger → Configure... to set up.",
+            )
+            return
+
+        serial = logger_cfg.get("device_serial", "")
+        if not serial:
+            QMessageBox.warning(
+                self, "Logger",
+                "No device configured.\n\n"
+                "Use Logger → Configure... to select a device.",
+            )
+            return
+
+        capture_mode = logger_cfg.get("capture_mode", "perfetto")
+        is_perfetto = capture_mode == "perfetto"
+
+        # 저장 경로 결정
+        save_path = logger_cfg.get("save_path", "")
+        if not save_path:
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            if is_perfetto:
+                default_name = f"trace_{ts}.csv"
+                file_filter = "CSV (*.csv);;All Files (*)"
+            else:
+                default_name = f"ftrace_{ts}.txt"
+                file_filter = "Ftrace Text (*.txt);;All Files (*)"
+            save_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Trace File", default_name, file_filter,
+            )
+            if not save_path:
+                return
+
+        # 컨트롤러 생성 (캡처 모드에 따라)
+        if is_perfetto:
+            try:
+                PerfettoTraceController.find_trace_processor()
+            except FileNotFoundError as e:
+                QMessageBox.warning(self, "Logger", str(e))
+                return
+            controller = PerfettoTraceController(self.w)
+        else:
+            controller = AdbTraceController(self.w)
+
+        try:
+            logger.debug("[Logger] starting %s trace on %s", capture_mode, serial)
+            controller.start_trace(serial, logger_cfg)
+        except Exception as e:
+            logger.error("[Logger] start_trace failed: %s", e, exc_info=True)
+            QMessageBox.warning(self, "Logger", f"Failed to start trace:\n{e}")
+            controller.cleanup()
+            return
+
+        dialog = TraceProgressDialog(controller, save_path, self.w)
+        result = dialog.exec()
+
+        logger.debug("[Logger] TraceProgressDialog result=%s", result)
+        if result == QDialog.DialogCode.Accepted:
+            self.w.statusBar().showMessage(f"Trace saved: {save_path}", 5000)
+
+            if is_perfetto:
+                # PerfettoTraceController saves CSV with .csv suffix
+                csv_path = str(Path(save_path).with_suffix(".csv"))
+                logger.info("[Logger] loading perfetto CSV: %s", csv_path)
+                self.w._load_csv_async(csv_path)
+            else:
+                reply = QMessageBox.question(
+                    self, "Logger",
+                    f"Trace saved to:\n{save_path}\n\n"
+                    "Open with Ftrace Parser now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.w._parse_ftrace_async(save_path)
+
+
+    def _load_csv_async(self, csv_path: str) -> None:
+        """Load a CSV file (from trace_processor_shell) in a background thread.
+
+        Args:
+            csv_path: Path to the CSV file.
+        """
+        from pathlib import Path
+        from PySide6.QtCore import QThread, Signal as QtSignal
+
+        import polars as pl
+
+        class _CsvWorker(QThread):
+            finished = QtSignal(object)
+            error = QtSignal(str)
+
+            def run(self_w):
+                try:
+                    df = pl.read_csv(csv_path)
+                    # ts is in nanoseconds, convert to seconds
+                    if "ts" in df.columns:
+                        df = df.with_columns(
+                            (pl.col("ts").cast(pl.Float64) / 1e9).alias("timestamp")
+                        ).drop("ts")
+                    self_w.finished.emit(df)
+                except Exception as e:
+                    self_w.error.emit(str(e))
+
+        logger.debug("[Logger] _load_csv_async: %s", csv_path)
+        self.w.statusBar().showMessage("Loading CSV...", 0)
+        worker = _CsvWorker(self.w)
+
+        def on_finished(df):
+            logger.info("[Logger] CSV loaded: %d rows, %d cols, columns=%s",
+                        len(df), len(df.columns), list(df.columns)[:10])
+            name = Path(csv_path).stem
+            did = self.w.engine.load_dataset_from_dataframe(
+                df, name=name, source_path=csv_path
+            )
+            if did:
+                logger.info("[Logger] dataset created: id=%s, name=%s", did, name)
+                self.w._on_data_loaded()
+                self.w._apply_graph_presets(df, converter="blocklayer")
+                self.w.statusBar().showMessage(
+                    f"Perfetto trace: loaded {len(df)} rows", 5000,
+                )
+            else:
+                logger.error("[Logger] load_dataset_from_dataframe returned None for %s", csv_path)
+                QMessageBox.warning(self, "Logger", "Failed to load CSV data.")
+                self.w.statusBar().clearMessage()
+
+        def on_error(msg):
+            logger.error("[Logger] CSV load failed: %s", msg)
+            QMessageBox.critical(self, "Logger", f"CSV load failed:\n{msg}")
+            self.w.statusBar().clearMessage()
+
+        worker.finished.connect(on_finished)
+        worker.error.connect(on_error)
+        self.w._csv_worker = worker
+        worker.start()
+
+
+    def _parse_ftrace_async(self, file_path: str, converter: str = "blocklayer") -> None:
+        """Parse an ftrace text file in a background thread.
+
+        Avoids blocking the UI during large file parsing.
+
+        Args:
+            file_path: Path to the ftrace text file.
+            converter: Converter to apply (default: "blocklayer").
+        """
+        from pathlib import Path
+        from PySide6.QtCore import QThread, Signal as QtSignal
+
+        from data_graph_studio.parsers import FtraceParser
+
+        parser = FtraceParser()
+        settings = parser.default_settings()
+        settings["converter"] = converter
+
+        class _ParseWorker(QThread):
+            finished = QtSignal(object)
+            error = QtSignal(str)
+
+            def run(self_w):
+                try:
+                    df = parser.parse_raw(file_path, settings)
+                    self_w.finished.emit(df)
+                except Exception as e:
+                    self_w.error.emit(str(e))
+
+        logger.debug("[Logger] _parse_ftrace_async: %s, converter=%s", file_path, converter)
+        self.w.statusBar().showMessage("Parsing ftrace file...", 0)
+        worker = _ParseWorker(self.w)
+
+        def on_finished(df):
+            logger.info("[Logger] ftrace parsed: %d rows, %d cols, columns=%s",
+                        len(df), len(df.columns), list(df.columns)[:10])
+            dataset_name = Path(file_path).stem
+            dataset_id = self.w.engine.load_dataset_from_dataframe(
+                df, name=dataset_name, source_path=file_path
+            )
+            if dataset_id:
+                logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
+                self.w._on_data_loaded()
+                self.w._apply_graph_presets(df, converter)
+                self.w.statusBar().showMessage(
+                    f"Ftrace: loaded {len(df)} rows from {Path(file_path).name}",
+                    5000,
+                )
+            else:
+                logger.error("[Logger] ftrace load_dataset_from_dataframe returned None")
+                QMessageBox.warning(self, "Ftrace Parser", "Failed to load parsed data.")
+                self.w.statusBar().clearMessage()
+
+        def on_error(msg):
+            logger.error("[Logger] ftrace parse failed: %s", msg)
+            QMessageBox.critical(self, "Ftrace Parser", f"Parse failed:\n{msg}")
+            self.w.statusBar().clearMessage()
+
+        worker.finished.connect(on_finished)
+        worker.error.connect(on_error)
+        # prevent GC
+        self.w._parse_worker = worker
+        worker.start()
+
+
+    def _apply_graph_presets(self, df, converter: str = "") -> None:
+        """Create DGS profiles from graph presets and apply the first one.
+
+        Each GraphPreset becomes a real GraphSetting (profile) in the
+        project's profile_store, visible in the Project Explorer sidebar.
+        The first matching preset is auto-applied.
+
+        Args:
+            df: The loaded polars DataFrame.
+            converter: Converter name (e.g. "blocklayer").
+        """
+        from data_graph_studio.parsers.graph_preset import BUILTIN_PRESETS
+        from data_graph_studio.core.profile import GraphSetting
+        from data_graph_studio.core.state import ChartType, AggregationType
+
+        presets = BUILTIN_PRESETS.get(converter, [])
+        if not presets:
+            logger.debug("[Logger] no presets for converter=%s", converter)
+            return
+
+        dataset_id = self.w.state.active_dataset_id
+        if not dataset_id:
+            logger.warning("[Logger] no active dataset, cannot create profiles")
+            return
+
+        # Skip if profiles already exist for this dataset (avoid duplicates on re-parse)
+        existing = self.w.profile_store.get_by_dataset(dataset_id)
+        existing_names = {s.name for s in existing}
+
+        first_profile_id = None
+        created_count = 0
+
+        for preset in presets:
+            if not preset.columns_present(df):
+                logger.debug("[Logger] preset '%s' skipped: columns missing", preset.name)
+                continue
+            if preset.name in existing_names:
+                logger.debug("[Logger] preset '%s' already exists, skipping", preset.name)
+                # Use existing profile as first if none yet
+                if first_profile_id is None:
+                    for s in existing:
+                        if s.name == preset.name:
+                            first_profile_id = s.id
+                            break
+                continue
+
+            # Build value_columns as dicts (GraphSettingMapper format)
+            value_cols = []
+            for col_name in preset.y_columns:
+                value_cols.append({
+                    "name": col_name,
+                    "aggregation": "sum",
+                    "color": "#1f77b4",
+                    "use_secondary_axis": False,
+                    "order": len(value_cols),
+                    "formula": "",
+                })
+
+            # Build group_columns
+            group_cols = []
+            if preset.group_column:
+                group_cols.append({
+                    "name": preset.group_column,
+                    "selected_values": [],
+                    "order": 0,
+                })
+
+            import uuid
+            profile_id = str(uuid.uuid4())
+            gs = GraphSetting(
+                id=profile_id,
+                name=preset.name,
+                dataset_id=dataset_id,
+                chart_type=preset.chart_type,
+                x_column=preset.x_column,
+                value_columns=tuple(value_cols),
+                group_columns=tuple(group_cols),
+                icon="📈" if preset.chart_type in ("line", "area") else "📊",
+                description=preset.description,
+            )
+            self.w.profile_store.add(gs)
+            created_count += 1
+            logger.info("[Logger] created profile '%s' (id=%s, chart=%s, x=%s, y=%s)",
+                        preset.name, profile_id, preset.chart_type,
+                        preset.x_column, preset.y_columns)
+
+            if first_profile_id is None:
+                first_profile_id = profile_id
+
+        # Refresh project tree to show new profiles
+        if created_count > 0 and hasattr(self, 'profile_model'):
+            self.w.profile_model.refresh()
+            logger.info("[Logger] %d profiles created for dataset %s", created_count, dataset_id)
+
+        # Apply the first profile
+        if first_profile_id:
+            try:
+                ok = self.w.profile_controller.apply_profile(first_profile_id)
+                if ok:
+                    self.w.graph_panel.refresh()
+                    self.w.graph_panel.autofit()
+                    logger.info("[Logger] auto-applied profile: %s", first_profile_id)
+                else:
+                    logger.warning("[Logger] failed to apply profile: %s", first_profile_id)
+            except Exception as e:
+                logger.warning("[Logger] error applying profile: %s", e, exc_info=True)
+
+
