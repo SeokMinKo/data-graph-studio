@@ -1652,7 +1652,7 @@ class TablePanel(QWidget):
             ordered_cols += [c for c in df.columns if c not in ordered_cols]
             df = df.select(ordered_cols)
 
-        hidden_cols = self.state._hidden_columns
+        hidden_cols = self.state.hidden_columns
         if hidden_cols:
             visible_cols = [col for col in df.columns if col not in hidden_cols]
             if visible_cols:
@@ -1990,13 +1990,12 @@ class TablePanel(QWidget):
             if self.state.x_column == column:
                 self.state.set_x_column(None)
             # Remove from groups/values/hover
-            self.state._group_columns = [g for g in self.state.group_columns if g.name != column]
-            self.state._value_columns = [v for v in self.state.value_columns if v.name != column]
+            self.state.remove_group_column(column)
+            self.state.remove_value_column_by_name(column)
             if column in self.state.hover_columns:
                 self.state.remove_hover_column(column)
             # Hidden/column order cleanup
-            if column in self.state._hidden_columns:
-                self.state._hidden_columns.remove(column)
+            self.state.unhide_column(column)
             if column in self.state.get_column_order():
                 self.state.set_column_order([c for c in self.state.get_column_order() if c != column])
 
@@ -2083,22 +2082,21 @@ class TablePanel(QWidget):
     
     def _on_show_column(self, column: str):
         """Show a hidden column"""
-        self.state.toggle_column_visibility(column)
+        self.state.unhide_column(column)
         self._update_hidden_bar()
         self._update_table_model()
     
     def _on_show_all_columns(self):
         """Show all hidden columns"""
-        # Need to add a method to state or iterate
-        hidden = list(self.state._hidden_columns)
+        hidden = list(self.state.hidden_columns)
         for col in hidden:
-            self.state.toggle_column_visibility(col)
+            self.state.unhide_column(col)
         self._update_hidden_bar()
         self._update_table_model()
     
     def _update_hidden_bar(self):
         """Update hidden columns bar"""
-        hidden = list(self.state._hidden_columns)
+        hidden = list(self.state.hidden_columns)
         self.hidden_bar.update_hidden_columns(hidden)
 
     # ==================== Table View Mode ====================

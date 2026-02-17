@@ -31,7 +31,7 @@ class GraphSettingMapper:
 
         # Serialize GroupColumn/ValueColumn objects to dicts for storage
         group_cols = []
-        for g in state._group_columns:
+        for g in state.group_columns:
             if isinstance(g, GroupColumn):
                 group_cols.append({
                     'name': g.name,
@@ -42,7 +42,7 @@ class GraphSettingMapper:
                 group_cols.append(g)
 
         value_cols = []
-        for v in state._value_columns:
+        for v in state.value_columns:
             if isinstance(v, ValueColumn):
                 value_cols.append({
                     'name': v.name,
@@ -90,31 +90,42 @@ class GraphSettingMapper:
             state._x_column = setting.x_column
 
             # group_columns: dict/str → GroupColumn 변환
-            state._group_columns = []
+            state.clear_group_zone()
+            normalized_groups: list[GroupColumn] = []
             for g in setting.group_columns:
                 if isinstance(g, GroupColumn):
-                    state._group_columns.append(g)
+                    normalized_groups.append(g)
                 elif isinstance(g, dict):
-                    state._group_columns.append(GroupColumn(
+                    normalized_groups.append(GroupColumn(
                         name=g.get('name', ''),
                         selected_values=set(g.get('selected_values', [])),
                         order=g.get('order', 0),
                     ))
                 else:
-                    state._group_columns.append(GroupColumn(name=str(g)))
+                    normalized_groups.append(GroupColumn(name=str(g)))
+
+            normalized_groups.sort(key=lambda col: col.order)
+            for gc in normalized_groups:
+                state.add_group_column(gc.name)
+                for current in state.group_columns:
+                    if current.name == gc.name:
+                        current.selected_values = set(gc.selected_values)
+                        current.order = gc.order
+                        break
 
             # value_columns: dict/str → ValueColumn 변환
             from .state import AggregationType
-            state._value_columns = []
+            state.clear_value_zone()
+            normalized_values: list[ValueColumn] = []
             for v in setting.value_columns:
                 if isinstance(v, ValueColumn):
-                    state._value_columns.append(v)
+                    normalized_values.append(v)
                 elif isinstance(v, dict):
                     try:
                         agg = AggregationType(v.get('aggregation', 'sum'))
                     except ValueError:
                         agg = AggregationType.SUM
-                    state._value_columns.append(ValueColumn(
+                    normalized_values.append(ValueColumn(
                         name=v.get('name', ''),
                         aggregation=agg,
                         color=v.get('color', '#1f77b4'),
@@ -123,7 +134,18 @@ class GraphSettingMapper:
                         formula=v.get('formula', ''),
                     ))
                 else:
-                    state._value_columns.append(ValueColumn(name=str(v)))
+                    normalized_values.append(ValueColumn(name=str(v)))
+
+            normalized_values.sort(key=lambda col: col.order)
+            for vc in normalized_values:
+                state.add_value_column(vc.name, aggregation=vc.aggregation)
+                idx = len(state.value_columns) - 1
+                state.update_value_column(
+                    idx,
+                    color=vc.color,
+                    use_secondary_axis=vc.use_secondary_axis,
+                    formula=vc.formula,
+                )
 
             state._hover_columns = [str(h) for h in setting.hover_columns]
             state._filters = list(setting.filters)

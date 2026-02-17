@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class ThemeState:
-    """테마 상태 — PRD §9.3"""
+    """테마 상태 - PRD §9.3"""
     current: str = "system"    # "light" | "dark" | "system"
 
 
@@ -197,26 +197,26 @@ class ChartSettings:
     """차트 설정"""
     chart_type: ChartType = ChartType.LINE
     x_column: Optional[str] = None
-    
+
     # 스타일
     line_width: int = 2
     marker_size: int = 6
     fill_opacity: float = 0.3
     show_data_labels: bool = False
-    
+
     # Primary Y축 설정
     x_log_scale: bool = False
     y_log_scale: bool = False
     y_min: Optional[float] = None
     y_max: Optional[float] = None
     y_label: Optional[str] = None
-    
+
     # Secondary Y축 설정
     secondary_y_log_scale: bool = False
     secondary_y_min: Optional[float] = None
     secondary_y_max: Optional[float] = None
     secondary_y_label: Optional[str] = None
-    
+
     # Grid View 설정
     grid_view: GridViewSettings = field(default_factory=GridViewSettings)
 
@@ -226,27 +226,27 @@ class SelectionState:
     """선택 상태"""
     selected_rows: Set[int] = field(default_factory=set)
     highlighted_rows: Set[int] = field(default_factory=set)
-    
+
     @property
     def has_selection(self) -> bool:
         return len(self.selected_rows) > 0
-    
+
     @property
     def selection_count(self) -> int:
         return len(self.selected_rows)
-    
+
     def clear(self):
         self.selected_rows.clear()
         self.highlighted_rows.clear()
-    
+
     def select(self, rows: List[int], add: bool = False):
         if not add:
             self.selected_rows.clear()
         self.selected_rows.update(rows)
-    
+
     def deselect(self, rows: List[int]):
         self.selected_rows.difference_update(rows)
-    
+
     def toggle(self, row: int):
         if row in self.selected_rows:
             self.selected_rows.remove(row)
@@ -312,10 +312,10 @@ class ComparisonSettings:
 class AppState(QObject):
     """
     앱 전역 상태 관리
-    
+
     Signals로 상태 변경을 UI에 알림
     """
-    
+
     # Signals
     data_loaded = Signal()
     data_cleared = Signal()
@@ -354,7 +354,7 @@ class AppState(QObject):
     dataset_updated = Signal(str)         # dataset_id
     comparison_mode_changed = Signal(str) # mode
     comparison_settings_changed = Signal()
-    
+
     def __init__(self):
         super().__init__()
 
@@ -684,7 +684,7 @@ class AppState(QObject):
 
         FR-8: 데이터셋 비교가 활성이면 자동 해제.
         """
-        # FR-8 — clear dataset comparison
+        # FR-8 - clear dataset comparison
         self._comparison_settings.comparison_datasets.clear()
 
         # Set profile comparison fields
@@ -834,11 +834,11 @@ class AppState(QObject):
         self._dataset_color_index = 0
 
     # ==================== Data ====================
-    
+
     @property
     def is_data_loaded(self) -> bool:
         return self._data_loaded
-    
+
     def set_data_loaded(self, loaded: bool, total_rows: int = 0):
         self._data_loaded = loaded
         self._total_rows = total_rows
@@ -847,95 +847,95 @@ class AppState(QObject):
             self.data_loaded.emit()
         else:
             self.data_cleared.emit()
-    
+
     @property
     def total_rows(self) -> int:
         return self._total_rows
-    
+
     @property
     def visible_rows(self) -> int:
         return self._visible_rows
-    
+
     def set_visible_rows(self, count: int):
         self._visible_rows = count
-    
+
     # ==================== Group Zone ====================
-    
+
     @property
     def group_columns(self) -> List[GroupColumn]:
         return self._group_columns
-    
+
     def add_group_column(self, name: str, index: int = -1):
         # 중복 방지
         if any(g.name == name for g in self._group_columns):
             return
-        
+
         col = GroupColumn(name=name, order=len(self._group_columns))
         if index < 0:
             self._group_columns.append(col)
         else:
             self._group_columns.insert(index, col)
             self._reorder_groups()
-        
+
         self.group_zone_changed.emit()
-    
+
     def remove_group_column(self, name: str):
         self._group_columns = [g for g in self._group_columns if g.name != name]
         self._reorder_groups()
         self.group_zone_changed.emit()
-    
+
     def reorder_group_columns(self, new_order: List[str]):
         name_to_col = {g.name: g for g in self._group_columns}
         self._group_columns = [name_to_col[name] for name in new_order if name in name_to_col]
         self._reorder_groups()
         self.group_zone_changed.emit()
-    
+
     def _reorder_groups(self):
         for i, g in enumerate(self._group_columns):
             g.order = i
-    
+
     def clear_group_zone(self):
         self._group_columns.clear()
         self.group_zone_changed.emit()
-    
+
     # ==================== Value Zone ====================
-    
+
     @property
     def value_columns(self) -> List[ValueColumn]:
         return self._value_columns
-    
+
     def add_value_column(
-        self, 
-        name: str, 
+        self,
+        name: str,
         aggregation: AggregationType = AggregationType.SUM,
         index: int = -1
     ):
         # 중복 허용 (같은 컬럼 다른 집계)
         col = ValueColumn(
-            name=name, 
+            name=name,
             aggregation=aggregation,
             order=len(self._value_columns)
         )
-        
+
         # 색상 자동 할당
         colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
                   "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
         col.color = colors[len(self._value_columns) % len(colors)]
-        
+
         if index < 0:
             self._value_columns.append(col)
         else:
             self._value_columns.insert(index, col)
             self._reorder_values()
-        
+
         self.value_zone_changed.emit()
-    
+
     def remove_value_column(self, index: int):
         if 0 <= index < len(self._value_columns):
             self._value_columns.pop(index)
             self._reorder_values()
             self.value_zone_changed.emit()
-    
+
     def update_value_column(
         self,
         index: int,
@@ -954,23 +954,29 @@ class AppState(QObject):
             if formula is not None:
                 self._value_columns[index].formula = formula
             self.value_zone_changed.emit()
-    
+
     def _reorder_values(self):
         for i, v in enumerate(self._value_columns):
             v.order = i
-    
+
     def clear_value_zone(self):
         self._value_columns.clear()
         self.value_zone_changed.emit()
-    
+
+    def remove_value_column_by_name(self, name: str):
+        """Remove value column by name."""
+        self._value_columns = [v for v in self._value_columns if v.name != name]
+        self._reorder_values()
+        self.value_zone_changed.emit()
+
     def get_primary_values(self) -> List[ValueColumn]:
         """Primary 축에 할당된 값 컬럼 목록"""
         return [v for v in self._value_columns if not v.use_secondary_axis]
-    
+
     def get_secondary_values(self) -> List[ValueColumn]:
         """Secondary 축에 할당된 값 컬럼 목록"""
         return [v for v in self._value_columns if v.use_secondary_axis]
-    
+
     def has_secondary_axis(self) -> bool:
         """Secondary 축 존재 여부"""
         return any(v.use_secondary_axis for v in self._value_columns)
@@ -999,21 +1005,21 @@ class AppState(QObject):
         self.hover_zone_changed.emit()
 
     # ==================== X Column ====================
-    
+
     @property
     def x_column(self) -> Optional[str]:
         return self._x_column
-    
+
     def set_x_column(self, name: Optional[str]):
         self._x_column = name
         self.chart_settings_changed.emit()
-    
+
     # ==================== Filters ====================
-    
+
     @property
     def filters(self) -> List[FilterCondition]:
         return self._filters
-    
+
     def add_filter(self, column: str, operator: str, value: Any):
         before = copy.deepcopy(self._filters)
         self._filters.append(FilterCondition(column, operator, value))
@@ -1116,13 +1122,13 @@ class AppState(QObject):
                 timestamp=time.time(),
             )
         )
-    
+
     # ==================== Sorts ====================
-    
+
     @property
     def sorts(self) -> List[SortCondition]:
         return self._sorts
-    
+
     def set_sort(self, column: str, descending: bool = False, add: bool = False):
         before = copy.deepcopy(self._sorts)
 
@@ -1180,29 +1186,29 @@ class AppState(QObject):
                 timestamp=time.time(),
             )
         )
-    
+
     # ==================== Selection ====================
-    
+
     @property
     def selection(self) -> SelectionState:
         return self._selection
-    
+
     def select_rows(self, rows: List[int], add: bool = False):
         self._selection.select(rows, add)
         self.selection_changed.emit()
-    
+
     def deselect_rows(self, rows: List[int]):
         self._selection.deselect(rows)
         self.selection_changed.emit()
-    
+
     def toggle_row(self, row: int):
         self._selection.toggle(row)
         self.selection_changed.emit()
-    
+
     def clear_selection(self):
         self._selection.clear()
         self.selection_changed.emit()
-    
+
     def select_all(self):
         self._selection.select(list(range(self._visible_rows)))
         self.selection_changed.emit()
@@ -1219,13 +1225,13 @@ class AppState(QObject):
         if self._limit_to_marking != enabled:
             self._limit_to_marking = enabled
             self.limit_to_marking_changed.emit(enabled)
-    
+
     # ==================== Chart Settings ====================
-    
+
     @property
     def chart_settings(self) -> ChartSettings:
         return self._chart_settings
-    
+
     def set_chart_type(self, chart_type: ChartType):
         before = copy.deepcopy(self._chart_settings)
         self._chart_settings.chart_type = chart_type
@@ -1282,13 +1288,13 @@ class AppState(QObject):
                 timestamp=time.time(),
             )
         )
-    
+
     # ==================== Tool Mode ====================
-    
+
     @property
     def tool_mode(self) -> ToolMode:
         return self._tool_mode
-    
+
     def set_tool_mode(self, mode: ToolMode):
         self._tool_mode = mode
         self.tool_mode_changed.emit()
@@ -1329,48 +1335,65 @@ class AppState(QObject):
                     changed = True
         if changed:
             self.grid_view_changed.emit()
-    
+
     # ==================== Layout ====================
-    
+
     @property
     def layout_ratios(self) -> Dict[str, float]:
         return self._layout_ratios
-    
+
     def set_layout_ratio(self, section: str, ratio: float):
         if section in self._layout_ratios:
             # 비율 조정 (합이 1이 되도록)
             old_ratio = self._layout_ratios[section]
             diff = ratio - old_ratio
-            
+
             other_sections = [k for k in self._layout_ratios if k != section]
             for other in other_sections:
                 self._layout_ratios[other] -= diff / len(other_sections)
-            
+
             self._layout_ratios[section] = ratio
-    
+
     # ==================== Column Order ====================
-    
+
     def set_column_order(self, order: List[str]):
         self._column_order = order
-    
+
     def get_column_order(self) -> List[str]:
         return self._column_order
-    
+
+    @property
+    def hidden_columns(self) -> Set[str]:
+        """Read-only access to hidden columns set."""
+        return frozenset(self._hidden_columns)
+
+    def hide_column(self, column: str):
+        """Hide a specific column."""
+        self._hidden_columns.add(column)
+
+    def unhide_column(self, column: str):
+        """Unhide a specific column."""
+        self._hidden_columns.discard(column)
+
+    def is_column_hidden(self, column: str) -> bool:
+        """Check if a column is hidden."""
+        return column in self._hidden_columns
+
     def toggle_column_visibility(self, column: str):
         if column in self._hidden_columns:
             self._hidden_columns.remove(column)
         else:
             self._hidden_columns.add(column)
-    
+
     def get_visible_columns(self) -> List[str]:
         return [c for c in self._column_order if c not in self._hidden_columns]
-    
+
     # ==================== Summary Update ====================
-    
+
     def update_summary(self, stats: Dict[str, Any]):
         """Summary 패널 업데이트"""
         self.summary_updated.emit(stats)
-    
+
     # ==================== Reset ====================
 
     def reset(self):

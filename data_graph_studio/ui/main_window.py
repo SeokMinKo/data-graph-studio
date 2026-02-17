@@ -1422,26 +1422,40 @@ class MainWindow(QMainWindow):
         if not datasets:
             return
 
-        progress = QProgressDialog("Restoring session...", "Cancel", 0, len(datasets), self)
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.show()
+        self._restore_data = data
+        self._restore_datasets = datasets
+        self._restore_queue = list(enumerate(datasets))
+        self._restore_loaded_dataset_ids = set()
 
-        for i, ds in enumerate(datasets):
-            if progress.wasCanceled():
-                break
-            progress.setValue(i)
-            progress.setLabelText(f"Loading: {Path(ds.get('file_path','')).name}")
-            QApplication.processEvents()
+        self._restore_progress = QProgressDialog("Restoring session...", "Cancel", 0, len(datasets), self)
+        self._restore_progress.setWindowModality(Qt.WindowModal)
+        self._restore_progress.setMinimumDuration(0)
+        self._restore_progress.show()
 
-            path = ds.get("file_path")
-            if not path or not os.path.exists(path):
-                continue
+        self._restore_next()
 
+    def _restore_next(self):
+        """Restore one dataset per event-loop tick to keep UI responsive."""
+        if not getattr(self, "_restore_queue", None):
+            self._restore_finalize()
+            return
+
+        if self._restore_progress and self._restore_progress.wasCanceled():
+            self._restore_finalize()
+            return
+
+        i, ds = self._restore_queue.pop(0)
+        if self._restore_progress:
+            self._restore_progress.setValue(i)
+            self._restore_progress.setLabelText(f"Loading: {Path(ds.get('file_path','')).name}")
+
+        path = ds.get("file_path")
+        if path and os.path.exists(path):
             dataset_id = ds.get("id")
             name = ds.get("name")
             new_id = self.engine.load_dataset(path, name=name, dataset_id=dataset_id)
             if new_id:
+                self._restore_loaded_dataset_ids.add(new_id)
                 dataset = self.engine.get_dataset(new_id)
                 memory_bytes = dataset.df.estimated_size() if dataset and dataset.df is not None else 0
                 self.state.add_dataset(
@@ -1453,7 +1467,17 @@ class MainWindow(QMainWindow):
                     memory_bytes=memory_bytes
                 )
 
-        progress.setValue(len(datasets))
+        QTimer.singleShot(0, self._restore_next)
+
+    def _restore_finalize(self):
+        """Finalize autosave restore after queued dataset loading."""
+        data = getattr(self, "_restore_data", {}) or {}
+        datasets = getattr(self, "_restore_datasets", []) or []
+
+        if self._restore_progress:
+            self._restore_progress.setValue(len(datasets))
+            self._restore_progress.close()
+            self._restore_progress = None
 
         # Activate dataset
         active_id = data.get("active_dataset_id")
@@ -1464,11 +1488,11 @@ class MainWindow(QMainWindow):
 
         # Restore profiles into ProfileStore
         profiles_data = data.get("profiles", [])
+        loaded_ids = getattr(self, "_restore_loaded_dataset_ids", set())
         for p_data in profiles_data:
             try:
                 gs = GraphSetting.from_dict(p_data)
-                # Only add if dataset exists
-                if gs.dataset_id in [ds.get("id") for ds in datasets]:
+                if gs.dataset_id in loaded_ids:
                     self.profile_store.add(gs)
             except Exception:
                 pass
@@ -1487,6 +1511,11 @@ class MainWindow(QMainWindow):
         self.profile_model.refresh()
         self.graph_panel.refresh()
         self.summary_panel.refresh()
+
+        self._restore_queue = []
+        self._restore_data = {}
+        self._restore_datasets = []
+        self._restore_loaded_dataset_ids = set()
 
     def _apply_graph_state(self, gs: Dict[str, Any]):
         """Apply graph state dict to current session"""

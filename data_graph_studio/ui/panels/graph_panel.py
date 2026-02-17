@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QListWidget, QListWidgetItem, QGridLayout,
     QMessageBox
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSize
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer
 from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter, QBrush
 
 from ..floatable import FloatableSection, FloatButton, FloatWindow
@@ -73,6 +73,12 @@ class GraphPanel(QWidget):
 
         # Active filter (Item 15): {col: [values]}
         self._active_filter: Dict[str, list] = {}
+
+        # Debounced refresh timer
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(30)
+        self._refresh_timer.timeout.connect(self.refresh)
 
         self._setup_ui()
         self._connect_signals()
@@ -169,9 +175,9 @@ class GraphPanel(QWidget):
         self.state.chart_settings_changed.connect(self._on_chart_settings_changed)
         self.state.group_zone_changed.connect(self._on_group_changed)
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
-        self.state.hover_zone_changed.connect(self.refresh)
+        self.state.hover_zone_changed.connect(self._schedule_refresh)
         self.state.selection_changed.connect(self._on_selection_changed)
-        self.options_panel.option_changed.connect(self.refresh)
+        self.options_panel.option_changed.connect(self._schedule_refresh)
 
         # Filter signal from DataTab (Item 15)
         self.options_panel.data_tab.filter_changed.connect(self._on_filter_changed)
@@ -194,6 +200,10 @@ class GraphPanel(QWidget):
         
         # Empty state signals (will be connected by MainWindow to handle file open)
         # self._empty_state.open_file_requested is exposed for external connection
+
+    def _schedule_refresh(self, *args):
+        """Debounced refresh - coalesces rapid changes into single refresh."""
+        self._refresh_timer.start()
 
     def _on_grid_view_changed(self):
         """Handle Grid View settings change"""
@@ -1677,40 +1687,31 @@ class GraphPanel(QWidget):
     def _build_group_masks(self, df_override=None) -> Dict[str, np.ndarray]:
         if not self.state.group_columns or not self.engine.is_loaded:
             return None
-        
+
         df = df_override if df_override is not None else self.engine.df
         n_rows = len(df)
         group_cols = [g.name for g in self.state.group_columns]
         groups = {}
-        
-        if len(group_cols) == 1:
-            col = group_cols[0]
-            unique_values = df[col].unique().sort().to_list()
-            
-            for val in unique_values:
-                group_name = str(val) if val is not None else "(Empty)"
-                if val is None:
-                    mask = df[col].is_null().to_numpy().astype(bool)
-                else:
-                    mask = (df[col] == val).to_numpy().astype(bool)
-                groups[group_name] = mask
-        else:
-            combined = df.select(group_cols)
-            unique_combos = combined.unique().sort(group_cols)
-            
-            for row in unique_combos.iter_rows():
-                parts = [str(v) if v is not None else "(Empty)" for v in row]
+
+        indexed = df.with_row_index("__row_idx__")
+        grouped = indexed.group_by(group_cols).agg(
+            pl.col("__row_idx__").alias("__indices__")
+        )
+
+        for row in grouped.iter_rows():
+            vals = row[:-1]
+            indices = row[-1]
+
+            if len(group_cols) == 1:
+                group_name = str(vals[0]) if vals[0] is not None else "(Empty)"
+            else:
+                parts = [str(v) if v is not None else "(Empty)" for v in vals]
                 group_name = " / ".join(parts)
-                
-                mask = np.ones(n_rows, dtype=bool)
-                for col, val in zip(group_cols, row):
-                    if val is None:
-                        mask &= df[col].is_null().to_numpy().astype(bool)
-                    else:
-                        mask &= (df[col] == val).to_numpy().astype(bool)
-                
-                groups[group_name] = mask
-        
+
+            mask = np.zeros(n_rows, dtype=bool)
+            mask[indices] = True
+            groups[group_name] = mask
+
         return groups
     
     def reset_view(self):
