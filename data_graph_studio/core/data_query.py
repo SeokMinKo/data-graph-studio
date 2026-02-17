@@ -521,6 +521,6 @@ class DataQuery:
     def _collect_streaming(lazy_df: pl.LazyFrame) -> pl.DataFrame:
         """LazyFrame을 streaming 모드로 수집한다."""
         try:
-            return lazy_df.collect(streaming=True)
+            return lazy_df.collect(engine="streaming")
         except Exception:
             return lazy_df.collect()

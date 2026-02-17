@@ -207,7 +207,7 @@ class ComparisonEngine:
         self,
         dataset_ids: List[str],
         key_column: Optional[str] = None,
-        how: str = "outer",
+        how: str = "full",
     ) -> Optional[pl.DataFrame]:
         """여러 데이터셋을 병합한다.
 

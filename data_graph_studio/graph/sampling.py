@@ -37,6 +37,10 @@ class DataSampler:
         if threshold <= 0:
             return np.array([]), np.array([])
         
+        # Replace inf with nan to avoid RuntimeWarning in triangle calc
+        x = np.where(np.isinf(x), np.nan, x)
+        y = np.where(np.isinf(y), np.nan, y)
+
         if threshold >= n or threshold < 3:
             return x.copy(), y.copy()
         
