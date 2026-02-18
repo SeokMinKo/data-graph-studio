@@ -15,7 +15,14 @@ import dataclasses
 
 @dataclass(frozen=True)
 class GraphSetting:
-    """단일 그래프 설정"""
+    """단일 그래프 설정 (프로파일).
+
+    ProfileStore가 직접 관리하는 주요 엔티티.
+    Profile 클래스는 파일 I/O (.dgp) 용 컨테이너로,
+    여러 GraphSetting을 묶어서 내보내기/가져오기할 때 사용.
+
+    일상적인 프로파일 CRUD는 ProfileStore + GraphSetting으로 처리.
+    """
     id: str
     name: str
     dataset_id: str
@@ -32,6 +39,7 @@ class GraphSetting:
     include_sorts: bool = False
     icon: str = "📊"
     description: str = ""
+    is_favorite: bool = False
     created_at: float = field(default_factory=time.time)
     modified_at: float = field(default_factory=time.time)
 
@@ -81,6 +89,7 @@ class GraphSetting:
             "include_sorts": self.include_sorts,
             "icon": self.icon,
             "description": self.description,
+            "is_favorite": self.is_favorite,
             "created_at": self.created_at,
             "modified_at": self.modified_at,
         }
@@ -104,6 +113,7 @@ class GraphSetting:
             include_sorts=data.get("include_sorts", False),
             icon=data.get("icon", "📊"),
             description=data.get("description", ""),
+            is_favorite=data.get("is_favorite", False),
             created_at=data.get("created_at", time.time()),
             modified_at=data.get("modified_at", time.time()),
         )

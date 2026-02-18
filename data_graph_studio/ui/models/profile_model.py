@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, QMimeData, Qt, QByteArray
 
 from ...core.profile import GraphSetting
 
@@ -48,10 +48,73 @@ class ProfileModel(QAbstractItemModel):
     def hasChildren(self, parent: QModelIndex = QModelIndex()) -> bool:
         return self.rowCount(parent) > 0
 
+    def supportedDropActions(self) -> Qt.DropAction:
+        return Qt.MoveAction
+
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.NoItemFlags
-        return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        flags = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        node = index.internalPointer()
+        if isinstance(node, _ProfileNode):
+            if not node.is_dataset:
+                flags |= Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled
+            else:
+                flags |= Qt.ItemIsDropEnabled
+        return flags
+
+    def mimeTypes(self) -> List[str]:
+        return ["application/x-dgs-profile-id"]
+
+    def mimeData(self, indexes: List[QModelIndex]) -> QMimeData:
+        mime = QMimeData()
+        ids = []
+        for idx in indexes:
+            node = idx.internalPointer()
+            if isinstance(node, _ProfileNode) and not node.is_dataset:
+                ids.append(node.setting.id)
+        mime.setData("application/x-dgs-profile-id", QByteArray(b"\n".join(i.encode() for i in ids)))
+        return mime
+
+    def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, column: int, parent: QModelIndex) -> bool:
+        if action != Qt.MoveAction:
+            return False
+        raw = bytes(data.data("application/x-dgs-profile-id")).decode()
+        profile_ids = [pid for pid in raw.split("\n") if pid]
+        if not profile_ids:
+            return False
+
+        # Determine target dataset
+        if parent.isValid():
+            parent_node = parent.internalPointer()
+            if isinstance(parent_node, _ProfileNode):
+                dataset_id = parent_node.dataset_id
+            else:
+                return False
+        else:
+            return False
+
+        # Get current profile order for this dataset
+        profiles = self._get_profiles(dataset_id)
+        current_ids = [p.id for p in profiles]
+
+        # Remove dragged ids from list
+        moved_ids = [pid for pid in profile_ids if pid in current_ids]
+        remaining = [pid for pid in current_ids if pid not in moved_ids]
+
+        # Insert at target row
+        if row < 0 or row > len(remaining):
+            row = len(remaining)
+        new_order = remaining[:row] + moved_ids + remaining[row:]
+
+        # Update store order
+        if hasattr(self._store, "reorder"):
+            self._store.reorder(dataset_id, new_order)
+        elif hasattr(self._store, "reorder_settings"):
+            self._store.reorder_settings(dataset_id, new_order)
+
+        self.refresh()
+        return True
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
         if not index.isValid():
@@ -69,7 +132,8 @@ class ProfileModel(QAbstractItemModel):
         if role == Qt.DisplayRole:
             if node.is_dataset:
                 return self._get_dataset_name(node.dataset_id)
-            return node.setting.name
+            prefix = "⭐ " if getattr(node.setting, 'is_favorite', False) else ""
+            return prefix + node.setting.name
 
         if role == Qt.UserRole:
             if node.is_dataset:
@@ -78,8 +142,35 @@ class ProfileModel(QAbstractItemModel):
 
         if role == Qt.ToolTipRole:
             if not node.is_dataset:
-                icon = self._chart_type_icon(node.setting.chart_type)
-                return f"{icon} {node.setting.name}"
+                s = node.setting
+                lines = [f"{self._chart_type_icon(s.chart_type)} {s.name}"]
+                if s.chart_type:
+                    lines.append(f"Chart: {s.chart_type}")
+                if s.x_column:
+                    lines.append(f"X: {s.x_column}")
+                if s.value_columns:
+                    y_names = [vc['name'] if isinstance(vc, dict) else str(vc) for vc in s.value_columns]
+                    lines.append(f"Y: {', '.join(y_names[:3])}")
+                    if len(y_names) > 3:
+                        lines.append(f"  (+{len(y_names)-3} more)")
+                if s.group_columns:
+                    g_names = [gc['name'] if isinstance(gc, dict) else str(gc) for gc in s.group_columns]
+                    lines.append(f"Group: {', '.join(g_names)}")
+                if s.description:
+                    lines.append(f"\n{s.description}")
+                return '\n'.join(lines)
+            else:
+                # 데이터셋 툴팁: 행/열 수, 소스 파일
+                metadata = self._state.dataset_metadata.get(node.dataset_id) if hasattr(self._state, 'dataset_metadata') else None
+                if metadata:
+                    lines = [metadata.name]
+                    if hasattr(metadata, 'source_path') and metadata.source_path:
+                        lines.append(f"Source: {metadata.source_path}")
+                    if hasattr(metadata, 'row_count'):
+                        lines.append(f"Rows: {metadata.row_count:,}")
+                    profiles = self._get_profiles(node.dataset_id)
+                    lines.append(f"Profiles: {len(profiles)}")
+                    return '\n'.join(lines)
 
         # Note: DecorationRole은 반환하지 않음 - 문자열 반환 시 Qt가 QIcon 변환 시도하여 에러
         # 아이콘은 delegate에서 UserRole+1로 처리
@@ -228,37 +319,33 @@ class ProfileModel(QAbstractItemModel):
     def update_profile_data(self, dataset_id: str, setting: GraphSetting) -> None:
         """프로파일 데이터만 업데이트 (이름 변경 등, expand 상태 보존).
 
-        Uses beginResetModel/endResetModel to safely rebuild the node cache.
-        This avoids stale internalPointer access violations that occur when
-        swapping frozen _ProfileNode objects while Qt views still hold old
-        QModelIndex references.
+        Uses dataChanged signal instead of beginResetModel to preserve
+        the tree expand/collapse state.
         """
-        # Verify dataset exists
         if dataset_id not in self._dataset_ids:
             return
 
-        # Check if the profile actually exists in our cache
-        found = any(
-            n.dataset_id == dataset_id
-            and n.setting is not None
-            and n.setting.id == setting.id
-            for n in self._nodes
-        )
-        if not found:
-            return
+        # Find and replace the node in cache
+        for i, node in enumerate(self._nodes):
+            if (node.dataset_id == dataset_id
+                    and node.setting is not None
+                    and node.setting.id == setting.id):
+                self._nodes[i] = _ProfileNode(dataset_id=dataset_id, setting=setting)
 
-        # Safe full rebuild — clears all internalPointers before replacing nodes
-        self.beginResetModel()
-        self._nodes.clear()
-        for ds_id in self._dataset_ids:
-            self._nodes.append(_ProfileNode(dataset_id=ds_id))
-            for profile in self._get_profiles(ds_id):
-                # Use the updated setting for the matching profile
-                if ds_id == dataset_id and profile.id == setting.id:
-                    self._nodes.append(_ProfileNode(dataset_id=ds_id, setting=setting))
-                else:
-                    self._nodes.append(_ProfileNode(dataset_id=ds_id, setting=profile))
-        self.endResetModel()
+                # Emit dataChanged for just the affected index
+                try:
+                    ds_row = self._dataset_ids.index(dataset_id)
+                    parent_node = self._find_node(dataset_id)
+                    parent_idx = self.createIndex(ds_row, 0, parent_node)
+                    profiles = self._get_profiles(dataset_id)
+                    for j, p in enumerate(profiles):
+                        if p.id == setting.id:
+                            child_idx = self.index(j, 0, parent_idx)
+                            self.dataChanged.emit(child_idx, child_idx)
+                            break
+                except (ValueError, IndexError):
+                    pass
+                return
 
     # ==================== Internal Helpers ====================
 
@@ -284,18 +371,21 @@ class ProfileModel(QAbstractItemModel):
 
     def _get_profiles(self, dataset_id: str) -> List[GraphSetting]:
         # ProfileStore API
+        profiles: List[GraphSetting] = []
         if hasattr(self._store, "get_by_dataset"):
-            return list(self._store.get_by_dataset(dataset_id))
-        if hasattr(self._store, "get_profiles"):
-            return list(self._store.get_profiles(dataset_id))
-        if hasattr(self._store, "get_settings"):
-            return list(self._store.get_settings(dataset_id))
-        if isinstance(self._store, dict):
-            return list(self._store.get(dataset_id, []))
-        if hasattr(self._store, "profiles_by_dataset"):
-            profiles = self._store.profiles_by_dataset.get(dataset_id, [])
-            return list(profiles)
-        return []
+            profiles = list(self._store.get_by_dataset(dataset_id))
+        elif hasattr(self._store, "get_profiles"):
+            profiles = list(self._store.get_profiles(dataset_id))
+        elif hasattr(self._store, "get_settings"):
+            profiles = list(self._store.get_settings(dataset_id))
+        elif isinstance(self._store, dict):
+            profiles = list(self._store.get(dataset_id, []))
+        elif hasattr(self._store, "profiles_by_dataset"):
+            profiles = list(self._store.profiles_by_dataset.get(dataset_id, []))
+
+        # Sort favorites first, preserve original order within each group
+        profiles.sort(key=lambda p: not getattr(p, 'is_favorite', False))
+        return profiles
 
     def _chart_type_icon(self, chart_type: str) -> str:
         chart_type = (chart_type or "").lower()

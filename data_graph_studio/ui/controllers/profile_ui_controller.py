@@ -309,6 +309,62 @@ class ProfileUIController:
 
         w.profile_comparison_controller.start_comparison(dataset_id, profile_ids, mode)
 
+    # ==================== Cross-dataset Copy & Favorite ====================
+
+    def _on_copy_to_dataset_requested(self, profile_id: str):
+        """프로파일을 다른 데이터셋으로 복사"""
+        w = self._w
+        setting = w.profile_store.get(profile_id)
+        if not setting:
+            return
+
+        all_datasets = list(w.state.dataset_metadata.keys())
+        current_ds = setting.dataset_id
+        other_datasets = [ds for ds in all_datasets if ds != current_ds]
+
+        if not other_datasets:
+            QMessageBox.information(w, "Copy Profile", "No other datasets available.")
+            return
+
+        names = []
+        for ds_id in other_datasets:
+            meta = w.state.dataset_metadata.get(ds_id)
+            names.append(meta.name if meta else ds_id)
+
+        name, ok = QInputDialog.getItem(
+            w, "Copy Profile",
+            f"Copy '{setting.name}' to which dataset?",
+            names, 0, False,
+        )
+        if ok and name:
+            import uuid
+            import dataclasses
+
+            target_idx = names.index(name)
+            target_ds = other_datasets[target_idx]
+
+            new_setting = dataclasses.replace(
+                setting,
+                id=str(uuid.uuid4()),
+                dataset_id=target_ds,
+                name=f"{setting.name} (copy)",
+            )
+            w.profile_store.add(new_setting)
+            w.profile_model.add_profile_incremental(target_ds, new_setting)
+            w.statusbar.showMessage(f"Profile copied to {name}", 3000)
+
+    def _on_favorite_toggled(self, profile_id: str):
+        """프로파일 즐겨찾기 토글"""
+        w = self._w
+        setting = w.profile_store.get(profile_id)
+        if not setting:
+            return
+        import dataclasses
+
+        updated = dataclasses.replace(setting, is_favorite=not setting.is_favorite)
+        w.profile_store.update(updated)
+        w.profile_model.update_profile_data(updated.dataset_id, updated)
+
     # ==================== Profile Comparison ====================
 
     def _on_profile_comparison_started(self, mode_value: str, profile_ids: list):
@@ -330,6 +386,12 @@ class ProfileUIController:
         w = self._w
         if hasattr(w, 'profile_controller'):
             w.profile_controller.save_active_profile()
+            # Show auto-saved feedback
+            active_id = getattr(w.state, 'active_setting_id', None)
+            if active_id and hasattr(w, 'profile_store'):
+                setting = w.profile_store.get(active_id)
+                if setting:
+                    w.statusbar.showMessage(f"Auto-saved to '{setting.name}'", 2000)
 
     # ==================== Profile File I/O ====================
 

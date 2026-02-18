@@ -14,10 +14,11 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget
+    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget,
+    QLineEdit
 )
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QShortcut
 
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
 from ..core.state import AppState, ToolMode, ChartType, ComparisonMode, AggregationType
@@ -252,6 +253,9 @@ class MainWindow(QMainWindow):
         # Wire shortcut callbacks
         self._wire_shortcut_callbacks()
 
+        # Quick Switch: Alt+1~9 로 프로파일 전환
+        self._setup_quick_switch_shortcuts()
+
         # Restore saved theme or default to midnight
         self._restore_saved_theme()
 
@@ -331,7 +335,7 @@ class MainWindow(QMainWindow):
         self._sidebar_tabs.setMaximumWidth(350)
         # Style handled by global theme stylesheet
         
-        # Project Explorer (새로운 트리 뷰)
+        # Project Explorer (새로운 트리 뷰) + 검색바
         self.profile_model = ProfileModel(self.profile_store, self.state)
         self.project_tree = ProjectTreeView()
         self.project_tree.set_model(self.profile_model)
@@ -344,7 +348,23 @@ class MainWindow(QMainWindow):
         self.project_tree.export_requested.connect(self._on_profile_export_requested)
         self.project_tree.import_requested.connect(self._on_profile_import_requested)
         self.project_tree.compare_requested.connect(self._on_profile_compare_requested)
-        self._sidebar_tabs.addTab(self.project_tree, "Projects")
+        self.project_tree.copy_to_dataset_requested.connect(self._on_copy_to_dataset_requested)
+        self.project_tree.favorite_toggled.connect(self._on_favorite_toggled)
+
+        # 검색바 + 트리를 컨테이너로 감싸기
+        project_container = QWidget()
+        project_layout = QVBoxLayout(project_container)
+        project_layout.setContentsMargins(0, 0, 0, 0)
+        project_layout.setSpacing(0)
+
+        self._project_search = QLineEdit()
+        self._project_search.setPlaceholderText("🔍 Filter profiles...")
+        self._project_search.setClearButtonEnabled(True)
+        self._project_search.textChanged.connect(self.project_tree.set_filter_text)
+        project_layout.addWidget(self._project_search)
+        project_layout.addWidget(self.project_tree)
+
+        self._sidebar_tabs.addTab(project_container, "Projects")
         
         # Dataset Manager (내부용 - 탭에서 제거됨, 기능은 유지)
         self.dataset_manager = DatasetManagerPanel(self.engine, self.state)
@@ -993,6 +1013,25 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.debug(f"Auto-fit after profile switch failed: {e}")
 
+    def _setup_quick_switch_shortcuts(self):
+        """Alt+1~9로 현재 데이터셋의 n번째 프로파일로 즉시 전환"""
+        for i in range(1, 10):
+            shortcut = QShortcut(QKeySequence(f"Alt+{i}"), self)
+            shortcut.activated.connect(lambda idx=i: self._quick_switch_profile(idx))
+
+    def _quick_switch_profile(self, index: int):
+        """Alt+N 으로 현재 데이터셋의 N번째 프로파일 적용"""
+        dataset_id = self.engine.active_dataset_id if hasattr(self.engine, 'active_dataset_id') else None
+        if not dataset_id:
+            return
+        profiles = list(self.profile_store.get_by_dataset(dataset_id)) if hasattr(self.profile_store, 'get_by_dataset') else []
+        if index <= len(profiles):
+            profile = profiles[index - 1]
+            self.profile_controller.apply_profile(profile.id)
+            self.graph_panel.refresh()
+            self._schedule_autofit()
+            self.statusbar.showMessage(f"[Alt+{index}] {profile.name}", 2000)
+
     def _cancel_loading(self):
         self._file_controller._cancel_loading()
     
@@ -1207,6 +1246,12 @@ class MainWindow(QMainWindow):
 
     def _on_profile_compare_requested(self, profile_ids: list, options: dict):
         self._profile_ui_controller._on_profile_compare_requested(profile_ids, options)
+
+    def _on_copy_to_dataset_requested(self, profile_id: str):
+        self._profile_ui_controller._on_copy_to_dataset_requested(profile_id)
+
+    def _on_favorite_toggled(self, profile_id: str):
+        self._profile_ui_controller._on_favorite_toggled(profile_id)
 
 
     # ==================== Multi-Dataset Operations ====================

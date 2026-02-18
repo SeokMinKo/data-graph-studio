@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QSortFilterProxyModel
 from PySide6.QtGui import QPainter, QPalette, QAccessible
 from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem, QStyle
 
@@ -67,6 +67,20 @@ class _ChartIconDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
+class ProfileFilterProxy(QSortFilterProxyModel):
+    """프로파일/데이터셋 이름 필터링용 프록시 모델"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRecursiveFilteringEnabled(True)
+        self.setFilterCaseSensitivity(Qt.CaseInsensitive)
+
+    def filterAcceptsRow(self, row, parent):
+        if not self.filterRegularExpression().pattern():
+            return True
+        return super().filterAcceptsRow(row, parent)
+
+
 class ProjectTreeView(_SafeAccessibleTreeView):
     # Signals
     profile_activated = Signal(str)  # profile_id
@@ -79,6 +93,8 @@ class ProjectTreeView(_SafeAccessibleTreeView):
     export_requested = Signal(str)  # profile_id
     import_requested = Signal(str)  # dataset_id
     compare_requested = Signal(list, dict)  # profile_ids, options
+    copy_to_dataset_requested = Signal(str)  # profile_id
+    favorite_toggled = Signal(str)  # profile_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -87,6 +103,10 @@ class ProjectTreeView(_SafeAccessibleTreeView):
         self.setHeaderHidden(True)
         self.setIndentation(18)
         self.setSelectionMode(QTreeView.ExtendedSelection)  # Ctrl/Shift 멀티 선택
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QTreeView.InternalMove)
+        self.setDefaultDropAction(Qt.MoveAction)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._on_context_menu)
         self.setItemDelegate(_ChartIconDelegate(self))
@@ -109,13 +129,22 @@ class ProjectTreeView(_SafeAccessibleTreeView):
                     pass
 
         self._model = model
-        self.setModel(model)
+        self._proxy = ProfileFilterProxy(self)
+        self._proxy.setSourceModel(model)
+        self._proxy.setFilterRole(Qt.DisplayRole)
+        self.setModel(self._proxy)
         # Discard placeholder now that real model is installed
         if hasattr(self, '_placeholder_model'):
             self._placeholder_model = None
         if self.selectionModel():
             self.selectionModel().selectionChanged.connect(self._on_selection_changed)
         self.doubleClicked.connect(self._on_double_clicked)
+
+    def set_filter_text(self, text: str):
+        """검색 필터 적용"""
+        self._proxy.setFilterFixedString(text)
+        if text:
+            self.expandAll()
 
     def _on_double_clicked(self, index):
         setting = self._get_setting(index)
@@ -226,6 +255,16 @@ class ProjectTreeView(_SafeAccessibleTreeView):
         export_action = menu.addAction("Export")
         export_action.triggered.connect(lambda: self.export_requested.emit(profile_id))
 
+        copy_to_action = menu.addAction("Copy to Dataset...")
+        copy_to_action.triggered.connect(lambda: self.copy_to_dataset_requested.emit(profile_id))
+
+        menu.addSeparator()
+
+        fav_action = menu.addAction("⭐ Toggle Favorite")
+        fav_action.triggered.connect(lambda: self.favorite_toggled.emit(profile_id))
+
+        menu.addSeparator()
+
         delete_action = menu.addAction("Delete")
         delete_action.triggered.connect(lambda: self.delete_requested.emit(profile_id))
 
@@ -246,7 +285,7 @@ class ProjectTreeView(_SafeAccessibleTreeView):
             profile_ids, {"mode": "overlay"}
         ))
 
-        if len(profile_ids) == 2:
+        if len(profile_ids) >= 2:
             compare_diff = menu.addAction("🔍 Compare — Difference")
             compare_diff.triggered.connect(lambda: self.compare_requested.emit(
                 profile_ids, {"mode": "difference"}
@@ -271,12 +310,18 @@ class ProjectTreeView(_SafeAccessibleTreeView):
         if setting is not None:
             self.profile_selected.emit(setting.id)
 
+    def _map_to_source(self, index):
+        """프록시 인덱스를 소스 모델 인덱스로 변환"""
+        if hasattr(self, '_proxy') and self._proxy:
+            return self._proxy.mapToSource(index)
+        return index
+
     def _get_setting(self, index):
         if not self._model or not index.isValid():
             return None
-        return self._model.get_setting(index)
+        return self._model.get_setting(self._map_to_source(index))
 
     def _get_dataset_id(self, index) -> Optional[str]:
         if not self._model or not index.isValid():
             return None
-        return self._model.get_dataset_id(index)
+        return self._model.get_dataset_id(self._map_to_source(index))
