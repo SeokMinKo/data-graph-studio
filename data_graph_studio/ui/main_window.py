@@ -142,8 +142,9 @@ class MainWindow(QMainWindow):
     LARGE_FILE_WARNING_MB = 500  # 500MB 이상 파일 경고
     HUGE_FILE_WARNING_MB = 2000  # 2GB 이상 파일 강력 경고
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         super().__init__()
+        self._debug = debug
 
         # Core components
         self.engine = DataEngine()
@@ -151,7 +152,7 @@ class MainWindow(QMainWindow):
         
         # Profile management (Project Explorer)
         self.profile_store = ProfileStore()
-        self.profile_controller = ProfileController(self.profile_store, self.state)
+        self.profile_controller = ProfileController(self.profile_store, self.state)  # undo_stack set later
         self.profile_comparison_controller = ProfileComparisonController(
             self.profile_store, self.profile_controller, self.state,
         )
@@ -167,6 +168,7 @@ class MainWindow(QMainWindow):
         # Undo/Redo stack (session-only)
         self._undo_stack = UndoStack(max_depth=200, on_changed=self._on_undo_stack_changed)
         self.state.set_undo_stack(self._undo_stack)
+        self.profile_controller._main_undo_stack = self._undo_stack
 
         self._history_panel: Optional[HistoryPanel] = None
         self._history_dock: Optional[QDockWidget] = None
@@ -211,7 +213,7 @@ class MainWindow(QMainWindow):
         self._last_project_path: Optional[str] = None
 
         # ===== Controllers (extracted from MainWindow) =====
-        self._ipc_controller = IPCController(self)
+        self._ipc_controller = IPCController(self, debug=self._debug)
         self._file_controller = FileLoadingController(self)
         self._dataset_controller = DatasetController(self)
         self._profile_ui_controller = ProfileUIController(self)
@@ -461,6 +463,11 @@ class MainWindow(QMainWindow):
         # Update history UI
         if self._history_panel is not None:
             self._history_panel.refresh()
+        # #8: Sync Edit menu enabled state
+        if hasattr(self, '_edit_undo_action'):
+            self._edit_undo_action.setEnabled(self._undo_stack.can_undo())
+        if hasattr(self, '_edit_redo_action'):
+            self._edit_redo_action.setEnabled(self._undo_stack.can_redo())
 
     def _on_undo(self):
         self._undo_stack.undo()
@@ -1928,7 +1935,7 @@ class MainWindow(QMainWindow):
         if ok and column:
             reply = QMessageBox.question(
                 self, "Confirm Remove",
-                f"Are you sure you want to remove column '{column}'?\n\nThis action cannot be undone.",
+                f"Are you sure you want to remove column '{column}'?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No
             )
             if reply == QMessageBox.Yes:

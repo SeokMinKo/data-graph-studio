@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, List, Optional
 
@@ -46,6 +46,23 @@ class UndoActionType(Enum):
     DASHBOARD_CELL_ASSIGN = "dashboard_cell_assign"
     DASHBOARD_CELL_REMOVE = "dashboard_cell_remove"
 
+    # Zone changes
+    ZONE_X_CHANGE = "zone_x_change"
+    ZONE_VALUE_CHANGE = "zone_value_change"
+    ZONE_GROUP_CHANGE = "zone_group_change"
+    ZONE_HOVER_CHANGE = "zone_hover_change"
+
+    # Profile operations
+    PROFILE_RENAME = "profile_rename"
+    PROFILE_DELETE = "profile_delete"
+
+    # Column visibility/order
+    COLUMN_VISIBILITY = "column_visibility"
+    COLUMN_REORDER = "column_reorder"
+
+    # Grid view
+    GRID_VIEW_CHANGE = "grid_view_change"
+
 
 @dataclass
 class UndoCommand:
@@ -55,7 +72,12 @@ class UndoCommand:
     description: str
     do: Callable[[], None]
     undo: Callable[[], None]
-    timestamp: float = time.time()
+    timestamp: float = field(default=0.0)
+    size_hint: int = 0  # approximate memory cost in bytes
+
+    def __post_init__(self):
+        if self.timestamp == 0.0:
+            self.timestamp = time.time()
 
 
 class UndoStack:
@@ -71,8 +93,14 @@ class UndoStack:
     pause() is used to prevent recursion when replaying commands.
     """
 
-    def __init__(self, max_depth: int = 50, on_changed: Optional[Callable[[], None]] = None):
+    def __init__(
+        self,
+        max_depth: int = 50,
+        on_changed: Optional[Callable[[], None]] = None,
+        max_memory_bytes: int = 500 * 1024 * 1024,  # 500MB default
+    ):
         self.max_depth = max_depth
+        self.max_memory_bytes = max_memory_bytes
         self._commands: List[UndoCommand] = []
         self._index: int = 0
         self._paused: int = 0
@@ -237,3 +265,10 @@ class UndoStack:
         while len(self._commands) > self.max_depth:
             self._commands.pop(0)
             self._index = max(0, self._index - 1)
+        # Memory-based eviction (#7)
+        if self.max_memory_bytes > 0:
+            total = sum(getattr(c, 'size_hint', 0) for c in self._commands)
+            while total > self.max_memory_bytes and len(self._commands) > 1:
+                removed = self._commands.pop(0)
+                self._index = max(0, self._index - 1)
+                total -= getattr(removed, 'size_hint', 0)

@@ -433,6 +433,35 @@ class AppState(QObject):
         # AppState methods usually already applied the mutation; only record.
         self._undo_stack.record(cmd)
 
+    def _record_zone_undo(self, zone: str, description: str, before, after) -> None:
+        """Helper to record zone change undo commands."""
+        type_map = {
+            "group": (UndoActionType.ZONE_GROUP_CHANGE, "_group_columns", "group_zone_changed"),
+            "value": (UndoActionType.ZONE_VALUE_CHANGE, "_value_columns", "value_zone_changed"),
+            "hover": (UndoActionType.ZONE_HOVER_CHANGE, "_hover_columns", "hover_zone_changed"),
+        }
+        info = type_map.get(zone)
+        if not info:
+            return
+        action_type, attr, signal_name = info
+
+        def _apply(val):
+            self._undo_paused += 1
+            try:
+                setattr(self, attr, copy.deepcopy(val))
+                getattr(self, signal_name).emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=action_type,
+                description=description,
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+            )
+        )
+
     def begin_batch_update(self):
         """시그널 일괄 발행을 위한 배치 시작"""
         self._batch_depth += 1
@@ -870,6 +899,7 @@ class AppState(QObject):
         if any(g.name == name for g in self._group_columns):
             return
 
+        before = copy.deepcopy(self._group_columns)
         col = GroupColumn(name=name, order=len(self._group_columns))
         if index < 0:
             self._group_columns.append(col)
@@ -878,25 +908,37 @@ class AppState(QObject):
             self._reorder_groups()
 
         self.group_zone_changed.emit()
+        after = copy.deepcopy(self._group_columns)
+        self._record_zone_undo("group", f"Add group column '{name}'", before, after)
 
     def remove_group_column(self, name: str):
+        before = copy.deepcopy(self._group_columns)
         self._group_columns = [g for g in self._group_columns if g.name != name]
         self._reorder_groups()
         self.group_zone_changed.emit()
+        after = copy.deepcopy(self._group_columns)
+        self._record_zone_undo("group", f"Remove group column '{name}'", before, after)
 
     def reorder_group_columns(self, new_order: List[str]):
+        before = copy.deepcopy(self._group_columns)
         name_to_col = {g.name: g for g in self._group_columns}
         self._group_columns = [name_to_col[name] for name in new_order if name in name_to_col]
         self._reorder_groups()
         self.group_zone_changed.emit()
+        after = copy.deepcopy(self._group_columns)
+        self._record_zone_undo("group", "Reorder group columns", before, after)
 
     def _reorder_groups(self):
         for i, g in enumerate(self._group_columns):
             g.order = i
 
     def clear_group_zone(self):
+        before = copy.deepcopy(self._group_columns)
+        if not self._group_columns:
+            return
         self._group_columns.clear()
         self.group_zone_changed.emit()
+        self._record_zone_undo("group", "Clear group zone", before, [])
 
     # ==================== Value Zone ====================
 
@@ -910,6 +952,7 @@ class AppState(QObject):
         aggregation: AggregationType = AggregationType.SUM,
         index: int = -1
     ):
+        before = copy.deepcopy(self._value_columns)
         # 중복 허용 (같은 컬럼 다른 집계)
         col = ValueColumn(
             name=name,
@@ -929,12 +972,17 @@ class AppState(QObject):
             self._reorder_values()
 
         self.value_zone_changed.emit()
+        after = copy.deepcopy(self._value_columns)
+        self._record_zone_undo("value", f"Add value column '{name}'", before, after)
 
     def remove_value_column(self, index: int):
         if 0 <= index < len(self._value_columns):
+            before = copy.deepcopy(self._value_columns)
             self._value_columns.pop(index)
             self._reorder_values()
             self.value_zone_changed.emit()
+            after = copy.deepcopy(self._value_columns)
+            self._record_zone_undo("value", "Remove value column", before, after)
 
     def update_value_column(
         self,
@@ -960,14 +1008,21 @@ class AppState(QObject):
             v.order = i
 
     def clear_value_zone(self):
+        before = copy.deepcopy(self._value_columns)
+        if not self._value_columns:
+            return
         self._value_columns.clear()
         self.value_zone_changed.emit()
+        self._record_zone_undo("value", "Clear value zone", before, [])
 
     def remove_value_column_by_name(self, name: str):
         """Remove value column by name."""
+        before = copy.deepcopy(self._value_columns)
         self._value_columns = [v for v in self._value_columns if v.name != name]
         self._reorder_values()
         self.value_zone_changed.emit()
+        after = copy.deepcopy(self._value_columns)
+        self._record_zone_undo("value", f"Remove value column '{name}'", before, after)
 
     def get_primary_values(self) -> List[ValueColumn]:
         """Primary 축에 할당된 값 컬럼 목록"""
@@ -990,19 +1045,29 @@ class AppState(QObject):
     def add_hover_column(self, name: str):
         """Add column to hover display"""
         if name not in self._hover_columns:
+            before = list(self._hover_columns)
             self._hover_columns.append(name)
             self.hover_zone_changed.emit()
+            after = list(self._hover_columns)
+            self._record_zone_undo("hover", f"Add hover column '{name}'", before, after)
 
     def remove_hover_column(self, name: str):
         """Remove column from hover display"""
         if name in self._hover_columns:
+            before = list(self._hover_columns)
             self._hover_columns.remove(name)
             self.hover_zone_changed.emit()
+            after = list(self._hover_columns)
+            self._record_zone_undo("hover", f"Remove hover column '{name}'", before, after)
 
     def clear_hover_columns(self):
         """Clear all hover columns"""
+        before = list(self._hover_columns)
+        if not self._hover_columns:
+            return
         self._hover_columns.clear()
         self.hover_zone_changed.emit()
+        self._record_zone_undo("hover", "Clear hover zone", before, [])
 
     # ==================== X Column ====================
 
@@ -1011,8 +1076,28 @@ class AppState(QObject):
         return self._x_column
 
     def set_x_column(self, name: Optional[str]):
+        before_x = self._x_column
+        if before_x == name:
+            return
         self._x_column = name
         self.chart_settings_changed.emit()
+
+        def _apply(val):
+            self._undo_paused += 1
+            try:
+                self._x_column = val
+                self.chart_settings_changed.emit()
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.ZONE_X_CHANGE,
+                description=f"Set X column to '{name}'",
+                do=lambda: _apply(name),
+                undo=lambda: _apply(before_x),
+            )
+        )
 
     # ==================== Filters ====================
 
@@ -1306,26 +1391,61 @@ class AppState(QObject):
         """Grid View 설정"""
         return self._chart_settings.grid_view
 
+    def _snapshot_grid_view(self) -> dict:
+        gv = self._chart_settings.grid_view
+        return {"enabled": gv.enabled, "split_by": gv.split_by, "direction": gv.direction, "max_columns": gv.max_columns}
+
+    def _restore_grid_view(self, snap: dict):
+        gv = self._chart_settings.grid_view
+        gv.enabled = snap["enabled"]
+        gv.split_by = snap["split_by"]
+        gv.direction = snap["direction"]
+        gv.max_columns = snap["max_columns"]
+        self.grid_view_changed.emit()
+
+    def _record_grid_undo(self, desc: str, before: dict, after: dict):
+        def _apply(val):
+            self._undo_paused += 1
+            try:
+                self._restore_grid_view(val)
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.GRID_VIEW_CHANGE,
+                description=desc,
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+            )
+        )
+
     def set_grid_view_enabled(self, enabled: bool):
         """Grid View 활성화/비활성화"""
         if self._chart_settings.grid_view.enabled != enabled:
+            before = self._snapshot_grid_view()
             self._chart_settings.grid_view.enabled = enabled
             self.grid_view_changed.emit()
+            self._record_grid_undo(f"Grid view {'on' if enabled else 'off'}", before, self._snapshot_grid_view())
 
     def set_grid_view_split_by(self, column: Optional[str]):
         """Grid View 분할 기준 열 설정"""
         if self._chart_settings.grid_view.split_by != column:
+            before = self._snapshot_grid_view()
             self._chart_settings.grid_view.split_by = column
             self.grid_view_changed.emit()
+            self._record_grid_undo(f"Grid split by '{column}'", before, self._snapshot_grid_view())
 
     def set_grid_view_direction(self, direction: GridDirection):
         """Grid View 방향 설정"""
         if self._chart_settings.grid_view.direction != direction:
+            before = self._snapshot_grid_view()
             self._chart_settings.grid_view.direction = direction
             self.grid_view_changed.emit()
+            self._record_grid_undo(f"Grid direction → {direction.value}", before, self._snapshot_grid_view())
 
     def update_grid_view_settings(self, **kwargs):
         """Grid View 설정 업데이트"""
+        before = self._snapshot_grid_view()
         changed = False
         for key, value in kwargs.items():
             if hasattr(self._chart_settings.grid_view, key):
@@ -1335,6 +1455,7 @@ class AppState(QObject):
                     changed = True
         if changed:
             self.grid_view_changed.emit()
+            self._record_grid_undo("Update grid view", before, self._snapshot_grid_view())
 
     # ==================== Layout ====================
 
@@ -1357,7 +1478,25 @@ class AppState(QObject):
     # ==================== Column Order ====================
 
     def set_column_order(self, order: List[str]):
+        before = list(self._column_order)
         self._column_order = order
+        after = list(self._column_order)
+        if before and before != after:
+            def _apply(val):
+                self._undo_paused += 1
+                try:
+                    self._column_order = list(val)
+                finally:
+                    self._undo_paused = max(0, self._undo_paused - 1)
+
+            self._push_undo(
+                UndoCommand(
+                    action_type=UndoActionType.COLUMN_REORDER,
+                    description="Reorder columns",
+                    do=lambda: _apply(after),
+                    undo=lambda: _apply(before),
+                )
+            )
 
     def get_column_order(self) -> List[str]:
         return self._column_order
@@ -1380,10 +1519,28 @@ class AppState(QObject):
         return column in self._hidden_columns
 
     def toggle_column_visibility(self, column: str):
+        before = set(self._hidden_columns)
         if column in self._hidden_columns:
             self._hidden_columns.remove(column)
         else:
             self._hidden_columns.add(column)
+        after = set(self._hidden_columns)
+
+        def _apply(val):
+            self._undo_paused += 1
+            try:
+                self._hidden_columns = set(val)
+            finally:
+                self._undo_paused = max(0, self._undo_paused - 1)
+
+        self._push_undo(
+            UndoCommand(
+                action_type=UndoActionType.COLUMN_VISIBILITY,
+                description=f"Toggle visibility of '{column}'",
+                do=lambda: _apply(after),
+                undo=lambda: _apply(before),
+            )
+        )
 
     def get_visible_columns(self) -> List[str]:
         return [c for c in self._column_order if c not in self._hidden_columns]

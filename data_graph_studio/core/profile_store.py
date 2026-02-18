@@ -1,13 +1,19 @@
 """
 ProfileStore - GraphSetting storage layer.
+
+Single source of truth for all profile/GraphSetting data.
+Supports optional JSON-file persistence via save_to_disk / load_from_disk.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import os
 import time
 import uuid
 from dataclasses import replace
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 try:
@@ -24,10 +30,23 @@ except Exception:  # pragma: no cover
 
 from .profile import GraphSetting
 
+logger = logging.getLogger(__name__)
+
+
+def _safe_trash(path: str) -> None:
+    """Move file to trash; fall back to os.remove if send2trash unavailable."""
+    try:
+        from send2trash import send2trash  # type: ignore
+        send2trash(path)
+    except ImportError:
+        logger.info("send2trash not installed, using os.remove for %s", path)
+        os.remove(path)
+
 
 class ProfileStore:
     def __init__(self):
         self._settings: Dict[str, GraphSetting] = {}
+        self._persist_dir: Optional[Path] = None
 
     def add(self, setting: GraphSetting) -> None:
         self._settings[setting.id] = setting
@@ -109,3 +128,60 @@ class ProfileStore:
 
     def _names_for_dataset(self, dataset_id: str) -> Set[str]:
         return {s.name for s in self.get_by_dataset(dataset_id)}
+
+    # ==================== Persistence ====================
+
+    def set_persist_dir(self, directory: Path) -> None:
+        """Set directory for JSON persistence (e.g. ~/.dgs/profiles/{dataset_hash}/)."""
+        self._persist_dir = Path(directory)
+        self._persist_dir.mkdir(parents=True, exist_ok=True)
+
+    def save_to_disk(self) -> None:
+        """Save all settings to individual JSON files in persist_dir."""
+        if self._persist_dir is None:
+            return
+        self._persist_dir.mkdir(parents=True, exist_ok=True)
+        # Write current settings
+        written_ids: set[str] = set()
+        for setting_id, setting in self._settings.items():
+            path = self._persist_dir / f"{setting_id}.json"
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(setting.to_dict(), f, ensure_ascii=False, indent=2)
+                written_ids.add(setting_id)
+            except Exception as e:
+                logger.warning("Failed to save profile %s: %s", setting_id, e)
+        # Remove stale files
+        for existing in self._persist_dir.glob("*.json"):
+            if existing.stem not in written_ids:
+                try:
+                    _safe_trash(str(existing))
+                except Exception as e:
+                    logger.warning("Failed to remove stale profile file %s: %s", existing, e)
+
+    def load_from_disk(self) -> int:
+        """Load all settings from persist_dir. Returns count loaded."""
+        if self._persist_dir is None or not self._persist_dir.exists():
+            return 0
+        count = 0
+        for path in self._persist_dir.glob("*.json"):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                setting = GraphSetting.from_dict(data)
+                self._settings[setting.id] = setting
+                count += 1
+            except Exception as e:
+                logger.warning("Failed to load profile from %s: %s", path, e)
+        return count
+
+    def delete_file(self, setting_id: str) -> None:
+        """Delete the persisted file for a setting (using trash)."""
+        if self._persist_dir is None:
+            return
+        path = self._persist_dir / f"{setting_id}.json"
+        if path.exists():
+            try:
+                _safe_trash(str(path))
+            except Exception as e:
+                logger.warning("Failed to trash profile file %s: %s", path, e)

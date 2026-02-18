@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from ...core.profile import Profile, GraphSetting, ProfileManager
+from ...core.profile import Profile, GraphSetting
 
 
 class SettingItem(QFrame):
@@ -109,9 +109,10 @@ class ProfileManagerDialog(QDialog):
 
     profile_selected = Signal(object)  # Profile
 
-    def __init__(self, profile_manager: ProfileManager, parent=None):
+    def __init__(self, profile_manager=None, profile_controller=None, parent=None):
         super().__init__(parent)
-        self._profile_manager = profile_manager
+        self._profile_manager = profile_manager  # Legacy — may be None
+        self._profile_controller = profile_controller
         self._selected_profile: Optional[Profile] = None
 
         self.setWindowTitle("Profile Manager")
@@ -390,7 +391,7 @@ class ProfileManagerDialog(QDialog):
 
         if reply == QMessageBox.Yes:
             path = current_item.data(Qt.UserRole + 1)
-            if path:
+            if path and self._profile_manager:
                 self._profile_manager.delete_profile(path)
 
             # 현재 프로파일이면 클리어

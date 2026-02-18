@@ -26,6 +26,7 @@ class GraphSetting:
     id: str
     name: str
     dataset_id: str
+    version: int = 1
     schema_version: int = 1
     chart_type: str = ""
     x_column: Optional[str] = None
@@ -42,6 +43,9 @@ class GraphSetting:
     is_favorite: bool = False
     created_at: float = field(default_factory=time.time)
     modified_at: float = field(default_factory=time.time)
+
+    # Current schema version for migration
+    CURRENT_VERSION: int = field(default=1, init=False, repr=False, compare=False)
 
     def __post_init__(self):
         object.__setattr__(self, "group_columns", tuple(self.group_columns))
@@ -64,6 +68,25 @@ class GraphSetting:
             icon=icon,
         )
 
+    def normalized_chart_settings(self) -> Dict:
+        """Return chart_settings as a plain dict with defaults filled in.
+
+        Used for reliable equality comparison.
+        """
+        defaults = {
+            "show_legend": True,
+            "show_grid": True,
+            "show_markers": False,
+            "line_width": 2,
+            "marker_size": 6,
+            "opacity": 1.0,
+            "color_palette": "default",
+        }
+        result = dict(defaults)
+        if self.chart_settings:
+            result.update(dict(self.chart_settings))
+        return result
+
     def with_name(self, name: str) -> 'GraphSetting':
         return dataclasses.replace(self, name=name, modified_at=time.time())
 
@@ -76,6 +99,7 @@ class GraphSetting:
             "id": self.id,
             "name": self.name,
             "dataset_id": self.dataset_id,
+            "version": self.version,
             "schema_version": self.schema_version,
             "chart_type": self.chart_type,
             "x_column": self.x_column,
@@ -96,10 +120,13 @@ class GraphSetting:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'GraphSetting':
+        """Deserialize from dict with version migration support."""
+        data = cls._migrate(dict(data))
         return cls(
             id=data["id"],
             name=data["name"],
             dataset_id=data.get("dataset_id", ""),
+            version=data.get("version", 1),
             schema_version=data.get("schema_version", 1),
             chart_type=data.get("chart_type", ""),
             x_column=data.get("x_column"),
@@ -117,6 +144,23 @@ class GraphSetting:
             created_at=data.get("created_at", time.time()),
             modified_at=data.get("modified_at", time.time()),
         )
+
+    @classmethod
+    def _migrate(cls, data: Dict) -> Dict:
+        """Apply version migrations sequentially.
+
+        Each migration function takes a dict and returns a dict.
+        Add new migrations as ``_migrate_vN_to_vM`` class methods.
+        """
+        version = data.get("version", 0)
+        # Migration v0 → v1: add version field (no-op, just stamp)
+        if version < 1:
+            data["version"] = 1
+        # Future migrations go here:
+        # if version < 2:
+        #     data = cls._migrate_v1_to_v2(data)
+        #     data["version"] = 2
+        return data
 
 
 @dataclass
@@ -417,10 +461,18 @@ class ProfileManager:
         return []
 
     def delete_profile(self, path: str) -> bool:
-        """프로파일 삭제"""
+        """프로파일 삭제 (send2trash 사용, fallback: os.remove)"""
         try:
             if os.path.exists(path):
-                os.remove(path)
+                try:
+                    from send2trash import send2trash  # type: ignore
+                    send2trash(path)
+                except ImportError:
+                    import logging
+                    logging.getLogger(__name__).info(
+                        "send2trash not installed, using os.remove for %s", path
+                    )
+                    os.remove(path)
                 if path in self._recent_profiles:
                     self._recent_profiles.remove(path)
                     self._save_recent_profiles()

@@ -75,21 +75,29 @@ class GraphSettingMapper:
         """Apply GraphSetting to AppState with signal batching"""
         state.begin_batch_update()
         # 직접 내부 속성을 변경하고 마지막에 시그널 한 번만 발행
+
+        # --- chart_type ---
         try:
             chart_type: Any = setting.chart_type
             if isinstance(chart_type, ChartType):
                 resolved_chart_type = chart_type
             else:
                 try:
-                    # 대소문자 무시하여 변환 (e.g. "Scatter" → "scatter")
                     resolved_chart_type = ChartType(str(chart_type).lower())
                 except Exception:
                     resolved_chart_type = state._chart_settings.chart_type
             state._chart_settings.chart_type = resolved_chart_type
+        except Exception as e:
+            logger.warning("Failed to apply chart_type: %s", e)
 
+        # --- x_column ---
+        try:
             state._x_column = setting.x_column
+        except Exception as e:
+            logger.warning("Failed to apply x_column: %s", e)
 
-            # group_columns: dict/str → GroupColumn 변환
+        # --- group_columns ---
+        try:
             state.clear_group_zone()
             normalized_groups: list[GroupColumn] = []
             for g in setting.group_columns:
@@ -112,8 +120,11 @@ class GraphSettingMapper:
                         current.selected_values = set(gc.selected_values)
                         current.order = gc.order
                         break
+        except Exception as e:
+            logger.warning("Failed to apply group_columns: %s", e)
 
-            # value_columns: dict/str → ValueColumn 변환
+        # --- value_columns ---
+        try:
             from .state import AggregationType
             state.clear_value_zone()
             normalized_values: list[ValueColumn] = []
@@ -146,19 +157,37 @@ class GraphSettingMapper:
                     use_secondary_axis=vc.use_secondary_axis,
                     formula=vc.formula,
                 )
+        except Exception as e:
+            logger.warning("Failed to apply value_columns: %s", e)
 
+        # --- hover/filters/sorts ---
+        try:
             state._hover_columns = [str(h) for h in setting.hover_columns]
-            state._filters = list(setting.filters)
-            state._sorts = list(setting.sorts)
+        except Exception as e:
+            logger.warning("Failed to apply hover_columns: %s", e)
 
-            # Apply chart_settings
+        try:
+            state._filters = list(setting.filters)
+        except Exception as e:
+            logger.warning("Failed to apply filters: %s", e)
+
+        try:
+            state._sorts = list(setting.sorts)
+        except Exception as e:
+            logger.warning("Failed to apply sorts: %s", e)
+
+        # --- chart_settings ---
+        try:
             if setting.chart_settings:
                 cs = state._chart_settings
                 for key, value in setting.chart_settings.items():
                     if hasattr(cs, key):
-                        setattr(cs, key, value)
-        except Exception:
-            pass
+                        try:
+                            setattr(cs, key, value)
+                        except Exception as e:
+                            logger.warning("Failed to apply chart_setting '%s': %s", key, e)
+        except Exception as e:
+            logger.warning("Failed to apply chart_settings: %s", e)
 
         # 변경 완료 후 시그널 발행 (UI 갱신 트리거)
         try:

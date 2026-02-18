@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class IPCController:
     """IPC 서버 관리 컨트롤러"""
 
-    def __init__(self, window: 'MainWindow'):
+    def __init__(self, window: 'MainWindow', debug: bool = False):
         self._w = window
+        self._debug = debug
 
     def setup(self):
         """IPC 서버 설정 - 외부 프로세스에서 앱 제어 가능"""
@@ -41,7 +42,11 @@ class IPCController:
         server.register_handler('load_file', self._ipc_load_file)
         server.register_handler('get_panels', self._ipc_get_panels)
         server.register_handler('get_summary', self._ipc_get_summary)
-        server.register_handler('execute', self._ipc_execute)
+
+        # execute handler: only registered in debug mode (RCE risk)
+        if self._debug:
+            server.register_handler('execute', self._ipc_execute)
+            logger.warning("[IPC] 'execute' handler enabled (debug mode)")
 
         # Zone control handlers
         server.register_handler('set_x_column', self._ipc_set_x_column)
@@ -117,9 +122,9 @@ class IPCController:
         if x:
             w.state.set_x_column(x)
         if y:
-            w.state._y_columns = set(y)
-            if hasattr(w.state, 'y_columns_changed'):
-                w.state.y_columns_changed.emit(y)
+            w.state.clear_value_zone()
+            for col in y:
+                w.state.add_value_column(col)
         return True
 
     def _ipc_load_file(self, path: str) -> dict:

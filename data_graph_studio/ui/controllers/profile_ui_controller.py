@@ -45,42 +45,35 @@ class ProfileUIController:
             w.statusbar.showMessage(f"Created new profile: {name.strip()}", 3000)
 
     def _on_load_profile_menu(self):
-        """메뉴에서 프로파일 로드"""
+        """메뉴에서 프로파일 로드 — ProfileController 사용"""
         w = self._w
+        default_dir = str(Path.home())
         path, _ = QFileDialog.getOpenFileName(
             w, "Load Profile",
-            str(w.profile_bar.profile_manager.profiles_dir),
-            "Data Graph Profile (*.dgp)"
+            default_dir,
+            "Data Graph Profile (*.dgp);;DGS Profile (*.dgs-profile);;JSON (*.json)"
         )
         if path:
-            try:
-                profile = w.profile_bar.profile_manager.load(path)
-                w.state.set_profile(profile)
-                w.statusbar.showMessage(f"Loaded profile: {profile.name}", 3000)
-            except Exception as e:
-                QMessageBox.critical(w, "Load Profile Error", f"Failed to load profile: {e}")
+            dataset_id = w.state.active_dataset_id or ""
+            profile_id = w.profile_controller.import_profile(dataset_id, path)
+            if profile_id:
+                w.profile_controller.apply_profile(profile_id)
+                setting = w.profile_store.get(profile_id)
+                if setting:
+                    w.statusbar.showMessage(f"Loaded profile: {setting.name}", 3000)
+                if hasattr(w, 'profile_model'):
+                    w.profile_model.refresh()
 
     def _on_save_profile_menu(self):
-        """메뉴에서 프로파일 저장"""
+        """메뉴에서 프로파일 저장 — ProfileController.save_active_profile() 사용"""
         w = self._w
-        profile = w.state.current_profile
-        if not profile:
-            QMessageBox.information(w, "Save Profile", "No profile to save. Create a new profile first.")
-            return
-
-        path, _ = QFileDialog.getSaveFileName(
-            w, "Save Profile",
-            str(w.profile_bar.profile_manager.profiles_dir / f"{profile.name}.dgp"),
-            "Data Graph Profile (*.dgp)"
-        )
-        if path:
-            try:
-                profile.save(path)
-                w.profile_bar.profile_manager._add_recent_profile(path)
-                w.state.profile_saved.emit()
-                w.statusbar.showMessage(f"Profile saved: {profile.name}", 3000)
-            except Exception as e:
-                QMessageBox.critical(w, "Save Profile Error", f"Failed to save profile: {e}")
+        if w.profile_controller.save_active_profile():
+            active_id = w.profile_controller.active_profile_id
+            setting = w.profile_store.get(active_id) if active_id else None
+            name = setting.name if setting else "profile"
+            w.statusbar.showMessage(f"Profile saved: {name}", 3000)
+        else:
+            QMessageBox.information(w, "Save Profile", "No active profile to save.")
 
     # ==================== Profile Actions (ProfileBar) ====================
 
@@ -172,7 +165,9 @@ class ProfileUIController:
         """프로파일 관리자 다이얼로그 표시"""
         from ..dialogs.profile_manager_dialog import ProfileManagerDialog
         w = self._w
-        dialog = ProfileManagerDialog(w.profile_bar.profile_manager, w)
+        dialog = ProfileManagerDialog(
+            profile_controller=w.profile_controller, parent=w,
+        )
         dialog.exec()
 
     # ==================== Project Explorer Actions ====================

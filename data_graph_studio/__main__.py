@@ -5,6 +5,7 @@ Data Graph Studio - Entry point for `python -m data_graph_studio`
 
 import sys
 import os
+import argparse
 import traceback
 import logging
 from datetime import datetime
@@ -32,17 +33,43 @@ def setup_logging():
     return logging.getLogger('DataGraphStudio')
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Data Graph Studio")
+    parser.add_argument("files", nargs="*", help="Files to open")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode (enables IPC execute handler)")
+    return parser.parse_args()
+
+
 def main():
     import faulthandler
     faulthandler.enable()  # segfault 시 traceback 출력
     
+    args = parse_args()
     logger = setup_logging()
     logger.info("=" * 60)
     logger.info("Data Graph Studio Starting...")
     logger.info(f"Python: {sys.version}")
+    if args.debug:
+        logger.info("Debug mode enabled")
     logger.info("=" * 60)
     
     try:
+        from data_graph_studio.core.ipc_server import (
+            is_another_instance_running,
+            send_files_to_existing_instance,
+        )
+
+        # Single-instance protection
+        file_paths = [f for f in args.files if os.path.exists(f)]
+        if is_another_instance_running():
+            logger.info("Another instance is running, forwarding files...")
+            if file_paths:
+                send_files_to_existing_instance(file_paths)
+            else:
+                logger.info("No files to forward, exiting.")
+            sys.exit(0)
+
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import Qt
         from PySide6.QtGui import QFont
@@ -65,14 +92,12 @@ def main():
         app.setFont(font)
         app.setStyle("Fusion")
         
-        window = MainWindow()
+        window = MainWindow(debug=args.debug)
         window.show()
         
-        # 커맨드라인 인자
-        if len(sys.argv) > 1:
-            file_path = sys.argv[1]
-            if os.path.exists(file_path):
-                window._load_file(file_path)
+        # 커맨드라인 인자로 파일 로드
+        for file_path in file_paths:
+            window._load_file(file_path)
         
         sys.exit(app.exec())
         

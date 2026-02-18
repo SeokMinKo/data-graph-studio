@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt, Signal, QSize, QMimeData
 from PySide6.QtGui import QDrag, QMouseEvent, QAction
 
 from ...core.state import AppState
-from ...core.profile import Profile, GraphSetting, ProfileManager
+from ...core.profile import Profile, GraphSetting
 
 
 class SettingButton(QFrame):
@@ -245,11 +245,11 @@ class ProfileBar(QFrame):
     profile_new_requested = Signal()
     compare_requested = Signal()           # Compare Profiles 요청
 
-    def __init__(self, state: AppState, parent=None):
+    def __init__(self, state: AppState, profile_controller=None, parent=None):
         super().__init__(parent)
         self._state = state
         self._setting_buttons: dict[str, SettingButton] = {}
-        self._profile_manager = ProfileManager()
+        self._profile_controller = profile_controller
 
         self._setup_ui()
         self._connect_signals()
@@ -402,110 +402,35 @@ class ProfileBar(QFrame):
         self._state.setting_removed.connect(self._on_setting_removed)
 
     def _refresh_profile_list(self):
-        """프로파일 목록 새로고침"""
+        """프로파일 목록 새로고침 — ProfileStore/ProfileController 기반."""
         self._profile_combo.blockSignals(True)
         self._profile_combo.clear()
         self._profile_combo.addItem("(No Profile)")
 
-        # 최근 프로파일
-        recent = self._profile_manager.get_recent_profiles()
-        for path in recent:
-            name = path.split('/')[-1].replace('.dgp', '')
-            self._profile_combo.addItem(name, path)
-
-        # 저장된 프로파일
-        profiles = self._profile_manager.list_profiles()
-        for profile_path in profiles:
-            name = profile_path.stem
-            path_str = str(profile_path)
-            # 중복 방지
-            found = False
-            for i in range(self._profile_combo.count()):
-                if self._profile_combo.itemData(i) == path_str:
-                    found = True
-                    break
-            if not found:
-                self._profile_combo.addItem(name, path_str)
+        if self._profile_controller is not None:
+            store = self._profile_controller._store
+            dataset_id = getattr(self._state, "active_dataset_id", "") or ""
+            for setting in store.get_by_dataset(dataset_id):
+                self._profile_combo.addItem(setting.name, setting.id)
 
         self._profile_combo.blockSignals(False)
 
     def _on_profile_selected(self, index: int):
-        """프로파일 선택"""
+        """프로파일 선택 — ProfileController.apply_profile() 사용."""
         if index <= 0:
-            self._state.set_profile(None)
             return
 
-        path = self._profile_combo.itemData(index)
-        if path:
-            try:
-                profile = self._profile_manager.load(path)
-                self._state.set_profile(profile)
-            except Exception as e:
-                QMessageBox.warning(
-                    self,
-                    "Load Profile Error",
-                    f"Failed to load profile: {e}"
-                )
+        profile_id = self._profile_combo.itemData(index)
+        if profile_id and self._profile_controller:
+            self._profile_controller.apply_profile(profile_id)
 
     def _on_load_profile(self):
-        """프로파일 불러오기"""
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Profile",
-            str(self._profile_manager.profiles_dir),
-            "Data Graph Profile (*.dgp)"
-        )
-        if path:
-            try:
-                profile = self._profile_manager.load(path)
-                self._state.set_profile(profile)
-                self._refresh_profile_list()
-                # 콤보박스에서 선택
-                for i in range(self._profile_combo.count()):
-                    if self._profile_combo.itemData(i) == path:
-                        self._profile_combo.setCurrentIndex(i)
-                        break
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Load Profile Error",
-                    f"Failed to load profile: {e}"
-                )
+        """프로파일 불러오기 — signal로 위임."""
+        self.profile_load_requested.emit()
 
     def _on_save_profile(self):
-        """프로파일 저장"""
-        profile = self._state.current_profile
-        if not profile:
-            QMessageBox.information(
-                self,
-                "Save Profile",
-                "No profile to save. Create a new profile first."
-            )
-            return
-
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Profile",
-            str(self._profile_manager.profiles_dir / f"{profile.name}.dgp"),
-            "Data Graph Profile (*.dgp)"
-        )
-        if path:
-            try:
-                profile.save(path)
-                self._profile_manager._add_recent_profile(path)
-                self._refresh_profile_list()
-                self._state.profile_saved.emit()
-                QMessageBox.information(
-                    self,
-                    "Profile Saved",
-                    f"Profile saved successfully."
-                )
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Save Profile Error",
-                    f"Failed to save profile: {e}"
-                )
+        """프로파일 저장 — signal로 위임."""
+        self.profile_save_requested.emit()
 
     def _on_new_profile(self):
         """새 프로파일 생성"""
@@ -589,22 +514,12 @@ class ProfileBar(QFrame):
         pass
 
     def _on_duplicate_setting(self, setting_id: str):
-        """설정 복제"""
-        profile = self._state.current_profile
-        if profile:
-            original = profile.get_setting(setting_id)
-            if original:
-                import uuid
-                from dataclasses import replace
-                new_setting = replace(
-                    original,
-                    id=str(uuid.uuid4()),
-                    name=f"{original.name} (copy)",
-                )
-                self._state.add_setting(new_setting)
+        """설정 복제 — ProfileController 사용."""
+        if self._profile_controller:
+            self._profile_controller.duplicate_profile(setting_id)
 
     def _on_delete_setting(self, setting_id: str):
-        """설정 삭제"""
+        """설정 삭제 — ProfileController 사용."""
         reply = QMessageBox.question(
             self,
             "Delete Setting",
@@ -613,30 +528,28 @@ class ProfileBar(QFrame):
             QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            self._state.remove_setting(setting_id)
+            if self._profile_controller:
+                self._profile_controller.delete_profile(setting_id)
 
     def _on_rename_setting(self, setting_id: str):
-        """설정 이름 변경"""
-        profile = self._state.current_profile
-        if profile:
-            setting = profile.get_setting(setting_id)
-            if setting:
-                name, ok = QInputDialog.getText(
-                    self,
-                    "Rename Setting",
-                    "Enter new name:",
-                    text=setting.name
-                )
-                if ok and name.strip():
-                    new_setting = setting.with_name(name.strip())
-                    # Replace in profile's settings list
-                    for i, s in enumerate(profile.settings):
-                        if s.id == setting_id:
-                            profile.settings[i] = new_setting
-                            break
-                    if setting_id in self._setting_buttons:
-                        self._setting_buttons[setting_id].update_setting(new_setting)
+        """설정 이름 변경 — ProfileController 사용."""
+        if not self._profile_controller:
+            return
+        setting = self._profile_controller._store.get(setting_id)
+        if setting:
+            name, ok = QInputDialog.getText(
+                self,
+                "Rename Setting",
+                "Enter new name:",
+                text=setting.name
+            )
+            if ok and name.strip():
+                self._profile_controller.rename_profile(setting_id, name.strip())
+                updated = self._profile_controller._store.get(setting_id)
+                if updated and setting_id in self._setting_buttons:
+                    self._setting_buttons[setting_id].update_setting(updated)
 
     @property
-    def profile_manager(self) -> ProfileManager:
-        return self._profile_manager
+    def profile_controller(self):
+        """Return the injected ProfileController (or None)."""
+        return self._profile_controller

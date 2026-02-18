@@ -12,6 +12,7 @@ from .graph_setting_mapper import GraphSettingMapper
 from .profile import GraphSetting
 from .profile_store import ProfileStore
 from .state import AppState
+from .undo_manager import UndoStack, UndoCommand, UndoActionType
 
 
 class ProfileController(QObject):
@@ -21,15 +22,12 @@ class ProfileController(QObject):
     profile_renamed = Signal(str, str)
     error_occurred = Signal(str)
 
-    _UNDO_LIMIT = 10
-    _UNDO_EXPIRY_SECONDS = 300
-
-    def __init__(self, store: ProfileStore, state: AppState):
+    def __init__(self, store: ProfileStore, state: AppState, undo_stack: Optional[UndoStack] = None):
         super().__init__()
         self._store = store
         self._state = state
         self._active_profile_id: Optional[str] = None
-        self._undo_stack: List[Dict[str, Any]] = []
+        self._main_undo_stack: Optional[UndoStack] = undo_stack
 
     def create_profile(self, dataset_id: str, name: str) -> Optional[str]:
         try:
@@ -101,7 +99,27 @@ class ProfileController(QObject):
         previous_name = setting.name
         updated = setting.with_name(new_name)
         self._store.update(updated)
-        self._push_undo({"op": "rename", "profile_id": profile_id, "old_name": previous_name})
+
+        # Record undo via main stack
+        if self._main_undo_stack:
+            pid, old_n, new_n = profile_id, previous_name, new_name
+            def _do_rename():
+                s = self._store.get(pid)
+                if s:
+                    self._store.update(s.with_name(new_n))
+                    self.profile_renamed.emit(pid, new_n)
+            def _undo_rename():
+                s = self._store.get(pid)
+                if s:
+                    self._store.update(s.with_name(old_n))
+                    self.profile_renamed.emit(pid, old_n)
+            self._main_undo_stack.record(UndoCommand(
+                action_type=UndoActionType.PROFILE_RENAME,
+                description=f"Rename profile '{previous_name}' → '{new_name}'",
+                do=_do_rename,
+                undo=_undo_rename,
+            ))
+
         self.profile_renamed.emit(profile_id, new_name)
         return True
 
@@ -115,7 +133,22 @@ class ProfileController(QObject):
             self.error_occurred.emit(f"Failed to delete profile: {profile_id}")
             return False
 
-        self._push_undo({"op": "delete", "setting": setting})
+        # Record undo via main stack
+        if self._main_undo_stack:
+            deleted_setting = setting
+            def _do_delete():
+                self._store.remove(deleted_setting.id)
+                self.profile_deleted.emit(deleted_setting.id)
+            def _undo_delete():
+                self._store.add(deleted_setting)
+                self.profile_created.emit(deleted_setting.id)
+            self._main_undo_stack.record(UndoCommand(
+                action_type=UndoActionType.PROFILE_DELETE,
+                description=f"Delete profile '{setting.name}'",
+                do=_do_delete,
+                undo=_undo_delete,
+            ))
+
         if self._active_profile_id == profile_id:
             self._active_profile_id = None
         self.profile_deleted.emit(profile_id)
@@ -179,45 +212,32 @@ class ProfileController(QObject):
         )
         return not self._settings_equal(setting, current)
 
+    @property
+    def active_profile_id(self) -> Optional[str]:
+        """Currently active profile ID."""
+        return self._active_profile_id
+
+    @active_profile_id.setter
+    def active_profile_id(self, value: Optional[str]) -> None:
+        if self._active_profile_id != value:
+            self._active_profile_id = value
+            if value is not None:
+                self.profile_applied.emit(value)
+
     def undo(self) -> bool:
-        self._prune_undo_stack()
-        while self._undo_stack:
-            entry = self._undo_stack.pop()
-            op = entry.get("op")
-            if op == "delete":
-                setting = entry.get("setting")
-                if isinstance(setting, GraphSetting):
-                    self._store.add(setting)
-                    self.profile_created.emit(setting.id)
-                    return True
-            elif op == "rename":
-                profile_id = entry.get("profile_id")
-                old_name = entry.get("old_name")
-                setting = self._store.get(profile_id)
-                if setting is None:
-                    continue
-                restored = setting.with_name(old_name)
-                self._store.update(restored)
-                self.profile_renamed.emit(profile_id, old_name)
-                return True
+        """Delegate to main undo stack. Kept for backward compatibility."""
+        if self._main_undo_stack and self._main_undo_stack.can_undo():
+            self._main_undo_stack.undo()
+            return True
         return False
-
-    def _push_undo(self, entry: Dict[str, Any]) -> None:
-        entry["timestamp"] = time.time()
-        self._undo_stack.append(entry)
-        if len(self._undo_stack) > self._UNDO_LIMIT:
-            self._undo_stack = self._undo_stack[-self._UNDO_LIMIT :]
-
-    def _prune_undo_stack(self) -> None:
-        now = time.time()
-        self._undo_stack = [
-            entry
-            for entry in self._undo_stack
-            if now - entry.get("timestamp", 0) <= self._UNDO_EXPIRY_SECONDS
-        ]
 
     @staticmethod
     def _settings_equal(a: GraphSetting, b: GraphSetting) -> bool:
+        """Compare two GraphSettings for semantic equality.
+
+        Compares all relevant fields including **all** chart_settings keys
+        (using normalized defaults so missing keys are treated as defaults).
+        """
         if a.chart_type != b.chart_type:
             return False
         if a.x_column != b.x_column:
@@ -226,22 +246,14 @@ class ProfileController(QObject):
             return False
         if tuple(a.value_columns) != tuple(b.value_columns):
             return False
-        if list(a.hover_columns) != list(b.hover_columns):
+        if tuple(a.hover_columns) != tuple(b.hover_columns):
             return False
-        if list(a.filters) != list(b.filters):
+        if tuple(a.filters) != tuple(b.filters):
             return False
-        if list(a.sorts) != list(b.sorts):
+        if tuple(a.sorts) != tuple(b.sorts):
             return False
-        # Compare chart_settings: only compare keys present in both,
-        # or treat empty dict as matching any defaults
-        dict_a = dict(a.chart_settings) if a.chart_settings else {}
-        dict_b = dict(b.chart_settings) if b.chart_settings else {}
-        if dict_a and dict_b:
-            # Compare only overlapping keys
-            common_keys = set(dict_a.keys()) & set(dict_b.keys())
-            for k in common_keys:
-                if dict_a[k] != dict_b[k]:
-                    return False
-            # If one has keys the other doesn't, they still match
-            # (extra keys from defaults are acceptable)
+        # Compare chart_settings: normalize with defaults so missing keys
+        # are filled in, then compare all keys from both sides.
+        if a.normalized_chart_settings() != b.normalized_chart_settings():
+            return False
         return True

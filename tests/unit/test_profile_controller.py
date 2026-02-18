@@ -6,6 +6,7 @@ from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.core.profile_controller import ProfileController
 from data_graph_studio.core.profile_store import ProfileStore
 from data_graph_studio.core.state import AppState, ChartType
+from data_graph_studio.core.undo_manager import UndoStack
 
 
 def make_setting(**overrides) -> GraphSetting:
@@ -128,7 +129,8 @@ def test_apply_same_profile_no_auto_save():
 def test_rename_profile_and_undo():
     store = ProfileStore()
     state = make_state()
-    controller = ProfileController(store, state)
+    undo_stack = UndoStack()
+    controller = ProfileController(store, state, undo_stack=undo_stack)
 
     setting = make_setting(id="setting-1", name="Original")
     store.add(setting)
@@ -147,7 +149,8 @@ def test_rename_profile_and_undo():
 def test_delete_profile_and_undo():
     store = ProfileStore()
     state = make_state()
-    controller = ProfileController(store, state)
+    undo_stack = UndoStack()
+    controller = ProfileController(store, state, undo_stack=undo_stack)
 
     setting = make_setting(id="setting-1", name="To Remove")
     store.add(setting)
