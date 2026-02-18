@@ -78,6 +78,9 @@ class GraphPanel(QWidget):
         # Used by selection highlight to correctly map state.selection rows
         self._sampled_original_indices: Optional[np.ndarray] = None
 
+        # P1-2: Categorical mapping cache {col_name: (labels_tuple, value_to_idx_dict)}
+        self._categorical_cache: Dict[str, tuple] = {}
+
         # Debounced refresh timer
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -206,7 +209,12 @@ class GraphPanel(QWidget):
         # self._empty_state.open_file_requested is exposed for external connection
 
     def _schedule_refresh(self, *args):
-        """Debounced refresh - coalesces rapid changes into single refresh."""
+        """Debounced refresh - coalesces rapid changes into single refresh.
+        
+        TODO (P1-1): Tag change type (data_changed vs style_changed) and skip
+        data recomputation when only style/color/line-width options change.
+        Currently every change triggers full clear → rebuild in _do_refresh().
+        """
         self._refresh_timer.start()
 
     def _on_grid_view_changed(self):
@@ -361,14 +369,17 @@ class GraphPanel(QWidget):
 
         # Guard against reentrant calls (can cause access violation in pyqtgraph)
         if getattr(self, '_refreshing', False):
-            _lg.debug("[DEBUG-CRASH] graph_panel.refresh() skipped - already refreshing")
+            _lg.debug("Skipping reentrant refresh")
             return
         self._refreshing = True
+        # P1-7: Suppress visual updates during refresh to avoid blank flash
+        self.main_graph.setUpdatesEnabled(False)
         try:
             self._do_refresh()
         except Exception as e:
             _lg.error(f"graph_panel.refresh() error: {e}")
         finally:
+            self.main_graph.setUpdatesEnabled(True)
             self._refreshing = False
 
     def _do_refresh(self):
@@ -427,6 +438,10 @@ class GraphPanel(QWidget):
         x_categorical_labels = None
         x_is_categorical = False
 
+        # P1-2: Invalidate categorical cache if X column changed
+        if x_col and x_col not in self._categorical_cache:
+            self._categorical_cache.clear()  # New X col → clear stale entries
+
         if not x_col:
             # In windowed mode, use visible rows for index to avoid length mismatch
             if self.engine.is_windowed and working_df is not None:
@@ -439,10 +454,15 @@ class GraphPanel(QWidget):
             x_is_categorical = self.engine.is_column_categorical(x_col)
 
             if x_is_categorical:
-                # Get unique values as labels
-                x_categorical_labels = self.engine.get_unique_values(x_col, limit=500)
-                # Map values to indices
-                value_to_idx = {v: i for i, v in enumerate(x_categorical_labels)}
+                # P1-2: Use cached categorical mapping if X column hasn't changed
+                cache_key = x_col
+                cached = self._categorical_cache.get(cache_key)
+                if cached is not None:
+                    x_categorical_labels, value_to_idx = cached
+                else:
+                    x_categorical_labels = self.engine.get_unique_values(x_col, limit=500)
+                    value_to_idx = {v: i for i, v in enumerate(x_categorical_labels)}
+                    self._categorical_cache[cache_key] = (x_categorical_labels, value_to_idx)
                 x_raw = working_df[x_col].to_list()
                 x_data = np.array([value_to_idx.get(v, 0) for v in x_raw], dtype=np.float64)
             else:
@@ -584,14 +604,19 @@ class GraphPanel(QWidget):
                         
                         x_sampled_list = []
                         y_sampled_list = []
+                        original_indices_list = []
                         new_groups = {}
                         current_offset = 0
+                        
+                        # Build indices of valid rows in original data
+                        valid_indices = np.where(valid_mask)[0]
                         
                         for group_name, mask in groups.items():
                             # Get valid data for this group
                             group_valid_mask = mask[valid_mask]
                             x_group = x_valid[group_valid_mask]
                             y_group = y_valid[group_valid_mask]
+                            group_orig_indices = valid_indices[group_valid_mask]
                             
                             if len(x_group) == 0:
                                 continue
@@ -605,8 +630,22 @@ class GraphPanel(QWidget):
                                 x_group_sampled, y_group_sampled = _apply_sampling(
                                     x_group, y_group, group_points, sampling_algorithm
                                 )
+                                # Track which original indices survived sampling
+                                # Match sampled x values back to group x values
+                                try:
+                                    x_g_f = x_group.astype(np.float64)
+                                    x_gs_f = x_group_sampled.astype(np.float64)
+                                    if np.all(x_g_f[:-1] <= x_g_f[1:]) and len(x_g_f) > 0:
+                                        matched = np.searchsorted(x_g_f, x_gs_f).clip(0, len(x_g_f) - 1)
+                                    else:
+                                        step = max(1, len(x_group) // max(1, len(x_group_sampled)))
+                                        matched = np.arange(0, len(x_group), step)[:len(x_group_sampled)]
+                                    group_sampled_orig = group_orig_indices[matched]
+                                except Exception:
+                                    group_sampled_orig = group_orig_indices[:len(x_group_sampled)]
                             else:
                                 x_group_sampled, y_group_sampled = x_group, y_group
+                                group_sampled_orig = group_orig_indices
                             
                             # Create new group mask for sampled data
                             group_len = len(x_group_sampled)
@@ -614,6 +653,7 @@ class GraphPanel(QWidget):
                             
                             x_sampled_list.append(x_group_sampled)
                             y_sampled_list.append(y_group_sampled)
+                            original_indices_list.append(group_sampled_orig)
                             new_groups[group_name] = (current_offset, group_len)
                             current_offset += group_len
                         
@@ -621,6 +661,10 @@ class GraphPanel(QWidget):
                         if x_sampled_list:
                             x_sampled = np.concatenate(x_sampled_list)
                             y_sampled = np.concatenate(y_sampled_list)
+                            
+                            # Build group-aware _sampled_original_indices
+                            if original_indices_list:
+                                self._sampled_original_indices = np.concatenate(original_indices_list)
                             
                             # Build new group masks for concatenated data
                             total_sampled = len(x_sampled)
@@ -692,6 +736,12 @@ class GraphPanel(QWidget):
         else:
             self._sampled_original_indices = None
 
+        # P2-3: Disable log scale on categorical axes (log(0) → -inf)
+        if x_is_categorical:
+            options['x_log'] = False
+        if y_is_categorical:
+            options['y_log'] = False
+
         # Plot data with categorical labels
         self.main_graph.plot_data(
             x_sampled, y_sampled,
@@ -716,24 +766,10 @@ class GraphPanel(QWidget):
         hover_columns = self.state.hover_columns
         if hover_columns:
             hover_data = {}
-            # Determine the indices that survived sampling
-            sampled_indices = None
-            if is_sampled and len(x_sampled) < len(x_data):
-                # Reconstruct sampled indices by matching x_sampled back to x_data
-                # For consistent hover, build index map from the sampling result
-                try:
-                    # Build a lookup: for each sampled point, find its original index
-                    x_orig = x_data.astype(np.float64) if hasattr(x_data, 'astype') else np.array(x_data, dtype=np.float64)
-                    x_samp = x_sampled.astype(np.float64) if hasattr(x_sampled, 'astype') else np.array(x_sampled, dtype=np.float64)
-                    # Use searchsorted for monotonic data, else nearest-neighbor
-                    if np.all(x_orig[:-1] <= x_orig[1:]) and len(x_orig) > 0:
-                        sampled_indices = np.searchsorted(x_orig, x_samp).clip(0, len(x_orig) - 1)
-                    else:
-                        # Fallback: uniform step (best effort)
-                        step = max(1, len(x_data) // max(1, len(x_sampled)))
-                        sampled_indices = np.arange(0, len(x_data), step)[:len(x_sampled)]
-                except Exception:
-                    sampled_indices = None
+            # Reuse the same indices that were computed during sampling
+            sampled_indices = self._sampled_original_indices if (
+                self._sampled_original_indices is not None and len(self._sampled_original_indices) == len(x_sampled)
+            ) else None
 
             for col in hover_columns:
                 if col in working_df.columns:
@@ -866,11 +902,17 @@ class GraphPanel(QWidget):
             return result_series.to_numpy()
 
         except ExpressionError as e:
-            print(f"Formula error: {e}")
+            _lg.warning(f"Formula error: {e}")
+            self._show_formula_error(str(e))
             return y_data
         except Exception as e:
-            print(f"Error applying formula '{formula}': {e}")
+            _lg.warning(f"Error applying formula '{formula}': {e}")
+            self._show_formula_error(str(e))
             return y_data
+
+    def _show_formula_error(self, message: str):
+        """Display formula error to user via the graph title."""
+        self.main_graph.setTitle(f"⚠ 수식 오류: {message}", color='#EF4444', size='11pt')
 
     # ==================== Combo Chart (Item 14) ====================
 
@@ -943,7 +985,13 @@ class GraphPanel(QWidget):
         line_width = options.get('line_width', 2)
 
         from ..theme import ColorPalette
-        default_colors = list(ColorPalette.default().colors)
+        custom_palette = options.get('color_palette')
+        if custom_palette and hasattr(custom_palette, 'colors'):
+            default_colors = list(custom_palette.colors)
+        elif isinstance(custom_palette, (list, tuple)) and custom_palette:
+            default_colors = list(custom_palette)
+        else:
+            default_colors = list(ColorPalette.default().colors)
 
         # Apply axis options
         self.main_graph.setLabel('bottom', options.get('x_title') or x_col or 'Index',
@@ -1085,6 +1133,9 @@ class GraphPanel(QWidget):
                     self.main_graph.getViewBox().sigResized.connect(_sync_vb)
                     _sync_vb()
                 else:
+                    # TODO (P1-3): 3rd+ value columns fall back to primary axis.
+                    # Implement additional Y axes (offset right axes) for 3+ different
+                    # units. Requires UI for axis assignment and spaced axis rendering.
                     self._render_combo_series(x_data, y_data_full, col_chart_type, color, pen, label,
                                               line_width, marker_size, marker_border,
                                               self.main_graph, options)
@@ -1093,12 +1144,33 @@ class GraphPanel(QWidget):
         series_names = [vc.name for vc in value_cols if vc.name in working_df.columns]
         self.options_panel.set_series(series_names)
 
-        # Stats for first Y column
-        if value_cols and value_cols[0].name in working_df.columns:
-            y_first = working_df[value_cols[0].name].to_numpy()
-            self.stat_panel.update_histograms(x_data, y_first)
-            stats = self.engine.get_statistics(value_cols[0].name)
-            self.stat_panel.update_stats(stats)
+        # P1-5: Stats for ALL Y columns (not just first)
+        if value_cols:
+            valid_cols = [vc for vc in value_cols if vc.name in working_df.columns]
+            if valid_cols:
+                y_first = working_df[valid_cols[0].name].to_numpy()
+                self.stat_panel.update_histograms(x_data, y_first)
+
+                if len(valid_cols) >= 2:
+                    stats_by_col = {}
+                    pcts_by_col = {}
+                    for vc in valid_cols:
+                        col_stats = self.engine.get_statistics(vc.name)
+                        stats_by_col[vc.name] = col_stats
+                        # Percentiles
+                        try:
+                            y_arr = working_df[vc.name].to_numpy()
+                            clean = y_arr[~np.isnan(y_arr)]
+                            if len(clean) > 0:
+                                pct_list = [0, 1, 5, 10, 25, 50, 75, 90, 95, 99, 100]
+                                pct_vals = np.percentile(clean, pct_list)
+                                pcts_by_col[vc.name] = {f"P{p}": float(v) for p, v in zip(pct_list, pct_vals)}
+                        except Exception:
+                            pass
+                    self.stat_panel.update_multi_y_stats(stats_by_col, pcts_by_col)
+                else:
+                    stats = self.engine.get_statistics(valid_cols[0].name)
+                    self.stat_panel.update_stats(stats)
 
     def _refresh_statistical_chart(self, chart_type: ChartType, options: Dict, legend_settings: Dict):
         """Render Box Plot, Violin Plot, or Heatmap using specialised chart classes."""
@@ -1155,7 +1227,13 @@ class GraphPanel(QWidget):
         self.main_graph.setBackground(bg_color.name())
 
         from ..theme import ColorPalette
-        default_colors = list(ColorPalette.default().colors)
+        custom_palette = options.get('color_palette')
+        if custom_palette and hasattr(custom_palette, 'colors'):
+            default_colors = list(custom_palette.colors)
+        elif isinstance(custom_palette, (list, tuple)) and custom_palette:
+            default_colors = list(custom_palette)
+        else:
+            default_colors = list(ColorPalette.default().colors)
 
         if chart_type == ChartType.BOX:
             self._render_box_plot(df, cat_col, y_col_name, options, default_colors)
@@ -1649,7 +1727,11 @@ class GraphPanel(QWidget):
                 self.stat_panel.update_stats(stats)
 
     def _update_stats_for_selection(self, selected_rows: list):
-        """Update stat panel with statistics for selected rows only"""
+        """P1-6: Update stat panel with statistics for selected rows only.
+        
+        Computes stats incrementally from the selected subset rather than
+        re-scanning the full dataset via engine.get_statistics().
+        """
         if not self.engine.is_loaded or not selected_rows:
             return
         
@@ -1663,6 +1745,9 @@ class GraphPanel(QWidget):
             selected_indices = [i for i in selected_rows if 0 <= i < len(df)]
             if not selected_indices:
                 return
+            
+            # P1-6: Use numpy array indexing for fast subset extraction
+            sel_idx = np.array(selected_indices, dtype=np.intp)
             
             # Get Y column name - try value_columns first, then any numeric column
             y_col_name = None
@@ -1678,7 +1763,6 @@ class GraphPanel(QWidget):
                         break
             
             if not y_col_name or y_col_name not in df.columns:
-                # Still no column found - show basic stats
                 stats = {
                     'Selected': len(selected_rows),
                     'Total': len(df),
@@ -1686,19 +1770,19 @@ class GraphPanel(QWidget):
                 self.stat_panel.update_stats(stats)
                 return
             
-            # Get selected data for Y column
+            # P1-6: Direct numpy indexing — no DataFrame filtering
             y_data = df[y_col_name].to_numpy()
-            selected_y = y_data[selected_indices]
+            selected_y = y_data[sel_idx]
             
             # Get X data
             x_col = self.state.x_column
             if x_col and x_col in df.columns:
                 x_data_full = df[x_col].to_numpy()
-                selected_x = x_data_full[selected_indices]
+                selected_x = x_data_full[sel_idx]
             else:
                 selected_x = np.array(selected_indices, dtype=float)
             
-            # Calculate statistics for selection
+            # Calculate statistics for selection only (no full-data recompute)
             clean_y = selected_y[~np.isnan(selected_y.astype(float))]
             clean_x = selected_x[~np.isnan(selected_x.astype(float))]
             if len(clean_y) == 0:
@@ -2052,7 +2136,13 @@ class GraphPanel(QWidget):
 
         # Colors for series
         from ..theme import ColorPalette
-        default_colors = list(ColorPalette.default().colors)
+        custom_palette = options.get('color_palette')
+        if custom_palette and hasattr(custom_palette, 'colors'):
+            default_colors = list(custom_palette.colors)
+        elif isinstance(custom_palette, (list, tuple)) and custom_palette:
+            default_colors = list(custom_palette)
+        else:
+            default_colors = list(ColorPalette.default().colors)
 
         # Get X and Y column info
         x_col = self.state.x_column
@@ -2121,33 +2211,45 @@ class GraphPanel(QWidget):
             all_x_data.extend(x_data.tolist())
             all_y_data.extend(y_data.tolist())
 
-            # Plot data
-            color = default_colors[idx % len(default_colors)]
-            pen = pg.mkPen(color=color, width=line_width)
+            # P1-4: Group support in grid view — overlay groups within each facet
+            group_col_names = [gc.name for gc in self.state.group_columns]
+            has_groups = bool(group_col_names) and all(gc in facet_df.columns for gc in group_col_names)
 
-            if chart_type == ChartType.LINE:
-                plot_widget.plot(x_data, y_data, pen=pen)
-                if show_points and marker_size > 0:
-                    scatter = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
-                                                  brush=pg.mkBrush(color))
-                    plot_widget.addItem(scatter)
-            elif chart_type == ChartType.SCATTER:
-                scatter = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
-                                              brush=pg.mkBrush(color))
-                plot_widget.addItem(scatter)
-            elif chart_type == ChartType.BAR:
-                w = (x_data.max() - x_data.min()) / len(x_data) * 0.8 if len(x_data) > 1 else 0.8
-                bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
-                                       brush=pg.mkBrush(QColor(color).red(),
-                                                       QColor(color).green(),
-                                                       QColor(color).blue(), 180))
-                plot_widget.addItem(bar)
-            elif chart_type == ChartType.AREA:
-                fill_color = QColor(color)
-                fill_color.setAlpha(80)
-                plot_widget.plot(x_data, y_data, pen=pen, fillLevel=0, brush=fill_color)
+            # Group colors
+            _grid_group_colors = [
+                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+            ]
+
+            if has_groups:
+                # Build group masks for this facet
+                facet_indexed = facet_df.with_row_index("__row_idx__")
+                facet_grouped = facet_indexed.group_by(group_col_names).agg(
+                    pl.col("__row_idx__").alias("__indices__")
+                )
+                for g_idx, row in enumerate(facet_grouped.iter_rows()):
+                    vals = row[:-1]
+                    indices = row[-1]
+                    if len(group_col_names) == 1:
+                        g_name = str(vals[0]) if vals[0] is not None else "(Empty)"
+                    else:
+                        g_name = " / ".join(str(v) if v is not None else "(Empty)" for v in vals)
+
+                    g_color = _grid_group_colors[g_idx % len(_grid_group_colors)]
+                    g_pen = pg.mkPen(color=g_color, width=line_width)
+                    g_x = x_data[list(indices)]
+                    g_y = y_data[list(indices)]
+                    if len(g_x) == 0:
+                        continue
+
+                    self._plot_grid_series(plot_widget, g_x, g_y, chart_type, g_color, g_pen,
+                                           line_width, marker_size, show_points)
             else:
-                plot_widget.plot(x_data, y_data, pen=pen)
+                # No groups — single series per facet (original behavior)
+                color = default_colors[idx % len(default_colors)]
+                pen = pg.mkPen(color=color, width=line_width)
+                self._plot_grid_series(plot_widget, x_data, y_data, chart_type, color, pen,
+                                       line_width, marker_size, show_points)
 
             cell_layout.addWidget(plot_widget, 1)
             self._grid_layout.addWidget(cell_widget, row, col)
@@ -2157,6 +2259,33 @@ class GraphPanel(QWidget):
         # Synchronize axes across all cells
         if len(all_cells) > 1 and len(all_x_data) > 0 and len(all_y_data) > 0:
             self._sync_grid_axes(all_cells, all_x_data, all_y_data)
+
+    def _plot_grid_series(self, plot_widget, x_data, y_data, chart_type, color, pen,
+                          line_width, marker_size, show_points):
+        """Helper to plot a single series on a grid cell PlotWidget."""
+        if chart_type == ChartType.LINE:
+            plot_widget.plot(x_data, y_data, pen=pen)
+            if show_points and marker_size > 0:
+                scatter = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
+                                              brush=pg.mkBrush(color))
+                plot_widget.addItem(scatter)
+        elif chart_type == ChartType.SCATTER:
+            scatter = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
+                                          brush=pg.mkBrush(color))
+            plot_widget.addItem(scatter)
+        elif chart_type == ChartType.BAR:
+            w = (x_data.max() - x_data.min()) / len(x_data) * 0.8 if len(x_data) > 1 else 0.8
+            bar = pg.BarGraphItem(x=x_data, height=y_data, width=w,
+                                   brush=pg.mkBrush(QColor(color).red(),
+                                                   QColor(color).green(),
+                                                   QColor(color).blue(), 180))
+            plot_widget.addItem(bar)
+        elif chart_type == ChartType.AREA:
+            fill_color = QColor(color)
+            fill_color.setAlpha(80)
+            plot_widget.plot(x_data, y_data, pen=pen, fillLevel=0, brush=fill_color)
+        else:
+            plot_widget.plot(x_data, y_data, pen=pen)
 
     def _clear_grid_cells(self):
         """Clear all grid cells"""

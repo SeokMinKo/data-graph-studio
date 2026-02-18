@@ -8,7 +8,7 @@ import numpy as np
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QSpinBox, QScrollArea, QGroupBox, QGridLayout,
+    QSpinBox, QScrollArea, QGroupBox, QGridLayout, QComboBox,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -51,6 +51,11 @@ class StatPanel(QFrame):
         self._y_bins: int = 30
         self._group_data: Optional[Dict[str, float]] = None
 
+        # P1-5: Multi-Y column stats support
+        self._all_y_stats: Dict[str, Dict[str, Any]] = {}  # {col_name: stats_dict}
+        self._all_y_percentiles: Dict[str, Dict[str, float]] = {}
+        self._current_stats_col: Optional[str] = None
+
         self._setup_ui()
         self._apply_style()
     
@@ -71,6 +76,14 @@ class StatPanel(QFrame):
         header = QLabel("📈 Stats")
         header.setObjectName("sectionHeader")
         header_layout.addWidget(header)
+
+        # P1-5: Column selector for multi-Y stats
+        self._stats_col_combo = QComboBox()
+        self._stats_col_combo.setMaximumWidth(120)
+        self._stats_col_combo.setToolTip("Select Y column for statistics")
+        self._stats_col_combo.currentTextChanged.connect(self._on_stats_col_changed)
+        self._stats_col_combo.hide()  # Hidden until multiple Y columns
+        header_layout.addWidget(self._stats_col_combo)
 
         header_layout.addStretch()
 
@@ -376,6 +389,45 @@ class StatPanel(QFrame):
         self._group_data = group_data
         self._update_pie_chart()
     
+    def _on_stats_col_changed(self, col_name: str):
+        """P1-5: Switch displayed stats when user selects a different Y column."""
+        if not col_name:
+            return
+        self._current_stats_col = col_name
+        stats = self._all_y_stats.get(col_name, {})
+        percentiles = self._all_y_percentiles.get(col_name)
+        self.update_stats(stats, percentiles)
+
+    def update_multi_y_stats(self, stats_by_col: Dict[str, Dict[str, Any]],
+                             percentiles_by_col: Dict[str, Dict[str, float]] = None,
+                             group_counts: Dict[str, int] = None,
+                             group_sums: Dict[str, float] = None):
+        """P1-5: Update stats for all value columns. Shows combo if 2+ columns."""
+        self._all_y_stats = stats_by_col or {}
+        self._all_y_percentiles = percentiles_by_col or {}
+
+        col_names = list(self._all_y_stats.keys())
+        if len(col_names) >= 2:
+            self._stats_col_combo.blockSignals(True)
+            self._stats_col_combo.clear()
+            self._stats_col_combo.addItems(col_names)
+            # Preserve current selection if still valid
+            if self._current_stats_col in col_names:
+                self._stats_col_combo.setCurrentText(self._current_stats_col)
+            else:
+                self._current_stats_col = col_names[0]
+            self._stats_col_combo.blockSignals(False)
+            self._stats_col_combo.show()
+        else:
+            self._stats_col_combo.hide()
+            self._current_stats_col = col_names[0] if col_names else None
+
+        # Show stats for current column
+        if self._current_stats_col and self._current_stats_col in self._all_y_stats:
+            stats = self._all_y_stats[self._current_stats_col]
+            pcts = self._all_y_percentiles.get(self._current_stats_col)
+            self.update_stats(stats, pcts, group_counts, group_sums)
+
     def update_stats(self, stats: Dict[str, Any], percentiles: Dict[str, float] = None,
                      group_counts: Dict[str, int] = None, group_sums: Dict[str, float] = None):
         if stats is None:
