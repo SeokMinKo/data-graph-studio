@@ -561,6 +561,11 @@ class FileLoader:
                 self._update_progress(status="cancelled")
                 return False
 
+            # loader returned None (e.g. cancel during _load_text)
+            if self._df is None and not self._windowed:
+                self._update_progress(status="cancelled")
+                return False
+
             if excluded_columns and self._df is not None and not self._windowed:
                 cols_to_drop = [c for c in excluded_columns if c in self._df.columns]
                 if cols_to_drop:
@@ -571,8 +576,9 @@ class FileLoader:
 
             if sample_n is not None and self._df is not None and len(self._df) > sample_n:
                 self._update_progress(status="sampling")
+                original_rows = len(self._df)
                 self._df = self._df.sample(n=sample_n, seed=42)
-                logger.info(f"Sampled {sample_n:,} rows from {len(self._df):,}")
+                logger.info(f"Sampled {sample_n:,} rows from {original_rows:,}")
 
             if optimize_memory and self._df is not None:
                 self._update_progress(status="optimizing")
@@ -624,7 +630,7 @@ class FileLoader:
         with open(path, 'r', encoding=encoding, errors='replace') as f:
             for i, line in enumerate(f):
                 if self._cancel_loading:
-                    return pl.DataFrame()
+                    return None
                 if i >= MAX_TEXT_LINES:
                     logger.warning(f"Text file truncated at {MAX_TEXT_LINES:,} lines")
                     break

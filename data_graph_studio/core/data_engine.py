@@ -10,6 +10,8 @@ ComparisonEngine)을 조합하여 기존 API를 100% 유지하는 Facade 패턴.
 
 import warnings
 import logging
+import time
+from collections import OrderedDict
 from typing import Optional, List, Dict, Any, Set
 
 import polars as pl
@@ -65,33 +67,50 @@ class DataEngine:
     LAZY_EVAL_THRESHOLD = 1024 * 1024 * 1024
     MAX_RETRIES = 3
     RETRY_DELAY_SECONDS = 0.5
-    MAX_DATASETS = 10
-    MAX_TOTAL_MEMORY = 4 * 1024 * 1024 * 1024
-    DEFAULT_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
-    ]
 
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
+        from .transform_chain import TransformChain
+
         FL, DQ, DE, DM, CE = _import_submodules()
         self._loader = FL(precision_mode)
         self._query = DQ()
         self._exporter = DE()
         self._datasets_mgr = DM(self._loader)
         self._comparison = CE(self._datasets_mgr)
-        self._cache: Dict[str, Any] = {}
+        self._cache: OrderedDict = OrderedDict()
         self._cache_maxsize: int = 128
         self._indexes: Dict[str, Dict] = {}
         self._precision_mode = precision_mode
+        self._transform_chain = TransformChain()
+        self._virtual_columns: Set[str] = set()
+        self._current_file_path: Optional[str] = None
 
-    # -- Cache ----------------------------------------------------------------
+    # -- Cache (real LRU via OrderedDict) ------------------------------------
+
+    def _get_cache(self, key: str) -> Any:
+        """캐시에서 값을 가져온다 (LRU: 접근 시 끝으로 이동)."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+
+    def _set_cache(self, key: str, value: Any) -> None:
+        """캐시에 값을 저장한다."""
+        self._cache[key] = value
+        self._cache.move_to_end(key)
+        self._evict_cache()
 
     def _evict_cache(self) -> None:
         while len(self._cache) > self._cache_maxsize:
-            del self._cache[next(iter(self._cache))]
+            self._cache.popitem(last=False)  # 가장 오래 안 쓴 것 제거
 
     def _clear_cache(self) -> None:
         self._cache.clear()
+
+    def _cache_key(self, operation: str, *args) -> str:
+        """dataset별 캐시 키 생성 (F5)."""
+        dataset_id = self._datasets_mgr.active_dataset_id if self._datasets_mgr else "default"
+        return f"{dataset_id}:{operation}:{hash(args)}"
 
     # -- Properties: FileLoader -----------------------------------------------
 
@@ -107,7 +126,33 @@ class DataEngine:
 
     @_df.setter
     def _df(self, value: Optional[pl.DataFrame]) -> None:
+        """Backward-compatible setter. Prefer update_dataframe()."""
         self._loader._df = value
+
+    def update_dataframe(self, df: Optional[pl.DataFrame]) -> None:
+        """공식 API: DataFrame 업데이트 + dataset sync + cache clear."""
+        self._loader._df = df
+        # active dataset sync
+        if self._datasets_mgr and self._datasets_mgr.active_dataset:
+            self._datasets_mgr.active_dataset.df = df
+        self._clear_cache()
+
+    def drop_column(self, col_name: str) -> None:
+        """컬럼 삭제 (dataset sync + cache clear)."""
+        if self.df is None or col_name not in self.df.columns:
+            return
+        new_df = self.df.drop(col_name)
+        self.update_dataframe(new_df)
+        # transform chain 기록
+        from .transform_chain import TransformStep
+        self._transform_chain.add(TransformStep(
+            name=f"Drop column '{col_name}'",
+            operation='drop',
+            params={'column': col_name},
+            timestamp=time.time(),
+        ))
+        # virtual columns 추적 제거
+        self._virtual_columns.discard(col_name)
 
     @property
     def _lazy_df(self) -> Optional[pl.LazyFrame]:
@@ -381,6 +426,9 @@ class DataEngine:
 
         Returns list of (ChartType, reason_str) tuples.
         """
+        if self.df is None:
+            return []
+
         from .state import ChartType
 
         recommendations: list = []
@@ -393,7 +441,7 @@ class DataEngine:
             if "time" in col_lower or "date" in col_lower:
                 x_is_time = True
             else:
-                dt = self.dtypes().get(x_col, "")
+                dt = self.dtypes.get(x_col, "")
                 if isinstance(dt, str) and dt.startswith("datetime"):
                     x_is_time = True
                 elif hasattr(dt, "__str__") and "datetime" in str(dt).lower():
@@ -429,8 +477,113 @@ class DataEngine:
 
         return recommendations[:3]
 
+    # -- LazyFrame pipeline (F1) ---------------------------------------------
+
+    def lazy_query(self) -> Optional[pl.LazyFrame]:
+        """현재 데이터에 대한 LazyFrame 반환."""
+        if self.df is None:
+            return None
+        return self.df.lazy()
+
+    def execute_query(self, lazy: pl.LazyFrame) -> pl.DataFrame:
+        """LazyFrame 실행."""
+        return lazy.collect()
+
+    # -- Column type casting (F3) ---------------------------------------------
+
+    def cast_column(self, col_name: str, target_dtype) -> bool:
+        """컬럼 타입을 변환한다."""
+        if self.df is None or col_name not in self.df.columns:
+            return False
+        try:
+            new_df = self.df.with_columns(pl.col(col_name).cast(target_dtype))
+            self.update_dataframe(new_df)
+            from .transform_chain import TransformStep
+            self._transform_chain.add(TransformStep(
+                name=f"Cast '{col_name}' to {target_dtype}",
+                operation='cast',
+                params={'column': col_name, 'dtype': str(target_dtype)},
+                timestamp=time.time(),
+            ))
+            return True
+        except Exception:
+            return False
+
+    # -- Data quality report (F4) ---------------------------------------------
+
+    def data_quality_report(self) -> Dict[str, Any]:
+        """null 비율, 중복 행, 타입별 통계."""
+        if self.df is None:
+            return {}
+        df = self.df
+        row_count = len(df)
+        return {
+            'row_count': row_count,
+            'col_count': len(df.columns),
+            'null_counts': {col: df[col].null_count() for col in df.columns},
+            'null_pct': {col: df[col].null_count() / max(row_count, 1) * 100 for col in df.columns},
+            'duplicate_rows': row_count - len(df.unique()),
+            'dtypes': dict(zip(df.columns, [str(d) for d in df.dtypes])),
+        }
+
+    # -- Virtual columns (F6) -------------------------------------------------
+
+    def add_virtual_column(self, name: str, expr: pl.Expr) -> bool:
+        """가상 컬럼 추가."""
+        if self.df is None:
+            return False
+        try:
+            new_df = self.df.with_columns(expr.alias(name))
+            self.update_dataframe(new_df)
+            self._virtual_columns.add(name)
+            return True
+        except Exception:
+            return False
+
+    # -- State sync (7) -------------------------------------------------------
+
+    def sync_dataset_state(self) -> None:
+        """DatasetManager → loader 동기화."""
+        ds = self._datasets_mgr.active_dataset
+        if ds:
+            self._loader._df = ds.df
+            self._loader._lazy_df = ds.lazy_df
+            self._loader._source = ds.source
+            self._loader._profile = ds.profile
+
+    # -- Lineage (F8) ---------------------------------------------------------
+
+    @property
+    def lineage(self) -> List[Dict[str, Any]]:
+        """전체 변환 이력."""
+        return self._transform_chain.get_lineage()
+
+    @property
+    def transform_chain(self):
+        """TransformChain 인스턴스."""
+        return self._transform_chain
+
+    # -- MAX_DATASETS / MAX_TOTAL_MEMORY / DEFAULT_COLORS → DatasetManager ----
+
+    @property
+    def MAX_DATASETS(self):
+        return self._datasets_mgr.MAX_DATASETS
+
+    @property
+    def MAX_TOTAL_MEMORY(self):
+        return self._datasets_mgr.MAX_TOTAL_MEMORY
+
+    @property
+    def DEFAULT_COLORS(self):
+        return self._datasets_mgr.DEFAULT_COLORS
+
+    # -- clear ----------------------------------------------------------------
+
     def clear(self):
         """데이터 클리어."""
         self._loader.clear()
         self._indexes.clear()
         self._cache.clear()
+        self._transform_chain.clear()
+        self._virtual_columns.clear()
+        self._current_file_path = None

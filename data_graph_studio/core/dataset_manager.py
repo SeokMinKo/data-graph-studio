@@ -111,6 +111,11 @@ class DatasetManager:
         Returns:
             생성된 dataset_id. 실패 시 None.
         """
+        # MAX_DATASETS 체크
+        if len(self._datasets) >= self.MAX_DATASETS:
+            logger.warning(f"Maximum datasets ({self.MAX_DATASETS}) reached")
+            return None
+
         if dataset_id is None:
             dataset_id = str(uuid.uuid4())[:8]
 
@@ -393,3 +398,46 @@ class DatasetManager:
             if dataset.df[col].dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
                                           pl.Float32, pl.Float64]
         ]
+
+    # ------------------------------------------------------------------
+    # Parallel loading (F7)
+    # ------------------------------------------------------------------
+
+    def load_datasets_parallel(
+        self, paths: list, max_workers: int = 4,
+    ) -> Dict[str, Any]:
+        """여러 파일을 병렬로 로드한다.
+
+        Args:
+            paths: 파일 경로 목록.
+            max_workers: 최대 워커 수.
+
+        Returns:
+            {path: dataset_id_or_exception} 매핑.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        results: Dict[str, Any] = {}
+
+        def _load_single(p: str):
+            loader = FileLoader(self._loader._precision_mode)
+            success = loader.load_file(p)
+            if not success:
+                raise RuntimeError(f"Failed to load {p}")
+            return loader._df
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_load_single, p): p for p in paths}
+            for future in as_completed(futures):
+                path = futures[future]
+                try:
+                    df = future.result()
+                    did = self.load_dataset_from_dataframe(
+                        df, name=Path(path).name, source_path=path,
+                    )
+                    results[path] = did
+                except Exception as e:
+                    results[path] = e
+                    logger.error(f"Parallel load failed for {path}: {e}")
+
+        return results

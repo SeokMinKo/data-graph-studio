@@ -1933,9 +1933,28 @@ class MainWindow(QMainWindow):
             )
             if reply == QMessageBox.Yes:
                 try:
-                    self.engine._df = self.engine.df.drop(column)
-                    self.table_panel.set_data(self.engine.df)
+                    from ..core.undo_manager import UndoCommand, UndoActionType
+                    before_df = self.engine.df
+                    self.engine.drop_column(column)
+                    after_df = self.engine.df
+
+                    def _apply_drop(df):
+                        self.engine.update_dataframe(df)
+                        self.table_panel.set_data(df)
+                        self.graph_panel.refresh()
+
+                    self.table_panel.set_data(after_df)
                     self.graph_panel.refresh()
+
+                    self._undo_stack.record(
+                        UndoCommand(
+                            action_type=UndoActionType.COLUMN_ADD,
+                            description=f"Remove column '{column}'",
+                            do=lambda: _apply_drop(after_df),
+                            undo=lambda: _apply_drop(before_df),
+                            timestamp=__import__('time').time(),
+                        )
+                    )
                     self.statusbar.showMessage(f"Column '{column}' removed", 3000)
                 except Exception as e:
                     QMessageBox.warning(self, "Remove Field", f"Failed to remove column: {e}")

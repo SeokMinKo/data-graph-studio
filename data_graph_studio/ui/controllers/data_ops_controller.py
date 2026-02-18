@@ -143,7 +143,7 @@ class DataOpsController:
                 sorted_df = before_df.sort(column, descending=(order == "Descending"))
 
                 def _apply(df):
-                    self.w.engine._df = df
+                    self.w.engine.update_dataframe(df)
                     self.w.table_panel.set_data(df)
                     self.w.graph_panel.refresh()
 
@@ -191,7 +191,7 @@ class DataOpsController:
 
             def _apply_df(df):
                 # Update engine
-                self.w.engine._df = df
+                self.w.engine.update_dataframe(df)
 
                 # Sync state/UI
                 try:
@@ -253,7 +253,7 @@ class DataOpsController:
             removed = len(before_df) - len(after_df)
 
             def _apply(df):
-                self.w.engine._df = df
+                self.w.engine.update_dataframe(df)
                 self.w.table_panel.set_data(df)
                 self.w.graph_panel.refresh()
 

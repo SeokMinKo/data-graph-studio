@@ -1980,12 +1980,7 @@ class TablePanel(QWidget):
             df = self.engine.df
             if df is None or column not in df.columns:
                 return
-            self.engine._df = df.drop(column)
-            # Update active dataset in engine
-            if self.engine.active_dataset_id and self.engine.active_dataset_id in self.engine._datasets:
-                ds = self.engine._datasets[self.engine.active_dataset_id]
-                ds.df = self.engine._df
-                ds.lazy_df = None
+            self.engine.drop_column(column)
             # Clean state references
             if self.state.x_column == column:
                 self.state.set_x_column(None)
