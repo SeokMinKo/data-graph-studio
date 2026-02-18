@@ -41,6 +41,7 @@ from .graph_options_panel import GraphOptionsPanel
 from .legend_settings_panel import LegendSettingsPanel
 from .stat_panel import StatPanel
 from .main_graph import MainGraph
+from .minimap_widget import MinimapWidget
 
 
 
@@ -80,6 +81,10 @@ class GraphPanel(QWidget):
 
         # P1-2: Categorical mapping cache {col_name: (labels_tuple, value_to_idx_dict)}
         self._categorical_cache: Dict[str, tuple] = {}
+
+        # Minimap state
+        self._minimap_enabled = False
+        self._minimap_syncing = False  # guard against infinite loop
 
         # Debounced refresh timer
         self._refresh_timer = QTimer(self)
@@ -151,6 +156,11 @@ class GraphPanel(QWidget):
         
         center_layout.addWidget(self._center_stack, 1)
 
+        # Minimap (below graph, above sliding window)
+        self.minimap = MinimapWidget()
+        self.minimap.setVisible(False)
+        center_layout.addWidget(self.minimap)
+
         # X-axis sliding window (below graph)
         self.x_sliding_window = SlidingWindowWidget(orientation='horizontal')
         self.x_sliding_window.setVisible(False)  # Hidden by default
@@ -198,6 +208,10 @@ class GraphPanel(QWidget):
 
         # Connect view range changes to update sliding windows
         self.main_graph.plotItem.sigRangeChanged.connect(self._on_graph_range_changed)
+
+        # Minimap signals
+        self.minimap.region_changed.connect(self._on_minimap_region_changed)
+        self.main_graph.plotItem.sigRangeChanged.connect(self._on_main_graph_range_for_minimap)
 
         # Grid View signal
         self.state.grid_view_changed.connect(self._on_grid_view_changed)
@@ -320,6 +334,38 @@ class GraphPanel(QWidget):
             self.x_sliding_window.set_data(self.main_graph._data_x)
         if self.main_graph._data_y is not None:
             self.y_sliding_window.set_data(self.main_graph._data_y)
+
+    # ==================== Minimap ====================
+
+    def toggle_minimap(self, enabled: Optional[bool] = None):
+        """Toggle minimap visibility."""
+        if enabled is None:
+            enabled = not self._minimap_enabled
+        self._minimap_enabled = enabled
+        self.minimap.setVisible(enabled)
+        if enabled:
+            self._schedule_refresh()
+
+    def _on_minimap_region_changed(self, x_min: float, x_max: float):
+        """User dragged minimap region → update main graph."""
+        if self._minimap_syncing:
+            return
+        self._minimap_syncing = True
+        try:
+            self.main_graph.setXRange(x_min, x_max, padding=0)
+        finally:
+            self._minimap_syncing = False
+
+    def _on_main_graph_range_for_minimap(self, vb, ranges):
+        """Main graph range changed → update minimap region."""
+        if not self._minimap_enabled or self._minimap_syncing:
+            return
+        self._minimap_syncing = True
+        try:
+            x_range = ranges[0]
+            self.minimap.set_region(x_range[0], x_range[1])
+        finally:
+            self._minimap_syncing = False
 
     def _on_group_changed(self):
         """그룹 변경 시 범례 업데이트"""
@@ -753,6 +799,20 @@ class GraphPanel(QWidget):
             y_categorical_labels=y_categorical_labels
         )
 
+        # Update minimap
+        if self._minimap_enabled:
+            chart_type = options.get('chart_type', ChartType.LINE)
+            if chart_type in (ChartType.LINE, ChartType.SCATTER, ChartType.AREA):
+                self.minimap.set_data(x_sampled, y_sampled)
+                # Sync current view range to minimap
+                vr = self.main_graph.viewRange()
+                self.minimap.set_region(vr[0][0], vr[0][1])
+                self.minimap.setVisible(True)
+            else:
+                self.minimap.setVisible(False)
+        else:
+            self.minimap.setVisible(False)
+
         # Update sampling status label
         displayed_points = len(x_sampled)
         self.main_graph.update_sampling_status(
@@ -994,8 +1054,9 @@ class GraphPanel(QWidget):
             default_colors = list(ColorPalette.default().colors)
 
         # Apply axis options
+        axis_label_color = '#111827' if self.main_graph._is_light else '#E2E8F0'
         self.main_graph.setLabel('bottom', options.get('x_title') or x_col or 'Index',
-                                 **{'font-size': '14px', 'color': '#E2E8F0'})
+                                 **{'font-size': '14px', 'color': axis_label_color})
         if x_categorical_labels:
             self.main_graph._x_axis.set_categorical(x_categorical_labels)
         else:
@@ -1295,9 +1356,10 @@ class GraphPanel(QWidget):
             self.main_graph._plot_items.append(box)
 
             # Median line
+            median_color = '#1E293B' if self.main_graph._is_light else '#ffffff'
             med_line = pg.PlotCurveItem(
                 [i - 0.3, i + 0.3], [s['median'], s['median']],
-                pen=pg.mkPen('#ffffff', width=3),
+                pen=pg.mkPen(median_color, width=3),
             )
             pw.addItem(med_line)
             self.main_graph._plot_items.append(med_line)

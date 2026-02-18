@@ -207,6 +207,9 @@ class ViewActionsController:
             # Stat panel mini-graphs
             if hasattr(self.w.graph_panel, 'stat_panel'):
                 self.w.graph_panel.stat_panel.apply_theme(is_light)
+            # Minimap
+            if hasattr(self.w.graph_panel, 'minimap'):
+                self.w.graph_panel.minimap.apply_theme(is_light)
 
         # Apply theme to compare widgets
         for attr in ('_overlay_stats_widget', '_comparison_stats_panel',
