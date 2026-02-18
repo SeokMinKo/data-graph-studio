@@ -74,6 +74,10 @@ class GraphPanel(QWidget):
         # Active filter (Item 15): {col: [values]}
         self._active_filter: Dict[str, list] = {}
 
+        # Mapping from original DataFrame row indices to sampled array indices
+        # Used by selection highlight to correctly map state.selection rows
+        self._sampled_original_indices: Optional[np.ndarray] = None
+
         # Debounced refresh timer
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
@@ -672,6 +676,22 @@ class GraphPanel(QWidget):
         else:
             x_sampled, y_sampled = x_data, y_data
 
+        # Track which original rows survived sampling (for selection highlight)
+        if is_sampled and len(x_sampled) < total_points:
+            # Build original→sampled index mapping by matching sampled x values
+            try:
+                x_orig_f = x_data.astype(np.float64) if hasattr(x_data, 'astype') else np.array(x_data, dtype=np.float64)
+                x_samp_f = x_sampled.astype(np.float64) if hasattr(x_sampled, 'astype') else np.array(x_sampled, dtype=np.float64)
+                if np.all(x_orig_f[:-1] <= x_orig_f[1:]) and len(x_orig_f) > 0:
+                    self._sampled_original_indices = np.searchsorted(x_orig_f, x_samp_f).clip(0, len(x_orig_f) - 1)
+                else:
+                    step = max(1, len(x_data) // max(1, len(x_sampled)))
+                    self._sampled_original_indices = np.arange(0, len(x_data), step)[:len(x_sampled)]
+            except Exception:
+                self._sampled_original_indices = None
+        else:
+            self._sampled_original_indices = None
+
         # Plot data with categorical labels
         self.main_graph.plot_data(
             x_sampled, y_sampled,
@@ -692,18 +712,37 @@ class GraphPanel(QWidget):
             algorithm=algorithm_used
         )
 
-        # Set hover data
+        # Set hover data — use the same sampled indices as x/y to avoid mismatch
         hover_columns = self.state.hover_columns
         if hover_columns:
             hover_data = {}
+            # Determine the indices that survived sampling
+            sampled_indices = None
+            if is_sampled and len(x_sampled) < len(x_data):
+                # Reconstruct sampled indices by matching x_sampled back to x_data
+                # For consistent hover, build index map from the sampling result
+                try:
+                    # Build a lookup: for each sampled point, find its original index
+                    x_orig = x_data.astype(np.float64) if hasattr(x_data, 'astype') else np.array(x_data, dtype=np.float64)
+                    x_samp = x_sampled.astype(np.float64) if hasattr(x_sampled, 'astype') else np.array(x_sampled, dtype=np.float64)
+                    # Use searchsorted for monotonic data, else nearest-neighbor
+                    if np.all(x_orig[:-1] <= x_orig[1:]) and len(x_orig) > 0:
+                        sampled_indices = np.searchsorted(x_orig, x_samp).clip(0, len(x_orig) - 1)
+                    else:
+                        # Fallback: uniform step (best effort)
+                        step = max(1, len(x_data) // max(1, len(x_sampled)))
+                        sampled_indices = np.arange(0, len(x_data), step)[:len(x_sampled)]
+                except Exception:
+                    sampled_indices = None
+
             for col in hover_columns:
                 if col in working_df.columns:
                     col_data = working_df[col].to_list()
-                    # Apply same sampling if needed
-                    if len(col_data) > max_points and len(x_sampled) < len(col_data):
-                        # Simple downsampling for hover data
-                        step = len(col_data) // len(x_sampled)
-                        col_data = col_data[::step][:len(x_sampled)]
+                    if sampled_indices is not None and len(col_data) > len(x_sampled):
+                        col_data = [col_data[i] for i in sampled_indices if i < len(col_data)]
+                    elif len(col_data) > len(x_sampled):
+                        # Last resort: truncate to match
+                        col_data = col_data[:len(x_sampled)]
                     hover_data[col] = col_data
             self.main_graph.set_hover_data(hover_columns, hover_data)
         else:
@@ -903,10 +942,8 @@ class GraphPanel(QWidget):
         self.main_graph.setBackground(bg_color.name())
         line_width = options.get('line_width', 2)
 
-        default_colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-        ]
+        from ..theme import ColorPalette
+        default_colors = list(ColorPalette.default().colors)
 
         # Apply axis options
         self.main_graph.setLabel('bottom', options.get('x_title') or x_col or 'Index',
@@ -1117,10 +1154,8 @@ class GraphPanel(QWidget):
         bg_color = options.get('bg_color', QColor('#323D4A'))
         self.main_graph.setBackground(bg_color.name())
 
-        default_colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-        ]
+        from ..theme import ColorPalette
+        default_colors = list(ColorPalette.default().colors)
 
         if chart_type == ChartType.BOX:
             self._render_box_plot(df, cat_col, y_col_name, options, default_colors)
@@ -1593,8 +1628,16 @@ class GraphPanel(QWidget):
         """Handle selection state change - highlight selected points and update stats"""
         selected_rows = list(self.state.selection.selected_rows)
         
-        # Update graph highlight
-        self.main_graph.highlight_selection(selected_rows)
+        # Map original DataFrame row indices to sampled array indices
+        # When data is sampled, selected_rows are original indices but
+        # _data_x/_data_y are sampled arrays — indices won't match directly.
+        if self._sampled_original_indices is not None and selected_rows:
+            # Build reverse map: original_idx → sampled_idx
+            orig_to_sampled = {int(orig): sampled for sampled, orig in enumerate(self._sampled_original_indices)}
+            mapped_rows = [orig_to_sampled[r] for r in selected_rows if r in orig_to_sampled]
+            self.main_graph.highlight_selection(mapped_rows)
+        else:
+            self.main_graph.highlight_selection(selected_rows)
         
         # Update stat panel with selected data statistics
         if selected_rows and self.engine.is_loaded:
@@ -2008,8 +2051,8 @@ class GraphPanel(QWidget):
         grid_alpha = options.get('grid_opacity', 0.3)
 
         # Colors for series
-        default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                          '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        from ..theme import ColorPalette
+        default_colors = list(ColorPalette.default().colors)
 
         # Get X and Y column info
         x_col = self.state.x_column
