@@ -789,6 +789,9 @@ class MainWindow(QMainWindow):
         self._streaming_controller.data_updated.connect(
             self._on_streaming_data_updated
         )
+        self._streaming_controller.file_deleted.connect(
+            self._on_streaming_file_deleted
+        )
 
     def _setup_float_handlers(self):
         """메인 패널들의 Float 버튼 핸들러 설정"""
@@ -1355,6 +1358,9 @@ class MainWindow(QMainWindow):
 
     def _on_streaming_data_updated(self, *a, **kw):
         return self._streaming_ui_ctrl._on_streaming_data_updated(*a, **kw)
+
+    def _on_streaming_file_deleted(self, *a, **kw):
+        return self._streaming_ui_ctrl._on_streaming_file_deleted(*a, **kw)
 
     def closeEvent(self, event):
         """창 닫기 이벤트"""

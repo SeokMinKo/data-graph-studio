@@ -254,7 +254,7 @@ class ViewActionsController:
     def _on_draw_color_pick(self):
         """Open color picker for draw color"""
         color = QColorDialog.getColor(
-            self.w._draw_color, self, "Draw Color"
+            self.w._draw_color, self.w, "Draw Color"
         )
         if color.isValid():
             self.w._draw_color = color
@@ -327,21 +327,21 @@ class ViewActionsController:
     def _on_multi_grid_view(self):
         """Multi-Grid View - 여러 그래프를 그리드로 표시"""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Multi-Grid View", "No data loaded.")
+            QMessageBox.information(self.w, "Multi-Grid View", "No data loaded.")
             return
         
         # 그리드 설정 다이얼로그
         layouts = ["2x1 (Horizontal)", "1x2 (Vertical)", "2x2 (Grid)", "3x2 (Wide Grid)", "Custom..."]
         layout, ok = QInputDialog.getItem(
-            self, "Multi-Grid View", "Select grid layout:",
+            self.w, "Multi-Grid View", "Select grid layout:",
             layouts, 2, False
         )
         if ok:
             if layout == "Custom...":
                 # 커스텀 그리드 설정
-                rows, rows_ok = QInputDialog.getInt(self, "Custom Grid", "Number of rows:", 2, 1, 10)
+                rows, rows_ok = QInputDialog.getInt(self.w, "Custom Grid", "Number of rows:", 2, 1, 10)
                 if rows_ok:
-                    cols, cols_ok = QInputDialog.getInt(self, "Custom Grid", "Number of columns:", 2, 1, 10)
+                    cols, cols_ok = QInputDialog.getInt(self.w, "Custom Grid", "Number of columns:", 2, 1, 10)
                     if cols_ok:
                         self.w.statusbar.showMessage(f"Multi-grid view: {rows}x{cols}", 3000)
             else:
@@ -358,11 +358,11 @@ class ViewActionsController:
     def _on_axis_settings(self):
         """Axis Settings - 축 설정 다이얼로그"""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Axis Settings", "No data loaded.")
+            QMessageBox.information(self.w, "Axis Settings", "No data loaded.")
             return
         
         QMessageBox.information(
-            self, "Axis Settings",
+            self.w, "Axis Settings",
             "Axis settings dialog will be implemented.\n\n"
             "Configure:\n"
             "• X/Y axis range (min/max)\n"
@@ -383,7 +383,7 @@ class ViewActionsController:
         self.w._dashboard_toggling = True
         try:
             if not self.w.state.is_data_loaded:
-                QMessageBox.information(self, "Dashboard Mode", "No datasets loaded.")
+                QMessageBox.information(self.w, "Dashboard Mode", "No datasets loaded.")
                 self.w._dashboard_mode_action.setChecked(False)
                 return
 
@@ -399,7 +399,7 @@ class ViewActionsController:
         """Activate dashboard mode — show DashboardPanel (FR-B1.1, FR-B1.7)."""
         if not self.w._dashboard_controller.activate():
             QMessageBox.warning(
-                self, "Dashboard Mode",
+            self.w, "Dashboard Mode",
                 "Cannot activate dashboard mode. No datasets loaded."
             )
             self.w._dashboard_mode_action.setChecked(False)
@@ -409,11 +409,14 @@ class ViewActionsController:
         if self.w._dashboard_panel is None:
             self.w._dashboard_panel = DashboardPanel(
                 controller=self.w._dashboard_controller,
-                parent=self,
+                parent=self.w,
             )
             self.w._dashboard_panel.exit_requested.connect(self.w._deactivate_dashboard_mode)
             self.w._dashboard_panel.cell_clicked.connect(self.w._on_dashboard_cell_clicked)
             self.w._dashboard_panel.preset_changed.connect(self.w._on_dashboard_preset_changed)
+            self.w._dashboard_panel.cell_swap_requested.connect(self._on_dashboard_cell_swap)
+            self.w._dashboard_panel.grid_size_changed.connect(self._on_dashboard_grid_size_changed)
+            self.w._dashboard_panel.name_changed.connect(self._on_dashboard_name_changed)
             # Populate initial layout
             layout = self.w._dashboard_controller.current_layout
             if layout:
@@ -444,15 +447,18 @@ class ViewActionsController:
 
 
     def _on_dashboard_cell_clicked(self, row: int, col: int):
-        """Handle empty cell click — show profile selection dialog (FR-B1.2)."""
+        """Handle empty cell click — show profile selection dialog (FR-B1.2).
+
+        After assignment, renders a MiniGraphWidget immediately.
+        """
         profiles = self.w.profile_store.get_all()
         if not profiles:
-            QMessageBox.information(self, "Dashboard", "No profiles available. Create a profile first.")
+            QMessageBox.information(self.w, "Dashboard", "No profiles available. Create a profile first.")
             return
 
         names = [p.name for p in profiles]
         name, ok = QInputDialog.getItem(
-            self, "Select Profile", f"Profile for cell ({row}, {col}):", names, 0, False
+            self.w, "Select Profile", f"Profile for cell ({row}, {col}):", names, 0, False
         )
         if ok and name:
             idx = names.index(name)
@@ -463,10 +469,66 @@ class ViewActionsController:
                 self.w._dashboard_controller.add_cell(row, col, profile_id=profile.id)
             else:
                 self.w._dashboard_controller.assign_profile(row, col, profile.id)
-            # Refresh the panel
+
+            # Real-time chart rendering: create MiniGraphWidget and replace spinner
+            self._render_dashboard_cell(row, col, profile)
+
+    def _render_dashboard_cell(self, row: int, col: int, profile):
+        """Render a MiniGraphWidget for a dashboard cell."""
+        if self.w._dashboard_panel is None:
+            return
+        try:
+            from ..panels.mini_graph_widget import MiniGraphWidget
+            df = self.w.engine.df
+            if df is None:
+                return
+            mini = MiniGraphWidget(parent=self.w._dashboard_panel)
+            mini.set_data(df, profile)
+            cell = self.w._dashboard_controller.get_cell(row, col)
+            rs = cell.row_span if cell else 1
+            cs = cell.col_span if cell else 1
+            self.w._dashboard_panel.replace_spinner(row, col, mini, rs, cs)
+        except Exception as e:
+            logger.debug(f"MiniGraphWidget render failed: {e}")
+            # Fallback: just refresh the panel
             layout = self.w._dashboard_controller.current_layout
             if layout and self.w._dashboard_panel:
                 self.w._dashboard_panel.populate(layout)
+
+    def _on_dashboard_cell_swap(self, src_row: int, src_col: int,
+                                 dst_row: int, dst_col: int):
+        """Handle drag-and-drop cell swap."""
+        ctrl = self.w._dashboard_controller
+        layout = ctrl.current_layout
+        if layout is None:
+            return
+        src_cell = ctrl.get_cell(src_row, src_col)
+        dst_cell = ctrl.get_cell(dst_row, dst_col)
+        src_pid = src_cell.profile_id if src_cell else ""
+        dst_pid = dst_cell.profile_id if dst_cell else ""
+        # Swap profiles
+        if src_cell:
+            ctrl.assign_profile(src_row, src_col, dst_pid)
+        if dst_cell:
+            ctrl.assign_profile(dst_row, dst_col, src_pid)
+        # Refresh
+        if self.w._dashboard_panel:
+            self.w._dashboard_panel.populate(layout)
+
+    def _on_dashboard_grid_size_changed(self, rows: int, cols: int):
+        """Handle custom grid size change from gear button."""
+        ctrl = self.w._dashboard_controller
+        before = ctrl.current_layout
+        ctrl.create_layout(before.name if before else "Dashboard", rows, cols)
+        layout = ctrl.current_layout
+        if layout and self.w._dashboard_panel:
+            self.w._dashboard_panel.populate(layout)
+
+    def _on_dashboard_name_changed(self, new_name: str):
+        """Handle dashboard name change from header double-click."""
+        layout = self.w._dashboard_controller.current_layout
+        if layout:
+            layout.name = new_name
 
 
     def _on_dashboard_preset_changed(self, preset_name: str):
@@ -482,7 +544,7 @@ class ViewActionsController:
             # Create annotation panel
             self.w._annotation_panel = AnnotationPanel(
                 controller=self.w._annotation_controller,
-                parent=self,
+                parent=self.w,
             )
             # Connect signals
             self.w._annotation_panel.navigate_requested.connect(self.w._on_annotation_navigate)
@@ -514,7 +576,7 @@ class ViewActionsController:
         annotation = self.w._annotation_controller.get(annotation_id)
         if annotation:
             text, ok = QInputDialog.getText(
-                self, "Edit Annotation", "Text:", text=annotation.text
+            self.w, "Edit Annotation", "Text:", text=annotation.text
             )
             if ok and text:
                 self.w._annotation_controller.edit(annotation_id, text=text)
@@ -525,7 +587,7 @@ class ViewActionsController:
     def _on_annotation_delete(self, annotation_id: str):
         """Delete annotation"""
         reply = QMessageBox.question(
-            self, "Delete Annotation",
+            self.w, "Delete Annotation",
             "Are you sure you want to delete this annotation?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
@@ -545,7 +607,7 @@ class ViewActionsController:
             self.w.statusbar.showMessage("⚠ Display a graph first before adding annotations", 3000)
             return
 
-        text, ok = QInputDialog.getText(self, "Add Annotation", "Annotation text:")
+        text, ok = QInputDialog.getText(self.w, "Add Annotation", "Annotation text:")
         if ok and text:
             import uuid
             from ..core.annotation import Annotation

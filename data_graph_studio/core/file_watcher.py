@@ -363,11 +363,37 @@ class FileWatcher(QObject):
     def _handle_tail(self, entry: _WatchEntry, st: Any) -> None:
         """
         Handle change in tail mode.
-        Check if new rows were appended (same header) or schema changed.
+        Uses seek-based reading for performance — only reads new bytes.
+        Falls back to full read if file was truncated or on first read without header.
         """
         path = entry.path
+        current_size = st.st_size
 
         try:
+            # Seek-based: only read new bytes appended since last check
+            if current_size > entry.last_size and entry.last_header:
+                try:
+                    with open(path, 'rb') as f:
+                        f.seek(entry.last_size)
+                        new_data = f.read()
+                    new_lines = new_data.decode("utf-8", errors="replace").splitlines()
+                    new_lines = [l for l in new_lines if l.strip()]
+                    new_rows = len(new_lines)
+
+                    if new_rows > 0:
+                        entry.last_mtime = st.st_mtime
+                        entry.last_size = current_size
+                        entry.last_row_count += new_rows
+                        self._debounce_data[path] = new_rows
+                        self._schedule_debounce(path, "appended")
+                    else:
+                        entry.last_mtime = st.st_mtime
+                        entry.last_size = current_size
+                    return
+                except (OSError, IOError):
+                    pass  # Fall through to full read via IFileSystem
+
+            # Full read via IFileSystem abstraction
             data = self._fs.read_file(path)
             lines = data.decode("utf-8", errors="replace").splitlines()
         except (FileNotFoundError, PermissionError):
@@ -391,7 +417,6 @@ class FileWatcher(QObject):
             entry.last_size = st.st_size
             entry.last_row_count = current_row_count
             entry.last_header = current_header
-            # Emit file_changed instead of rows_appended
             self._schedule_debounce(path, "changed")
             return
 
@@ -403,7 +428,6 @@ class FileWatcher(QObject):
             self._debounce_data[path] = new_rows
             self._schedule_debounce(path, "appended")
         else:
-            # Size/mtime changed but no new rows (possible truncation)
             entry.last_mtime = st.st_mtime
             entry.last_size = st.st_size
             entry.last_row_count = current_row_count

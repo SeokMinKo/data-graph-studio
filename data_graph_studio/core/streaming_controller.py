@@ -40,6 +40,7 @@ class StreamingController(QObject):
     # ── Signals ───────────────────────────────────────────────
     streaming_state_changed = Signal(str)  # "off" | "live" | "paused"
     data_updated = Signal(str, int)        # file_path, new_row_count
+    file_deleted = Signal(str)             # file_path (notifies UI before stop)
 
     def __init__(
         self,
@@ -160,8 +161,9 @@ class StreamingController(QObject):
         self.data_updated.emit(path, 0)
 
     def _on_file_deleted(self, path: str) -> None:
-        """Handle file_deleted — ERR-2.1."""
+        """Handle file_deleted — ERR-2.1. Notify UI before stopping."""
         logger.warning(f"Streaming: file deleted: {path}")
+        self.file_deleted.emit(path)
         self.stop()
 
     def _on_rows_appended(self, path: str, count: int) -> None:

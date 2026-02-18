@@ -276,6 +276,28 @@ class DataEngine:
         self._clear_cache()
         return self._loader.load_file(path, **kwargs)
 
+    def append_rows(self, file_path: str, new_row_count: int) -> bool:
+        """Incrementally append new rows from the end of a file (streaming optimization).
+
+        Reads the last *new_row_count* rows from *file_path* and concatenates
+        them to the current DataFrame.  Falls back to full reload on error.
+        """
+        import polars as pl
+
+        current_df = self.df
+        if current_df is None:
+            return self.load_file(file_path, optimize_memory=True)
+
+        try:
+            full_df = pl.read_csv(file_path)
+            new_rows = full_df.tail(new_row_count)
+            merged = pl.concat([current_df, new_rows], how="vertical_relaxed")
+            self.update_dataframe(merged)
+            self._clear_cache()
+            return True
+        except Exception:
+            return self.load_file(file_path, optimize_memory=True)
+
     @staticmethod
     def is_binary_etl(path: str) -> bool:
         from .file_loader import FileLoader as FL

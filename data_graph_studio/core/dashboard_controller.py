@@ -194,13 +194,19 @@ class DashboardController:
         return True
 
     def unassign_profile(self, row: int, col: int) -> bool:
-        """Clear profile from a cell."""
+        """Clear profile from a cell (with undo support)."""
         if self._layout is None:
             return False
         cell = self._layout.get_cell(row, col)
         if cell is None:
             return False
+        before = self._layout.deep_copy()
         cell.profile_id = ""
+        self._push_undo(
+            UndoActionType.DASHBOARD_CELL_ASSIGN,
+            f"Unassign profile from ({row},{col})",
+            before,
+        )
         return True
 
     def on_profile_deleted(self, profile_id: str) -> None:
