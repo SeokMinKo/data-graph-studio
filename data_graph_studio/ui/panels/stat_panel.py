@@ -42,8 +42,8 @@ class StatPanel(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("StatPanel")
-        self.setMinimumWidth(280)
-        self.setMaximumWidth(360)
+        self.setMinimumWidth(200)
+        self.setMaximumWidth(500)
 
         self._x_data: Optional[np.ndarray] = None
         self._y_data: Optional[np.ndarray] = None

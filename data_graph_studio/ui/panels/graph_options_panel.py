@@ -68,14 +68,7 @@ class GraphOptionsPanel(QFrame):
         self.tabs = QTabWidget()
         self.tabs.setUsesScrollButtons(True)
         self.tabs.setElideMode(Qt.ElideNone)
-        # 탭 바 컴팩트하게: 패딩 최소화
-        self.tabs.tabBar().setStyleSheet("""
-            QTabBar::tab {
-                padding: 4px 6px;
-                font-size: 11px;
-                min-width: 36px;
-            }
-        """)
+        # Tab bar styling handled by ThemeManager.generate_stylesheet()
         main_layout.addWidget(self.tabs)
 
         # Tab 0: Data (X/Y/Group/Hover configuration)

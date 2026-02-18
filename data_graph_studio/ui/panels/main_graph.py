@@ -39,13 +39,14 @@ class MainGraph(pg.PlotWidget):
 
         super().__init__(axisItems={'bottom': self._x_axis, 'left': self._y_axis})
         self.state = state
+        self._is_light = False  # Default: dark (midnight) theme
 
-        # Ensure Y-axis label is not clipped
-        self._y_axis.setWidth(60)
+        # Ensure Y-axis label is not clipped (0 = auto-calculate)
+        self._y_axis.setWidth(0)
         self.getPlotItem().getViewBox().setDefaultPadding(0.05)
 
-        self.setBackground('w')
-        self.showGrid(x=True, y=True, alpha=0.15)
+        self.setBackground('#1E293B')
+        self.showGrid(x=True, y=True, alpha=0.3)
         self.setLabel('left', '')
         self.setLabel('bottom', '')
 
@@ -104,7 +105,7 @@ class MainGraph(pg.PlotWidget):
         self._sampling_label = pg.TextItem(
             text="",
             anchor=(0, 0),
-            color='#C2C8D1'
+            color='#C2C8D1'  # Dark theme default
         )
         self._sampling_label.setZValue(1000)
         self._sampling_label.setFont(pg.QtGui.QFont('Arial', 9))
@@ -272,11 +273,12 @@ class MainGraph(pg.PlotWidget):
         else:
             self._y_axis.clear_categorical()
 
-        # Apply options
+        # Apply options — use theme-aware colors
+        axis_label_color = '#111827' if self._is_light else '#E2E8F0'
         x_label = options.get('x_title', 'X')
         y_label = options.get('y_title', 'Y')
-        self.setLabel('bottom', x_label, **{'font-size': '14px', 'color': '#E2E8F0'})
-        self.setLabel('left', y_label, **{'font-size': '14px', 'color': '#E2E8F0'})
+        self.setLabel('bottom', x_label, **{'font-size': '14px', 'color': axis_label_color})
+        self.setLabel('left', y_label, **{'font-size': '14px', 'color': axis_label_color})
         
         # Grid
         grid_x = options.get('grid_x', True)
@@ -285,7 +287,8 @@ class MainGraph(pg.PlotWidget):
         self.showGrid(x=grid_x, y=grid_y, alpha=grid_alpha)
         
         # Background
-        bg_color = options.get('bg_color', QColor('#323D4A'))
+        default_bg = QColor('#F8FAFC') if self._is_light else QColor('#1E293B')
+        bg_color = options.get('bg_color', default_bg)
         self.setBackground(bg_color.name())
         
         # Title
@@ -350,9 +353,9 @@ class MainGraph(pg.PlotWidget):
         marker_symbol = options.get('marker_symbol', 'o')
         show_points = options.get('show_points', True)
         
-        # Default colors
-        default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                          '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        # Default colors from theme palette
+        from ..theme import ColorPalette
+        default_colors = list(ColorPalette.default().colors)
         
         # Get series colors from legend settings
         series_colors = {}
@@ -435,7 +438,8 @@ class MainGraph(pg.PlotWidget):
                 for i, (xi, yi) in enumerate(zip(x, y)):
                     if i >= max_labels:
                         break
-                    label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color='#E2E8F0')
+                    _lbl_color = '#111827' if self._is_light else '#E2E8F0'
+                    label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color=_lbl_color)
                     label.setPos(xi, yi)
                     self.addItem(label)
                     self._label_items.append(label)
@@ -453,7 +457,8 @@ class MainGraph(pg.PlotWidget):
                 for i, (xi, yi) in enumerate(zip(x, y)):
                     if i >= max_labels:
                         break
-                    label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color='#E2E8F0')
+                    _lbl_color = '#111827' if self._is_light else '#E2E8F0'
+                    label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color=_lbl_color)
                     label.setPos(xi, yi)
                     self.addItem(label)
                     self._label_items.append(label)
@@ -559,13 +564,14 @@ class MainGraph(pg.PlotWidget):
         # Clear existing plot
         self.clear_plot()
 
-        # Apply axis settings
+        # Apply axis settings — use theme-aware colors
+        axis_label_color = '#111827' if self._is_light else '#E2E8F0'
         x_title = options.get('x_title', '')
         y_title = options.get('y_title', '')
         if x_title:
-            self.setLabel('bottom', x_title, **{'font-size': '14px', 'color': '#E2E8F0'})
+            self.setLabel('bottom', x_title, **{'font-size': '14px', 'color': axis_label_color})
         if y_title:
-            self.setLabel('left', y_title, **{'font-size': '14px', 'color': '#E2E8F0'})
+            self.setLabel('left', y_title, **{'font-size': '14px', 'color': axis_label_color})
 
         # Set log scale if specified
         x_log = options.get('x_log', False)
@@ -710,7 +716,7 @@ class MainGraph(pg.PlotWidget):
 
     def _toggle_grid(self):
         self._grid_visible = not getattr(self, '_grid_visible', True)
-        self.showGrid(x=self._grid_visible, y=self._grid_visible, alpha=0.15)
+        self.showGrid(x=self._grid_visible, y=self._grid_visible, alpha=0.3)
 
     def _copy_plot_image(self):
         try:
@@ -1299,7 +1305,10 @@ class MainGraph(pg.PlotWidget):
     ):
         """Show tooltip at data point"""
         if self._tooltip_item is None:
-            self._tooltip_item = pg.TextItem(anchor=(0, 1), fill='w', border='k')
+            fill_color = '#FFFFFF' if self._is_light else '#323D4A'
+            border_color = '#CCCCCC' if self._is_light else '#4A5568'
+            text_color = '#111827' if self._is_light else '#E2E8F0'
+            self._tooltip_item = pg.TextItem(anchor=(0, 1), fill=fill_color, border=border_color, color=text_color)
             self._tooltip_item.setZValue(1000)
             self.addItem(self._tooltip_item)
 
@@ -1603,6 +1612,7 @@ class MainGraph(pg.PlotWidget):
 
     def apply_theme(self, is_light: bool):
         """Apply theme colors to main graph"""
+        self._is_light = is_light
         bg_color = '#F8FAFC' if is_light else '#1E293B'
         grid_color = '#E5E7EB' if is_light else '#374151'
         text_color = '#111827' if is_light else '#F1F5F9'
@@ -1620,6 +1630,11 @@ class MainGraph(pg.PlotWidget):
         if hasattr(self, '_sampling_label'):
             label_color = '#6B7280' if is_light else '#C2C8D1'
             self._sampling_label.setColor(label_color)
+        
+        # Reset tooltip so it gets recreated with correct theme colors
+        if hasattr(self, '_tooltip_item') and self._tooltip_item is not None:
+            self.removeItem(self._tooltip_item)
+            self._tooltip_item = None
 
 
 # ==================== Graph Panel ====================
