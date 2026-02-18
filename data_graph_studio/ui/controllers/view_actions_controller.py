@@ -208,6 +208,14 @@ class ViewActionsController:
             if hasattr(self.w.graph_panel, 'stat_panel'):
                 self.w.graph_panel.stat_panel.apply_theme(is_light)
 
+        # Apply theme to compare widgets
+        for attr in ('_overlay_stats_widget', '_comparison_stats_panel',
+                     '_compare_toolbar', '_profile_overlay_renderer',
+                     '_profile_difference_renderer'):
+            widget = getattr(self.w, attr, None)
+            if widget is not None and hasattr(widget, 'apply_theme'):
+                widget.apply_theme(is_light)
+
         # Persist to QSettings (B-6)
         try:
             from PySide6.QtCore import QSettings

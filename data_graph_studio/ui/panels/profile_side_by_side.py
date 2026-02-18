@@ -33,7 +33,8 @@ class ProfileSideBySideLayout(QWidget):
     profile_activated = Signal(str)  # profile_id
     exit_requested = Signal()  # FR-9
 
-    MAX_PANELS = 4
+    MAX_PANELS = 6
+    MIN_PANEL_WIDTH = 200  # minimum panel width in px
 
     def __init__(
         self,
@@ -279,14 +280,8 @@ class ProfileSideBySideLayout(QWidget):
             self._grid_container = None
 
     def _on_row_selection(self, source_pid: str, row_indices: list) -> None:
-        """Propagate row selection to all other panels (always sync, ignoring X/Y sync setting)."""
-        for pid, panel in self._panels.items():
-            if pid == source_pid:
-                continue
-            try:
-                panel.highlight_selection(row_indices)
-            except Exception:
-                pass
+        """Propagate row selection via ViewSyncManager."""
+        self._view_sync_manager.on_source_row_selection_changed(source_pid, row_indices)
 
     def _rearrange_panels(self) -> None:
         """Rearrange existing panels according to self._current_grid_layout.
@@ -305,6 +300,10 @@ class ProfileSideBySideLayout(QWidget):
         self._clear_content_widgets()
 
         panel_list = [self._panels[pid] for pid in self._profile_ids if pid in self._panels]
+
+        # Set minimum width on all panels
+        for panel in panel_list:
+            panel.setMinimumWidth(self.MIN_PANEL_WIDTH)
 
         if self._current_grid_layout == "grid":
             # 2×2 QGridLayout
@@ -336,6 +335,7 @@ class ProfileSideBySideLayout(QWidget):
                 self._splitter.addWidget(panel)
             if self._splitter.count() > 0:
                 w = max(self.width(), 800)
-                sizes = [w // self._splitter.count()] * self._splitter.count()
+                per_panel = max(w // self._splitter.count(), self.MIN_PANEL_WIDTH)
+                sizes = [per_panel] * self._splitter.count()
                 self._splitter.setSizes(sizes)
             self._content_layout.addWidget(self._splitter, 1)

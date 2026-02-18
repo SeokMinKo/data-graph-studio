@@ -47,12 +47,20 @@ class ProfileDifferenceRenderer(QWidget):
         self.state = state
         self.store = store
 
+        self._is_light: bool = False  # Default: dark (midnight) theme
+        self._diff_mode: str = "absolute"  # "absolute" or "percent"
         self._profile_a_id: Optional[str] = None
         self._profile_b_id: Optional[str] = None
+        self._profile_ids: List[str] = []  # multi-profile support
         self._plot_widget = None
+        self._header: Optional[QFrame] = None
+        self._header_title: Optional[QLabel] = None
         self._x_col_label: Optional[QLabel] = None
         self._subtitle_label: Optional[QLabel] = None
         self._stats_label: Optional[QLabel] = None
+        self._stats_frame: Optional[QFrame] = None
+        self._abs_btn: Optional[QPushButton] = None
+        self._pct_btn: Optional[QPushButton] = None
 
         self._setup_ui()
 
@@ -62,17 +70,15 @@ class ProfileDifferenceRenderer(QWidget):
 
     @staticmethod
     def can_difference(profiles: List["GraphSetting"]) -> bool:
-        """Check if exactly 2 profiles with same non-None x_column.
+        """Check if 2+ profiles with same non-None x_column.
 
         Returns False when X columns differ, triggering the X-axis
         mismatch warning in the comparison controller.
         """
-        if len(profiles) != 2:
+        if len(profiles) < 2:
             return False
-        return (
-            profiles[0].x_column == profiles[1].x_column
-            and profiles[0].x_column is not None
-        )
+        x_cols = {p.x_column for p in profiles}
+        return len(x_cols) == 1 and None not in x_cols
 
     @staticmethod
     def compute_diff(df, y_col_a: str, y_col_b: str) -> Dict:
@@ -112,6 +118,39 @@ class ProfileDifferenceRenderer(QWidget):
             "rmse": rmse,
         }
 
+    @staticmethod
+    def compute_pct_diff(df, y_col_a: str, y_col_b: str) -> Dict:
+        """Compute percentage diff stats: (A - B) / B * 100.
+
+        Returns dict with keys: diff_series, mean_diff, max_diff, rmse.
+        B==0 positions are set to NaN.
+        """
+        a = np.asarray(df[y_col_a], dtype=np.float64)
+        b = np.asarray(df[y_col_b], dtype=np.float64)
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pct = np.where(b != 0, (a - b) / b * 100.0, np.nan)
+
+        if len(pct) == 0:
+            return {
+                "diff_series": pct,
+                "mean_diff": 0.0,
+                "max_diff": 0.0,
+                "rmse": 0.0,
+            }
+
+        abs_pct = np.abs(pct)
+        mean_diff = float(np.nanmean(abs_pct))
+        max_diff = float(np.nanmax(abs_pct)) if not np.all(np.isnan(abs_pct)) else 0.0
+        rmse = float(np.sqrt(np.nanmean(pct ** 2))) if not np.all(np.isnan(pct)) else 0.0
+
+        return {
+            "diff_series": pct,
+            "mean_diff": mean_diff,
+            "max_diff": max_diff,
+            "rmse": rmse,
+        }
+
     # ------------------------------------------------------------------
     # UI setup
     # ------------------------------------------------------------------
@@ -122,23 +161,35 @@ class ProfileDifferenceRenderer(QWidget):
         layout.setSpacing(4)
 
         # Header
-        header = QFrame()
-        header.setStyleSheet("background-color: #2c3e50; border-radius: 4px;")
-        header.setFixedHeight(52)
-        header_layout = QVBoxLayout(header)
+        self._header = QFrame()
+        self._header.setFixedHeight(52)
+        header_layout = QVBoxLayout(self._header)
         header_layout.setContentsMargins(8, 4, 8, 4)
         header_layout.setSpacing(2)
 
         # Top row: title + x_col + exit
         top_row = QHBoxLayout()
-        title = QLabel("Profile Comparison (Difference)")
-        title.setStyleSheet("color: white; font-weight: bold;")
-        top_row.addWidget(title)
+        self._header_title = QLabel("Profile Comparison (Difference)")
+        top_row.addWidget(self._header_title)
 
         self._x_col_label = QLabel("")
-        self._x_col_label.setStyleSheet("color: rgba(255,255,255,0.8);")
         top_row.addWidget(self._x_col_label)
         top_row.addStretch()
+
+        # Absolute / Percent toggle buttons
+        self._abs_btn = QPushButton("Absolute")
+        self._abs_btn.setFixedWidth(70)
+        self._abs_btn.setCheckable(True)
+        self._abs_btn.setChecked(True)
+        self._abs_btn.clicked.connect(lambda: self._set_diff_mode("absolute"))
+        top_row.addWidget(self._abs_btn)
+
+        self._pct_btn = QPushButton("Percent")
+        self._pct_btn.setFixedWidth(70)
+        self._pct_btn.setCheckable(True)
+        self._pct_btn.setChecked(False)
+        self._pct_btn.clicked.connect(lambda: self._set_diff_mode("percent"))
+        top_row.addWidget(self._pct_btn)
 
         exit_btn = QPushButton("✕ Exit")
         exit_btn.setFixedWidth(60)
@@ -154,17 +205,15 @@ class ProfileDifferenceRenderer(QWidget):
 
         # Subtitle row
         self._subtitle_label = QLabel("")
-        self._subtitle_label.setStyleSheet("color: rgba(255,255,255,0.7); font-size: 11px;")
         header_layout.addWidget(self._subtitle_label)
 
-        layout.addWidget(header)
+        layout.addWidget(self._header)
 
         # Plot area
         try:
             import pyqtgraph as pg
 
             self._plot_widget = pg.PlotWidget()
-            self._plot_widget.setBackground("w")
             self._plot_widget.showGrid(x=True, y=True, alpha=0.3)
             self._plot_widget.addLegend(offset=(10, 10))
             self._plot_widget.setMinimumHeight(200)
@@ -176,30 +225,105 @@ class ProfileDifferenceRenderer(QWidget):
             layout.addWidget(placeholder, 1)
 
         # Stats bar
-        stats_frame = QFrame()
-        stats_frame.setStyleSheet(
-            "background-color: #ecf0f1; border-radius: 4px; padding: 4px;"
-        )
-        stats_layout = QHBoxLayout(stats_frame)
+        self._stats_frame = QFrame()
+        stats_layout = QHBoxLayout(self._stats_frame)
         stats_layout.setContentsMargins(8, 4, 8, 4)
         self._stats_label = QLabel("Mean Diff: — | Max Diff: — | RMSE: —")
         self._stats_label.setStyleSheet("font-size: 12px;")
         stats_layout.addWidget(self._stats_label)
         stats_layout.addStretch()
-        layout.addWidget(stats_frame)
+        layout.addWidget(self._stats_frame)
 
         # Esc shortcut
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.activated.connect(self.exit_requested.emit)
 
+        # Apply initial theme
+        self.apply_theme(self._is_light)
+
+    # ------------------------------------------------------------------
+    # Theme
+    # ------------------------------------------------------------------
+
+    def apply_theme(self, is_light: bool) -> None:
+        """Apply light/dark theme colors."""
+        self._is_light = is_light
+
+        # Header
+        header_bg = "#E5E7EB" if is_light else "#1E293B"
+        header_fg = "#111827" if is_light else "#FFFFFF"
+        header_fg_muted = "rgba(0,0,0,0.6)" if is_light else "rgba(255,255,255,0.8)"
+        header_fg_subtle = "rgba(0,0,0,0.5)" if is_light else "rgba(255,255,255,0.7)"
+
+        if self._header:
+            self._header.setStyleSheet(f"background-color: {header_bg}; border-radius: 4px;")
+        if self._header_title:
+            self._header_title.setStyleSheet(f"color: {header_fg}; font-weight: bold;")
+        if self._x_col_label:
+            self._x_col_label.setStyleSheet(f"color: {header_fg_muted};")
+        if self._subtitle_label:
+            self._subtitle_label.setStyleSheet(f"color: {header_fg_subtle}; font-size: 11px;")
+
+        # Plot background
+        plot_bg = "#FFFFFF" if is_light else "#1E293B"
+        if self._plot_widget:
+            self._plot_widget.setBackground(plot_bg)
+
+        # Stats bar
+        stats_bg = "#F3F4F6" if is_light else "#334155"
+        stats_fg = "#111827" if is_light else "#E2E8F0"
+        if self._stats_frame:
+            self._stats_frame.setStyleSheet(
+                f"background-color: {stats_bg}; border-radius: 4px; padding: 4px;"
+            )
+        if self._stats_label:
+            self._stats_label.setStyleSheet(f"font-size: 12px; color: {stats_fg};")
+
+        # Toggle buttons
+        btn_style = (
+            "QPushButton { color: %(fg)s; background: transparent; border: 1px solid %(border)s; "
+            "border-radius: 3px; padding: 2px 6px; font-size: 10px; }"
+            "QPushButton:checked { background: %(accent)s; color: white; border-color: %(accent)s; }"
+        ) % {
+            "fg": header_fg,
+            "border": header_fg_muted,
+            "accent": "#3B82F6",
+        }
+        if self._abs_btn:
+            self._abs_btn.setStyleSheet(btn_style)
+        if self._pct_btn:
+            self._pct_btn.setStyleSheet(btn_style)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def set_profiles(self, profile_a_id: str, profile_b_id: str) -> None:
-        """Set the two profiles to compare."""
-        self._profile_a_id = profile_a_id
-        self._profile_b_id = profile_b_id
+    def _set_diff_mode(self, mode: str) -> None:
+        """Switch between absolute and percent diff mode."""
+        self._diff_mode = mode
+        if self._abs_btn and self._pct_btn:
+            self._abs_btn.setChecked(mode == "absolute")
+            self._pct_btn.setChecked(mode == "percent")
+        self._render()
+
+    def set_profiles(self, *args) -> None:
+        """Set profiles to compare.
+
+        Accepts either:
+          - set_profiles(profile_a_id, profile_b_id)  (legacy 2-arg)
+          - set_profiles([id1, id2, ...])              (multi-profile list)
+        """
+        if len(args) == 1 and isinstance(args[0], (list, tuple)):
+            ids = list(args[0])
+        elif len(args) == 2 and isinstance(args[0], str):
+            ids = [args[0], args[1]]
+        else:
+            ids = list(args)
+
+        self._profile_ids = ids
+        # Backward compat
+        self._profile_a_id = ids[0] if len(ids) >= 1 else None
+        self._profile_b_id = ids[1] if len(ids) >= 2 else None
         self._render()
 
     def refresh(self) -> None:
@@ -216,33 +340,39 @@ class ProfileDifferenceRenderer(QWidget):
 
         self._plot_widget.clear()
 
-        if self._profile_a_id is None or self._profile_b_id is None:
+        if len(self._profile_ids) < 2:
             return
 
-        gs_a = self.store.get(self._profile_a_id)
-        gs_b = self.store.get(self._profile_b_id)
-        if gs_a is None or gs_b is None:
+        # Resolve all profiles
+        profiles = []
+        for pid in self._profile_ids:
+            gs = self.store.get(pid)
+            if gs is not None:
+                profiles.append((pid, gs))
+
+        if len(profiles) < 2:
             return
 
-        x_col = gs_a.x_column
+        # Baseline is first profile
+        _, gs_baseline = profiles[0]
+        x_col = gs_baseline.x_column
         if self._x_col_label is not None:
             self._x_col_label.setText(f"X: {x_col}" if x_col else "")
 
-        # Extract Y column names
-        vc_a = list(gs_a.value_columns)
-        vc_b = list(gs_b.value_columns)
-        y_col_a = ""
-        y_col_b = ""
-        if vc_a:
-            first = vc_a[0]
-            y_col_a = first.get("name", "") if isinstance(first, dict) else getattr(first, "name", "")
-        if vc_b:
-            first = vc_b[0]
-            y_col_b = first.get("name", "") if isinstance(first, dict) else getattr(first, "name", "")
+        # Y column helper
+        def _y_col(gs):
+            vc = list(gs.value_columns)
+            if not vc:
+                return ""
+            first = vc[0]
+            return first.get("name", "") if isinstance(first, dict) else getattr(first, "name", "")
+
+        y_col_baseline = _y_col(gs_baseline)
 
         if self._subtitle_label is not None:
+            others = ", ".join(f"{gs.name}({_y_col(gs)})" for _, gs in profiles[1:])
             self._subtitle_label.setText(
-                f"Profile A: {y_col_a} vs Profile B: {y_col_b}"
+                f"Baseline: {gs_baseline.name}({y_col_baseline}) vs {others}"
             )
 
         # Get dataset
@@ -262,42 +392,22 @@ class ProfileDifferenceRenderer(QWidget):
         except Exception:
             x_data = np.arange(len(df))
 
-        # Coerce non-numeric X data (e.g., date strings) to numeric
         from .profile_overlay import ProfileOverlayRenderer
         x_data = ProfileOverlayRenderer._coerce_x_to_numeric(x_data, len(df))
 
-        # Y data
+        # Baseline Y data
         try:
-            y_a = df[y_col_a].to_numpy() if y_col_a and y_col_a in df else None
-            y_b = df[y_col_b].to_numpy() if y_col_b and y_col_b in df else None
+            y_baseline = df[y_col_baseline].to_numpy() if y_col_baseline and y_col_baseline in df else None
         except Exception:
-            y_a = y_b = None
+            y_baseline = None
 
-        if y_a is None or y_b is None:
+        if y_baseline is None:
             return
 
-        # Compute diff using pandas-like interface for numpy arrays
-        import pandas as pd
-        temp_df = pd.DataFrame({"y_a": y_a, "y_b": y_b})
-        result = self.compute_diff(temp_df, "y_a", "y_b")
-
-        diff = result["diff_series"]
-
-        # Downsample based on profile sampling settings
-        cs_a = dict(gs_a.chart_settings) if gs_a.chart_settings else {}
-        show_all = cs_a.get("show_all_data", False)
-        mp = cs_a.get("max_points", MAX_POINTS)
-        if not show_all and len(x_data) > mp:
-            step = len(x_data) // mp
-            x_data = x_data[::step]
-            y_a = y_a[::step]
-            y_b = y_b[::step]
-            diff = diff[::step]
-
-        # Plot
         import pyqtgraph as pg
+        import pandas as pd
 
-        # Read styles from profile chart_settings (Item 12)
+        # Style helper
         def _style(gs, fallback_color, fallback_width=2):
             cs = dict(gs.chart_settings) if gs.chart_settings else {}
             color = cs.get("color", fallback_color)
@@ -310,36 +420,94 @@ class ProfileDifferenceRenderer(QWidget):
                     color = vc_color
             return color, int(width)
 
-        color_a, width_a = _style(gs_a, "#1f77b4")
-        color_b, width_b = _style(gs_b, "#ff7f0e")
+        DIFF_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
 
-        # Series A
+        # Downsample settings from baseline
+        cs_base = dict(gs_baseline.chart_settings) if gs_baseline.chart_settings else {}
+        show_all = cs_base.get("show_all_data", False)
+        mp = cs_base.get("max_points", MAX_POINTS)
+
+        # Plot baseline
+        color_base, width_base = _style(gs_baseline, DIFF_COLORS[0])
+        x_plot = x_data
+        y_base_plot = y_baseline
+        if not show_all and len(x_plot) > mp:
+            step = len(x_plot) // mp
+            x_plot = x_plot[::step]
+            y_base_plot = y_base_plot[::step]
+
         self._plot_widget.plot(
-            x_data, y_a,
-            pen=pg.mkPen(color_a, width=width_a),
-            name=f"A: {y_col_a}",
+            x_plot, y_base_plot,
+            pen=pg.mkPen(color_base, width=width_base),
+            name=f"Baseline: {y_col_baseline}",
         )
 
-        # Series B
-        self._plot_widget.plot(
-            x_data, y_b,
-            pen=pg.mkPen(color_b, width=width_b),
-            name=f"B: {y_col_b}",
-        )
+        # For each other profile, compute and plot diff
+        all_stats = []
 
-        # Diff shaded area (gray fill)
-        zeros = np.zeros_like(diff)
-        fill_above = pg.FillBetweenItem(
-            pg.PlotCurveItem(x_data, diff, pen=pg.mkPen("#7f7f7f", width=1)),
-            pg.PlotCurveItem(x_data, zeros, pen=pg.mkPen(None)),
-            brush=pg.mkBrush(127, 127, 127, 60),
-        )
-        self._plot_widget.addItem(fill_above)
+        for pair_idx, (pid, gs_other) in enumerate(profiles[1:], start=1):
+            y_col_other = _y_col(gs_other)
+            try:
+                y_other = df[y_col_other].to_numpy() if y_col_other and y_col_other in df else None
+            except Exception:
+                y_other = None
+
+            if y_other is None:
+                continue
+
+            # Compute diff
+            temp_df = pd.DataFrame({"y_a": y_baseline, "y_b": y_other})
+            if self._diff_mode == "percent":
+                result = self.compute_pct_diff(temp_df, "y_a", "y_b")
+            else:
+                result = self.compute_diff(temp_df, "y_a", "y_b")
+            diff = result["diff_series"]
+
+            # Downsample
+            x_d = x_data
+            y_o = y_other
+            d = diff
+            if not show_all and len(x_d) > mp:
+                step = len(x_d) // mp
+                x_d = x_d[::step]
+                y_o = y_o[::step]
+                d = d[::step]
+
+            pair_color = DIFF_COLORS[pair_idx % len(DIFF_COLORS)]
+            color_other, width_other = _style(gs_other, pair_color)
+
+            # Plot other series
+            self._plot_widget.plot(
+                x_d, y_o,
+                pen=pg.mkPen(color_other, width=width_other),
+                name=f"{gs_other.name}: {y_col_other}",
+            )
+
+            # Diff shaded area
+            zeros = np.zeros_like(d)
+            diff_pen_color = pg.mkColor(pair_color)
+            diff_pen_color.setAlpha(180)
+            fill = pg.FillBetweenItem(
+                pg.PlotCurveItem(x_d, d, pen=pg.mkPen(diff_pen_color, width=1)),
+                pg.PlotCurveItem(x_d, zeros, pen=pg.mkPen(None)),
+                brush=pg.mkBrush(diff_pen_color.red(), diff_pen_color.green(), diff_pen_color.blue(), 40),
+            )
+            self._plot_widget.addItem(fill)
+
+            if self._diff_mode == "percent":
+                all_stats.append(
+                    f"[{gs_other.name}] Mean: {result['mean_diff']:.2f}% | "
+                    f"Max: {result['max_diff']:.2f}% | RMSE: {result['rmse']:.2f}%"
+                )
+            else:
+                all_stats.append(
+                    f"[{gs_other.name}] Mean: {result['mean_diff']:.4f} | "
+                    f"Max: {result['max_diff']:.4f} | RMSE: {result['rmse']:.4f}"
+                )
 
         # Stats bar
         if self._stats_label is not None:
-            self._stats_label.setText(
-                f"Mean Diff: {result['mean_diff']:.4f}  |  "
-                f"Max Diff: {result['max_diff']:.4f}  |  "
-                f"RMSE: {result['rmse']:.4f}"
-            )
+            if all_stats:
+                self._stats_label.setText("  ·  ".join(all_stats))
+            else:
+                self._stats_label.setText("Mean Diff: — | Max Diff: — | RMSE: —")

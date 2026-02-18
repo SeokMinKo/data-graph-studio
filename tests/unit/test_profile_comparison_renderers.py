@@ -310,14 +310,15 @@ class TestCanDifference:
         p2 = store.get("p2")  # x=time
         assert ProfileDifferenceRenderer.can_difference([p1, p2]) is True
 
-    def test_three_profiles_returns_false(self, store):
+    def test_three_profiles_returns_true(self, store):
         from data_graph_studio.ui.panels.profile_difference import ProfileDifferenceRenderer
         from data_graph_studio.core.profile import GraphSetting
         p1 = store.get("p1")
         p2 = store.get("p2")
         p_extra = GraphSetting(id="px", name="X", dataset_id="ds-1",
                                chart_type="line", x_column="time")
-        assert ProfileDifferenceRenderer.can_difference([p1, p2, p_extra]) is False
+        # New behavior: difference mode supports 2+ profiles (same X)
+        assert ProfileDifferenceRenderer.can_difference([p1, p2, p_extra]) is True
 
     def test_one_profile_returns_false(self, store):
         from data_graph_studio.ui.panels.profile_difference import ProfileDifferenceRenderer
@@ -459,12 +460,12 @@ class TestProfileSideBySideLayoutCreation:
         # Should have created panels for both profiles
         assert w._view_sync_manager.panel_count == 2
 
-    def test_set_profiles_max_4(self, state, engine, store, qtbot):
-        """MAX_PANELS = 4: only first 4 profiles used."""
+    def test_set_profiles_max_6(self, state, engine, store, qtbot):
+        """MAX_PANELS = 6: up to first 6 profiles used."""
         from data_graph_studio.ui.panels.profile_side_by_side import ProfileSideBySideLayout
         from data_graph_studio.core.profile import GraphSetting
         # Add more profiles to store
-        for i in range(5, 10):
+        for i in range(5, 12):
             store.add(GraphSetting(
                 id=f"p{i}", name=f"Profile {i}", dataset_id="ds-1",
                 chart_type="line", x_column="time",
@@ -472,8 +473,8 @@ class TestProfileSideBySideLayoutCreation:
 
         w = ProfileSideBySideLayout("ds-1", engine, state, store)
         qtbot.addWidget(w)
-        w.set_profiles(["p1", "p2", "p3", "p5", "p6"])
-        assert w._view_sync_manager.panel_count == 4  # MAX_PANELS
+        w.set_profiles(["p1", "p2", "p3", "p5", "p6", "p7", "p8"])
+        assert w._view_sync_manager.panel_count == 6  # MAX_PANELS
 
     def test_has_view_sync_manager(self, state, engine, store, qtbot):
         from data_graph_studio.ui.panels.profile_side_by_side import ProfileSideBySideLayout

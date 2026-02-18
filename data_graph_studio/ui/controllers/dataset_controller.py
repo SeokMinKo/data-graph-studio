@@ -490,6 +490,10 @@ class DatasetController:
             w._overlay_stats_widget.close_requested.connect(self._hide_overlay_stats_widget)
             w._overlay_stats_widget.expand_requested.connect(self._show_comparison_stats_panel)
 
+        is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+        if hasattr(w._overlay_stats_widget, 'apply_theme'):
+            w._overlay_stats_widget.apply_theme(is_light)
+
         w._overlay_stats_widget.set_position("top-right")
         w._overlay_stats_widget.show_animated()
 
@@ -508,6 +512,10 @@ class DatasetController:
             w._comparison_stats_panel = ComparisonStatsPanel(
                 w.engine, w.state
             )
+
+        is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+        if hasattr(w._comparison_stats_panel, 'apply_theme'):
+            w._comparison_stats_panel.apply_theme(is_light)
 
         dialog = QDialog(w)
         dialog.setWindowTitle("Comparison Statistics")
@@ -701,6 +709,9 @@ class DatasetController:
                 w.profile_comparison_controller.stop_comparison
             )
             w._compare_toolbar.reset_to_defaults()
+            is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+            if hasattr(w._compare_toolbar, 'apply_theme'):
+                w._compare_toolbar.apply_theme(is_light)
             w._compare_toolbar.show()
 
         elif mode == ComparisonMode.OVERLAY:
@@ -721,6 +732,10 @@ class DatasetController:
 
         else:
             return
+
+        is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+        if hasattr(view, 'apply_theme'):
+            view.apply_theme(is_light)
 
         w._profile_comparison_view = view
         self._show_comparison_view(view)

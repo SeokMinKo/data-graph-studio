@@ -223,17 +223,31 @@ class MiniGraphWidget(QWidget):
         stats_layout.setContentsMargins(8, 4, 8, 4)
 
         if dataset and dataset.df is not None:
-            # 숫자 컬럼 통계
-            numeric_cols = self.engine.get_numeric_columns(self.dataset_id)
-            if numeric_cols:
-                col = numeric_cols[0]
-                try:
-                    series = dataset.df[col]
-                    stats_layout.addWidget(QLabel(f"Mean: {series.mean():.2f}"))
-                    stats_layout.addWidget(QLabel(f"Min: {series.min():.2f}"))
-                    stats_layout.addWidget(QLabel(f"Max: {series.max():.2f}"))
-                except Exception:
-                    pass
+            # Use effective_value_columns for stats (not just first numeric col)
+            eff_cols = self.effective_value_columns
+            stat_col_names = []
+            for vc in eff_cols:
+                if hasattr(vc, 'name'):
+                    stat_col_names.append(vc.name)
+                elif isinstance(vc, dict):
+                    stat_col_names.append(vc.get('name', ''))
+
+            # Fallback to first numeric column
+            if not stat_col_names:
+                numeric_cols = self.engine.get_numeric_columns(self.dataset_id)
+                if numeric_cols:
+                    stat_col_names = [numeric_cols[0]]
+
+            for col in stat_col_names:
+                if col and col in dataset.df.columns:
+                    try:
+                        series = dataset.df[col]
+                        label_prefix = f"{col}: " if len(stat_col_names) > 1 else ""
+                        stats_layout.addWidget(QLabel(f"{label_prefix}Mean: {series.mean():.2f}"))
+                        stats_layout.addWidget(QLabel(f"Min: {series.min():.2f}"))
+                        stats_layout.addWidget(QLabel(f"Max: {series.max():.2f}"))
+                    except Exception:
+                        pass
 
         stats_layout.addStretch()
         layout.addWidget(stats_frame)
@@ -316,7 +330,14 @@ class MiniGraphWidget(QWidget):
         if not y_col_names:
             return
 
-        # Store first Y column data for selection matching
+        # Store all Y column data for multi-column selection matching
+        self._plot_y_data_dict = {}
+        for yc in y_col_names:
+            try:
+                self._plot_y_data_dict[yc] = df[yc].to_numpy()
+            except Exception:
+                pass
+        # Backward compat: _plot_y_data = first Y column
         try:
             self._plot_y_data = df[y_col_names[0]].to_numpy()
         except Exception:
@@ -640,17 +661,28 @@ class MiniGraphWidget(QWidget):
         y_min = min(y1, end_y)
         y_max = max(y1, end_y)
 
-        # Match actual data points within the rectangle
+        # Match actual data points within the rectangle (all Y columns)
         row_indices = []
-        if self._plot_x_data is not None and self._plot_y_data is not None:
+        if self._plot_x_data is not None:
             try:
                 x_arr = np.asarray(self._plot_x_data, dtype=float)
-                y_arr = np.asarray(self._plot_y_data, dtype=float)
-                mask = (
-                    (x_arr >= x_min) & (x_arr <= x_max) &
-                    (y_arr >= y_min) & (y_arr <= y_max)
-                )
-                row_indices = np.where(mask)[0].tolist()
+                x_mask = (x_arr >= x_min) & (x_arr <= x_max)
+
+                # Hit-test across all Y columns
+                y_data_sources = getattr(self, '_plot_y_data_dict', {})
+                if not y_data_sources and self._plot_y_data is not None:
+                    y_data_sources = {"_default": self._plot_y_data}
+
+                combined_mask = np.zeros(len(x_arr), dtype=bool)
+                for y_arr_raw in y_data_sources.values():
+                    try:
+                        y_arr = np.asarray(y_arr_raw, dtype=float)
+                        y_mask = (y_arr >= y_min) & (y_arr <= y_max)
+                        combined_mask |= (x_mask & y_mask)
+                    except Exception:
+                        pass
+
+                row_indices = np.where(combined_mask)[0].tolist()
             except Exception:
                 row_indices = []
 
@@ -862,7 +894,8 @@ class SideBySideLayout(QWidget):
 
     dataset_activated = Signal(str)  # dataset_id
 
-    MAX_PANELS = 4  # 최대 동시 표시 패널 수
+    MAX_PANELS = 6  # 최대 동시 표시 패널 수
+    MIN_PANEL_WIDTH = 200  # 최소 패널 너비 (px)
 
     def __init__(self, engine: DataEngine, state: AppState, parent=None):
         super().__init__(parent)
@@ -1033,14 +1066,8 @@ class SideBySideLayout(QWidget):
     # ------------------------------------------------------------------
 
     def _on_row_selection(self, source_id: str, row_indices: list):
-        """Propagate row selection highlight to all other panels (always sync)."""
-        for did, panel in self._panels.items():
-            if did == source_id:
-                continue
-            try:
-                panel.highlight_selection(row_indices)
-            except Exception:
-                pass
+        """Propagate row selection highlight via ViewSyncManager."""
+        self._view_sync_manager.on_source_row_selection_changed(source_id, row_indices)
 
     def _on_panel_activated(self, dataset_id: str):
         """패널 활성화"""

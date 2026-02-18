@@ -111,7 +111,7 @@ class ProfileComparisonDialog(QDialog):
         n = len(checked)
 
         can_overlay = ProfileOverlayRenderer.can_overlay(checked) if n >= 2 else False
-        can_diff = ProfileDifferenceRenderer.can_difference(checked) if n == 2 else False
+        can_diff = ProfileDifferenceRenderer.can_difference(checked) if n >= 2 else False
 
         # Side-by-Side: always available when n>=2
         # Overlay: only when same X

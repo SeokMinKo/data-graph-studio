@@ -7,7 +7,7 @@ Supports dual-axis, mixed chart_type handling, downsampling, and interactive leg
 
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -57,10 +57,15 @@ class ProfileOverlayRenderer(QWidget):
         self.state = state
         self.store = store
 
+        self._is_light: bool = False  # Default: dark (midnight) theme
         self._profile_ids: List[str] = []
         self._plot_widget = None
+        self._header: Optional[QFrame] = None
+        self._header_title: Optional[QLabel] = None
         self._warning_label: Optional[QLabel] = None
         self._x_col_label: Optional[QLabel] = None
+        self._series_items: Dict[str, "pg.PlotCurveItem"] = {}
+        self._series_visible: Dict[str, bool] = {}
 
         self._setup_ui()
 
@@ -93,6 +98,55 @@ class ProfileOverlayRenderer(QWidget):
         return ratio > 10
 
     @staticmethod
+    def cluster_series_axes(series_data: list) -> tuple:
+        """Cluster N series into left/right axis groups based on Y-range scale.
+
+        Uses a 10x ratio threshold: series whose y_max differs by >10x from
+        the median of the left group are assigned to the right axis.
+
+        Args:
+            series_data: list of dicts with at least 'y_max' key.
+
+        Returns:
+            (left_indices, right_indices) — lists of indices into series_data.
+        """
+        if not series_data:
+            return [], []
+
+        maxes = [(i, sd["y_max"]) for i, sd in enumerate(series_data) if sd["y_max"] > 0]
+        if len(maxes) <= 1:
+            return list(range(len(series_data))), []
+
+        # Sort by y_max
+        maxes.sort(key=lambda x: x[1])
+
+        # Use the median value as the reference for the left axis
+        median_val = maxes[len(maxes) // 2][1]
+
+        left = []
+        right = []
+        for i, sd in enumerate(series_data):
+            if sd["y_max"] == 0.0:
+                left.append(i)
+                continue
+            ratio = max(sd["y_max"], median_val) / min(sd["y_max"], median_val)
+            if ratio > 10 and sd["y_max"] > median_val:
+                right.append(i)
+            elif ratio > 10 and sd["y_max"] < median_val:
+                # Much smaller than median — also right axis
+                right.append(i)
+            else:
+                left.append(i)
+
+        # If all ended up on one side, don't use dual axis
+        if not left:
+            return right, []
+        if not right:
+            return left, []
+
+        return left, right
+
+    @staticmethod
     def has_mixed_chart_types(profiles: List["GraphSetting"]) -> bool:
         """UT-10: Check if profiles use different chart_type values."""
         if len(profiles) <= 1:
@@ -110,18 +164,15 @@ class ProfileOverlayRenderer(QWidget):
         layout.setSpacing(4)
 
         # Header
-        header = QFrame()
-        header.setStyleSheet("background-color: #34495e; border-radius: 4px;")
-        header.setFixedHeight(36)
-        header_layout = QHBoxLayout(header)
+        self._header = QFrame()
+        self._header.setFixedHeight(36)
+        header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(8, 4, 8, 4)
 
-        title = QLabel("Profile Comparison (Overlay)")
-        title.setStyleSheet("color: white; font-weight: bold;")
-        header_layout.addWidget(title)
+        self._header_title = QLabel("Profile Comparison (Overlay)")
+        header_layout.addWidget(self._header_title)
 
         self._x_col_label = QLabel("")
-        self._x_col_label.setStyleSheet("color: rgba(255,255,255,0.8);")
         header_layout.addWidget(self._x_col_label)
 
         header_layout.addStretch()
@@ -137,7 +188,7 @@ class ProfileOverlayRenderer(QWidget):
         exit_btn.clicked.connect(self.exit_requested.emit)
         header_layout.addWidget(exit_btn)
 
-        layout.addWidget(header)
+        layout.addWidget(self._header)
 
         # Warning label (hidden by default)
         self._warning_label = QLabel("")
@@ -150,9 +201,8 @@ class ProfileOverlayRenderer(QWidget):
             import pyqtgraph as pg
 
             self._plot_widget = pg.PlotWidget()
-            self._plot_widget.setBackground("w")
             self._plot_widget.showGrid(x=True, y=True, alpha=0.3)
-            self._plot_widget.addLegend(offset=(10, 10))
+            self._legend = self._plot_widget.addLegend(offset=(10, 10))
             self._plot_widget.setMinimumHeight(200)
             layout.addWidget(self._plot_widget, 1)
         except ImportError:
@@ -165,9 +215,72 @@ class ProfileOverlayRenderer(QWidget):
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.activated.connect(self.exit_requested.emit)
 
+        # Apply initial theme
+        self.apply_theme(self._is_light)
+
+    # ------------------------------------------------------------------
+    # Theme
+    # ------------------------------------------------------------------
+
+    def apply_theme(self, is_light: bool) -> None:
+        """Apply light/dark theme colors."""
+        self._is_light = is_light
+
+        header_bg = "#E5E7EB" if is_light else "#1E293B"
+        header_fg = "#111827" if is_light else "#FFFFFF"
+        header_fg_muted = "rgba(0,0,0,0.6)" if is_light else "rgba(255,255,255,0.8)"
+
+        if self._header:
+            self._header.setStyleSheet(f"background-color: {header_bg}; border-radius: 4px;")
+        if self._header_title:
+            self._header_title.setStyleSheet(f"color: {header_fg}; font-weight: bold;")
+        if self._x_col_label:
+            self._x_col_label.setStyleSheet(f"color: {header_fg_muted};")
+
+        plot_bg = "#FFFFFF" if is_light else "#1E293B"
+        if self._plot_widget:
+            self._plot_widget.setBackground(plot_bg)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def _on_legend_clicked(self, item, label_item):
+        """Toggle series visibility when legend item is clicked."""
+        try:
+            name = label_item.text if hasattr(label_item, 'text') else str(label_item)
+            if name in self._series_items:
+                visible = self._series_visible.get(name, True)
+                new_visible = not visible
+                self._series_visible[name] = new_visible
+                curve = self._series_items[name]
+                curve.setVisible(new_visible)
+                # Update legend label opacity
+                if new_visible:
+                    label_item.setOpacity(1.0)
+                else:
+                    label_item.setOpacity(0.3)
+        except Exception:
+            pass
+
+    def _install_legend_click_handlers(self):
+        """Install click event handlers on legend items."""
+        if not hasattr(self, '_legend') or self._legend is None:
+            return
+        try:
+            for sample, label in self._legend.items:
+                # Store reference for the click handler
+                def make_handler(s, l):
+                    def handler(event):
+                        self._on_legend_clicked(s, l)
+                    return handler
+                label.mousePressEvent = make_handler(sample, label)
+                sample.mousePressEvent = make_handler(sample, label)
+                # Set cursor to pointing hand
+                label.setCursor(Qt.PointingHandCursor)
+                sample.setCursor(Qt.PointingHandCursor)
+        except Exception:
+            pass
 
     def set_profiles(self, profile_ids: List[str]) -> None:
         """Set which profiles to overlay."""
@@ -249,6 +362,8 @@ class ProfileOverlayRenderer(QWidget):
         import numpy as np
 
         self._plot_widget.clear()
+        self._series_items.clear()
+        self._series_visible.clear()
         # Clean up previous secondary ViewBox if any
         if hasattr(self, "_secondary_vb") and self._secondary_vb is not None:
             try:
@@ -360,19 +475,19 @@ class ProfileOverlayRenderer(QWidget):
         if not series_data:
             return
 
-        # Dual-axis detection (only when exactly 2 series)
-        use_dual = False
-        if len(series_data) == 2:
-            use_dual = self.needs_dual_axis(series_data[0]["y_max"], series_data[1]["y_max"])
+        # Dual-axis detection — works for 2+ series via clustering
+        left_indices, right_indices = self.cluster_series_axes(series_data)
+        use_dual = len(right_indices) > 0
 
         if use_dual:
-            # Show right axis
             self._plot_widget.showAxis("right")
         else:
             self._plot_widget.hideAxis("right") if hasattr(self._plot_widget, "hideAxis") else None
 
         # Plot each series
         self._secondary_vb = None
+        right_set = set(right_indices)
+
         for idx, sd in enumerate(series_data):
             x_plot = x_data
             y_plot = sd["y_data"]
@@ -390,32 +505,43 @@ class ProfileOverlayRenderer(QWidget):
             pen = pg.mkPen(sd["color"], width=sd["line_width"])
             label = f"{sd['profile'].name} ({sd['y_col']})"
 
-            if use_dual and idx == 1:
-                # Second series on right Y axis
-                p2 = pg.ViewBox()
-                self._secondary_vb = p2
-                self._plot_widget.scene().addItem(p2)
-                ax_right = self._plot_widget.getAxis("right")
-                ax_right.linkToView(p2)
-                ax_right.setLabel(sd["y_col"], color=sd["color"])
-                ax_right.setPen(pg.mkPen(sd["color"]))
-                p2.setXLink(self._plot_widget)
+            if use_dual and idx in right_set:
+                # Right-axis series
+                if self._secondary_vb is None:
+                    p2 = pg.ViewBox()
+                    self._secondary_vb = p2
+                    self._plot_widget.scene().addItem(p2)
+                    ax_right = self._plot_widget.getAxis("right")
+                    ax_right.linkToView(p2)
+                    p2.setXLink(self._plot_widget)
+
+                    # Sync secondary viewbox geometry
+                    def _update_views():
+                        p2.setGeometry(self._plot_widget.getViewBox().sceneBoundingRect())
+                        p2.linkedViewChanged(self._plot_widget.getViewBox(), p2.XAxis)
+
+                    self._plot_widget.getViewBox().sigResized.connect(_update_views)
+                    _update_views()
+
+                    # Label right axis with first right-series info
+                    ax_right.setLabel(sd["y_col"], color=sd["color"])
+                    ax_right.setPen(pg.mkPen(sd["color"]))
+
                 curve = pg.PlotCurveItem(x_plot, y_plot, pen=pen, name=label)
-                p2.addItem(curve)
+                self._secondary_vb.addItem(curve)
+                self._series_items[label] = curve
+                self._series_visible[label] = True
 
-                # Add a zero-length invisible item to the main plot for legend entry
-                legend_proxy = self._plot_widget.plot([], [], pen=pen, name=label)
-
-                # Sync secondary viewbox geometry with plot's viewbox
-                def _update_views():
-                    p2.setGeometry(self._plot_widget.getViewBox().sceneBoundingRect())
-                    p2.linkedViewChanged(self._plot_widget.getViewBox(), p2.XAxis)
-
-                self._plot_widget.getViewBox().sigResized.connect(_update_views)
-                _update_views()
+                # Add invisible item to main plot for legend entry
+                self._plot_widget.plot([], [], pen=pen, name=label)
             else:
-                self._plot_widget.plot(x_plot, y_plot, pen=pen, name=label)
-                if use_dual and idx == 0:
-                    # Label left axis with first series colour
+                plot_item = self._plot_widget.plot(x_plot, y_plot, pen=pen, name=label)
+                self._series_items[label] = plot_item
+                self._series_visible[label] = True
+                if use_dual and left_indices and idx == left_indices[0]:
+                    # Label left axis with first left-series colour
                     self._plot_widget.getAxis("left").setLabel(sd["y_col"], color=sd["color"])
                     self._plot_widget.getAxis("left").setPen(pg.mkPen(sd["color"]))
+
+        # Install interactive legend click handlers
+        self._install_legend_click_handlers()

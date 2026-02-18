@@ -249,6 +249,31 @@ class ViewSyncManager(QObject):
         finally:
             self._is_syncing = False
 
+    def on_source_row_selection_changed(
+        self,
+        source_id: str,
+        row_indices: list,
+    ) -> None:
+        """Called when a panel's row selection (rect/lasso) changes.
+
+        Always syncs regardless of sync_x/sync_y settings — row selection
+        is always propagated for visual consistency.
+        """
+        if self._is_syncing:
+            return
+
+        self._is_syncing = True
+        try:
+            for pid, panel in list(self._panels.items()):
+                if pid == source_id:
+                    continue
+                try:
+                    panel.highlight_selection(row_indices)
+                except Exception:
+                    pass
+        finally:
+            self._is_syncing = False
+
     def clear(self) -> None:
         """Remove all panels and cancel pending timers."""
         self._panels.clear()

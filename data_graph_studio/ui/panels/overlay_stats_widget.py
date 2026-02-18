@@ -19,13 +19,14 @@ from ...core.state import AppState, ComparisonMode
 class DatasetLegendItem(QFrame):
     """데이터셋 범례 아이템"""
 
-    def __init__(self, dataset_id: str, name: str, color: str, parent=None):
+    def __init__(self, dataset_id: str, name: str, color: str, is_light: bool = False, parent=None):
         super().__init__(parent)
         self.dataset_id = dataset_id
 
+        bg = "rgba(255, 255, 255, 0.9)" if is_light else "rgba(30, 41, 59, 0.9)"
         self.setStyleSheet(f"""
             QFrame {{
-                background: rgba(255, 255, 255, 0.9);
+                background: {bg};
                 border: 2px solid {color};
                 border-radius: 4px;
                 padding: 2px 6px;
@@ -43,32 +44,36 @@ class DatasetLegendItem(QFrame):
         layout.addWidget(color_box)
 
         # 이름
+        fg = "#111827" if is_light else "#E2E8F0"
         name_label = QLabel(name)
-        name_label.setStyleSheet("font-weight: bold; font-size: 11px;")
+        name_label.setStyleSheet(f"font-weight: bold; font-size: 11px; color: {fg};")
         layout.addWidget(name_label)
 
 
 class StatisticBadge(QFrame):
     """통계 배지 (작은 통계 정보 표시)"""
 
-    def __init__(self, label: str, value: str, color: str = "#333", parent=None):
+    def __init__(self, label: str, value: str, color: str = "#333", is_light: bool = False, parent=None):
         super().__init__(parent)
 
-        self.setStyleSheet("""
-            QFrame {
-                background: rgba(255, 255, 255, 0.85);
-                border: 1px solid #ddd;
+        bg = "rgba(255, 255, 255, 0.85)" if is_light else "rgba(30, 41, 59, 0.85)"
+        border = "#ddd" if is_light else "#475569"
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {bg};
+                border: 1px solid {border};
                 border-radius: 4px;
                 padding: 2px 4px;
-            }
+            }}
         """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(0)
 
+        label_fg = "#666" if is_light else "#9CA3AF"
         label_widget = QLabel(label)
-        label_widget.setStyleSheet("font-size: 9px; color: #666;")
+        label_widget.setStyleSheet(f"font-size: 9px; color: {label_fg};")
         label_widget.setAlignment(Qt.AlignCenter)
         layout.addWidget(label_widget)
 
@@ -95,6 +100,7 @@ class OverlayStatsWidget(QWidget):
         super().__init__(parent)
         self.engine = engine
         self.state = state
+        self._is_light: bool = False  # Default: dark (midnight) theme
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -105,13 +111,6 @@ class OverlayStatsWidget(QWidget):
     def _setup_ui(self):
         # 메인 컨테이너
         self.container = QFrame(self)
-        self.container.setStyleSheet("""
-            QFrame {
-                background: rgba(255, 255, 255, 0.95);
-                border: 1px solid #ccc;
-                border-radius: 8px;
-            }
-        """)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -124,9 +123,8 @@ class OverlayStatsWidget(QWidget):
         # 헤더 (타이틀 + 버튼)
         header_layout = QHBoxLayout()
 
-        title = QLabel("Comparison Stats")
-        title.setStyleSheet("font-weight: bold; font-size: 12px; color: #333;")
-        header_layout.addWidget(title)
+        self._title_label = QLabel("Comparison Stats")
+        header_layout.addWidget(self._title_label)
 
         header_layout.addStretch()
 
@@ -168,6 +166,30 @@ class OverlayStatsWidget(QWidget):
         self.setMinimumWidth(200)
         self.setMaximumWidth(400)
 
+        # Apply initial theme
+        self._apply_container_theme()
+
+    def apply_theme(self, is_light: bool) -> None:
+        """Apply light/dark theme colors."""
+        self._is_light = is_light
+        self._apply_container_theme()
+
+    def _apply_container_theme(self) -> None:
+        """Update container and title styling based on _is_light."""
+        is_light = self._is_light
+        bg = "rgba(255, 255, 255, 0.95)" if is_light else "rgba(30, 41, 59, 0.95)"
+        border = "#ccc" if is_light else "#475569"
+        self.container.setStyleSheet(f"""
+            QFrame {{
+                background: {bg};
+                border: 1px solid {border};
+                border-radius: 8px;
+            }}
+        """)
+        title_fg = "#333" if is_light else "#E2E8F0"
+        if hasattr(self, '_title_label'):
+            self._title_label.setStyleSheet(f"font-weight: bold; font-size: 12px; color: {title_fg};")
+
     def _connect_signals(self):
         self.state.comparison_settings_changed.connect(self.refresh)
         self.state.dataset_added.connect(self.refresh)
@@ -197,7 +219,7 @@ class OverlayStatsWidget(QWidget):
         for did in dataset_ids[:4]:  # 최대 4개
             metadata = self.state.get_dataset_metadata(did)
             if metadata:
-                legend_item = DatasetLegendItem(did, metadata.name, metadata.color)
+                legend_item = DatasetLegendItem(did, metadata.name, metadata.color, self._is_light)
                 self.legend_layout.addWidget(legend_item)
 
         self.legend_layout.addStretch()
@@ -238,8 +260,9 @@ class OverlayStatsWidget(QWidget):
         # 통계 행
         stat_names = [("Mean", "mean"), ("Max", "max"), ("Min", "min")]
         for row, (display_name, stat_key) in enumerate(stat_names, 1):
+            label_fg = "#666" if self._is_light else "#9CA3AF"
             label = QLabel(display_name)
-            label.setStyleSheet("font-size: 10px; color: #666;")
+            label.setStyleSheet(f"font-size: 10px; color: {label_fg};")
             self.stats_grid.addWidget(label, row, 0)
 
             values = []
@@ -295,8 +318,9 @@ class OverlayStatsWidget(QWidget):
                         f"font-size: 10px; padding: 4px; background: rgba({int(sig_color[1:3], 16)}, {int(sig_color[3:5], 16)}, {int(sig_color[5:7], 16)}, 0.1); border-radius: 4px; color: {sig_color};"
                     )
         else:
+            muted = "#666" if self._is_light else "#9CA3AF"
             self.significance_label.setText(f"Comparing {len(dataset_ids)} datasets")
-            self.significance_label.setStyleSheet("font-size: 10px; padding: 4px; color: #666;")
+            self.significance_label.setStyleSheet(f"font-size: 10px; padding: 4px; color: {muted};")
 
     def set_position(self, position: str = "top-right"):
         """위젯 위치 설정"""

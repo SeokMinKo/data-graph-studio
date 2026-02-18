@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
     QComboBox, QPushButton, QSizePolicy, QScrollArea,
-    QTabWidget, QTextEdit, QProgressBar
+    QTabWidget, QTextEdit, QProgressBar, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
@@ -38,6 +38,7 @@ class ComparisonStatsPanel(QWidget):
         super().__init__(parent)
         self.engine = engine
         self.state = state
+        self._is_light: bool = False  # Default: dark (midnight) theme
 
         self._setup_ui()
         self._connect_signals()
@@ -49,24 +50,6 @@ class ComparisonStatsPanel(QWidget):
 
         # 탭 위젯 - compact style
         self.tab_widget = QTabWidget()
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: none;
-                background: transparent;
-            }
-            QTabBar::tab {
-                background: transparent;
-                border: none;
-                padding: 6px 12px;
-                font-size: 11px;
-                color: #9CA3AF;
-            }
-            QTabBar::tab:selected {
-                color: #59B8E3;
-                font-weight: 600;
-                border-bottom: 2px solid #59B8E3;
-            }
-        """)
         layout.addWidget(self.tab_widget)
 
         # 탭 1: 기본 통계 비교
@@ -101,6 +84,12 @@ class ComparisonStatsPanel(QWidget):
         self.stats_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.stats_table.verticalHeader().setVisible(False)
         layout.addWidget(self.stats_table)
+
+        # Export CSV button
+        export_stats_btn = QPushButton("Export CSV")
+        export_stats_btn.setToolTip("Export statistics table to CSV")
+        export_stats_btn.clicked.connect(self._export_stats_csv)
+        layout.addWidget(export_stats_btn)
 
         self.tab_widget.addTab(tab, "Statistics")
 
@@ -205,7 +194,7 @@ class ComparisonStatsPanel(QWidget):
             "• |r| ≥ 0.7: Strong"
         )
         guide_text.setWordWrap(True)
-        guide_text.setStyleSheet("padding: 4px; background: #f8f9fa; border-radius: 4px;")
+        self._guide_text = guide_text
         guide_layout.addWidget(guide_text)
         layout.addWidget(guide_group)
 
@@ -256,7 +245,6 @@ class ComparisonStatsPanel(QWidget):
         # 차이 요약
         self.diff_summary = QLabel("")
         self.diff_summary.setWordWrap(True)
-        self.diff_summary.setStyleSheet("padding: 8px; background: #f8f9fa; border-radius: 4px;")
         layout.addWidget(self.diff_summary)
 
         # 차이 테이블
@@ -265,6 +253,15 @@ class ComparisonStatsPanel(QWidget):
         self.diff_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.diff_table)
 
+        # Export CSV button
+        export_diff_btn = QPushButton("Export CSV")
+        export_diff_btn.setToolTip("Export difference table to CSV")
+        export_diff_btn.clicked.connect(self._export_diff_csv)
+        layout.addWidget(export_diff_btn)
+
+        # Store diff_df for export
+        self._last_diff_df = None
+
         self.tab_widget.addTab(tab, "Difference")
 
     def _connect_signals(self):
@@ -272,6 +269,65 @@ class ComparisonStatsPanel(QWidget):
         self.state.comparison_settings_changed.connect(self.refresh)
         self.state.dataset_added.connect(self._update_dataset_combos)
         self.state.dataset_removed.connect(self._update_dataset_combos)
+
+        # Apply initial theme
+        self._apply_theme_styles()
+
+    # ------------------------------------------------------------------
+    # Theme
+    # ------------------------------------------------------------------
+
+    def apply_theme(self, is_light: bool) -> None:
+        """Apply light/dark theme colors."""
+        self._is_light = is_light
+        self._apply_theme_styles()
+
+    def _apply_theme_styles(self) -> None:
+        """Update all theme-dependent styles."""
+        is_light = self._is_light
+        tab_inactive = "#6B7280" if is_light else "#9CA3AF"
+        tab_active = "#3B82F6" if is_light else "#59B8E3"
+
+        self.tab_widget.setStyleSheet(f"""
+            QTabWidget::pane {{
+                border: none;
+                background: transparent;
+            }}
+            QTabBar::tab {{
+                background: transparent;
+                border: none;
+                padding: 6px 12px;
+                font-size: 11px;
+                color: {tab_inactive};
+            }}
+            QTabBar::tab:selected {{
+                color: {tab_active};
+                font-weight: 600;
+                border-bottom: 2px solid {tab_active};
+            }}
+        """)
+
+        guide_bg = "#f8f9fa" if is_light else "#334155"
+        guide_fg = "#111827" if is_light else "#E2E8F0"
+        if hasattr(self, '_guide_text'):
+            self._guide_text.setStyleSheet(
+                f"padding: 4px; background: {guide_bg}; border-radius: 4px; color: {guide_fg};"
+            )
+
+        summary_bg = "#f8f9fa" if is_light else "#334155"
+        summary_fg = "#111827" if is_light else "#E2E8F0"
+        if hasattr(self, 'diff_summary'):
+            self.diff_summary.setStyleSheet(
+                f"padding: 8px; background: {summary_bg}; border-radius: 4px; color: {summary_fg};"
+            )
+
+        # QTextEdit for test results
+        te_bg = "#FFFFFF" if is_light else "#1E293B"
+        te_fg = "#111827" if is_light else "#E2E8F0"
+        if hasattr(self, 'test_results'):
+            self.test_results.setStyleSheet(
+                f"background-color: {te_bg}; color: {te_fg};"
+            )
 
     def refresh(self):
         """패널 새로고침"""
@@ -434,6 +490,8 @@ class ComparisonStatsPanel(QWidget):
             self.diff_summary.setText("Unable to calculate difference.")
             return
 
+        self._last_diff_df = diff_df
+
         # 요약 통계
         metadata_a = self.state.get_dataset_metadata(dataset_a_id)
         metadata_b = self.state.get_dataset_metadata(dataset_b_id)
@@ -559,17 +617,23 @@ class ComparisonStatsPanel(QWidget):
             sig_stars = ""
             sig_color = "#757575"
 
+        # Theme-aware HTML colors
+        _tbl_bg = "#f5f5f5" if self._is_light else "#334155"
+        _interp_bg = "#e3f2fd" if self._is_light else "#1E3A5F"
+        _heading_color = "#1976d2" if self._is_light else "#59B8E3"
+        _fg = "#111827" if self._is_light else "#E2E8F0"
+
         # 결과 HTML 생성
         html = f"""
-        <h3 style='margin: 0; color: #1976d2;'>Statistical Test Results</h3>
+        <h3 style='margin: 0; color: {_heading_color};'>Statistical Test Results</h3>
         <hr>
-        <table style='width: 100%; font-size: 11pt;'>
+        <table style='width: 100%; font-size: 11pt; color: {_fg};'>
             <tr><td><b>Comparison:</b></td><td>{name_a} vs {name_b}</td></tr>
             <tr><td><b>Column:</b></td><td>{value_column}</td></tr>
             <tr><td><b>Test:</b></td><td>{result.get('test_name', 'N/A')}</td></tr>
         </table>
         <br>
-        <table style='width: 100%; font-size: 11pt; background: #f5f5f5; padding: 8px;'>
+        <table style='width: 100%; font-size: 11pt; background: {_tbl_bg}; padding: 8px; color: {_fg};'>
             <tr>
                 <td><b>Statistic:</b></td>
                 <td style='text-align: right;'>{result.get('statistic', 'N/A'):.4f if result.get('statistic') else 'N/A'}</td>
@@ -592,7 +656,7 @@ class ComparisonStatsPanel(QWidget):
             </tr>
         </table>
         <br>
-        <div style='background: #e3f2fd; padding: 8px; border-radius: 4px;'>
+        <div style='background: {_interp_bg}; padding: 8px; border-radius: 4px; color: {_fg};'>
             <b>Interpretation:</b><br>
             {result.get('interpretation', '')}
         </div>
@@ -729,3 +793,71 @@ class ComparisonStatsPanel(QWidget):
             self.test_column_combo.addItems(numeric_cols)
             if current_col in numeric_cols:
                 self.test_column_combo.setCurrentText(current_col)
+
+    # ------------------------------------------------------------------
+    # CSV Export
+    # ------------------------------------------------------------------
+
+    def _export_table_to_csv(self, table: QTableWidget, default_name: str = "export.csv") -> None:
+        """Export a QTableWidget to CSV via file dialog."""
+        import csv
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export CSV", default_name, "CSV Files (*.csv);;All Files (*)"
+        )
+        if not path:
+            return
+
+        try:
+            col_count = table.columnCount()
+            row_count = table.rowCount()
+
+            # Headers
+            headers = []
+            for c in range(col_count):
+                h = table.horizontalHeaderItem(c)
+                headers.append(h.text() if h else f"col_{c}")
+
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                for r in range(row_count):
+                    row_data = []
+                    for c in range(col_count):
+                        item = table.item(r, c)
+                        row_data.append(item.text() if item else "")
+                    writer.writerow(row_data)
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Export Error", f"Failed to export CSV:\n{e}")
+
+    def _export_stats_csv(self) -> None:
+        """Export the Statistics table to CSV."""
+        if self.stats_table.rowCount() == 0:
+            return
+        self._export_table_to_csv(self.stats_table, "comparison_statistics.csv")
+
+    def _export_diff_csv(self) -> None:
+        """Export the Difference table to CSV."""
+        if self._last_diff_df is not None:
+            import csv
+
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Export CSV", "comparison_difference.csv",
+                "CSV Files (*.csv);;All Files (*)"
+            )
+            if not path:
+                return
+            try:
+                columns = list(self._last_diff_df.columns)
+                with open(path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(columns)
+                    for i in range(len(self._last_diff_df)):
+                        row = [self._last_diff_df[col][i] for col in columns]
+                        writer.writerow(row)
+            except Exception as e:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Export Error", f"Failed to export CSV:\n{e}")
+        elif self.diff_table.rowCount() > 0:
+            self._export_table_to_csv(self.diff_table, "comparison_difference.csv")

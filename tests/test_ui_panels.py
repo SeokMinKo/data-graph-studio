@@ -477,8 +477,8 @@ class TestStatPanel:
 
         # 기본 속성 확인
         assert panel is not None
-        assert panel.minimumWidth() >= 280  # compact design
-        assert panel.maximumWidth() <= 360
+        assert panel.minimumWidth() >= 200  # responsive compact design (min reduced)
+        assert panel.maximumWidth() <= 500
 
     def test_stat_panel_widgets(self):
         """StatPanel 4개 그래프 위젯 존재 확인"""

@@ -44,8 +44,10 @@ class CompareToolbar(QToolBar):
         self.setIconSize(QSize(16, 16))
 
         self._grid_actions: Dict[str, QAction] = {}
+        self._grid_buttons: Dict[str, QToolButton] = {}
         self._sync_buttons: Dict[str, QCheckBox] = {}
         self._current_grid = "row"
+        self._is_light = False
 
         self._build_ui()
 
@@ -87,12 +89,6 @@ class CompareToolbar(QToolBar):
             btn.setCheckable(True)
             btn.setFixedHeight(24)
             btn.setMinimumWidth(60)
-            btn.setStyleSheet(
-                "QToolButton { padding: 2px 8px; border: 1px solid #555; "
-                "border-radius: 3px; }"
-                "QToolButton:checked { background-color: #2980b9; color: white; "
-                "border-color: #2980b9; }"
-            )
             action = QAction(text, self)
             action.setToolTip(tooltip)
             action.setCheckable(True)
@@ -101,6 +97,7 @@ class CompareToolbar(QToolBar):
             btn.setDefaultAction(action)
             row1_layout.addWidget(btn)
             self._grid_actions[key] = action
+            self._grid_buttons[key] = btn
 
         # Default: row
         self._grid_actions["row"].setChecked(True)
@@ -151,6 +148,27 @@ class CompareToolbar(QToolBar):
         two_row_layout.addWidget(row2)
 
         self.addWidget(container)
+
+        # Apply initial theme
+        self.apply_theme(self._is_light)
+
+    # ------------------------------------------------------------------
+    # Theme
+    # ------------------------------------------------------------------
+
+    def apply_theme(self, is_light: bool) -> None:
+        """Apply light/dark theme colors."""
+        self._is_light = is_light
+
+        border = "#D1D5DB" if is_light else "#555"
+        checked_bg = "#3B82F6" if is_light else "#2980b9"
+        for btn in self._grid_buttons.values():
+            btn.setStyleSheet(
+                f"QToolButton {{ padding: 2px 8px; border: 1px solid {border}; "
+                f"border-radius: 3px; }}"
+                f"QToolButton:checked {{ background-color: {checked_bg}; color: white; "
+                f"border-color: {checked_bg}; }}"
+            )
 
     # ------------------------------------------------------------------
     # Signal handlers
