@@ -77,14 +77,9 @@ class _DragDropCellMixin:
         while w is not None:
             if isinstance(w, DashboardPanel):
                 return w
+            if isinstance(w, _DashboardTab):
+                return w._panel_ref
             w = w.parent()
-        # Check tab widget parents
-        if w is None:
-            w = self.parent()  # type: ignore[attr-defined]
-            while w is not None:
-                if isinstance(w, _DashboardTab):
-                    return w._panel_ref
-                w = w.parent()
         return None
 
 

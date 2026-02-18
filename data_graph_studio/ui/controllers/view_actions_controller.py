@@ -11,6 +11,7 @@ from PySide6.QtGui import QAction
 
 from ..panels.annotation_panel import AnnotationPanel
 from ..panels.dashboard_panel import DashboardPanel
+from ...core.undo_manager import UndoActionType
 
 logger = logging.getLogger(__name__)
 
@@ -399,8 +400,8 @@ class ViewActionsController:
         """Activate dashboard mode — show DashboardPanel (FR-B1.1, FR-B1.7)."""
         if not self.w._dashboard_controller.activate():
             QMessageBox.warning(
-            self.w, "Dashboard Mode",
-                "Cannot activate dashboard mode. No datasets loaded."
+                self.w, "Dashboard Mode",
+                "Cannot activate dashboard mode. No datasets loaded.",
             )
             self.w._dashboard_mode_action.setChecked(False)
             return
@@ -497,38 +498,61 @@ class ViewActionsController:
 
     def _on_dashboard_cell_swap(self, src_row: int, src_col: int,
                                  dst_row: int, dst_col: int):
-        """Handle drag-and-drop cell swap."""
+        """Handle drag-and-drop cell swap (with undo)."""
         ctrl = self.w._dashboard_controller
         layout = ctrl.current_layout
         if layout is None:
             return
+        # Record undo before mutation
+        before = layout.deep_copy()
         src_cell = ctrl.get_cell(src_row, src_col)
         dst_cell = ctrl.get_cell(dst_row, dst_col)
         src_pid = src_cell.profile_id if src_cell else ""
         dst_pid = dst_cell.profile_id if dst_cell else ""
-        # Swap profiles
+        # Swap profiles directly (bypass individual undo in assign_profile)
         if src_cell:
-            ctrl.assign_profile(src_row, src_col, dst_pid)
+            src_cell.profile_id = dst_pid
         if dst_cell:
-            ctrl.assign_profile(dst_row, dst_col, src_pid)
+            dst_cell.profile_id = src_pid
+        ctrl._push_undo(
+            UndoActionType.DASHBOARD_CELL_ASSIGN,
+            f"Swap cells ({src_row},{src_col}) ↔ ({dst_row},{dst_col})",
+            before,
+        )
         # Refresh
         if self.w._dashboard_panel:
             self.w._dashboard_panel.populate(layout)
 
     def _on_dashboard_grid_size_changed(self, rows: int, cols: int):
-        """Handle custom grid size change from gear button."""
+        """Handle custom grid size change — preserve cells that still fit."""
         ctrl = self.w._dashboard_controller
         before = ctrl.current_layout
-        ctrl.create_layout(before.name if before else "Dashboard", rows, cols)
+        name = before.name if before else "Dashboard"
+        # Collect cells that fit in the new grid
+        kept_cells = []
+        if before is not None:
+            for cell in before.cells:
+                if (cell.row + cell.row_span <= rows and
+                        cell.col + cell.col_span <= cols):
+                    kept_cells.append(cell)
+        ctrl.create_layout(name, rows, cols)
         layout = ctrl.current_layout
+        if layout is not None:
+            for cell in kept_cells:
+                layout.add_cell(cell)
+            if before is not None:
+                ctrl._push_layout_undo(f"Resize grid to {rows}×{cols}", before)
         if layout and self.w._dashboard_panel:
             self.w._dashboard_panel.populate(layout)
 
     def _on_dashboard_name_changed(self, new_name: str):
-        """Handle dashboard name change from header double-click."""
-        layout = self.w._dashboard_controller.current_layout
+        """Handle dashboard name change from header double-click (with undo)."""
+        ctrl = self.w._dashboard_controller
+        layout = ctrl.current_layout
         if layout:
+            before = layout.deep_copy()
             layout.name = new_name
+            ctrl._push_layout_undo(f"Rename dashboard to '{new_name}'", before)
 
 
     def _on_dashboard_preset_changed(self, preset_name: str):
@@ -576,7 +600,7 @@ class ViewActionsController:
         annotation = self.w._annotation_controller.get(annotation_id)
         if annotation:
             text, ok = QInputDialog.getText(
-            self.w, "Edit Annotation", "Text:", text=annotation.text
+                self.w, "Edit Annotation", "Text:", text=annotation.text,
             )
             if ok and text:
                 self.w._annotation_controller.edit(annotation_id, text=text)

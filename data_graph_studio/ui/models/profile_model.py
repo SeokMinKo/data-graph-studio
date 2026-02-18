@@ -6,6 +6,8 @@ from typing import Any, List, Optional
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QMimeData, Qt, QByteArray
 
 from ...core.profile import GraphSetting
+from ...core.profile_store_protocol import ProfileStoreProtocol
+from ..utils import chart_type_icon
 
 
 @dataclass(frozen=True)
@@ -143,7 +145,7 @@ class ProfileModel(QAbstractItemModel):
         if role == Qt.ToolTipRole:
             if not node.is_dataset:
                 s = node.setting
-                lines = [f"{self._chart_type_icon(s.chart_type)} {s.name}"]
+                lines = [f"{chart_type_icon(s.chart_type)} {s.name}"]
                 if s.chart_type:
                     lines.append(f"Chart: {s.chart_type}")
                 if s.x_column:
@@ -176,7 +178,7 @@ class ProfileModel(QAbstractItemModel):
         # 아이콘은 delegate에서 UserRole+1로 처리
         if role == Qt.UserRole + 1:
             if not node.is_dataset:
-                return self._chart_type_icon(node.setting.chart_type)
+                return chart_type_icon(node.setting.chart_type)
 
         return None
 
@@ -279,30 +281,27 @@ class ProfileModel(QAbstractItemModel):
         self.endInsertRows()
 
     def remove_profile_incremental(self, dataset_id: str, profile_id: str) -> None:
-        """프로파일 하나를 제거 (expand 상태 보존)."""
+        """프로파일 하나를 제거 (expand 상태 보존).
+
+        Issue #6 — single-pass O(n) instead of O(n²).
+        """
         try:
             ds_row = self._dataset_ids.index(dataset_id)
         except ValueError:
             self.refresh()
             return
 
-        # 삭제 전 프로파일 목록에서 row 찾기 (이미 store에서 제거됐으므로 node cache에서 찾음)
-        row = -1
+        # Single-pass: find target row among this dataset's profile nodes
+        row = 0
+        target_idx = -1
         for i, node in enumerate(self._nodes):
-            if (node.dataset_id == dataset_id
-                    and node.setting is not None
-                    and node.setting.id == profile_id):
-                row_count = 0
-                # 해당 dataset의 프로파일 중 몇 번째인지 계산
-                for n in self._nodes:
-                    if n.dataset_id == dataset_id and n.setting is not None:
-                        if n.setting.id == profile_id:
-                            row = row_count
-                            break
-                        row_count += 1
-                break
+            if node.dataset_id == dataset_id and node.setting is not None:
+                if node.setting.id == profile_id:
+                    target_idx = i
+                    break
+                row += 1
 
-        if row < 0:
+        if target_idx < 0:
             self.refresh()
             return
 
@@ -370,31 +369,23 @@ class ProfileModel(QAbstractItemModel):
         return dataset_id
 
     def _get_profiles(self, dataset_id: str) -> List[GraphSetting]:
-        # ProfileStore API
+        """Retrieve profiles for a dataset.
+
+        Issue #4 — prefer the ``ProfileStoreProtocol`` method
+        ``get_by_dataset`` and fall back gracefully.
+        """
         profiles: List[GraphSetting] = []
-        if hasattr(self._store, "get_by_dataset"):
+        if isinstance(self._store, ProfileStoreProtocol):
+            profiles = list(self._store.get_by_dataset(dataset_id))
+        elif hasattr(self._store, "get_by_dataset"):
             profiles = list(self._store.get_by_dataset(dataset_id))
         elif hasattr(self._store, "get_profiles"):
             profiles = list(self._store.get_profiles(dataset_id))
-        elif hasattr(self._store, "get_settings"):
-            profiles = list(self._store.get_settings(dataset_id))
         elif isinstance(self._store, dict):
             profiles = list(self._store.get(dataset_id, []))
-        elif hasattr(self._store, "profiles_by_dataset"):
-            profiles = list(self._store.profiles_by_dataset.get(dataset_id, []))
+        else:
+            profiles = []
 
         # Sort favorites first, preserve original order within each group
         profiles.sort(key=lambda p: not getattr(p, 'is_favorite', False))
         return profiles
-
-    def _chart_type_icon(self, chart_type: str) -> str:
-        chart_type = (chart_type or "").lower()
-        mapping = {
-            "line": "📈",
-            "bar": "📊",
-            "scatter": "⚬",
-            "area": "▤",
-            "pie": "🥧",
-            "histogram": "▦",
-        }
-        return mapping.get(chart_type, "📊")

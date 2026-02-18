@@ -307,7 +307,7 @@ class DataEngine:
     def append_rows(self, file_path: str, new_row_count: int) -> bool:
         """Incrementally append new rows from the end of a file (streaming optimization).
 
-        Uses scan_csv + tail to avoid loading the entire file into memory (#13).
+        Uses skip_rows to avoid loading the entire file into memory.
         Falls back to full reload on error.
         """
         import polars as pl
@@ -317,23 +317,31 @@ class DataEngine:
             return self.load_file(file_path, optimize_memory=True)
 
         try:
-            # Incremental: scan lazily and collect only tail rows
-            new_rows = pl.scan_csv(file_path).tail(new_row_count).collect()
+            # Incremental: skip already-loaded rows (+ 1 for header)
+            skip = len(current_df)
+            new_rows = pl.read_csv(file_path, skip_rows_after_header=skip)
+            if len(new_rows) == 0:
+                return True
             merged = pl.concat([current_df, new_rows], how="vertical_relaxed")
             self.update_dataframe(merged)
             self._clear_cache()
             return True
         except Exception:
             try:
-                # Fallback: eager read
-                full_df = pl.read_csv(file_path)
-                new_rows = full_df.tail(new_row_count)
+                # Fallback: scan_csv + tail
+                new_rows = pl.scan_csv(file_path).tail(new_row_count).collect()
                 merged = pl.concat([current_df, new_rows], how="vertical_relaxed")
                 self.update_dataframe(merged)
                 self._clear_cache()
                 return True
             except Exception:
                 return self.load_file(file_path, optimize_memory=True)
+
+    def trim(self, max_rows: int) -> None:
+        """Trim the engine DataFrame to at most *max_rows* (tail). Used by sliding window."""
+        df = self.df
+        if df is not None and len(df) > max_rows:
+            self.update_dataframe(df.tail(max_rows))
 
     @staticmethod
     def is_binary_etl(path: str) -> bool:

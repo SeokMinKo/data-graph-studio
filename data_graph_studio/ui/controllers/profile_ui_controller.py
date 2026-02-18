@@ -26,10 +26,52 @@ logger = logging.getLogger(__name__)
 
 
 class ProfileUIController:
-    """프로필 UI 관리 컨트롤러"""
+    """프로필 UI 관리 컨트롤러
 
-    def __init__(self, window: 'MainWindow'):
+    Issue #2 — major dependencies can be injected via __init__ kwargs;
+    falls back to ``self._w`` for backward-compatibility so existing
+    ``MainWindow`` wiring keeps working.
+    """
+
+    def __init__(
+        self,
+        window: 'MainWindow',
+        *,
+        profile_store=None,
+        profile_model=None,
+        profile_controller=None,
+        state=None,
+        statusbar=None,
+    ):
         self._w = window
+        # DI with self._w fallback (Issue #2)
+        self._profile_store = profile_store
+        self._profile_model = profile_model
+        self._profile_controller = profile_controller
+        self._state = state
+        self._statusbar = statusbar
+
+    # ---- DI property helpers (fallback to self._w) ----
+
+    @property
+    def _ps(self):
+        return self._profile_store or getattr(self._w, 'profile_store', None)
+
+    @property
+    def _pm(self):
+        return self._profile_model or getattr(self._w, 'profile_model', None)
+
+    @property
+    def _pc(self):
+        return self._profile_controller or getattr(self._w, 'profile_controller', None)
+
+    @property
+    def _st(self):
+        return self._state or getattr(self._w, 'state', None)
+
+    @property
+    def _sb(self):
+        return self._statusbar or getattr(self._w, 'statusbar', None)
 
     # ==================== Profile Menu Actions ====================
 
@@ -462,6 +504,30 @@ class ProfileUIController:
         except Exception as e:
             QMessageBox.warning(w, "Save Profile As", f"Failed to save profile:\n{e}")
 
+    def _collect_all_profiles(self) -> list:
+        """Collect all profiles (deduplicated) as dicts.
+
+        Issue #8 — shared helper replacing duplicated code in
+        ``_on_save_profile_bundle_as`` and ``_save_project_to``.
+        """
+        w = self._w
+        all_profiles: list = []
+        dataset_ids = w.engine.get_dataset_ids() if hasattr(w.engine, 'get_dataset_ids') else [""]
+        for did in dataset_ids:
+            for gs in w.profile_store.get_by_dataset(did):
+                all_profiles.append(gs.to_dict())
+        # Also collect profiles with empty dataset_id
+        for gs in w.profile_store.get_by_dataset(""):
+            all_profiles.append(gs.to_dict())
+        seen_ids: set = set()
+        unique: list = []
+        for p in all_profiles:
+            pid = p["id"]
+            if pid not in seen_ids:
+                seen_ids.add(pid)
+                unique.append(p)
+        return unique
+
     def _on_save_profile_bundle_as(self):
         """Save Profile Bundle As – 모든 프로파일을 .dgs-bundle JSON으로 저장"""
         w = self._w
@@ -473,18 +539,7 @@ class ProfileUIController:
         if not file_path:
             return
         try:
-            all_profiles = []
-            for did in w.engine.get_dataset_ids() if hasattr(w.engine, 'get_dataset_ids') else [""]:
-                for gs in w.profile_store.get_by_dataset(did):
-                    all_profiles.append(gs.to_dict())
-            for gs in w.profile_store.get_by_dataset(""):
-                all_profiles.append(gs.to_dict())
-            seen_ids = set()
-            unique = []
-            for p in all_profiles:
-                if p["id"] not in seen_ids:
-                    seen_ids.add(p["id"])
-                    unique.append(p)
+            unique = self._collect_all_profiles()
 
             bundle = {
                 "format": "dgs-profile-bundle",
@@ -558,18 +613,7 @@ class ProfileUIController:
                         )
                         project.add_data_source(ds_ref)
 
-            all_profiles = []
-            for did in w.engine.get_dataset_ids() if hasattr(w.engine, 'get_dataset_ids') else [""]:
-                for gs in w.profile_store.get_by_dataset(did):
-                    all_profiles.append(gs.to_dict())
-            for gs in w.profile_store.get_by_dataset(""):
-                all_profiles.append(gs.to_dict())
-            seen_ids = set()
-            unique = []
-            for p in all_profiles:
-                if p["id"] not in seen_ids:
-                    seen_ids.add(p["id"])
-                    unique.append(p)
+            unique = self._collect_all_profiles()
             project.profiles = unique
 
             project.save(path)

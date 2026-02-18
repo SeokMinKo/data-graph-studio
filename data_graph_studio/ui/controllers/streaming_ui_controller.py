@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
+MIN_POLL_INTERVAL_MS = 500
+
+
 class StreamingUIController:
     """Controller extracted from MainWindow."""
 
@@ -64,7 +67,7 @@ class StreamingUIController:
                 self._base_poll_interval_ms = self.w._streaming_controller.poll_interval_ms
             speed = float(text.replace('x', ''))
             self.w._streaming_controller.set_poll_interval(
-                max(500, int(self._base_poll_interval_ms / speed))
+                max(MIN_POLL_INTERVAL_MS, int(self._base_poll_interval_ms / speed))
             )
         except (ValueError, ZeroDivisionError):
             pass
@@ -77,10 +80,12 @@ class StreamingUIController:
             self._streaming_window_size = None
         else:
             try:
-                self._streaming_window_size = int(
-                    text.replace(",", "").replace("k", "000").replace("K", "000")
-                )
-            except ValueError:
+                cleaned = text.replace(",", "").strip()
+                if cleaned.lower().endswith("k"):
+                    self._streaming_window_size = int(float(cleaned[:-1]) * 1000)
+                else:
+                    self._streaming_window_size = int(float(cleaned))
+            except (ValueError, OverflowError):
                 self._streaming_window_size = None
 
 
@@ -203,18 +208,18 @@ class StreamingUIController:
             else:
                 self.w.engine.load_file(file_path, optimize_memory=True)
 
-            # Apply sliding window if set
-            df = self.w.engine.df
-            if df is not None and self._streaming_window_size is not None:
-                df = df.tail(self._streaming_window_size)
+            # Apply sliding window if set — also trim the engine to bound memory
+            if self._streaming_window_size is not None:
+                self.w.engine.trim(self._streaming_window_size)
 
+            df = self.w.engine.df
             if df is not None:
                 self.w.state.set_data_loaded(True, len(df))
                 self.w.table_panel.set_data(df)
                 self.w.graph_panel.refresh()
 
                 # Follow tail: auto-scroll table
-                if self.w._streaming_controller.follow_tail:
+                if getattr(self.w._streaming_controller, 'follow_tail', False):
                     if hasattr(self.w.table_panel, 'table_view'):
                         self.w.table_panel.table_view.scrollToBottom()
 
@@ -254,7 +259,7 @@ class StreamingUIController:
             self.w.statusbar.addPermanentWidget(self._stats_label)
         self._stats_label.show()
         if self._stats_timer is None:
-            self._stats_timer = QTimer()
+            self._stats_timer = QTimer(self.w)
             self._stats_timer.timeout.connect(self._refresh_stats_overlay)
         self._stats_timer.start(1000)
 

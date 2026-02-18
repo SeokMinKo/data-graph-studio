@@ -9,6 +9,7 @@ from __future__ import annotations
 import gc
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List
 
@@ -22,6 +23,7 @@ from ...core.state import ComparisonMode
 from ...core.undo_manager import UndoCommand, UndoActionType
 from ...core.comparison_report import ComparisonReport
 from ...core.parsing import ParsingSettings
+from ..utils import is_light_theme
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow
@@ -29,11 +31,51 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DatasetController:
-    """데이터셋 추가/관리/비교 컨트롤러"""
+@dataclass
+class _PendingLoad:
+    """Encapsulates pending dataset-load state.
 
-    def __init__(self, window: 'MainWindow'):
+    Issue #7 — replaces scattered ``w._pending_*`` attributes on MainWindow.
+    Issue #3 — owned by DatasetController instead of MainWindow.
+    """
+    dataset_id: str
+    name: str
+    file_path: Optional[str]
+
+
+class DatasetController:
+    """데이터셋 추가/관리/비교 컨트롤러
+
+    Issue #3 — major dependencies injected via kwargs with self._w fallback.
+    """
+
+    def __init__(
+        self,
+        window: 'MainWindow',
+        *,
+        engine=None,
+        state=None,
+        undo_stack=None,
+    ):
         self._w = window
+        self._engine = engine
+        self._state_di = state
+        self._undo_stack_di = undo_stack
+        self._pending: Optional[_PendingLoad] = None  # Issue #7
+
+    # ---- DI property helpers ----
+
+    @property
+    def _engine_ref(self):
+        return self._engine or self._w.engine
+
+    @property
+    def _state_ref(self):
+        return self._state_di or self._w.state
+
+    @property
+    def _undo(self):
+        return self._undo_stack_di or self._w._undo_stack
 
     # ==================== Dataset Add/Manage ====================
 
@@ -126,9 +168,7 @@ class DatasetController:
         w._progress_dialog.canceled.connect(w._file_controller._cancel_loading)
         w._progress_dialog.show()
 
-        w._pending_dataset_id = dataset_id
-        w._pending_dataset_name = name
-        w._pending_dataset_path = file_path
+        self._pending = _PendingLoad(dataset_id=dataset_id, name=name, file_path=file_path)
 
         w._file_controller._cleanup_loader_thread()
         from .file_loading_controller import DataLoaderThread
@@ -156,9 +196,7 @@ class DatasetController:
         w._progress_dialog.canceled.connect(w._file_controller._cancel_loading)
         w._progress_dialog.show()
 
-        w._pending_dataset_id = dataset_id
-        w._pending_dataset_name = name
-        w._pending_dataset_path = file_path
+        self._pending = _PendingLoad(dataset_id=dataset_id, name=name, file_path=file_path)
 
         w._file_controller._cleanup_loader_thread()
         from .file_loading_controller import DataLoaderThreadWithSettings
@@ -174,9 +212,10 @@ class DatasetController:
             w._progress_dialog.close()
 
         if success:
-            dataset_id = getattr(w, '_pending_dataset_id', None)
-            name = getattr(w, '_pending_dataset_name', 'Dataset')
-            file_path = getattr(w, '_pending_dataset_path', None)
+            pending = self._pending
+            dataset_id = pending.dataset_id if pending else None
+            name = pending.name if pending else 'Dataset'
+            file_path = pending.file_path if pending else None
 
             if dataset_id:
                 from ...core.data_engine import DatasetInfo
@@ -212,9 +251,7 @@ class DatasetController:
                 gc.collect()
                 logger.info(f"Dataset added: {dataset_id} ({name}), {w.engine.row_count:,} rows")
 
-            w._pending_dataset_id = None
-            w._pending_dataset_name = None
-            w._pending_dataset_path = None
+            self._pending = None
         else:
             error_msg = w.engine.progress.error_message or "Unknown error"
             logger.error(f"Failed to load dataset: {error_msg}")
@@ -279,24 +316,21 @@ class DatasetController:
             )
         )
 
-    def _on_dataset_remove_requested(self, dataset_id: str):
-        """데이터셋 제거 요청 (Undo 가능)"""
+    def _capture_dataset_snapshot(self, dataset_id: str):
+        """Capture dataset info + state for undo.  Issue #16 — helper extracted."""
+        import copy
         w = self._w
         metadata = w.state.get_dataset_metadata(dataset_id)
-        name = metadata.name if metadata else dataset_id
 
-        # Capture for undo
         try:
             dataset_info = w.engine.get_dataset(dataset_id)
         except Exception:
             dataset_info = None
 
-        # Memory safety: for large datasets, prefer reload-based undo (no DF snapshot)
-        LARGE_UNDO_BYTES = 300 * 1024 * 1024  # 300MB
+        LARGE_UNDO_BYTES = 300 * 1024 * 1024
         can_reload = bool(getattr(metadata, "file_path", None))
         is_large = bool(metadata and getattr(metadata, "memory_bytes", 0) and metadata.memory_bytes > LARGE_UNDO_BYTES)
-        use_reload_undo = bool(is_large and can_reload)
-        if use_reload_undo:
+        if is_large and can_reload:
             dataset_info = None
 
         state_snapshot = None
@@ -304,14 +338,57 @@ class DatasetController:
         try:
             ds_state = w.state.get_dataset_state(dataset_id)
             if ds_state is not None:
-                import copy
                 state_snapshot = copy.deepcopy(ds_state)
             if metadata is not None:
-                import copy
                 meta_snapshot = copy.deepcopy(metadata)
         except Exception:
             pass
 
+        return dataset_info, state_snapshot, meta_snapshot
+
+    def _restore_dataset(self, dataset_id: str, name: str, dataset_info, state_snapshot, meta_snapshot, prev_active: str):
+        """Restore a removed dataset.  Issue #16 — helper extracted."""
+        w = self._w
+        if meta_snapshot is None:
+            return
+
+        if dataset_info is not None:
+            try:
+                w.engine._datasets[dataset_id] = dataset_info
+            except Exception:
+                return
+        else:
+            file_path = getattr(meta_snapshot, "file_path", None)
+            if not file_path:
+                return
+            try:
+                w.engine.load_dataset(file_path, name=getattr(meta_snapshot, "name", name), dataset_id=dataset_id)
+            except Exception:
+                return
+
+        try:
+            if state_snapshot is not None:
+                w.state._dataset_states[dataset_id] = state_snapshot
+            w.state._dataset_metadata[dataset_id] = meta_snapshot
+            if getattr(meta_snapshot, "compare_enabled", True):
+                if dataset_id not in w.state._comparison_settings.comparison_datasets:
+                    w.state._comparison_settings.comparison_datasets.append(dataset_id)
+            w.state.dataset_added.emit(dataset_id)
+            w.state.dataset_updated.emit(dataset_id)
+        except Exception:
+            pass
+
+        target = prev_active or dataset_id
+        self._on_dataset_activated(target)
+        w.statusbar.showMessage(f"Restored: {name}", 3000)
+
+    def _on_dataset_remove_requested(self, dataset_id: str):
+        """데이터셋 제거 요청 (Undo 가능)"""
+        w = self._w
+        metadata = w.state.get_dataset_metadata(dataset_id)
+        name = metadata.name if metadata else dataset_id
+
+        dataset_info, state_snapshot, meta_snapshot = self._capture_dataset_snapshot(dataset_id)
         prev_active = w.engine.active_dataset_id
 
         def _remove():
@@ -327,42 +404,7 @@ class DatasetController:
                 w.statusbar.showMessage(f"Removed: {name}", 3000)
 
         def _restore():
-            if meta_snapshot is None:
-                return
-
-            # If we have a full snapshot, restore it.
-            if dataset_info is not None:
-                try:
-                    w.engine._datasets[dataset_id] = dataset_info
-                except Exception:
-                    return
-            else:
-                # Reload-based undo (large dataset)
-                file_path = getattr(meta_snapshot, "file_path", None)
-                if not file_path:
-                    return
-                try:
-                    w.engine.load_dataset(file_path, name=getattr(meta_snapshot, "name", name), dataset_id=dataset_id)
-                except Exception:
-                    return
-
-            # Restore AppState dataset entries
-            try:
-                if state_snapshot is not None:
-                    w.state._dataset_states[dataset_id] = state_snapshot
-                w.state._dataset_metadata[dataset_id] = meta_snapshot
-                if getattr(meta_snapshot, "compare_enabled", True):
-                    if dataset_id not in w.state._comparison_settings.comparison_datasets:
-                        w.state._comparison_settings.comparison_datasets.append(dataset_id)
-                w.state.dataset_added.emit(dataset_id)
-                w.state.dataset_updated.emit(dataset_id)
-            except Exception:
-                pass
-
-            # Activate previous dataset (or restored one)
-            target = prev_active or dataset_id
-            self._on_dataset_activated(target)
-            w.statusbar.showMessage(f"Restored: {name}", 3000)
+            self._restore_dataset(dataset_id, name, dataset_info, state_snapshot, meta_snapshot, prev_active)
 
         w._undo_stack.push(
             UndoCommand(
@@ -490,7 +532,7 @@ class DatasetController:
             w._overlay_stats_widget.close_requested.connect(self._hide_overlay_stats_widget)
             w._overlay_stats_widget.expand_requested.connect(self._show_comparison_stats_panel)
 
-        is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+        is_light = is_light_theme(w)
         if hasattr(w._overlay_stats_widget, 'apply_theme'):
             w._overlay_stats_widget.apply_theme(is_light)
 
@@ -513,7 +555,7 @@ class DatasetController:
                 w.engine, w.state
             )
 
-        is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+        is_light = is_light_theme(w)
         if hasattr(w._comparison_stats_panel, 'apply_theme'):
             w._comparison_stats_panel.apply_theme(is_light)
 
@@ -709,7 +751,7 @@ class DatasetController:
                 w.profile_comparison_controller.stop_comparison
             )
             w._compare_toolbar.reset_to_defaults()
-            is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+            is_light = is_light_theme(w)
             if hasattr(w._compare_toolbar, 'apply_theme'):
                 w._compare_toolbar.apply_theme(is_light)
             w._compare_toolbar.show()
@@ -733,7 +775,7 @@ class DatasetController:
         else:
             return
 
-        is_light = bool(getattr(getattr(w, '_theme_manager', None), 'current_theme', None).is_light()) if hasattr(getattr(w, '_theme_manager', None), 'current_theme') else False
+        is_light = is_light_theme(w)
         if hasattr(view, 'apply_theme'):
             view.apply_theme(is_light)
 

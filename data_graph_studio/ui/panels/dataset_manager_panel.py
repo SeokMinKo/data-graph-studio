@@ -186,6 +186,9 @@ class DatasetItemWidget(QFrame):
             self.activated.emit(self.dataset_id)
         super().mousePressEvent(event)
 
+    # Issue #13 — signal for state-level rename (not just UI label)
+    renamed = Signal(str, str)  # dataset_id, new_name
+
     def mouseDoubleClickEvent(self, event):
         """더블클릭 시 이름 변경"""
         if event.button() == Qt.LeftButton:
@@ -195,6 +198,7 @@ class DatasetItemWidget(QFrame):
             )
             if ok and new_name:
                 self.name_label.setText(new_name)
+                self.renamed.emit(self.dataset_id, new_name)
 
 
 class DatasetManagerPanel(QWidget):
@@ -236,14 +240,14 @@ class DatasetManagerPanel(QWidget):
         header_layout = QHBoxLayout()
 
         title = QLabel("📂 Datasets")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #F2F4F8;")
+        title.setObjectName("datasetPanelTitle")
         header_layout.addWidget(title)
 
         header_layout.addStretch()
 
         # 데이터셋 수 표시
         self.count_label = QLabel("0 / 10")
-        self.count_label.setStyleSheet("color: #C9D1DB;")
+        self.count_label.setObjectName("datasetCount")
         header_layout.addWidget(self.count_label)
 
         layout.addLayout(header_layout)
@@ -252,16 +256,7 @@ class DatasetManagerPanel(QWidget):
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(18)
-        self.tree.setStyleSheet("""
-            QTreeWidget {
-                background: #111827;
-                color: #E2E8F0;
-                border: 1px solid #1F2937;
-                border-radius: 6px;
-            }
-            QTreeWidget::item { padding: 6px; }
-            QTreeWidget::item:selected { background: #1F2937; color: #E2E8F0; }
-        """)
+        self.tree.setObjectName("datasetTree")
         self.tree.itemClicked.connect(self._on_tree_clicked)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._on_tree_context_menu)

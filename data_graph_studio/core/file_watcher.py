@@ -376,8 +376,18 @@ class FileWatcher(QObject):
                     with open(path, 'rb') as f:
                         f.seek(entry.last_size)
                         new_data = f.read()
-                    new_lines = new_data.decode("utf-8", errors="replace").splitlines()
-                    new_lines = [l for l in new_lines if l.strip()]
+                    text = new_data.decode("utf-8", errors="replace")
+                    # Drop first partial line: seek may land mid-line
+                    if text and text[0] != '\n' and entry.last_size > 0:
+                        first_nl = text.find('\n')
+                        if first_nl == -1:
+                            # Entire chunk is a partial line — skip, don't advance last_size
+                            entry.last_mtime = st.st_mtime
+                            return
+                        text = text[first_nl + 1:]
+                        # Adjust last_size to end of the partial line we dropped
+                        entry.last_size += first_nl + 1
+                    new_lines = [l for l in text.splitlines() if l.strip()]
                     new_rows = len(new_lines)
 
                     if new_rows > 0:
