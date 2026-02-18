@@ -2,7 +2,8 @@
 Table Panel - 테이블 뷰 + X Zone + Group Zone + Value Zone
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set, Tuple
+from collections import OrderedDict
 import json
 import polars as pl
 
@@ -11,19 +12,77 @@ from PySide6.QtWidgets import (
     QTableView, QHeaderView, QAbstractItemView, QMenu,
     QLineEdit, QComboBox, QPushButton, QMessageBox,
     QSplitter, QSizePolicy, QApplication, QListWidget,
-    QListWidgetItem, QGroupBox, QSlider
+    QListWidgetItem, QGroupBox, QSlider, QDialog,
+    QDialogButtonBox, QFormLayout, QColorDialog
 )
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
     Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
     QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QEvent, QSize
 )
-from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnterEvent
+from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnterEvent, QKeySequence
 
 from ...core.state import AppState, AggregationType, GroupColumn, ValueColumn
 from ...core.data_engine import DataEngine
 from .grouped_table_model import GroupedTableModel
 from ..floatable import FloatButton, FloatWindow
+
+
+class ConditionalFormat:
+    """Conditional formatting rule for a column."""
+
+    HEATMAP = "heatmap"
+    THRESHOLD = "threshold"
+    DATA_BAR = "data_bar"
+
+    def __init__(self, mode: str = "heatmap", min_color: str = "#2196F3",
+                 max_color: str = "#F44336", threshold: float = 0,
+                 threshold_color: str = "#F44336"):
+        self.mode = mode
+        self.min_color = QColor(min_color)
+        self.max_color = QColor(max_color)
+        self.threshold = threshold
+        self.threshold_color = QColor(threshold_color)
+        self._min_val: Optional[float] = None
+        self._max_val: Optional[float] = None
+
+    def set_range(self, min_val: float, max_val: float):
+        self._min_val = min_val
+        self._max_val = max_val
+
+    def get_color(self, value) -> Optional[QBrush]:
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if self.mode == self.HEATMAP:
+            if self._min_val is None or self._max_val is None:
+                return None
+            rng = self._max_val - self._min_val
+            if rng == 0:
+                return None
+            t = max(0.0, min(1.0, (v - self._min_val) / rng))
+            r = int(self.min_color.red() + t * (self.max_color.red() - self.min_color.red()))
+            g = int(self.min_color.green() + t * (self.max_color.green() - self.min_color.green()))
+            b = int(self.min_color.blue() + t * (self.max_color.blue() - self.min_color.blue()))
+            color = QColor(r, g, b, 60)
+            return QBrush(color)
+        elif self.mode == self.THRESHOLD:
+            if v >= self.threshold:
+                return QBrush(QColor(self.threshold_color.red(), self.threshold_color.green(),
+                                     self.threshold_color.blue(), 60))
+            return None
+        elif self.mode == self.DATA_BAR:
+            # Data bar uses alpha to indicate magnitude
+            if self._min_val is None or self._max_val is None:
+                return None
+            rng = self._max_val - self._min_val
+            if rng == 0:
+                return None
+            t = max(0.0, min(1.0, (v - self._min_val) / rng))
+            return QBrush(QColor(33, 150, 243, int(t * 80)))
+        return None
 
 
 class PolarsTableModel(QAbstractTableModel):
@@ -34,10 +93,13 @@ class PolarsTableModel(QAbstractTableModel):
     - 직접 인덱스 접근으로 iter_rows() 회피
     - 필요한 데이터만 로드
     - 정렬 인덱스 기반 접근 (메모리 효율)
+    - LRU 컬럼 캐시 (OrderedDict)
+    - 가상 스크롤 (fetchMore/canFetchMore)
     """
 
     # 테이블에 표시할 최대 행 수 (성능 보장)
     MAX_DISPLAY_ROWS = 100_000
+    FETCH_SIZE = 500
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,16 +108,29 @@ class PolarsTableModel(QAbstractTableModel):
         self._visible_columns: List[str] = []
         self._row_count = 0
         self._actual_row_count = 0  # 실제 데이터 행 수
-        # 컬럼 기반 캐시: column_index -> list of values
-        self._column_cache: Dict[int, list] = {}
+        self._total_rows = 0  # for virtual scroll
+        self._loaded_rows = 0  # for virtual scroll
+        self._virtual_scroll_enabled = False  # opt-in
+        # 컬럼 기반 LRU 캐시: column_index -> list of values
+        self._column_cache: OrderedDict = OrderedDict()
         self._cache_valid = False
         # 정렬 상태
         self._sort_column: Optional[int] = None
         self._sort_order: Optional[Qt.SortOrder] = None
         self._sort_indices: Optional[pl.Series] = None  # 원본 인덱스 매핑
+        self._reverse_sort_map: Dict[int, int] = {}  # Bug 3: O(1) reverse map
+        # 멀티 정렬 (F6)
+        self._sort_columns: List[Tuple[int, Qt.SortOrder]] = []
         # Focusing 하이라이트
         self._focused_rows: set = set()
         self._focus_brush = QBrush(QColor(200, 240, 200))  # 연한 초록색
+        # 검색 하이라이트 (UX 6)
+        self._search_matches: Set[Tuple[int, int]] = set()  # (row, col) pairs
+        self._search_brush = QBrush(QColor(255, 235, 59, 100))  # 연한 노랑
+        # 조건부 서식 (F3)
+        self._conditional_formats: Dict[str, ConditionalFormat] = {}
+        # 인라인 편집 (F2)
+        self._editable = False
 
     def set_dataframe(self, df: Optional[pl.DataFrame]):
         self.beginResetModel()
@@ -67,16 +142,46 @@ class PolarsTableModel(QAbstractTableModel):
         self._sort_column = None
         self._sort_order = None
         self._sort_indices = None
+        self._reverse_sort_map = {}
+        self._sort_columns = []
+        self._search_matches = set()
         if df is not None:
             self._visible_columns = df.columns
             self._actual_row_count = len(df)
-            # 성능을 위해 최대 행 수 제한
-            self._row_count = min(len(df), self.MAX_DISPLAY_ROWS)
+            self._total_rows = min(len(df), self.MAX_DISPLAY_ROWS)
+            if self._virtual_scroll_enabled:
+                self._loaded_rows = min(self.FETCH_SIZE, self._total_rows)
+            else:
+                self._loaded_rows = self._total_rows
+            self._row_count = self._loaded_rows
+            # Update conditional format ranges
+            self._update_conditional_format_ranges()
         else:
             self._visible_columns = []
             self._row_count = 0
             self._actual_row_count = 0
+            self._total_rows = 0
+            self._loaded_rows = 0
         self.endResetModel()
+
+    # ==================== Virtual Scroll (F8) ====================
+
+    def set_virtual_scroll(self, enabled: bool):
+        """Enable/disable virtual scroll for large datasets."""
+        self._virtual_scroll_enabled = enabled
+
+    def canFetchMore(self, parent=QModelIndex()):
+        if not self._virtual_scroll_enabled:
+            return False
+        return self._loaded_rows < self._total_rows
+
+    def fetchMore(self, parent=QModelIndex()):
+        remaining = self._total_rows - self._loaded_rows
+        fetch = min(self.FETCH_SIZE, remaining)
+        self.beginInsertRows(parent, self._loaded_rows, self._loaded_rows + fetch - 1)
+        self._loaded_rows += fetch
+        self._row_count = self._loaded_rows
+        self.endInsertRows()
 
     def rowCount(self, parent=QModelIndex()):
         return self._row_count
@@ -84,13 +189,75 @@ class PolarsTableModel(QAbstractTableModel):
     def columnCount(self, parent=QModelIndex()):
         return len(self._visible_columns)
 
+    def flags(self, index: QModelIndex):
+        """F2: Support inline editing when enabled."""
+        f = super().flags(index)
+        if self._editable:
+            f |= Qt.ItemIsEditable
+        return f
+
+    def setData(self, index: QModelIndex, value, role=Qt.EditRole) -> bool:
+        """F2: Inline cell editing."""
+        if role != Qt.EditRole or not self._editable:
+            return False
+        if not index.isValid() or self._df is None:
+            return False
+        col_idx = index.column()
+        row_idx = index.row()
+        if col_idx >= len(self._visible_columns) or row_idx >= self._row_count:
+            return False
+        col_name = self._visible_columns[col_idx]
+        original_row = self._get_original_row(row_idx)
+        try:
+            series_list = self._df[col_name].to_list()
+            series_list[original_row] = value
+            new_df = self._df.with_columns(pl.Series(col_name, series_list))
+            self._df = new_df
+            if self._original_df is not None and self._sort_indices is not None:
+                # Also update original
+                orig_list = self._original_df[col_name].to_list()
+                orig_list[original_row] = value
+                self._original_df = self._original_df.with_columns(pl.Series(col_name, orig_list))
+            else:
+                self._original_df = new_df
+            # Invalidate column cache
+            if col_idx in self._column_cache:
+                del self._column_cache[col_idx]
+            self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+            return True
+        except Exception:
+            return False
+
+    def set_editable(self, editable: bool):
+        self._editable = editable
+
+    def _get_original_row(self, display_row: int) -> int:
+        """Get original row index from display row."""
+        if self._sort_indices is not None and 0 <= display_row < len(self._sort_indices):
+            return int(self._sort_indices[display_row])
+        return display_row
+
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
         if not index.isValid() or self._df is None:
             return None
 
         if role == Qt.BackgroundRole:
+            # Search highlight takes priority
+            if (index.row(), index.column()) in self._search_matches:
+                return self._search_brush
+            # Focus highlight
             if index.row() in self._focused_rows:
                 return self._focus_brush
+            # Conditional formatting (F3)
+            if self._conditional_formats:
+                col_idx = index.column()
+                if col_idx < len(self._visible_columns):
+                    col_name = self._visible_columns[col_idx]
+                    if col_name in self._conditional_formats:
+                        val = self._get_raw_value(index.row(), col_idx)
+                        result = self._conditional_formats[col_name].get_color(val)
+                        if result is not None:
+                            return result
             return None
 
         if role == Qt.DisplayRole or role == Qt.EditRole:
@@ -105,6 +272,7 @@ class PolarsTableModel(QAbstractTableModel):
                 self._cache_column(col)
 
             if col in self._column_cache:
+                self._column_cache.move_to_end(col)  # LRU touch
                 cache = self._column_cache[col]
                 if row < len(cache):
                     value = cache[row]
@@ -112,6 +280,16 @@ class PolarsTableModel(QAbstractTableModel):
                         return ""
                     return str(value)
 
+        return None
+
+    def _get_raw_value(self, row: int, col: int):
+        """Get raw (non-string) value for conditional formatting."""
+        if col not in self._column_cache:
+            self._cache_column(col)
+        if col in self._column_cache:
+            cache = self._column_cache[col]
+            if row < len(cache):
+                return cache[row]
         return None
 
     def set_focused_rows(self, rows: set):
@@ -131,28 +309,41 @@ class PolarsTableModel(QAbstractTableModel):
                     [Qt.BackgroundRole],
                 )
 
+    # ==================== Search Highlight (UX 6) ====================
+
+    def set_search_matches(self, matches: Set[Tuple[int, int]]):
+        """Set search match positions and highlight without model rebuild."""
+        self._search_matches = matches
+        if self._row_count > 0 and len(self._visible_columns) > 0:
+            self.dataChanged.emit(
+                self.index(0, 0),
+                self.index(self._row_count - 1, len(self._visible_columns) - 1),
+                [Qt.BackgroundRole],
+            )
+
+    def clear_search_matches(self):
+        self.set_search_matches(set())
+
     def _cache_column(self, col: int):
-        """컬럼 데이터를 캐시에 로드 (한 번만 변환)"""
+        """컬럼 데이터를 LRU 캐시에 로드"""
         if self._df is None or col >= len(self._visible_columns):
             return
 
         col_name = self._visible_columns[col]
         try:
-            # 표시할 행 수만큼만 가져옴
             if self._row_count < self._actual_row_count:
                 col_data = self._df[col_name].head(self._row_count).to_list()
             else:
                 col_data = self._df[col_name].to_list()
             self._column_cache[col] = col_data
+            self._column_cache.move_to_end(col)
         except Exception:
             self._column_cache[col] = []
 
-        # 캐시 크기 제한 (메모리 관리)
+        # LRU eviction
         MAX_CACHED_COLUMNS = 50
-        if len(self._column_cache) > MAX_CACHED_COLUMNS:
-            # 가장 오래된 컬럼 제거 (LRU 간소화)
-            oldest = min(self._column_cache.keys())
-            del self._column_cache[oldest]
+        while len(self._column_cache) > MAX_CACHED_COLUMNS:
+            self._column_cache.popitem(last=False)
 
     def headerData(self, section: int, orientation: Qt.Orientation, role=Qt.DisplayRole):
         if role == Qt.DisplayRole:
@@ -165,9 +356,30 @@ class PolarsTableModel(QAbstractTableModel):
                             return f"{col_name} ▲"
                         else:
                             return f"{col_name} ▼"
+                    # Multi-sort indicator
+                    for i, (sc, so) in enumerate(self._sort_columns):
+                        if sc == section:
+                            arrow = "▲" if so == Qt.AscendingOrder else "▼"
+                            return f"{col_name} {arrow}{i+1}"
                     return col_name
             else:
                 return str(section + 1)
+        # F4: Column stats tooltip
+        elif role == Qt.ToolTipRole and orientation == Qt.Horizontal:
+            if self._df is not None and 0 <= section < len(self._visible_columns):
+                col_name = self._visible_columns[section]
+                try:
+                    series = self._df[col_name]
+                    dtype = str(series.dtype)
+                    null_count = series.null_count()
+                    total = len(series)
+                    pct = (null_count / total * 100) if total > 0 else 0
+                    tooltip = f"<b>{col_name}</b><br>Type: {dtype}<br>Nulls: {null_count} ({pct:.1f}%)"
+                    if series.dtype.is_numeric():
+                        tooltip += f"<br>Min: {series.min()}<br>Max: {series.max()}<br>Mean: {series.mean():.2f}"
+                    return tooltip
+                except Exception:
+                    return col_name
         return None
 
     def get_column_name(self, index: int) -> Optional[str]:
@@ -179,15 +391,45 @@ class PolarsTableModel(QAbstractTableModel):
         """실제 데이터 행 수 (표시 제한과 무관)"""
         return self._actual_row_count
 
+    # ==================== 조건부 서식 (F3) ====================
+
+    def set_conditional_format(self, col_name: str, fmt: ConditionalFormat):
+        self._conditional_formats[col_name] = fmt
+        self._update_conditional_format_ranges()
+        if self._row_count > 0 and len(self._visible_columns) > 0:
+            self.dataChanged.emit(
+                self.index(0, 0),
+                self.index(self._row_count - 1, len(self._visible_columns) - 1),
+                [Qt.BackgroundRole],
+            )
+
+    def remove_conditional_format(self, col_name: str):
+        if col_name in self._conditional_formats:
+            del self._conditional_formats[col_name]
+            if self._row_count > 0 and len(self._visible_columns) > 0:
+                self.dataChanged.emit(
+                    self.index(0, 0),
+                    self.index(self._row_count - 1, len(self._visible_columns) - 1),
+                    [Qt.BackgroundRole],
+                )
+
+    def _update_conditional_format_ranges(self):
+        """Update min/max ranges for conditional formats."""
+        if self._df is None:
+            return
+        for col_name, fmt in self._conditional_formats.items():
+            if col_name in self._df.columns:
+                try:
+                    series = self._df[col_name]
+                    if series.dtype.is_numeric():
+                        fmt.set_range(float(series.min()), float(series.max()))
+                except Exception:
+                    pass
+
     # ==================== 정렬 기능 ====================
 
     def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder):
-        """컬럼 기준 정렬
-
-        Args:
-            column: 정렬할 컬럼 인덱스
-            order: Qt.AscendingOrder 또는 Qt.DescendingOrder
-        """
+        """컬럼 기준 정렬 (멀티 정렬 지원 F6)"""
         if self._original_df is None:
             return
 
@@ -212,6 +454,10 @@ class PolarsTableModel(QAbstractTableModel):
             # 원본 인덱스 저장 (Int32로 메모리 효율화)
             self._sort_indices = sorted_df["__original_idx__"].cast(pl.Int32)
 
+            # Bug 3: Build reverse map for O(1) lookup
+            indices_list = self._sort_indices.to_list()
+            self._reverse_sort_map = {orig: sorted_idx for sorted_idx, orig in enumerate(indices_list)}
+
             # 정렬된 DataFrame 저장 (인덱스 컬럼 제거)
             self._df = sorted_df.drop("__original_idx__")
 
@@ -222,6 +468,11 @@ class PolarsTableModel(QAbstractTableModel):
             self._sort_column = column
             self._sort_order = order
 
+            # Virtual scroll reset
+            self._total_rows = min(len(self._df), self.MAX_DISPLAY_ROWS)
+            self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
+            self._row_count = self._loaded_rows
+
         except Exception as e:
             # 정렬 실패 시 원본 유지
             print(f"Sort error: {e}")
@@ -229,7 +480,44 @@ class PolarsTableModel(QAbstractTableModel):
             self._sort_column = None
             self._sort_order = None
             self._sort_indices = None
+            self._reverse_sort_map = {}
 
+        self.endResetModel()
+
+    def sort_multi(self, columns: List[Tuple[int, Qt.SortOrder]]):
+        """F6: Multi-column sort."""
+        if self._original_df is None or not columns:
+            return
+
+        self._sort_columns = columns
+        col_names = []
+        descending = []
+        for col_idx, order in columns:
+            if 0 <= col_idx < len(self._visible_columns):
+                col_names.append(self._visible_columns[col_idx])
+                descending.append(order == Qt.DescendingOrder)
+
+        if not col_names:
+            return
+
+        self.beginResetModel()
+        try:
+            df_with_idx = self._original_df.with_row_index("__original_idx__")
+            sorted_df = df_with_idx.sort(col_names, descending=descending, nulls_last=True)
+            self._sort_indices = sorted_df["__original_idx__"].cast(pl.Int32)
+            indices_list = self._sort_indices.to_list()
+            self._reverse_sort_map = {orig: si for si, orig in enumerate(indices_list)}
+            self._df = sorted_df.drop("__original_idx__")
+            self._column_cache.clear()
+            self._sort_column = columns[0][0] if len(columns) == 1 else None
+            self._sort_order = columns[0][1] if len(columns) == 1 else None
+            self._total_rows = min(len(self._df), self.MAX_DISPLAY_ROWS)
+            self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
+            self._row_count = self._loaded_rows
+        except Exception as e:
+            print(f"Multi-sort error: {e}")
+            self._df = self._original_df
+            self._sort_columns = []
         self.endResetModel()
 
     def clear_sort(self):
@@ -243,6 +531,11 @@ class PolarsTableModel(QAbstractTableModel):
         self._sort_column = None
         self._sort_order = None
         self._sort_indices = None
+        self._reverse_sort_map = {}
+        self._sort_columns = []
+        self._total_rows = min(len(self._df), self.MAX_DISPLAY_ROWS) if self._df is not None else 0
+        self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
+        self._row_count = self._loaded_rows
         self.endResetModel()
 
     def get_sort_column(self) -> Optional[int]:
@@ -254,16 +547,9 @@ class PolarsTableModel(QAbstractTableModel):
         return self._sort_order
 
     def get_original_row_index(self, sorted_row: int) -> Optional[int]:
-        """정렬된 행 인덱스에서 원본 행 인덱스 반환
-
-        Args:
-            sorted_row: 정렬된 테이블에서의 행 인덱스
-
-        Returns:
-            원본 DataFrame에서의 행 인덱스
-        """
+        """정렬된 행 인덱스에서 원본 행 인덱스 반환"""
         if self._sort_indices is None:
-            return sorted_row  # 정렬 안 된 경우 그대로 반환
+            return sorted_row
 
         if 0 <= sorted_row < len(self._sort_indices):
             return int(self._sort_indices[sorted_row])
@@ -271,23 +557,14 @@ class PolarsTableModel(QAbstractTableModel):
         return None
 
     def get_sorted_row_index(self, original_row: int) -> Optional[int]:
-        """원본 행 인덱스에서 정렬된 행 인덱스 반환
-
-        Args:
-            original_row: 원본 DataFrame에서의 행 인덱스
-
-        Returns:
-            정렬된 테이블에서의 행 인덱스
-        """
+        """원본 행 인덱스에서 정렬된 행 인덱스 반환 (Bug 3: O(1))"""
         if self._sort_indices is None:
             return original_row
 
-        # 역 매핑 (선형 검색, 필요시 최적화 가능)
-        try:
-            indices_list = self._sort_indices.to_list()
-            return indices_list.index(original_row)
-        except ValueError:
-            return None
+        if self._reverse_sort_map:
+            return self._reverse_sort_map.get(original_row, -1)
+
+        return None
 
 
 def _parse_drag_payload(mime_data: QMimeData) -> Dict[str, Any]:
@@ -991,6 +1268,11 @@ class DataTableView(QTableView):
     hide_column = Signal(str)  # column name
     exclude_column = Signal(str)  # column name (drop from data)
     column_order_changed = Signal(list)
+    column_type_convert = Signal(str, str)  # column_name, target_type
+    column_freeze = Signal(str)  # column name
+    column_unfreeze = Signal(str)  # column name
+    conditional_format_requested = Signal(str)  # column name
+    multi_sort_requested = Signal(int, object)  # column, Qt.SortOrder
     
     def __init__(self):
         super().__init__()
@@ -1016,13 +1298,41 @@ class DataTableView(QTableView):
         self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
         self.horizontalHeader().installEventFilter(self)
         
-        self.selectionModel_connected = False
+        # Multi-sort state
+        self._pending_multi_sort: List[Tuple[int, Qt.SortOrder]] = []
     
     def setModel(self, model):
+        """Bug 4: Reconnect selectionModel on every model swap."""
         super().setModel(model)
-        if model and not self.selectionModel_connected:
-            self.selectionModel().selectionChanged.connect(self._on_selection_changed)
-            self.selectionModel_connected = True
+        sel_model = self.selectionModel()
+        if sel_model:
+            sel_model.selectionChanged.connect(self._on_selection_changed)
+
+    # F1: Multi-cell Ctrl+C copy
+    def keyPressEvent(self, event):
+        if event.matches(QKeySequence.Copy):
+            self._copy_selection_to_clipboard()
+            return
+        super().keyPressEvent(event)
+
+    def _copy_selection_to_clipboard(self):
+        """Copy selected cells as TSV to clipboard."""
+        sel = self.selectionModel()
+        if not sel:
+            return
+        indexes = sel.selectedIndexes()
+        if not indexes:
+            return
+        rows = sorted(set(idx.row() for idx in indexes))
+        cols = sorted(set(idx.column() for idx in indexes))
+        lines = []
+        for r in rows:
+            line = []
+            for c in cols:
+                idx = self.model().index(r, c)
+                line.append(str(self.model().data(idx, Qt.DisplayRole) or ""))
+            lines.append("\t".join(line))
+        QApplication.clipboard().setText("\n".join(lines))
     
     def _on_header_pressed(self, logical_index: int):
         # Store column name for context menu / reorder
@@ -1095,6 +1405,29 @@ class DataTableView(QTableView):
         exclude_col = QAction("🚫 Exclude Column", self)
         exclude_col.triggered.connect(lambda: self.exclude_column.emit(column_name))
         menu.addAction(exclude_col)
+
+        menu.addSeparator()
+
+        # F5: Convert Type submenu
+        type_menu = menu.addMenu("🔄 Convert Type")
+        for dtype_name in ["Int64", "Float64", "String", "Date", "Boolean"]:
+            act = QAction(dtype_name, self)
+            act.triggered.connect(lambda checked=False, t=dtype_name: self.column_type_convert.emit(column_name, t))
+            type_menu.addAction(act)
+
+        # F3: Conditional Formatting
+        cond_fmt = QAction("🎨 Conditional Formatting...", self)
+        cond_fmt.triggered.connect(lambda: self.conditional_format_requested.emit(column_name))
+        menu.addAction(cond_fmt)
+
+        # F7: Freeze/Unfreeze Column
+        freeze_act = QAction("📌 Freeze Column", self)
+        freeze_act.triggered.connect(lambda: self.column_freeze.emit(column_name))
+        menu.addAction(freeze_act)
+
+        unfreeze_act = QAction("📌 Unfreeze Column", self)
+        unfreeze_act.triggered.connect(lambda: self.column_unfreeze.emit(column_name))
+        menu.addAction(unfreeze_act)
 
         menu.exec(self.horizontalHeader().mapToGlobal(pos))
     
@@ -1576,6 +1909,15 @@ class TablePanel(QWidget):
         self.window_widget.setVisible(False)
         toolbar.addWidget(self.window_widget)
         
+        # F2: Edit mode toggle
+        self.edit_toggle_btn = QPushButton("✏️ Edit")
+        self.edit_toggle_btn.setCheckable(True)
+        self.edit_toggle_btn.setChecked(False)
+        self.edit_toggle_btn.setObjectName("smallButton")
+        self.edit_toggle_btn.setToolTip("Toggle inline cell editing")
+        self.edit_toggle_btn.clicked.connect(self._on_edit_toggle)
+        toolbar.addWidget(self.edit_toggle_btn)
+
         toolbar.addStretch()
         
         self.group_info_label = QLabel("")
@@ -1584,6 +1926,10 @@ class TablePanel(QWidget):
         
         table_layout.addLayout(toolbar)
         
+        # F7: Frozen columns container
+        self._frozen_columns: List[str] = []
+        self._frozen_view: Optional[QTableView] = None
+
         # Table view
         self.table_view = DataTableView()
         self.table_model = PolarsTableModel()
@@ -1602,6 +1948,10 @@ class TablePanel(QWidget):
         self.table_view.exclude_column.connect(self._on_exclude_column)
         self.table_view.column_dragged.connect(self._on_column_action)
         self.table_view.column_order_changed.connect(self._on_column_order_changed)
+        self.table_view.column_type_convert.connect(self._on_column_type_convert)
+        self.table_view.conditional_format_requested.connect(self._on_conditional_format_requested)
+        self.table_view.column_freeze.connect(self._on_freeze_column)
+        self.table_view.column_unfreeze.connect(self._on_unfreeze_column)
         self.state.selection_changed.connect(self._on_state_selection_changed)
         self.state.group_zone_changed.connect(self._on_group_zone_changed)
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
@@ -2068,7 +2418,12 @@ class TablePanel(QWidget):
                 elif f.operator == 'contains':
                     filtered_df = filtered_df.filter(col.str.contains(str(f.value)))
             except Exception as e:
-                print(f"Filter error: {e}")
+                # UX 10: Show filter error to user instead of print
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        f"Filter error on '{f.column}': {e}", 5000
+                    )
                 continue
 
         # Update visible rows count in state
@@ -2162,19 +2517,17 @@ class TablePanel(QWidget):
             valid_indices = [i for i in selected_rows if 0 <= i < max_idx]
             
             if valid_indices:
-                # Create boolean mask
-                mask = pl.Series([i in valid_indices for i in range(len(df))])
+                # Bug 2: O(n) with polars is_in instead of O(n×m) list comprehension
+                valid_series = pl.Series("valid", valid_indices)
+                idx_series = pl.Series("idx", list(range(len(df))))
+                mask = idx_series.is_in(valid_series)
                 filtered_df = df.filter(mask)
                 
-                # Update label
+                # UX 9: Use setProperty instead of inline style
                 self.group_info_label.setText(f"Showing {len(valid_indices)} marked rows")
-                self.group_info_label.setStyleSheet("""
-                    color: #92400E;
-                    font-size: 10px;
-                    background: #FEF3C7;
-                    padding: 3px 8px;
-                    border-radius: 8px;
-                """)
+                self.group_info_label.setProperty("state", "marking")
+                self.group_info_label.style().unpolish(self.group_info_label)
+                self.group_info_label.style().polish(self.group_info_label)
                 
                 self._update_table_model(filtered_df)
             else:
@@ -2346,6 +2699,67 @@ class TablePanel(QWidget):
         self.set_data(self.engine.df)
         self.window_changed.emit()
 
+    # ==================== F2: Edit Mode ====================
+
+    def _on_edit_toggle(self, checked: bool):
+        self.table_model.set_editable(checked)
+
+    # ==================== F5: Column Type Conversion ====================
+
+    def _on_column_type_convert(self, column_name: str, target_type: str):
+        """Handle column type conversion from header menu."""
+        if not self.engine.is_loaded:
+            return
+        dtype_map = {
+            "Int64": pl.Int64,
+            "Float64": pl.Float64,
+            "String": pl.Utf8,
+            "Date": pl.Date,
+            "Boolean": pl.Boolean,
+        }
+        target = dtype_map.get(target_type)
+        if target is None:
+            return
+        try:
+            success = self.engine.cast_column(column_name, target)
+            if success:
+                self._update_table_model(self.engine.df)
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        f"Converted '{column_name}' to {target_type}", 3000
+                    )
+            else:
+                QMessageBox.warning(self, "Type Conversion", f"Failed to convert '{column_name}' to {target_type}")
+        except Exception as e:
+            QMessageBox.warning(self, "Type Conversion", f"Error: {e}")
+
+    # ==================== F3: Conditional Formatting ====================
+
+    def _on_conditional_format_requested(self, column_name: str):
+        """Show conditional formatting dialog for a column."""
+        dialog = ConditionalFormatDialog(column_name, self)
+        if dialog.exec() == QDialog.Accepted:
+            fmt = dialog.get_format()
+            if fmt:
+                self.table_model.set_conditional_format(column_name, fmt)
+            else:
+                self.table_model.remove_conditional_format(column_name)
+
+    # ==================== F7: Freeze Columns ====================
+
+    def _on_freeze_column(self, column_name: str):
+        """Freeze a column (pin to left)."""
+        if column_name not in self._frozen_columns:
+            self._frozen_columns.append(column_name)
+            self._update_table_model()
+
+    def _on_unfreeze_column(self, column_name: str):
+        """Unfreeze a column."""
+        if column_name in self._frozen_columns:
+            self._frozen_columns.remove(column_name)
+            self._update_table_model()
+
     # ==================== Drag & Drop ====================
     
     def dragEnterEvent(self, event: QDragEnterEvent):
@@ -2360,3 +2774,121 @@ class TablePanel(QWidget):
                     self.file_dropped.emit(file_path)
                     break
             event.acceptProposedAction()
+
+
+# ==================== F3: Conditional Format Dialog ====================
+
+class ConditionalFormatDialog(QDialog):
+    """Dialog for configuring conditional formatting on a column."""
+
+    def __init__(self, column_name: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Conditional Formatting: {column_name}")
+        self.setMinimumWidth(300)
+        self._column_name = column_name
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem("Heatmap", ConditionalFormat.HEATMAP)
+        self.mode_combo.addItem("Data Bar", ConditionalFormat.DATA_BAR)
+        self.mode_combo.addItem("Threshold", ConditionalFormat.THRESHOLD)
+        self.mode_combo.addItem("(Remove)", "remove")
+        form.addRow("Mode:", self.mode_combo)
+
+        self.threshold_input = QLineEdit("0")
+        self.threshold_input.setPlaceholderText("Threshold value")
+        form.addRow("Threshold:", self.threshold_input)
+
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def get_format(self) -> Optional[ConditionalFormat]:
+        mode = self.mode_combo.currentData()
+        if mode == "remove":
+            return None
+        try:
+            threshold = float(self.threshold_input.text())
+        except ValueError:
+            threshold = 0
+        return ConditionalFormat(mode=mode, threshold=threshold)
+
+
+# ==================== F9: Pivot Table Dialog ====================
+
+class PivotTableDialog(QDialog):
+    """Dialog for creating pivot tables from data."""
+
+    def __init__(self, df: pl.DataFrame, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Pivot Table")
+        self.setMinimumSize(500, 400)
+        self._df = df
+        self._result_df: Optional[pl.DataFrame] = None
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+
+        columns = df.columns
+
+        self.index_combo = QComboBox()
+        self.index_combo.addItems(columns)
+        form.addRow("Row (Index):", self.index_combo)
+
+        self.columns_combo = QComboBox()
+        self.columns_combo.addItems(columns)
+        if len(columns) > 1:
+            self.columns_combo.setCurrentIndex(1)
+        form.addRow("Column:", self.columns_combo)
+
+        self.values_combo = QComboBox()
+        # Only numeric columns for values
+        numeric_cols = [c for c in columns if df[c].dtype.is_numeric()]
+        self.values_combo.addItems(numeric_cols if numeric_cols else columns)
+        form.addRow("Values:", self.values_combo)
+
+        self.agg_combo = QComboBox()
+        self.agg_combo.addItems(["first", "sum", "mean", "count", "min", "max"])
+        self.agg_combo.setCurrentText("sum")
+        form.addRow("Aggregation:", self.agg_combo)
+
+        layout.addLayout(form)
+
+        # Preview button
+        preview_btn = QPushButton("Preview")
+        preview_btn.clicked.connect(self._preview)
+        layout.addWidget(preview_btn)
+
+        # Result table
+        self.result_view = QTableView()
+        self.result_model = PolarsTableModel()
+        self.result_view.setModel(self.result_model)
+        layout.addWidget(self.result_view)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _preview(self):
+        try:
+            idx = self.index_combo.currentText()
+            cols = self.columns_combo.currentText()
+            vals = self.values_combo.currentText()
+            agg = self.agg_combo.currentText()
+
+            self._result_df = self._df.pivot(
+                values=vals, index=idx, on=cols,
+                aggregate_function=agg
+            )
+            self.result_model.set_dataframe(self._result_df)
+        except Exception as e:
+            QMessageBox.warning(self, "Pivot Error", str(e))
+
+    def get_result(self) -> Optional[pl.DataFrame]:
+        return self._result_df

@@ -8,56 +8,11 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
     QScrollArea, QSizePolicy, QGraphicsDropShadowEffect, QPushButton
 )
-from PySide6.QtCore import Qt, Slot, QPropertyAnimation, QEasingCurve, Property
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtCore import Qt, Slot, QPointF
+from PySide6.QtGui import QFont, QColor, QPainter, QPen
 
 from ...core.state import AppState
 from ..floatable import FloatButton
-
-
-class AnimatedNumber(QLabel):
-    """Animated number label with smooth transitions"""
-    
-    def __init__(self, initial_value: float = 0):
-        super().__init__()
-        self._value = initial_value
-        self._display_value = initial_value
-        self._suffix = ""
-        self._prefix = ""
-        self._decimals = 0
-        
-        self.animation = QPropertyAnimation(self, b"display_value")
-        self.animation.setDuration(400)
-        self.animation.setEasingCurve(QEasingCurve.OutCubic)
-        
-        self._update_text()
-    
-    def get_display_value(self) -> float:
-        return self._display_value
-    
-    def set_display_value(self, value: float):
-        self._display_value = value
-        self._update_text()
-    
-    display_value = Property(float, get_display_value, set_display_value)
-    
-    def set_value(self, value: float, suffix: str = "", prefix: str = "", decimals: int = 0):
-        self._suffix = suffix
-        self._prefix = prefix
-        self._decimals = decimals
-        
-        self.animation.setStartValue(self._display_value)
-        self.animation.setEndValue(value)
-        self.animation.start()
-        
-        self._value = value
-    
-    def _update_text(self):
-        if self._decimals > 0:
-            formatted = f"{self._display_value:,.{self._decimals}f}"
-        else:
-            formatted = f"{int(self._display_value):,}"
-        self.setText(f"{self._prefix}{formatted}{self._suffix}")
 
 
 class StatCard(QFrame):
@@ -135,12 +90,33 @@ class MiniSparkline(QFrame):
     
     def __init__(self, data: list = None, color: str = "#59B8E3"):
         super().__init__()
-        self.data = data or []
-        self.color = color
+        self._data = data or []
+        self._color = color
         self.setFixedHeight(32)
         self.setMinimumWidth(60)
-        
-    # TODO: Implement paintEvent for actual sparkline
+
+    def set_data(self, data: list):
+        self._data = data
+        self.update()
+
+    def paintEvent(self, event):
+        if not self._data or len(self._data) < 2:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        data = self._data
+        min_v, max_v = min(data), max(data)
+        range_v = max_v - min_v if max_v != min_v else 1
+        n = len(data)
+        points = [
+            QPointF(i * w / (n - 1), h - (v - min_v) / range_v * (h - 4) - 2)
+            for i, v in enumerate(data)
+        ]
+        painter.setPen(QPen(QColor(self._color), 1.5))
+        for i in range(len(points) - 1):
+            painter.drawLine(points[i], points[i + 1])
+        painter.end()
 
 
 class SummaryPanel(QWidget):

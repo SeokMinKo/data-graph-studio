@@ -68,7 +68,7 @@ class DataOpsController:
     def _on_find_data(self):
         """데이터 검색 다이얼로그"""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Find", "No data loaded.")
+            QMessageBox.information(self.w, "Find", "No data loaded.")
             return
         
         text, ok = QInputDialog.getText(
@@ -90,7 +90,7 @@ class DataOpsController:
     def _on_goto_row(self):
         """특정 행으로 이동"""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Go to Row", "No data loaded.")
+            QMessageBox.information(self.w, "Go to Row", "No data loaded.")
             return
         
         max_row = self.w.engine.row_count
@@ -121,7 +121,7 @@ class DataOpsController:
     def _on_sort_data(self):
         """정렬 다이얼로그"""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Sort", "No data loaded.")
+            QMessageBox.information(self.w, "Sort", "No data loaded.")
             return
         
         columns = self.w.engine.columns
@@ -164,15 +164,15 @@ class DataOpsController:
     def _on_add_calculated_field(self):
         """계산 필드 추가 다이얼로그 (FR-B3.1, FR-B3.5)."""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Add Calculated Field", "데이터를 먼저 로드하세요.")
+            QMessageBox.information(self.w, "Add Calculated Field", "데이터를 먼저 로드하세요.")
             return
 
         df = self.w.engine.df
         if df is None or df.is_empty():
-            QMessageBox.warning(self, "Add Calculated Field", "No data available.")
+            QMessageBox.warning(self.w, "Add Calculated Field", "No data available.")
             return
 
-        dialog = ComputedColumnDialog(df, parent=self)
+        dialog = ComputedColumnDialog(df, parent=self.w)
         dialog.column_created.connect(self.w._on_computed_column_created)
         dialog.exec()
 
@@ -229,13 +229,13 @@ class DataOpsController:
             self.w.statusbar.showMessage(f"Computed column '{col_name}' added", 3000)
         except Exception as e:
             logger.error(f"Failed to add computed column: {e}", exc_info=True)
-            QMessageBox.warning(self, "Add Calculated Field", f"Failed to add column:\n{e}")
+            QMessageBox.warning(self.w, "Add Calculated Field", f"Failed to add column:\n{e}")
 
 
     def _on_remove_duplicates(self):
         """중복 제거"""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Remove Duplicates", "No data loaded.")
+            QMessageBox.information(self.w, "Remove Duplicates", "No data loaded.")
             return
         
         reply = QMessageBox.question(
@@ -274,7 +274,7 @@ class DataOpsController:
     def _on_data_summary(self):
         """데이터 요약 다이얼로그"""
         if not self.w.state.is_data_loaded:
-            QMessageBox.information(self, "Data Summary", "No data loaded.")
+            QMessageBox.information(self.w, "Data Summary", "No data loaded.")
             return
         
         # 간단한 요약 정보 표시
