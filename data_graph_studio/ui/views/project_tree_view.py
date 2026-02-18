@@ -8,6 +8,7 @@ from PySide6.QtGui import QPainter, QPalette, QAccessible
 from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem, QStyle
 
 from ..models.profile_model import ProfileModel
+from ..utils import chart_type_icon as _chart_type_icon  # noqa: F401 (available for delegate)
 
 
 class _SafeAccessibleTreeView(QTreeView):
@@ -82,19 +83,30 @@ class ProfileFilterProxy(QSortFilterProxyModel):
 
 
 class ProjectTreeView(_SafeAccessibleTreeView):
-    # Signals
-    profile_activated = Signal(str)  # profile_id
-    profile_selected = Signal(str)  # profile_id
-    project_activated = Signal(str)  # dataset_id
-    new_profile_requested = Signal(str)  # dataset_id
-    rename_requested = Signal(str)  # profile_id
-    delete_requested = Signal(str)  # profile_id or dataset_id
-    duplicate_requested = Signal(str)  # profile_id
-    export_requested = Signal(str)  # profile_id
-    import_requested = Signal(str)  # dataset_id
-    compare_requested = Signal(list, dict)  # profile_ids, options
-    copy_to_dataset_requested = Signal(str)  # profile_id
-    favorite_toggled = Signal(str)  # profile_id
+    """Project explorer tree with profile management.
+
+    Issue #12 — signals grouped by category for readability.
+    """
+
+    # -- Navigation signals --
+    profile_activated = Signal(str)   # profile_id — apply/open profile
+    profile_selected = Signal(str)    # profile_id — selection changed
+    project_activated = Signal(str)   # dataset_id — switch active dataset
+
+    # -- CRUD signals --
+    new_profile_requested = Signal(str)   # dataset_id
+    rename_requested = Signal(str)        # profile_id
+    delete_requested = Signal(str)        # profile_id or dataset_id
+    duplicate_requested = Signal(str)     # profile_id
+
+    # -- I/O signals --
+    export_requested = Signal(str)        # profile_id
+    import_requested = Signal(str)        # dataset_id
+
+    # -- Comparison / cross-dataset signals --
+    compare_requested = Signal(list, dict)      # profile_ids, options
+    copy_to_dataset_requested = Signal(str)     # profile_id
+    favorite_toggled = Signal(str)              # profile_id
 
     def __init__(self, parent=None):
         super().__init__(parent)

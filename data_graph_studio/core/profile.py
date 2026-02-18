@@ -53,10 +53,16 @@ class GraphSetting:
         object.__setattr__(self, "hover_columns", tuple(self.hover_columns))
         object.__setattr__(self, "filters", tuple(self.filters))
         object.__setattr__(self, "sorts", tuple(self.sorts))
+        # Issue #10 — always store chart_settings as a plain dict.
+        # The frozen dataclass already prevents attribute reassignment;
+        # MappingProxyType added false safety (nested dicts were still mutable)
+        # and caused round-trip inconsistency with to_dict/from_dict.
         if self.chart_settings is None:
-            object.__setattr__(self, "chart_settings", MappingProxyType({}))
-        elif not isinstance(self.chart_settings, MappingProxyType):
-            object.__setattr__(self, "chart_settings", MappingProxyType(dict(self.chart_settings)))
+            object.__setattr__(self, "chart_settings", {})
+        elif isinstance(self.chart_settings, MappingProxyType):
+            object.__setattr__(self, "chart_settings", dict(self.chart_settings))
+        elif not isinstance(self.chart_settings, dict):
+            object.__setattr__(self, "chart_settings", dict(self.chart_settings))
 
     @classmethod
     def create_new(cls, name: str, icon: str = "📊", dataset_id: str = "") -> 'GraphSetting':
@@ -329,11 +335,16 @@ class Profile:
             if setting.x_column:
                 used_columns.add(setting.x_column)
             for gc in setting.group_columns:
-                if 'name' in gc:
+                # Issue #15 — isinstance check instead of assuming dict
+                if isinstance(gc, dict) and 'name' in gc:
                     used_columns.add(gc['name'])
+                elif isinstance(gc, str):
+                    used_columns.add(gc)
             for vc in setting.value_columns:
-                if 'name' in vc:
+                if isinstance(vc, dict) and 'name' in vc:
                     used_columns.add(vc['name'])
+                elif isinstance(vc, str):
+                    used_columns.add(vc)
             for hc in setting.hover_columns:
                 used_columns.add(hc)
 
@@ -349,7 +360,13 @@ class Profile:
 
 
 class ProfileManager:
-    """프로파일 매니저"""
+    """프로파일 매니저
+
+    .. deprecated::
+        Issue #11 — This class overlaps with ProfileStore and is not
+        instantiated in production code.  Retained for test compatibility;
+        prefer ProfileStore for new code.
+    """
 
     MAX_RECENT_PROFILES = 10
     DEFAULT_PROFILES_DIR = "profiles"

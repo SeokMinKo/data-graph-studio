@@ -70,9 +70,10 @@ def test_migrate_v0_to_v1():
 
 
 def test_frozen_chart_settings_is_mapping_proxy():
-    from types import MappingProxyType
+    """Issue #10 — chart_settings is now a plain dict (MappingProxyType removed)."""
     gs = GraphSetting(id="x", name="Y", dataset_id="ds", chart_settings={"a": 1})
-    assert isinstance(gs.chart_settings, MappingProxyType)
+    assert isinstance(gs.chart_settings, dict)
+    assert gs.chart_settings == {"a": 1}
 
 
 def test_frozen_tuples():

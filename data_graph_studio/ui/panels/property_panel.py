@@ -138,6 +138,11 @@ class PropertyPanel:
             for item_name, value in group_values.items():
                 self.set_value(group_name, item_name, value)
 
+    @property
+    def groups(self) -> Dict[str, PropertyGroup]:
+        """Read-only access to groups (Issue #9)."""
+        return dict(self._groups)
+
     def reset_to_defaults(self) -> None:
         """기본값으로 리셋"""
         for group in self._groups.values():
@@ -288,7 +293,7 @@ if HAS_QT:
             """트리 구성"""
             self._tree.clear()
 
-            for group_name, group in self._model._groups.items():
+            for group_name, group in self._model.groups.items():
                 group_item = QTreeWidgetItem([group.display_name])
                 group_item.setExpanded(group.expanded)
                 self._tree.addTopLevelItem(group_item)
@@ -297,13 +302,64 @@ if HAS_QT:
                     prop_item = QTreeWidgetItem([prop.display_name])
                     prop_item.setData(0, Qt.ItemDataRole.UserRole, (group_name, item_name))
 
-                    # 값 위젯 생성 (간소화)
+                    # Issue #9 — type-specific editor widgets
                     if prop.property_type == PropertyType.BOOLEAN:
                         prop_item.setCheckState(1, Qt.CheckState.Checked if prop.value else Qt.CheckState.Unchecked)
+                    elif prop.property_type == PropertyType.NUMBER:
+                        spin = QDoubleSpinBox()
+                        spin.setDecimals(4)
+                        if prop.min_value is not None:
+                            spin.setMinimum(prop.min_value)
+                        else:
+                            spin.setMinimum(-1e12)
+                        if prop.max_value is not None:
+                            spin.setMaximum(prop.max_value)
+                        else:
+                            spin.setMaximum(1e12)
+                        spin.setValue(float(prop.value) if prop.value is not None else 0.0)
+                        spin.valueChanged.connect(
+                            lambda v, gn=group_name, itn=item_name: self._on_spin_changed(gn, itn, v)
+                        )
+                        group_item.addChild(prop_item)
+                        self._tree.setItemWidget(prop_item, 1, spin)
+                        continue
+                    elif prop.property_type == PropertyType.INTEGER:
+                        spin = QSpinBox()
+                        if prop.min_value is not None:
+                            spin.setMinimum(int(prop.min_value))
+                        else:
+                            spin.setMinimum(-2147483647)
+                        if prop.max_value is not None:
+                            spin.setMaximum(int(prop.max_value))
+                        else:
+                            spin.setMaximum(2147483647)
+                        spin.setValue(int(prop.value) if prop.value is not None else 0)
+                        spin.valueChanged.connect(
+                            lambda v, gn=group_name, itn=item_name: self._on_spin_changed(gn, itn, v)
+                        )
+                        group_item.addChild(prop_item)
+                        self._tree.setItemWidget(prop_item, 1, spin)
+                        continue
+                    elif prop.property_type == PropertyType.ENUM and prop.enum_values:
+                        combo = QComboBox()
+                        combo.addItems(prop.enum_values)
+                        if prop.value in prop.enum_values:
+                            combo.setCurrentText(str(prop.value))
+                        combo.currentTextChanged.connect(
+                            lambda v, gn=group_name, itn=item_name: self._on_spin_changed(gn, itn, v)
+                        )
+                        group_item.addChild(prop_item)
+                        self._tree.setItemWidget(prop_item, 1, combo)
+                        continue
                     else:
                         prop_item.setText(1, str(prop.value) if prop.value is not None else "")
 
                     group_item.addChild(prop_item)
+
+        def _on_spin_changed(self, group_name: str, item_name: str, value) -> None:
+            """Handle value change from spin/combo widgets (Issue #9)."""
+            self._model.set_value(group_name, item_name, value)
+            self.property_changed.emit(group_name, item_name, value)
 
         def _on_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
             """항목 변경 이벤트"""
@@ -316,11 +372,24 @@ if HAS_QT:
 
             group_name, item_name = data
 
-            # 값 추출
-            prop = self._model._groups[group_name].items[item_name]
+            groups = self._model.groups
+            if group_name not in groups or item_name not in groups[group_name].items:
+                return
+            prop = groups[group_name].items[item_name]
 
+            # Issue #9 — type-aware value extraction
             if prop.property_type == PropertyType.BOOLEAN:
                 value = item.checkState(1) == Qt.CheckState.Checked
+            elif prop.property_type in (PropertyType.NUMBER,):
+                try:
+                    value = float(item.text(1))
+                except (ValueError, TypeError):
+                    value = prop.default_value
+            elif prop.property_type in (PropertyType.INTEGER,):
+                try:
+                    value = int(item.text(1))
+                except (ValueError, TypeError):
+                    value = prop.default_value
             else:
                 value = item.text(1)
 

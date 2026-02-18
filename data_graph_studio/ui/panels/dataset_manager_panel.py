@@ -266,29 +266,19 @@ class DatasetManagerPanel(QWidget):
         btn_row = QHBoxLayout()
         self.add_btn = QPushButton("+ 데이터셋 추가")
         self.add_btn.setToolTip("Add a new dataset from file")
-        self.add_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 6px 8px;
-                border-radius: 4px;
-                font-size: 11px;
-            }
-            QPushButton:hover { background-color: #45a049; }
-        """)
+        self.add_btn.setObjectName("datasetAddBtn")
         self.add_btn.clicked.connect(self._on_add_click)
         btn_row.addWidget(self.add_btn)
 
         self.save_profile_btn = QPushButton("💾 프로파일 저장")
         self.save_profile_btn.setToolTip("Save current graph settings as a profile")
-        self.save_profile_btn.setStyleSheet("font-size: 11px; padding: 6px 8px;")
+        self.save_profile_btn.setObjectName("datasetProfileBtn")
         self.save_profile_btn.clicked.connect(self._on_save_profile)
         btn_row.addWidget(self.save_profile_btn)
 
         self.load_profile_btn = QPushButton("📂 프로파일 불러오기")
         self.load_profile_btn.setToolTip("Load a saved profile from file")
-        self.load_profile_btn.setStyleSheet("font-size: 11px; padding: 6px 8px;")
+        self.load_profile_btn.setObjectName("datasetProfileBtn")
         self.load_profile_btn.clicked.connect(self._on_load_profile)
         btn_row.addWidget(self.load_profile_btn)
 
@@ -297,7 +287,6 @@ class DatasetManagerPanel(QWidget):
         # 구분선
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("color: #ddd;")
         layout.addWidget(line)
 
         # 비교 모드 설정
@@ -377,7 +366,7 @@ class DatasetManagerPanel(QWidget):
 
         # 메모리 사용량
         self.memory_label = QLabel("💾 메모리: 0 MB / 4 GB")
-        self.memory_label.setStyleSheet("color: #C9D1DB; font-size: 11px;")
+        self.memory_label.setObjectName("datasetMemory")
         layout.addWidget(self.memory_label)
 
     def _connect_signals(self):
@@ -664,6 +653,35 @@ class DatasetManagerPanel(QWidget):
             did for did, widget in self._dataset_widgets.items()
             if widget.compare_cb.isChecked()
         ]
+
+    def apply_theme(self, is_light: bool = False):
+        """Apply theme-aware styles.  Issue #5 — replaces hardcoded dark-only CSS."""
+        if is_light:
+            bg, fg, border, sel_bg = "#FFFFFF", "#1A202C", "#E2E8F0", "#EDF2F7"
+            title_fg, stat_fg = "#1A202C", "#4A5568"
+            btn_bg, btn_hover = "#38A169", "#2F855A"
+        else:
+            bg, fg, border, sel_bg = "#111827", "#E2E8F0", "#1F2937", "#1F2937"
+            title_fg, stat_fg = "#F2F4F8", "#C9D1DB"
+            btn_bg, btn_hover = "#4CAF50", "#45a049"
+
+        self.setStyleSheet(f"""
+            #datasetPanelTitle {{ font-size: 14px; font-weight: bold; color: {title_fg}; }}
+            #datasetCount {{ color: {stat_fg}; }}
+            #datasetMemory {{ color: {stat_fg}; font-size: 11px; }}
+            #datasetTree {{
+                background: {bg}; color: {fg};
+                border: 1px solid {border}; border-radius: 6px;
+            }}
+            #datasetTree::item {{ padding: 6px; }}
+            #datasetTree::item:selected {{ background: {sel_bg}; color: {fg}; }}
+            #datasetAddBtn {{
+                background-color: {btn_bg}; color: white; border: none;
+                padding: 6px 8px; border-radius: 4px; font-size: 11px;
+            }}
+            #datasetAddBtn:hover {{ background-color: {btn_hover}; }}
+            #datasetProfileBtn {{ font-size: 11px; padding: 6px 8px; }}
+        """)
 
     def refresh(self):
         """전체 새로고침"""
