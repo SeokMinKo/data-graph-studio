@@ -371,6 +371,64 @@ class DataEngine:
 
     # -- clear ----------------------------------------------------------------
 
+    def recommend_chart_type(
+        self,
+        x_col: Optional[str],
+        y_cols: List[str],
+        group_cols: Optional[List[str]] = None,
+    ) -> List[tuple]:
+        """데이터 특성 분석 후 추천 차트 타입 반환 (최대 3개, 이유 포함).
+
+        Returns list of (ChartType, reason_str) tuples.
+        """
+        from .state import ChartType
+
+        recommendations: list = []
+        group_cols = group_cols or []
+
+        x_is_cat = self.is_column_categorical(x_col) if x_col else False
+        x_is_time = False
+        if x_col:
+            col_lower = x_col.lower()
+            if "time" in col_lower or "date" in col_lower:
+                x_is_time = True
+            else:
+                dt = self.dtypes().get(x_col, "")
+                if isinstance(dt, str) and dt.startswith("datetime"):
+                    x_is_time = True
+                elif hasattr(dt, "__str__") and "datetime" in str(dt).lower():
+                    x_is_time = True
+
+        n_rows = len(self.df) if self.df is not None else 0
+        n_y = len(y_cols)
+        has_groups = bool(group_cols)
+
+        if x_is_time:
+            recommendations.append((ChartType.LINE, "시계열 데이터 → 라인 차트"))
+            if n_y >= 2:
+                recommendations.append((ChartType.AREA, "다중 시계열 → 영역 차트"))
+        elif x_is_cat:
+            recommendations.append((ChartType.BAR, "카테고리 데이터 → 바 차트"))
+            if has_groups:
+                recommendations.append((ChartType.STACKED_BAR, "그룹 카테고리 → 누적 바"))
+        elif n_rows > 1000:
+            recommendations.append((ChartType.SCATTER, "대량 데이터 → 산점도"))
+
+        # 분포 분석
+        if n_y == 1 and not x_is_time:
+            recommendations.append((ChartType.HISTOGRAM, "단일 변수 분포 → 히스토그램"))
+        if x_is_cat and n_y == 1:
+            recommendations.append((ChartType.BOX, "카테고리별 분포 → 박스플롯"))
+
+        # Fallback: at least one recommendation
+        if not recommendations:
+            if n_y >= 2:
+                recommendations.append((ChartType.LINE, "다중 Y 컬럼 → 라인 차트"))
+            elif n_y == 1:
+                recommendations.append((ChartType.BAR, "단일 Y 컬럼 → 바 차트"))
+
+        return recommendations[:3]
+
     def clear(self):
         """데이터 클리어."""
         self._loader.clear()

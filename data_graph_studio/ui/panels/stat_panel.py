@@ -58,6 +58,7 @@ class StatPanel(QFrame):
 
         self._setup_ui()
         self._apply_style()
+        self.state.selection_changed.connect(self._on_selection_changed)
     
     def _apply_style(self):
         # Styles now handled by global theme stylesheet
@@ -84,6 +85,13 @@ class StatPanel(QFrame):
         self._stats_col_combo.currentTextChanged.connect(self._on_stats_col_changed)
         self._stats_col_combo.hide()  # Hidden until multiple Y columns
         header_layout.addWidget(self._stats_col_combo)
+
+        # Selection count label
+        self._selection_label = QLabel("")
+        self._selection_label.setObjectName("selectionLabel")
+        self._selection_label.setStyleSheet("color: #EF4444; font-weight: bold; font-size: 11px;")
+        self._selection_label.hide()
+        header_layout.addWidget(self._selection_label)
 
         header_layout.addStretch()
 
@@ -204,6 +212,15 @@ class StatPanel(QFrame):
             widget._hover_label.show()
         else:
             widget._hover_label.hide()
+
+    def _on_selection_changed(self):
+        """Update selection count display."""
+        count = self.state.selection.selection_count
+        if count > 0:
+            self._selection_label.setText(f"🔘 {count:,} selected")
+            self._selection_label.show()
+        else:
+            self._selection_label.hide()
 
     def _on_x_bins_changed(self, value: int):
         self._x_bins = value

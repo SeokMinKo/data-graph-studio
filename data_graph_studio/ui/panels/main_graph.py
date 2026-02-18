@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 import numpy as np
 import csv
 
-from PySide6.QtWidgets import QDialog, QMenu, QFileDialog
+from PySide6.QtWidgets import QDialog, QMenu, QFileDialog, QInputDialog
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QAction
 from PySide6.QtWidgets import QApplication
@@ -23,6 +23,95 @@ from ..drawing import (
 import pyqtgraph as pg
 
 
+# ==================== Annotation Item ====================
+
+class AnnotationItem:
+    """Data-anchored annotation with leader line.
+
+    Renders a text label near a data point with a dashed leader line
+    connecting the label to the exact data coordinates.  Both items
+    are positioned in *data* coordinates so they follow zoom/pan.
+    """
+
+    def __init__(self, text: str, data_x: float, data_y: float,
+                 offset_x: float = 0.0, offset_y: float = 0.0,
+                 color: str = '#FBBF24', uid: str = ''):
+        self.data_x = data_x
+        self.data_y = data_y
+        self.uid = uid or str(id(self))
+        self.offset_x = offset_x
+        self.offset_y = offset_y
+
+        # Text item
+        self.text_item = pg.TextItem(
+            text=text,
+            anchor=(0, 1),
+            color=color,
+            border=pg.mkPen('#888', width=1),
+            fill=pg.mkBrush('#1E293BCC'),
+        )
+        self.text_item.setFont(pg.QtGui.QFont('Arial', 10))
+        self.text_item.setZValue(200)
+
+        # Leader line (data_point → label)
+        self.leader = pg.PlotCurveItem(
+            pen=pg.mkPen('#888', width=1, style=Qt.DashLine)
+        )
+        self.leader.setZValue(199)
+
+        # Marker dot at the data point
+        self.marker = pg.ScatterPlotItem(
+            [data_x], [data_y], size=8,
+            pen=pg.mkPen(color, width=2),
+            brush=pg.mkBrush(color),
+            symbol='o',
+        )
+        self.marker.setZValue(201)
+
+        self._update_position()
+
+    def _update_position(self):
+        label_x = self.data_x + self.offset_x
+        label_y = self.data_y + self.offset_y
+        self.text_item.setPos(label_x, label_y)
+        self.leader.setData([self.data_x, label_x], [self.data_y, label_y])
+
+    def set_offset(self, ox: float, oy: float):
+        self.offset_x = ox
+        self.offset_y = oy
+        self._update_position()
+
+    def add_to(self, plot_widget: pg.PlotWidget):
+        plot_widget.addItem(self.text_item)
+        plot_widget.addItem(self.leader)
+        plot_widget.addItem(self.marker)
+
+    def remove_from(self, plot_widget: pg.PlotWidget):
+        plot_widget.removeItem(self.text_item)
+        plot_widget.removeItem(self.leader)
+        plot_widget.removeItem(self.marker)
+
+    def get_text(self) -> str:
+        return self.text_item.textItem.toPlainText()
+
+    def to_dict(self) -> dict:
+        return {
+            'text': self.get_text(),
+            'data_x': self.data_x,
+            'data_y': self.data_y,
+            'offset_x': self.offset_x,
+            'offset_y': self.offset_y,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'AnnotationItem':
+        return cls(
+            text=d['text'],
+            data_x=d['data_x'],
+            data_y=d['data_y'],
+            offset_x=d.get('offset_x', 0.0),
+            offset_y=d.get('offset_y', 0.0),
+        )
 
 
 # ==================== Main Graph ====================
@@ -53,6 +142,15 @@ class MainGraph(pg.PlotWidget):
         self.legend = self.addLegend()
         self._legend_visible = True
         self._legend_position = (1, 1)  # Default: top right
+        self._legend_default_anchor = ((1, 0), (1, 0), (-10, 10))  # top-right default
+
+        # Make legend draggable
+        try:
+            self.legend.setFlag(
+                self.legend.GraphicsItemFlag.ItemIsMovable, True
+            )
+        except Exception:
+            pass
 
         self._plot_items = []
         self._scatter_items = []
@@ -132,6 +230,9 @@ class MainGraph(pg.PlotWidget):
         for line in (self._crosshair_v, self._crosshair_h):
             line.setVisible(False)
             self.addItem(line)
+
+        # Annotations
+        self._annotations: List[AnnotationItem] = []
 
         # OpenGL state
         self._opengl_enabled = False
@@ -528,6 +629,76 @@ class MainGraph(pg.PlotWidget):
         if hasattr(self, '_selection_scatter') and self._selection_scatter is not None:
             self.removeItem(self._selection_scatter)
             self._selection_scatter = None
+        # Note: annotations are NOT cleared on refresh — they persist.
+        # Re-add them to the plot after clear.
+        for ann in self._annotations:
+            ann.add_to(self)
+
+    # ==================== Annotations ====================
+
+    def add_annotation(self, text: str, data_x: float, data_y: float,
+                       offset_x: float = 0.0, offset_y: float = 0.0) -> AnnotationItem:
+        """Add a data-anchored annotation at (data_x, data_y)."""
+        # Auto-compute offset from view range if not provided
+        if offset_x == 0.0 and offset_y == 0.0:
+            vr = self.viewRange()
+            offset_x = (vr[0][1] - vr[0][0]) * 0.05
+            offset_y = (vr[1][1] - vr[1][0]) * 0.08
+        ann = AnnotationItem(text, data_x, data_y, offset_x, offset_y)
+        self._annotations.append(ann)
+        ann.add_to(self)
+        return ann
+
+    def remove_annotation(self, ann: AnnotationItem):
+        """Remove a single annotation."""
+        if ann in self._annotations:
+            ann.remove_from(self)
+            self._annotations.remove(ann)
+
+    def clear_annotations(self):
+        """Remove all annotations."""
+        for ann in self._annotations:
+            ann.remove_from(self)
+        self._annotations.clear()
+
+    def get_annotations_data(self) -> list:
+        """Return serialisable list of annotation dicts."""
+        return [a.to_dict() for a in self._annotations]
+
+    def load_annotations(self, data: list):
+        """Load annotations from serialised dicts."""
+        self.clear_annotations()
+        for d in data:
+            ann = AnnotationItem.from_dict(d)
+            self._annotations.append(ann)
+            ann.add_to(self)
+
+    def _find_nearest_data_point(self, x: float, y: float):
+        """Find the nearest data point to (x, y) in data coordinates.
+        
+        Returns (nearest_x, nearest_y, index) or None.
+        """
+        if self._data_x is None or self._data_y is None or len(self._data_x) == 0:
+            return None
+        vr = self.viewRange()
+        x_range = max(vr[0][1] - vr[0][0], 1e-10)
+        y_range = max(vr[1][1] - vr[1][0], 1e-10)
+        # Normalised distance
+        dx = (self._data_x - x) / x_range
+        dy = (self._data_y - y) / y_range
+        dist = dx * dx + dy * dy
+        idx = int(np.nanargmin(dist))
+        return float(self._data_x[idx]), float(self._data_y[idx]), idx
+
+    def _prompt_add_annotation(self, data_x: float, data_y: float):
+        """Show dialog and add annotation at given data point."""
+        from PySide6.QtWidgets import QInputDialog
+        text, ok = QInputDialog.getText(
+            self, "Add Annotation",
+            f"Annotation text for point ({data_x:.4g}, {data_y:.4g}):"
+        )
+        if ok and text.strip():
+            self.add_annotation(text.strip(), data_x, data_y)
 
     def highlight_selection(self, selected_indices: List[int]):
         """Highlight selected data points on the graph"""
@@ -747,6 +918,13 @@ class MainGraph(pg.PlotWidget):
             widget = widget.parent() if hasattr(widget, 'parent') else None
         return None
 
+    def _reset_legend_position(self):
+        """Reset legend to default top-right position."""
+        try:
+            self.legend.anchor((1, 0), (1, 0), offset=(-10, 10))
+        except Exception:
+            pass
+
     def _toggle_grid(self):
         self._grid_visible = not getattr(self, '_grid_visible', True)
         self.showGrid(x=self._grid_visible, y=self._grid_visible, alpha=0.3)
@@ -854,6 +1032,10 @@ class MainGraph(pg.PlotWidget):
         crosshair_act.setChecked(self._crosshair_enabled)
         crosshair_act.triggered.connect(self._toggle_crosshair)
         menu.addAction(crosshair_act)
+
+        legend_reset_act = QAction("Reset Legend Position", self)
+        legend_reset_act.triggered.connect(self._reset_legend_position)
+        menu.addAction(legend_reset_act)
 
         copy_act = QAction("Copy Image", self)
         copy_act.triggered.connect(self._copy_plot_image)
@@ -985,6 +1167,25 @@ class MainGraph(pg.PlotWidget):
         clear_trend.setEnabled(bool(self._trendline_items))
         clear_trend.triggered.connect(self.clear_trendlines)
         trend_menu.addAction(clear_trend)
+
+        menu.addSeparator()
+
+        # Annotations
+        ann_menu = menu.addMenu("Annotations")
+        add_ann_act = QAction("Add Annotation at Nearest Point…", self)
+        add_ann_act.setEnabled(has_data)
+        def _add_ann_nearest():
+            pos = self.plotItem.vb.mapSceneToView(event.pos())
+            result = self._find_nearest_data_point(pos.x(), pos.y())
+            if result:
+                self._prompt_add_annotation(result[0], result[1])
+        add_ann_act.triggered.connect(_add_ann_nearest)
+        ann_menu.addAction(add_ann_act)
+
+        clear_ann_act = QAction("Clear All Annotations", self)
+        clear_ann_act.setEnabled(bool(self._annotations))
+        clear_ann_act.triggered.connect(self.clear_annotations)
+        ann_menu.addAction(clear_ann_act)
 
         menu.addSeparator()
 

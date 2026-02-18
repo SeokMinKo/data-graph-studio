@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
     QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QScrollArea, QGroupBox, QLineEdit, QPushButton, QSlider,
-    QTabWidget, QGridLayout, QMessageBox, QSizePolicy,
+    QTabWidget, QGridLayout, QMessageBox, QSizePolicy, QMenu,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -307,7 +307,19 @@ class GraphOptionsPanel(QFrame):
         for label, ct in chart_types:
             self.chart_type_combo.addItem(label, ct)
         self.chart_type_combo.currentIndexChanged.connect(self._on_chart_type_changed)
-        type_layout.addWidget(self.chart_type_combo)
+
+        # Chart type row: combo + recommend button
+        chart_type_row = QHBoxLayout()
+        chart_type_row.setSpacing(4)
+        chart_type_row.addWidget(self.chart_type_combo, 1)
+
+        self._recommend_btn = QPushButton("💡")
+        self._recommend_btn.setFixedSize(28, 28)
+        self._recommend_btn.setToolTip("데이터 기반 차트 타입 추천")
+        self._recommend_btn.clicked.connect(self._show_chart_recommendations)
+        chart_type_row.addWidget(self._recommend_btn)
+
+        type_layout.addLayout(chart_type_row)
 
         # Per-column chart type selector (visible only in Combination mode)
         self._combo_series_widget = QWidget()
@@ -763,6 +775,51 @@ class GraphOptionsPanel(QFrame):
             # Force-disable sub windows when master is off
             self.x_sliding_window_check.setChecked(False)
             self.y_sliding_window_check.setChecked(False)
+        self.option_changed.emit()
+
+    def _show_chart_recommendations(self):
+        """💡 데이터 기반 차트 타입 추천 팝업 표시."""
+        engine = getattr(self._data_tab, '_filter_engine', None)
+        if engine is None or engine.df is None:
+            QMessageBox.information(self, "Chart Recommendation", "데이터를 먼저 로드하세요.")
+            return
+
+        x_col = self.state.x_column
+        y_cols = [vc.name for vc in self.state.value_columns] if self.state.value_columns else []
+        group_cols = [gc.name for gc in self.state.group_columns] if self.state.group_columns else []
+
+        if not y_cols:
+            QMessageBox.information(self, "Chart Recommendation", "Y 컬럼을 선택하세요.")
+            return
+
+        try:
+            recs = engine.recommend_chart_type(x_col, y_cols, group_cols)
+        except Exception as e:
+            QMessageBox.warning(self, "Chart Recommendation", f"추천 실패: {e}")
+            return
+
+        if not recs:
+            QMessageBox.information(self, "Chart Recommendation", "추천할 차트 타입이 없습니다.")
+            return
+
+        # Show as context menu so user can click to apply
+        menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+        for chart_type, reason in recs:
+            act = menu.addAction(f"{chart_type.value.upper()} — {reason}")
+            act.setData(chart_type)
+            act.triggered.connect(lambda checked=False, ct=chart_type: self._apply_recommended_chart(ct))
+        menu.exec(self._recommend_btn.mapToGlobal(self._recommend_btn.rect().bottomLeft()))
+
+    def _apply_recommended_chart(self, chart_type):
+        """추천된 차트 타입 적용."""
+        # Find index in combo
+        for i in range(self.chart_type_combo.count()):
+            if self.chart_type_combo.itemData(i) == chart_type:
+                self.chart_type_combo.setCurrentIndex(i)
+                return
+        # If not in combo, set directly via state
+        self.state.set_chart_type(chart_type)
         self.option_changed.emit()
 
     def _on_chart_type_changed(self, index: int):
