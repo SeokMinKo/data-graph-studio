@@ -593,17 +593,87 @@ class ExportController(QObject):
     # -- IPC commands (FR-4.8) -------------------------------------------------
 
     def handle_ipc_export_chart(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """IPC: export_chart {path, format, width?, height?, dpi?}"""
-        # Will be wired from MainWindow's IPC server
-        return {"status": "ok", "message": "export_chart scheduled"}
+        """IPC: export_chart {path, format, width?, height?, dpi?}
+
+        Requires ``set_image_provider(callable)`` to be called first so
+        the controller can obtain the current chart QImage.
+        """
+        path = params.get("path")
+        fmt_str = params.get("format", "png").lower()
+        if not path:
+            return {"status": "error", "message": "Missing 'path' parameter"}
+
+        fmt_map = {"png": ExportFormat.PNG, "svg": ExportFormat.SVG, "pdf": ExportFormat.PDF}
+        fmt = fmt_map.get(fmt_str)
+        if fmt is None:
+            return {"status": "error", "message": f"Unsupported chart format: {fmt_str}"}
+
+        image_provider = getattr(self, "_image_provider", None)
+        if image_provider is None:
+            return {"status": "error", "message": "No image provider configured (call set_image_provider)"}
+
+        image = image_provider()
+        if image is None or image.isNull():
+            return {"status": "error", "message": "No chart image available"}
+
+        opts = ExportOptions(
+            width=params.get("width"),
+            height=params.get("height"),
+            dpi=params.get("dpi", 96),
+        )
+        try:
+            self.export_chart_sync(image, path, fmt, opts)
+            return {"status": "ok", "message": f"Exported chart to {path}"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
 
     def handle_ipc_export_data(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """IPC: export_data {path, format}"""
-        return {"status": "ok", "message": "export_data scheduled"}
+        """IPC: export_data {path, format}
+
+        Requires ``set_dataframe_provider(callable)`` to be called first.
+        """
+        path = params.get("path")
+        fmt_str = params.get("format", "csv").lower()
+        if not path:
+            return {"status": "error", "message": "Missing 'path' parameter"}
+
+        fmt_map = {"csv": ExportFormat.CSV, "excel": ExportFormat.EXCEL,
+                   "parquet": ExportFormat.PARQUET}
+        fmt = fmt_map.get(fmt_str)
+        if fmt is None:
+            return {"status": "error", "message": f"Unsupported data format: {fmt_str}"}
+
+        df_provider = getattr(self, "_dataframe_provider", None)
+        if df_provider is None:
+            return {"status": "error", "message": "No dataframe provider configured"}
+
+        df = df_provider()
+        if df is None:
+            return {"status": "error", "message": "No data available"}
+
+        try:
+            self.export_data_sync(df, path, fmt)
+            return {"status": "ok", "message": f"Exported data to {path}"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
 
     def handle_ipc_export_dashboard(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """IPC: export_dashboard {path, format}"""
-        return {"status": "ok", "message": "export_dashboard scheduled"}
+        """IPC: export_dashboard {path, format}
+
+        Not yet implemented — dashboard export requires multi-chart capture.
+        """
+        raise NotImplementedError(
+            "Dashboard export via IPC is not yet implemented. "
+            "Use the GUI Export menu instead."
+        )
+
+    def set_image_provider(self, provider) -> None:
+        """Set a callable that returns the current chart QImage."""
+        self._image_provider = provider
+
+    def set_dataframe_provider(self, provider) -> None:
+        """Set a callable that returns the current polars DataFrame."""
+        self._dataframe_provider = provider
 
     # -- internals -------------------------------------------------------------
 

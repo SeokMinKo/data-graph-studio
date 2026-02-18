@@ -63,7 +63,8 @@ class FinishStep(QWizardPage):
         preview_df = None
 
         if wizard is not None:
-            parsing_page = wizard.page(0)
+            # Use typed reference if available, fall back to page(0)
+            parsing_page = getattr(wizard, "_parsing_step", None) or wizard.page(0)
             if parsing_page is not None and hasattr(parsing_page, "get_parsing_settings"):
                 parsing_settings = parsing_page.get_parsing_settings()
             if parsing_page is not None and hasattr(parsing_page, "get_preview_df"):

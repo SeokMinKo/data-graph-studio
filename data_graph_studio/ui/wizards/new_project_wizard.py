@@ -1,11 +1,16 @@
 """New project wizard."""
 
+import logging
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWizard, QWizardPage
 
+logger = logging.getLogger(__name__)
+
 try:
     from .parsing_step import ParsingStep
-except Exception:  # pragma: no cover - placeholder until implemented
+except ImportError as e:  # pragma: no cover - placeholder until implemented
+    logger.warning("ParsingStep import failed: %s", e)
 
     class ParsingStep(QWizardPage):
         def __init__(self, file_path: str, parent=None):
@@ -14,7 +19,8 @@ except Exception:  # pragma: no cover - placeholder until implemented
 
 try:
     from .wpr_convert_step import WprConvertStep, is_wpr_file
-except Exception:  # pragma: no cover
+except ImportError as e:  # pragma: no cover
+    logger.warning("WprConvertStep import failed: %s", e)
 
     def is_wpr_file(_: str) -> bool:
         return False
@@ -27,7 +33,8 @@ except Exception:  # pragma: no cover
 
 try:
     from .graph_setup_step import GraphSetupStep
-except Exception:  # pragma: no cover - placeholder until implemented
+except ImportError as e:  # pragma: no cover - placeholder until implemented
+    logger.warning("GraphSetupStep import failed: %s", e)
 
     class GraphSetupStep(QWizardPage):
         def __init__(self, parent=None):
@@ -36,7 +43,8 @@ except Exception:  # pragma: no cover - placeholder until implemented
 
 try:
     from .finish_step import FinishStep
-except Exception:  # pragma: no cover - placeholder until implemented
+except ImportError as e:  # pragma: no cover - placeholder until implemented
+    logger.warning("FinishStep import failed: %s", e)
 
     class FinishStep(QWizardPage):
         def __init__(self, parent=None):

@@ -145,16 +145,78 @@ class MenuSetupController:
 
         export_menu.addSeparator()
 
-        # Export Report
+        # Chart PDF export
+        self.w._export_image_pdf_action = QAction("Chart (PDF)...", self.w)
+        self.w._export_image_pdf_action.setStatusTip("Export chart as PDF")
+        self.w._export_image_pdf_action.triggered.connect(lambda: self.w._on_export_image(ExportFormat.PDF))
+        export_menu.addAction(self.w._export_image_pdf_action)
+
+        export_menu.addSeparator()
+
+        # Export Report — each format gets its own handler
         self.w._export_report_html_action = QAction("Report (HTML)...", self.w)
         self.w._export_report_html_action.setStatusTip("Export report as HTML")
-        self.w._export_report_html_action.triggered.connect(self.w._on_export_report)
+        self.w._export_report_html_action.triggered.connect(
+            lambda: self.w._export_ui_ctrl._on_export_report_format("html"))
         export_menu.addAction(self.w._export_report_html_action)
 
         self.w._export_report_pptx_action = QAction("Report (PPTX)...", self.w)
         self.w._export_report_pptx_action.setStatusTip("Export report as PowerPoint")
-        self.w._export_report_pptx_action.triggered.connect(self.w._on_export_report)
+        self.w._export_report_pptx_action.triggered.connect(
+            lambda: self.w._export_ui_ctrl._on_export_report_format("pptx"))
         export_menu.addAction(self.w._export_report_pptx_action)
+
+        self.w._export_report_docx_action = QAction("Report (DOCX)...", self.w)
+        self.w._export_report_docx_action.setStatusTip("Export report as Word document")
+        self.w._export_report_docx_action.triggered.connect(
+            lambda: self.w._export_ui_ctrl._on_export_report_format("docx"))
+        export_menu.addAction(self.w._export_report_docx_action)
+
+        self.w._export_report_md_action = QAction("Report (Markdown)...", self.w)
+        self.w._export_report_md_action.setStatusTip("Export report as Markdown")
+        self.w._export_report_md_action.triggered.connect(
+            lambda: self.w._export_ui_ctrl._on_export_report_format("markdown"))
+        export_menu.addAction(self.w._export_report_md_action)
+
+        self.w._export_report_pdf_action = QAction("Report (PDF)...", self.w)
+        self.w._export_report_pdf_action.setStatusTip("Export report as PDF")
+        self.w._export_report_pdf_action.triggered.connect(
+            lambda: self.w._export_ui_ctrl._on_export_report_format("pdf"))
+        export_menu.addAction(self.w._export_report_pdf_action)
+
+        export_menu.addSeparator()
+
+        # Clipboard copy
+        self.w._copy_chart_clipboard_action = QAction("Copy Chart to Clipboard", self.w)
+        self.w._copy_chart_clipboard_action.setShortcut("Ctrl+Shift+C")
+        self.w._copy_chart_clipboard_action.setStatusTip("Copy chart image to clipboard")
+        self.w._copy_chart_clipboard_action.triggered.connect(
+            self.w._export_ui_ctrl._copy_chart_to_clipboard)
+        export_menu.addAction(self.w._copy_chart_clipboard_action)
+
+        self.w._copy_data_clipboard_action = QAction("Copy Data to Clipboard", self.w)
+        self.w._copy_data_clipboard_action.setStatusTip("Copy all data to clipboard as TSV")
+        self.w._copy_data_clipboard_action.triggered.connect(
+            self.w._export_ui_ctrl._copy_data_to_clipboard)
+        export_menu.addAction(self.w._copy_data_clipboard_action)
+
+        export_menu.addSeparator()
+
+        # Batch export
+        self.w._batch_export_action = QAction("Batch Export All Datasets...", self.w)
+        self.w._batch_export_action.setStatusTip("Export all datasets to a directory")
+        self.w._batch_export_action.triggered.connect(
+            self.w._export_ui_ctrl._on_batch_export)
+        export_menu.addAction(self.w._batch_export_action)
+
+        # Auto-export
+        self.w._auto_export_action = QAction("Auto-Export on File Change", self.w)
+        self.w._auto_export_action.setCheckable(True)
+        self.w._auto_export_action.setChecked(False)
+        self.w._auto_export_action.setStatusTip("Automatically re-export when source file changes")
+        self.w._auto_export_action.triggered.connect(
+            self.w._export_ui_ctrl._on_toggle_auto_export)
+        export_menu.addAction(self.w._auto_export_action)
 
         export_menu.addSeparator()
 
@@ -674,7 +736,8 @@ class MenuSetupController:
         has_graph = has_data and (bool(self.w.state.value_columns) or bool(self.w.state.x_column))
 
         # Image export requires a graph
-        for action in (self.w._export_image_png_action, self.w._export_image_svg_action):
+        for action in (self.w._export_image_png_action, self.w._export_image_svg_action,
+                       self.w._export_image_pdf_action):
             action.setEnabled(has_graph)
 
         # Data export requires data
@@ -683,8 +746,17 @@ class MenuSetupController:
             action.setEnabled(has_data)
 
         # Report export requires data
-        for action in (self.w._export_report_html_action, self.w._export_report_pptx_action):
+        for action in (self.w._export_report_html_action, self.w._export_report_pptx_action,
+                       self.w._export_report_docx_action, self.w._export_report_md_action,
+                       self.w._export_report_pdf_action):
             action.setEnabled(has_data)
+
+        # Clipboard
+        self.w._copy_chart_clipboard_action.setEnabled(has_graph)
+        self.w._copy_data_clipboard_action.setEnabled(has_data)
+
+        # Batch & auto
+        self.w._batch_export_action.setEnabled(has_data)
 
         # Quick export
         self.w._export_quick_action.setEnabled(has_data)

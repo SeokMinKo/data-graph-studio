@@ -42,8 +42,8 @@ class _ConvertWorker(QThread):
     def run(self) -> None:
         try:
             result = subprocess.run(
-                self._command,
-                shell=True,
+                shlex.split(self._command),
+                shell=False,
                 capture_output=True,
                 text=True,
             )

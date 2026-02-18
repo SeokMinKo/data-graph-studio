@@ -992,28 +992,22 @@ class MainWindow(QMainWindow):
         
         if graph_setting:
             active_id = self.engine.active_dataset_id
-            logger.debug(f"[DEBUG-CRASH] active_id={active_id}, graph_setting={graph_setting}")
+            logger.debug("active_id=%s, graph_setting=%s", active_id, graph_setting)
             if active_id:
                 # 프로젝트 탐색창에 추가
                 from dataclasses import replace
                 graph_setting = replace(graph_setting, dataset_id=active_id)
-                logger.debug(f"[DEBUG-CRASH] profile_store.add() start")
                 self.profile_store.add(graph_setting)
-                logger.debug(f"[DEBUG-CRASH] profile_store.add() done, profile_model update start")
                 self.profile_model.add_profile_incremental(active_id, graph_setting)
-                logger.debug(f"[DEBUG-CRASH] profile_model update done")
                 
                 # 그래프 설정 적용
                 try:
-                    logger.debug(f"[DEBUG-CRASH] apply_profile() start, id={graph_setting.id}")
                     self.profile_controller.apply_profile(graph_setting.id)
-                    logger.debug(f"[DEBUG-CRASH] apply_profile() done")
                     self._schedule_autofit()
                 except Exception as e:
                     logger.warning(f"Failed to apply profile: {e}", exc_info=True)
                 
                 logger.info(f"Wizard result applied: {graph_setting.name}")
-                logger.debug(f"[DEBUG-CRASH] after wizard result applied, returning from _apply_pending_wizard_result")
 
     def _schedule_autofit(self):
         """프로파일 전환/생성 후 그래프를 자동으로 Fit (데이터에 맞춤)."""

@@ -2,13 +2,16 @@
 Parsing Step - New Project Wizard Step 1
 """
 
+import csv
+import io
+import logging
 import os
 import re
 from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSettings
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,6 +37,8 @@ from PySide6.QtWidgets import (
 
 from ...core.data_engine import FileType, DelimiterType, DataEngine, HAS_ETL_PARSER
 from ...core.parsing import ParsingSettings
+
+logger = logging.getLogger(__name__)
 
 
 class ParsingStep(QWizardPage):
@@ -72,8 +77,20 @@ class ParsingStep(QWizardPage):
         self._update_preview()
 
     def validatePage(self) -> bool:
-        """다음 스텝 진행 가능 여부"""
-        return self._parsing_success
+        """다음 스텝 진행 가능 여부 — 최소 1개 컬럼 선택 필요"""
+        if not self._parsing_success:
+            return False
+        # Ensure at least 1 column is selected
+        total = len(self._column_checkboxes)
+        selected = total - len(self._excluded_columns)
+        if total > 0 and selected == 0:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "No Columns Selected",
+                "At least one column must be selected to proceed."
+            )
+            return False
+        return True
 
     def update_file_path(self, file_path: str) -> None:
         self.file_path = file_path
@@ -318,12 +335,56 @@ class ParsingStep(QWizardPage):
 
     def _detect_settings(self):
         ext = Path(self.file_path).suffix.lower()
-        if ext == '.tsv':
+
+        # Try to restore last-used settings for this extension
+        settings = QSettings("DataGraphStudio", "ParsingStep")
+        saved_encoding = settings.value(f"parsing/{ext}/encoding", "")
+        saved_delimiter = settings.value(f"parsing/{ext}/delimiter_index", -1, type=int)
+        saved_skip_rows = settings.value(f"parsing/{ext}/skip_rows", 0, type=int)
+
+        # Smart encoding detection
+        if saved_encoding:
+            idx = self.encoding_combo.findText(saved_encoding)
+            if idx >= 0:
+                self.encoding_combo.setCurrentIndex(idx)
+        else:
+            try:
+                from ...core.file_loader import detect_encoding
+                detected = detect_encoding(self.file_path)
+                # Normalize encoding name
+                enc_map = {
+                    'utf-8': 'utf8', 'ascii': 'ascii', 'cp949': 'cp949',
+                    'euc-kr': 'euc-kr', 'latin-1': 'latin-1', 'iso-8859-1': 'latin-1',
+                    'utf-16': 'utf16',
+                }
+                norm = enc_map.get(detected.lower(), detected.lower())
+                idx = self.encoding_combo.findText(norm)
+                if idx >= 0:
+                    self.encoding_combo.setCurrentIndex(idx)
+            except Exception:
+                pass
+
+        # Delimiter
+        if saved_delimiter >= 0:
+            self.delimiter_combo.setCurrentIndex(saved_delimiter)
+        elif ext == '.tsv':
             self.delimiter_combo.setCurrentIndex(2)
         elif ext == '.csv':
             self.delimiter_combo.setCurrentIndex(1)
         else:
             self.delimiter_combo.setCurrentIndex(0)
+
+        # Skip rows
+        if saved_skip_rows > 0:
+            self.skip_rows_spin.setValue(saved_skip_rows)
+
+    def _save_settings_to_qsettings(self):
+        """Save current parsing settings for this file extension"""
+        ext = Path(self.file_path).suffix.lower()
+        settings = QSettings("DataGraphStudio", "ParsingStep")
+        settings.setValue(f"parsing/{ext}/encoding", self.encoding_combo.currentText())
+        settings.setValue(f"parsing/{ext}/delimiter_index", self.delimiter_combo.currentIndex())
+        settings.setValue(f"parsing/{ext}/skip_rows", self.skip_rows_spin.value())
 
     def _on_delimiter_changed(self, index: int):
         self.regex_edit.setEnabled(index == 6)
@@ -480,7 +541,12 @@ class ParsingStep(QWizardPage):
             elif delimiter_type == DelimiterType.SPACE or delimiter == " ":
                 fields = line.split()
             else:
-                fields = line.split(delimiter)
+                # Use csv.reader to properly handle quoted fields
+                try:
+                    reader = csv.reader(io.StringIO(line), delimiter=delimiter or ',')
+                    fields = next(reader)
+                except (csv.Error, StopIteration):
+                    fields = line.split(delimiter)
 
             rows.append([f.strip() for f in fields])
 
@@ -560,11 +626,18 @@ class ParsingStep(QWizardPage):
         self._update_column_checkboxes(headers)
 
         row_count = min(len(data), self.PREVIEW_ROWS)
+        # Infer data types for header display
+        typed_headers = []
+        for col_idx, header in enumerate(headers):
+            col_values = [row[col_idx] for row in data[:min(20, len(data))] if col_idx < len(row) and row[col_idx].strip()]
+            dtype = self._infer_column_type(col_values)
+            typed_headers.append(f"{header}\n[{dtype}]")
+
         self.preview_table.setUpdatesEnabled(False)
         try:
             self.preview_table.setRowCount(row_count)
             self.preview_table.setColumnCount(max_cols)
-            self.preview_table.setHorizontalHeaderLabels(headers)
+            self.preview_table.setHorizontalHeaderLabels(typed_headers)
 
             excluded_bg = QColor("#E5E7EB")
             excluded_fg = QColor("#6B7280")
@@ -588,8 +661,41 @@ class ParsingStep(QWizardPage):
         except Exception:
             self._preview_df = pd.DataFrame()
         self._parsing_success = True
+        self._save_settings_to_qsettings()
         self.progress_bar.setValue(100)
         self.progress_bar.setFormat("Ready (%p%)")
+
+    @staticmethod
+    def _infer_column_type(values: List[str]) -> str:
+        """Infer column type from sample values for preview display."""
+        if not values:
+            return "str"
+        int_count = 0
+        float_count = 0
+        for v in values:
+            try:
+                int(v)
+                int_count += 1
+                continue
+            except ValueError:
+                pass
+            try:
+                float(v)
+                float_count += 1
+                continue
+            except ValueError:
+                pass
+        total = len(values)
+        if int_count == total:
+            return "int"
+        if (int_count + float_count) == total:
+            return "float"
+        # Check for date patterns
+        import re as _re
+        date_pattern = _re.compile(r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}')
+        if all(date_pattern.match(v) for v in values):
+            return "date"
+        return "str"
 
     def _update_column_checkboxes(self, headers: List[str]):
         for cb in self._column_checkboxes:
