@@ -348,8 +348,56 @@ class DashboardPanel(QWidget):
         self._controller = controller
         self._cell_widgets: Dict[str, QWidget] = {}  # "r,c" → widget
         self._focused_cell: tuple[int, int] | None = None
+        self.setAccessibleName("Dashboard Panel")
+        self.setAccessibleDescription("Grid dashboard with mini chart cells")
+        self.setFocusPolicy(Qt.StrongFocus)
 
         self._build_ui()
+
+    def keyPressEvent(self, event):
+        """Item 12: Arrow key navigation between dashboard cards"""
+        layout = self._controller.current_layout if hasattr(self._controller, 'current_layout') else None
+        if layout is None:
+            super().keyPressEvent(event)
+            return
+
+        rows = layout.rows if hasattr(layout, 'rows') else 2
+        cols = layout.cols if hasattr(layout, 'cols') else 2
+
+        if self._focused_cell is None:
+            self._focused_cell = (0, 0)
+
+        r, c = self._focused_cell
+        moved = False
+
+        if event.key() == Qt.Key_Left and c > 0:
+            c -= 1; moved = True
+        elif event.key() == Qt.Key_Right and c < cols - 1:
+            c += 1; moved = True
+        elif event.key() == Qt.Key_Up and r > 0:
+            r -= 1; moved = True
+        elif event.key() == Qt.Key_Down and r < rows - 1:
+            r += 1; moved = True
+        elif event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.cell_clicked.emit(r, c)
+            return
+        elif event.key() == Qt.Key_Escape:
+            self.exit_requested.emit()
+            return
+
+        if moved:
+            self._focused_cell = (r, c)
+            key = f"{r},{c}"
+            widget = self._cell_widgets.get(key)
+            if widget:
+                widget.setFocus()
+            # Update visual focus indicator
+            for k, w in self._cell_widgets.items():
+                w.setProperty("focused", k == key)
+                w.style().unpolish(w)
+                w.style().polish(w)
+        else:
+            super().keyPressEvent(event)
 
     # -- UI -----------------------------------------------------------------
 

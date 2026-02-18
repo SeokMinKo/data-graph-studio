@@ -80,9 +80,9 @@ class Theme:
         if not self.text_secondary:
             self.text_secondary = "#6B7280" if is_light else "#9CA3AF"
         if not self.text_muted:
-            self.text_muted = "#9CA3AF" if is_light else "#6B7280"
+            self.text_muted = "#6B7280" if is_light else "#9CA3AF"  # WCAG AA ~4.6:1
         if not self.text_disabled:
-            self.text_disabled = "#D1D5DB" if is_light else "#4B5563"
+            self.text_disabled = "#9CA3AF" if is_light else "#6B7280"  # improved for disabled
         
         # Shadow (light: subtle, dark: stronger)
         if not self.shadow_color:
@@ -211,8 +211,8 @@ LIGHT_THEME = Theme(
     selected="#EFF6FF",
     text_primary="#111827",
     text_secondary="#6B7280",
-    text_muted="#9CA3AF",
-    text_disabled="#D1D5DB",
+    text_muted="#6B7280",       # WCAG AA ~4.6:1 on white
+    text_disabled="#9CA3AF",    # improved disabled contrast
     accent="#8B5CF6",
 )
 
@@ -262,8 +262,8 @@ TAILWIND_THEME = Theme(
     focused="#6366F140",         # indigo-500/25
     text_primary="#0F172A",      # slate-900
     text_secondary="#475569",    # slate-600
-    text_muted="#94A3B8",        # slate-400
-    text_disabled="#CBD5E1",     # slate-300
+    text_muted="#64748B",        # slate-500 (WCAG AA ~5.5:1)
+    text_disabled="#94A3B8",     # slate-400 (improved)
     shadow_color="rgba(15, 23, 42, 0.06)",  # slate-900/6
     gradient_start="#6366F1",    # indigo-500
     gradient_end="#8B5CF6",      # violet-500
@@ -291,18 +291,48 @@ TAILWIND_DARK_THEME = Theme(
     focused="#818CF840",         # indigo-400/25
     text_primary="#F8FAFC",      # slate-50
     text_secondary="#94A3B8",    # slate-400
-    text_muted="#64748B",        # slate-500
-    text_disabled="#334155",     # slate-700
+    text_muted="#94A3B8",        # slate-400 (WCAG AA ~4.6:1 on dark)
+    text_disabled="#64748B",     # slate-500 (improved)
     shadow_color="rgba(0, 0, 0, 0.30)",
     gradient_start="#818CF8",    # indigo-400
     gradient_end="#A78BFA",      # violet-400
 )
 
 
+# High Contrast Theme — WCAG AAA 7:1 contrast ratio
+HIGH_CONTRAST_THEME = Theme(
+    name="High Contrast",
+    background="#000000",
+    foreground="#FFFFFF",
+    primary="#00FFFF",           # Cyan
+    secondary="#FF00FF",         # Magenta
+    accent="#FFFF00",            # Yellow
+    success="#00FF00",           # Green
+    warning="#FFFF00",           # Yellow
+    error="#FF0000",             # Red
+    info="#00FFFF",              # Cyan
+    surface="#1A1A1A",
+    surface_hover="#333333",
+    surface_active="#4D4D4D",
+    border="#FFFFFF",
+    border_light="#CCCCCC",
+    hover="#333333",
+    selected="#003366",
+    focused="#00FFFF40",
+    text_primary="#FFFFFF",
+    text_secondary="#E0E0E0",
+    text_muted="#C0C0C0",
+    text_disabled="#808080",
+    shadow_color="rgba(0, 0, 0, 0.5)",
+    gradient_start="#00FFFF",
+    gradient_end="#FFFF00",
+)
+
+
 class ThemeManager:
     """Modern Theme Manager with animations support"""
     
-    BUILTIN_THEMES = {'light', 'dark', 'midnight', 'tailwind', 'tailwind-dark'}
+    BUILTIN_THEMES = {'light', 'dark', 'midnight', 'tailwind', 'tailwind-dark', 'high-contrast'}
     
     def __init__(self):
         self._themes: Dict[str, Theme] = {
@@ -311,6 +341,7 @@ class ThemeManager:
             'midnight': MIDNIGHT_THEME,
             'tailwind': TAILWIND_THEME,
             'tailwind-dark': TAILWIND_DARK_THEME,
+            'high-contrast': HIGH_CONTRAST_THEME,
         }
         self._current: str = 'midnight'
         self._chart_palette: ColorPalette = ColorPalette.default()
@@ -385,6 +416,19 @@ class ThemeManager:
             * {{
                 font-family: 'Helvetica Neue', 'Arial';
                 font-size: 13px;
+            }}
+            
+            /* ============ Focus Ring (Accessibility) ============ */
+            QWidget:focus {{
+                outline: 2px solid {t.primary};
+                outline-offset: 1px;
+            }}
+            
+            QPushButton:focus, QToolButton:focus, QComboBox:focus,
+            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+            QCheckBox:focus, QListWidget:focus, QTableView:focus,
+            QTreeView:focus {{
+                border: 2px solid {t.primary};
             }}
             
             /* ============ Main Window ============ */
@@ -940,7 +984,7 @@ class ThemeManager:
             
             /* ============ Hint & Stats Labels ============ */
             #hintLabel {{
-                font-size: 10px;
+                font-size: 11px;
                 color: {t.text_muted};
                 font-style: italic;
                 background: transparent;
@@ -960,7 +1004,7 @@ class ThemeManager:
             
             /* ============ Small Buttons ============ */
             #smallButton {{
-                font-size: 10px;
+                font-size: 11px;
                 padding: 4px 8px;
             }}
             
@@ -982,7 +1026,7 @@ class ThemeManager:
             
             #cardTitle {{
                 color: {t.text_secondary};
-                font-size: 10px;
+                font-size: 11px;
                 font-weight: 500;
                 background: transparent;
                 border: none;
@@ -998,7 +1042,7 @@ class ThemeManager:
             
             #cardSubtitle {{
                 color: {t.text_secondary};
-                font-size: 9px;
+                font-size: 11px;
                 background: transparent;
                 border: none;
             }}
@@ -1094,7 +1138,7 @@ class ThemeManager:
             }}
             
             #zoneHelp {{
-                font-size: 10px;
+                font-size: 11px;
                 background: transparent;
                 color: {t.text_secondary};
             }}
@@ -1168,7 +1212,7 @@ class ThemeManager:
                 border-radius: 6px;
                 padding: 6px 10px;
                 font-weight: 500;
-                font-size: 10px;
+                font-size: 11px;
             }}
             
             #dangerButton:hover {{
@@ -1183,7 +1227,7 @@ class ThemeManager:
                 border-radius: 6px;
                 padding: 6px 10px;
                 font-weight: 500;
-                font-size: 10px;
+                font-size: 11px;
             }}
             
             #warningButton:hover {{
@@ -1404,7 +1448,7 @@ class ThemeManager:
             }}
             
             #dragHandle {{
-                font-size: 10px;
+                font-size: 11px;
                 color: {t.text_muted};
                 background: transparent;
             }}
@@ -1481,7 +1525,7 @@ class ThemeManager:
             #defaultBadge {{
                 background-color: {"#FEF3C7" if t.is_light() else t.surface_active};
                 color: {"#92400E" if t.is_light() else t.warning};
-                font-size: 10px;
+                font-size: 11px;
                 padding: 2px 6px;
                 border-radius: 4px;
             }}
@@ -1657,17 +1701,17 @@ class ThemeManager:
             }}
             
             #overlayStatLabel {{
-                font-size: 9px;
+                font-size: 11px;
                 color: {t.text_muted};
             }}
             
             #overlayStatValue {{
-                font-size: 10px;
+                font-size: 11px;
                 color: {t.foreground};
             }}
             
             #overlayStatPositive {{
-                font-size: 10px;
+                font-size: 11px;
                 font-weight: bold;
                 color: {t.success};
             }}
@@ -1714,7 +1758,7 @@ class ThemeManager:
             }}
             
             #searchResultLabel {{
-                font-size: 10px;
+                font-size: 11px;
                 color: {t.text_muted};
                 background: transparent;
             }}
@@ -1733,7 +1777,7 @@ class ThemeManager:
                 border: 1px solid {t.border};
                 border-radius: 4px;
                 padding: 4px 8px;
-                font-size: 10px;
+                font-size: 11px;
                 color: {t.text_secondary};
             }}
             
@@ -1751,12 +1795,12 @@ class ThemeManager:
             /* ============ Window/Group Info Labels ============ */
             #windowLabel {{
                 color: {t.text_secondary};
-                font-size: 10px;
+                font-size: 11px;
             }}
             
             #groupInfoLabel {{
                 color: {t.text_secondary};
-                font-size: 10px;
+                font-size: 11px;
             }}
             
             #groupInfoLabel[state="grouped"] {{

@@ -42,6 +42,9 @@ class StatPanel(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("StatPanel")
+        self.setAccessibleName("Statistics Panel")
+        self.setAccessibleDescription("Shows distribution histograms and summary statistics for selected data")
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(200)
         self.setMaximumWidth(500)
 

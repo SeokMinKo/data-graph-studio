@@ -66,6 +66,8 @@ class GraphPanel(QWidget):
         super().__init__()
         self.state = state
         self.engine = engine
+        self.setAccessibleName("Graph Panel")
+        self.setAccessibleDescription("Main chart visualization area with options and statistics")
 
         # Sliding window state
         self._sliding_window_enabled = False

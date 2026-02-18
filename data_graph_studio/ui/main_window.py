@@ -237,6 +237,9 @@ class MainWindow(QMainWindow):
         self._setup_compare_toolbar()
         self._setup_statusbar()
 
+        # Accessibility setup (items 1-3)
+        self._setup_accessibility()
+
         # Connect signals
         self._connect_signals()
 
@@ -595,6 +598,88 @@ class MainWindow(QMainWindow):
 
         self.main_splitter.setSizes(sizes)
 
+    def _setup_accessibility(self):
+        """Setup accessibility properties for screen readers (Items 1-3)"""
+        # Main window
+        self.setAccessibleName("Data Graph Studio Main Window")
+        self.setAccessibleDescription("Main application window for data visualization and analysis")
+
+        # Menu bar
+        mb = self.menuBar()
+        if mb:
+            mb.setAccessibleName("Main Menu Bar")
+
+        # Sidebar
+        if hasattr(self, '_sidebar_tabs'):
+            self._sidebar_tabs.setAccessibleName("Sidebar Navigation")
+            self._sidebar_tabs.setAccessibleDescription("Project explorer and dataset management")
+
+        # Project tree
+        if hasattr(self, 'project_tree'):
+            self.project_tree.setAccessibleName("Project Explorer Tree")
+
+        # Project search
+        if hasattr(self, '_project_search'):
+            self._project_search.setAccessibleName("Filter Profiles Search")
+
+        # Graph panel
+        if hasattr(self, 'graph_panel'):
+            self.graph_panel.setAccessibleName("Graph Panel")
+            self.graph_panel.setAccessibleDescription("Main chart and visualization area")
+            self.graph_panel.setFocusPolicy(Qt.StrongFocus)
+
+        # Table panel
+        if hasattr(self, 'table_panel'):
+            self.table_panel.setAccessibleName("Table Panel")
+            self.table_panel.setAccessibleDescription("Data table view with search and filtering")
+            self.table_panel.setFocusPolicy(Qt.StrongFocus)
+            # Table sub-widgets
+            if hasattr(self.table_panel, 'search_input'):
+                self.table_panel.search_input.setAccessibleName("Table Search Input")
+            if hasattr(self.table_panel, 'table_view'):
+                self.table_panel.table_view.setAccessibleName("Data Table View")
+                self.table_panel.table_view.setAccessibleDescription("Sortable data table showing loaded dataset")
+            if hasattr(self.table_panel, 'filter_bar'):
+                self.table_panel.filter_bar.setAccessibleName("Active Filters Bar")
+            if hasattr(self.table_panel, 'group_combo1'):
+                self.table_panel.group_combo1.setAccessibleName("Group By Column 1")
+            if hasattr(self.table_panel, 'group_combo2'):
+                self.table_panel.group_combo2.setAccessibleName("Group By Column 2")
+            if hasattr(self.table_panel, 'agg_combo'):
+                self.table_panel.agg_combo.setAccessibleName("Aggregation Function")
+            if hasattr(self.table_panel, 'table_view_mode_combo'):
+                self.table_panel.table_view_mode_combo.setAccessibleName("Table View Mode")
+            if hasattr(self.table_panel, 'limit_marking_btn'):
+                self.table_panel.limit_marking_btn.setAccessibleName("Limit to Marking Toggle")
+            if hasattr(self.table_panel, 'expand_btn'):
+                self.table_panel.expand_btn.setAccessibleName("Expand All Groups")
+            if hasattr(self.table_panel, 'collapse_btn'):
+                self.table_panel.collapse_btn.setAccessibleName("Collapse All Groups")
+
+        # Profile bar
+        if hasattr(self, 'profile_bar'):
+            self.profile_bar.setAccessibleName("Profile Bar")
+            self.profile_bar.setAccessibleDescription("Graph profile settings and management")
+
+        # Summary panel
+        if hasattr(self, 'summary_panel'):
+            self.summary_panel.setAccessibleName("Summary Panel")
+
+        # History dock
+        if self._history_dock:
+            self._history_dock.setAccessibleName("History Panel Dock")
+
+        # Set tab order: sidebar → table → graph → profile bar
+        if hasattr(self, '_project_search') and hasattr(self, 'table_panel'):
+            tp = self.table_panel
+            gp = self.graph_panel
+            QWidget.setTabOrder(self._project_search, self.project_tree)
+            if hasattr(tp, 'search_input'):
+                QWidget.setTabOrder(self.project_tree, tp.search_input)
+                if hasattr(tp, 'table_view'):
+                    QWidget.setTabOrder(tp.search_input, tp.table_view)
+                    QWidget.setTabOrder(tp.table_view, gp)
+
     def _setup_statusbar(self):
         """Modern status bar setup"""
         self.statusbar = QStatusBar()
@@ -609,6 +694,10 @@ class MainWindow(QMainWindow):
         self._status_memory_label = QLabel("💾 --")
         self._status_memory_label.setToolTip("Memory Usage (Process / System)")
 
+        self.statusbar.setAccessibleName("Status Bar")
+        self._status_data_label.setAccessibleName("Data Status")
+        self._status_selection_label.setAccessibleName("Selection Status")
+        self._status_memory_label.setAccessibleName("Memory Usage")
         self.statusbar.addWidget(self._status_data_label)
         self.statusbar.addWidget(self._status_selection_label, 1)
         self.statusbar.addPermanentWidget(self._status_memory_label)

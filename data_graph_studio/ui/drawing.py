@@ -669,9 +669,10 @@ class ColorButton(QPushButton):
     def __init__(self, color: QColor = QColor("#000000"), parent=None):
         super().__init__(parent)
         self._color = color
-        self.setFixedSize(28, 28)
+        self.setFixedSize(32, 32)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("Click to choose a color")
+        self.setAccessibleName("Color picker")
         self.clicked.connect(self._on_clicked)
         self._update_style()
 
@@ -708,10 +709,18 @@ class DrawingStyleDialog(QDialog):
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
+        self.setAccessibleName(title)
         self.setMinimumWidth(300)
 
         self._setup_ui()
         self._apply_style()
+
+    def keyPressEvent(self, event):
+        """Item 11: Explicit Escape handling"""
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+        else:
+            super().keyPressEvent(event)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -845,9 +854,16 @@ class TextInputDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Add Text")
+        self.setAccessibleName("Add Text Dialog")
         self.setMinimumWidth(400)
 
         self._setup_ui()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+        else:
+            super().keyPressEvent(event)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)

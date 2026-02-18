@@ -266,6 +266,29 @@ class ColorSchemeManager:
             scheme_type=ColorSchemeType.DIVERGING
         )
 
+        # Colorblind-safe RYG alternative (Red→Blue instead of Red→Green)
+        self._schemes["RYB"] = ColorScheme(
+            name="RYB",
+            colors=["#D32F2F", "#FFCA28", "#1565C0"],
+            scheme_type=ColorSchemeType.DIVERGING
+        )
+
+        # Wong colorblind-safe palette (Nature Methods, 2011)
+        self._schemes["Colorblind Safe"] = ColorScheme(
+            name="Colorblind Safe",
+            colors=[
+                "#E69F00",  # Orange
+                "#56B4E9",  # Sky Blue
+                "#009E73",  # Bluish Green
+                "#F0E442",  # Yellow
+                "#0072B2",  # Blue
+                "#D55E00",  # Vermillion
+                "#CC79A7",  # Reddish Purple
+                "#000000",  # Black
+            ],
+            scheme_type=ColorSchemeType.CATEGORICAL
+        )
+
         # Red-Blue Diverging
         self._schemes["RedBlue"] = ColorScheme(
             name="RedBlue",

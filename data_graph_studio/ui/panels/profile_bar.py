@@ -251,6 +251,9 @@ class ProfileBar(QFrame):
         self._setting_buttons: dict[str, SettingButton] = {}
         self._profile_controller = profile_controller
 
+        self.setAccessibleName("Profile Bar")
+        self.setAccessibleDescription("Profile settings and graph configuration management")
+
         self._setup_ui()
         self._connect_signals()
 
@@ -283,6 +286,7 @@ class ProfileBar(QFrame):
 
         # 프로파일 드롭다운
         self._profile_combo = QComboBox()
+        self._profile_combo.setAccessibleName("Profile Selector")
         self._profile_combo.setToolTip("Select a saved profile to load")
         self._profile_combo.setMinimumWidth(150)
         self._profile_combo.setStyleSheet("""

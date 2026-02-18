@@ -347,10 +347,20 @@ class OverlayStatsWidget(QWidget):
 
         self.move(x, y)
 
+    @staticmethod
+    def _reduce_animations() -> bool:
+        """Check if animations should be reduced (Item 13)"""
+        from PySide6.QtCore import QSettings
+        settings = QSettings("DataGraphStudio", "DGS")
+        return settings.value("accessibility/reduce_animations", False, type=bool)
+
     def show_animated(self):
         """애니메이션과 함께 표시"""
         self.show()
         self.refresh()
+
+        if self._reduce_animations():
+            return
 
         # 페이드인 효과
         effect = QGraphicsOpacityEffect(self)
@@ -364,6 +374,10 @@ class OverlayStatsWidget(QWidget):
 
     def hide_animated(self):
         """애니메이션과 함께 숨기기"""
+        if self._reduce_animations():
+            self.hide()
+            return
+
         effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(effect)
 

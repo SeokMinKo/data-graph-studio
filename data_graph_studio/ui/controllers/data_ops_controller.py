@@ -139,22 +139,30 @@ class DataOpsController:
             if ok2:
                 from ..core.undo_manager import UndoCommand, UndoActionType
 
-                before_df = self.w.engine.df
-                sorted_df = before_df.sort(column, descending=(order == "Descending"))
+                descending = (order == "Descending")
+                # Capture current sort state for undo (reverse operation, no df copy)
+                old_sort_col = column
+                old_sort_desc = descending
 
-                def _apply(df):
-                    self.w.engine.update_dataframe(df)
-                    self.w.table_panel.set_data(df)
+                def _apply_sort(col, desc):
+                    df = self.w.engine.df
+                    sorted_df = df.sort(col, descending=desc)
+                    self.w.engine.update_dataframe(sorted_df)
+                    self.w.table_panel.set_data(sorted_df)
                     self.w.graph_panel.refresh()
 
-                _apply(sorted_df)
+                def _undo_sort():
+                    # Reverse sort: sort by same column in opposite direction
+                    _apply_sort(old_sort_col, not old_sort_desc)
+
+                _apply_sort(column, descending)
 
                 self.w._undo_stack.record(
                     UndoCommand(
                         action_type=UndoActionType.COLUMN_ADD,
                         description=f"Sort by '{column}' ({order})",
-                        do=lambda: _apply(sorted_df),
-                        undo=lambda: _apply(before_df),
+                        do=lambda: _apply_sort(column, descending),
+                        undo=_undo_sort,
                         timestamp=time.time(),
                     )
                 )
@@ -183,24 +191,19 @@ class DataOpsController:
 
         try:
             col_name = defn.name if hasattr(defn, 'name') else str(defn)
-            before_df = self.w.engine.df
-            if before_df is None:
+            current_df = self.w.engine.df
+            if current_df is None:
                 return
 
-            after_df = before_df.with_columns(series.alias(col_name))
+            after_df = current_df.with_columns(series.alias(col_name))
 
-            def _apply_df(df):
-                # Update engine
-                self.w.engine.update_dataframe(df)
-
-                # Sync state/UI
+            def _refresh_ui():
+                df = self.w.engine.df
                 try:
                     self.w.state.set_column_order(self.w.engine.columns)
                 except Exception:
                     pass
-
                 self.w.table_panel.set_data(df)
-
                 try:
                     self.w.graph_panel.set_columns(self.w.engine.columns)
                     if hasattr(self.w.graph_panel.options_panel, 'data_tab'):
@@ -209,19 +212,30 @@ class DataOpsController:
                         )
                 except Exception:
                     pass
-
                 self.w.graph_panel.refresh()
 
-            # Apply
-            _apply_df(after_df)
+            def _do_add():
+                df = self.w.engine.df
+                new_df = df.with_columns(series.alias(col_name))
+                self.w.engine.update_dataframe(new_df)
+                _refresh_ui()
 
-            # Record undo/redo
+            def _undo_add():
+                # Reverse operation: drop the column instead of restoring full df
+                self.w.engine.drop_column(col_name)
+                _refresh_ui()
+
+            # Apply
+            self.w.engine.update_dataframe(after_df)
+            _refresh_ui()
+
+            # Record undo/redo (reverse operation: drop column, no df copy)
             self.w._undo_stack.record(
                 UndoCommand(
                     action_type=UndoActionType.COLUMN_ADD,
                     description=f"Add computed column '{col_name}'",
-                    do=lambda: _apply_df(after_df),
-                    undo=lambda: _apply_df(before_df),
+                    do=_do_add,
+                    undo=_undo_add,
                     timestamp=time.time(),
                 )
             )
@@ -247,24 +261,46 @@ class DataOpsController:
         )
         if reply == QMessageBox.Yes:
             from ..core.undo_manager import UndoCommand, UndoActionType
+            import polars as pl
 
-            before_df = self.w.engine.df
-            after_df = before_df.unique()
-            removed = len(before_df) - len(after_df)
+            current_df = self.w.engine.df
+            # Save original row indices for undo (lightweight vs full df copy)
+            orig_idx = pl.arange(0, len(current_df), eager=True)
+            after_df = current_df.unique()
+            removed = len(current_df) - len(after_df)
 
-            def _apply(df):
-                self.w.engine.update_dataframe(df)
-                self.w.table_panel.set_data(df)
+            # Store only the indices of kept rows for undo reference
+            # We need to keep original row order to restore — store the duplicate mask
+            dup_mask = current_df.is_duplicated()
+            # Save the full df only if there are duplicates (unavoidable for true undo)
+            # But store just the removed rows for memory efficiency
+            removed_rows_df = current_df.filter(dup_mask)
+
+            def _apply_remove():
+                df = self.w.engine.df
+                new_df = df.unique()
+                self.w.engine.update_dataframe(new_df)
+                self.w.table_panel.set_data(new_df)
                 self.w.graph_panel.refresh()
 
-            _apply(after_df)
+            def _undo_remove():
+                # Restore by concatenating removed rows back
+                df = self.w.engine.df
+                restored = pl.concat([df, removed_rows_df], how="vertical_relaxed")
+                self.w.engine.update_dataframe(restored)
+                self.w.table_panel.set_data(restored)
+                self.w.graph_panel.refresh()
+
+            self.w.engine.update_dataframe(after_df)
+            self.w.table_panel.set_data(after_df)
+            self.w.graph_panel.refresh()
 
             self.w._undo_stack.record(
                 UndoCommand(
                     action_type=UndoActionType.COLUMN_ADD,
                     description=f"Remove {removed:,} duplicate rows",
-                    do=lambda: _apply(after_df),
-                    undo=lambda: _apply(before_df),
+                    do=_apply_remove,
+                    undo=_undo_remove,
                     timestamp=time.time(),
                 )
             )

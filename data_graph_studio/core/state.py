@@ -273,9 +273,23 @@ class DatasetState:
     profiles: List['GraphSetting'] = field(default_factory=list)
 
     def clone(self) -> 'DatasetState':
-        """상태 복제"""
+        """상태 복제 (선택적 deepcopy로 메모리 절약 #17)"""
         import copy
-        return copy.deepcopy(self)
+        new = DatasetState(dataset_id=self.dataset_id)
+        new.x_column = self.x_column
+        new.group_columns = copy.deepcopy(self.group_columns)
+        new.value_columns = copy.deepcopy(self.value_columns)
+        new.hover_columns = list(self.hover_columns)
+        new.filters = copy.deepcopy(self.filters)
+        new.sorts = [SortCondition(s.column, s.descending) for s in self.sorts]
+        # Selection: create new if empty, deepcopy if populated
+        if not self.selection.selected_rows and not self.selection.highlighted_rows:
+            new.selection = SelectionState()
+        else:
+            new.selection = copy.deepcopy(self.selection)
+        new.chart_settings = copy.deepcopy(self.chart_settings)
+        new.profiles = copy.deepcopy(self.profiles)
+        return new
 
     def reset(self):
         """상태 초기화"""
@@ -807,37 +821,45 @@ class AppState(QObject):
         """
         데이터셋 상태를 기존 AppState 속성들로 동기화
 
-        단일 모드에서 활성 데이터셋 전환 시 호출됨
+        단일 모드에서 활성 데이터셋 전환 시 호출됨.
+        배치 업데이트로 시그널 폭풍 방지 (6개 → 1회 통합 발사).
         """
         import copy
         state = self._dataset_states.get(dataset_id)
         if not state:
             return
 
-        # 기존 속성들 업데이트 (하위 호환성) - 깊은 복사 사용
-        self._x_column = state.x_column
-        self._group_columns = copy.deepcopy(state.group_columns)
-        self._value_columns = copy.deepcopy(state.value_columns)
-        self._hover_columns = copy.deepcopy(state.hover_columns)
-        self._filters = copy.deepcopy(state.filters)
-        self._sorts = copy.deepcopy(state.sorts)
-        # Selection은 참조 유지 (양방향 동기화 필요)
-        self._selection = state.selection
-        self._chart_settings = copy.deepcopy(state.chart_settings)
+        self.begin_batch_update()
+        try:
+            # 기존 속성들 업데이트 (하위 호환성) - 깊은 복사 사용
+            self._x_column = state.x_column
+            self._group_columns = copy.deepcopy(state.group_columns)
+            self._value_columns = copy.deepcopy(state.value_columns)
+            self._hover_columns = list(state.hover_columns)
+            self._filters = copy.deepcopy(state.filters)
+            self._sorts = copy.deepcopy(state.sorts)
+            # Selection은 참조 유지 (양방향 동기화 필요)
+            self._selection = state.selection
+            self._chart_settings = copy.deepcopy(state.chart_settings)
 
-        # 시그널 발생
-        self.group_zone_changed.emit()
-        self.value_zone_changed.emit()
-        self.hover_zone_changed.emit()
-        self.chart_settings_changed.emit()
-        self.filter_changed.emit()
-        self.sort_changed.emit()
+            # 시그널을 배치 큐에 추가
+            self._batch_pending_signals.extend([
+                "group_zone_changed",
+                "value_zone_changed",
+                "hover_zone_changed",
+                "chart_settings_changed",
+                "filter_changed",
+                "sort_changed",
+            ])
+        finally:
+            self.end_batch_update()
 
     def _sync_to_dataset_state(self, dataset_id: str = None):
         """
         기존 AppState 속성들을 데이터셋 상태로 동기화
 
-        단일 모드에서 상태 변경 시 호출됨
+        단일 모드에서 상태 변경 시 호출됨.
+        변경된 필드만 복사 (deepcopy 최소화).
         """
         import copy
         target_id = dataset_id or self._active_dataset_id
@@ -845,12 +867,16 @@ class AppState(QObject):
             return
 
         state = self._dataset_states[target_id]
+        # Simple values: no copy needed
         state.x_column = self._x_column
+        # Lists of dataclasses: deepcopy needed for isolation
         state.group_columns = copy.deepcopy(self._group_columns)
         state.value_columns = copy.deepcopy(self._value_columns)
-        state.hover_columns = copy.deepcopy(self._hover_columns)
+        # hover_columns is List[str]: shallow copy sufficient
+        state.hover_columns = list(self._hover_columns)
         state.filters = copy.deepcopy(self._filters)
-        state.sorts = copy.deepcopy(self._sorts)
+        # sorts is List[SortCondition] with simple fields: shallow copy of list + new objects
+        state.sorts = [SortCondition(s.column, s.descending) for s in self._sorts]
         # Selection은 참조 유지 (양방향 동기화 필요)
         state.selection = self._selection
         state.chart_settings = copy.deepcopy(self._chart_settings)
@@ -1706,93 +1732,99 @@ class AppState(QObject):
         }
 
     def apply_graph_setting(self, setting: 'GraphSetting'):
-        """GraphSetting을 현재 상태에 적용"""
+        """GraphSetting을 현재 상태에 적용 (배치 업데이트로 시그널 통합)"""
         from .profile import GraphSetting
 
-        # 차트 타입
+        self.begin_batch_update()
         try:
-            self._chart_settings.chart_type = ChartType(setting.chart_type)
-        except ValueError:
-            pass
-
-        # X축 컬럼
-        self._x_column = setting.x_column
-
-        # Group Zone 복원
-        self._group_columns.clear()
-        for gc_data in setting.group_columns:
-            gc = GroupColumn(
-                name=gc_data.get('name', ''),
-                selected_values=set(gc_data.get('selected_values', [])),
-                order=gc_data.get('order', 0)
-            )
-            self._group_columns.append(gc)
-
-        # Value Zone 복원
-        self._value_columns.clear()
-        for vc_data in setting.value_columns:
+            # 차트 타입
             try:
-                agg = AggregationType(vc_data.get('aggregation', 'sum'))
+                self._chart_settings.chart_type = ChartType(setting.chart_type)
             except ValueError:
-                agg = AggregationType.SUM
-            vc = ValueColumn(
-                name=vc_data.get('name', ''),
-                aggregation=agg,
-                color=vc_data.get('color', '#1f77b4'),
-                use_secondary_axis=vc_data.get('use_secondary_axis', False),
-                order=vc_data.get('order', 0),
-                formula=vc_data.get('formula', '')
-            )
-            self._value_columns.append(vc)
+                pass
 
-        # Hover Zone 복원
-        self._hover_columns = list(setting.hover_columns)
+            # X축 컬럼
+            self._x_column = setting.x_column
 
-        # 차트 설정 복원
-        cs = setting.chart_settings
-        if cs:
-            self._chart_settings.line_width = cs.get('line_width', 2)
-            self._chart_settings.marker_size = cs.get('marker_size', 6)
-            self._chart_settings.fill_opacity = cs.get('fill_opacity', 0.3)
-            self._chart_settings.show_data_labels = cs.get('show_data_labels', False)
-            self._chart_settings.x_log_scale = cs.get('x_log_scale', False)
-            self._chart_settings.y_log_scale = cs.get('y_log_scale', False)
-            self._chart_settings.y_min = cs.get('y_min')
-            self._chart_settings.y_max = cs.get('y_max')
-            self._chart_settings.y_label = cs.get('y_label')
-            self._chart_settings.secondary_y_log_scale = cs.get('secondary_y_log_scale', False)
-            self._chart_settings.secondary_y_min = cs.get('secondary_y_min')
-            self._chart_settings.secondary_y_max = cs.get('secondary_y_max')
-            self._chart_settings.secondary_y_label = cs.get('secondary_y_label')
-
-        # 필터 복원 (include_filters가 True인 경우만)
-        if setting.include_filters:
-            self._filters.clear()
-            for f_data in setting.filters:
-                f = FilterCondition(
-                    column=f_data.get('column', ''),
-                    operator=f_data.get('operator', 'eq'),
-                    value=f_data.get('value'),
-                    enabled=f_data.get('enabled', True)
+            # Group Zone 복원
+            self._group_columns.clear()
+            for gc_data in setting.group_columns:
+                gc = GroupColumn(
+                    name=gc_data.get('name', ''),
+                    selected_values=set(gc_data.get('selected_values', [])),
+                    order=gc_data.get('order', 0)
                 )
-                self._filters.append(f)
+                self._group_columns.append(gc)
 
-        # 정렬 복원 (include_sorts가 True인 경우만)
-        if setting.include_sorts:
-            self._sorts.clear()
-            for s_data in setting.sorts:
-                s = SortCondition(
-                    column=s_data.get('column', ''),
-                    descending=s_data.get('descending', False)
+            # Value Zone 복원
+            self._value_columns.clear()
+            for vc_data in setting.value_columns:
+                try:
+                    agg = AggregationType(vc_data.get('aggregation', 'sum'))
+                except ValueError:
+                    agg = AggregationType.SUM
+                vc = ValueColumn(
+                    name=vc_data.get('name', ''),
+                    aggregation=agg,
+                    color=vc_data.get('color', '#1f77b4'),
+                    use_secondary_axis=vc_data.get('use_secondary_axis', False),
+                    order=vc_data.get('order', 0),
+                    formula=vc_data.get('formula', '')
                 )
-                self._sorts.append(s)
+                self._value_columns.append(vc)
 
-        # 시그널 발생
-        self.group_zone_changed.emit()
-        self.value_zone_changed.emit()
-        self.hover_zone_changed.emit()
-        self.chart_settings_changed.emit()
-        if setting.include_filters:
-            self.filter_changed.emit()
-        if setting.include_sorts:
-            self.sort_changed.emit()
+            # Hover Zone 복원
+            self._hover_columns = list(setting.hover_columns)
+
+            # 차트 설정 복원
+            cs = setting.chart_settings
+            if cs:
+                self._chart_settings.line_width = cs.get('line_width', 2)
+                self._chart_settings.marker_size = cs.get('marker_size', 6)
+                self._chart_settings.fill_opacity = cs.get('fill_opacity', 0.3)
+                self._chart_settings.show_data_labels = cs.get('show_data_labels', False)
+                self._chart_settings.x_log_scale = cs.get('x_log_scale', False)
+                self._chart_settings.y_log_scale = cs.get('y_log_scale', False)
+                self._chart_settings.y_min = cs.get('y_min')
+                self._chart_settings.y_max = cs.get('y_max')
+                self._chart_settings.y_label = cs.get('y_label')
+                self._chart_settings.secondary_y_log_scale = cs.get('secondary_y_log_scale', False)
+                self._chart_settings.secondary_y_min = cs.get('secondary_y_min')
+                self._chart_settings.secondary_y_max = cs.get('secondary_y_max')
+                self._chart_settings.secondary_y_label = cs.get('secondary_y_label')
+
+            # 필터 복원 (include_filters가 True인 경우만)
+            if setting.include_filters:
+                self._filters.clear()
+                for f_data in setting.filters:
+                    f = FilterCondition(
+                        column=f_data.get('column', ''),
+                        operator=f_data.get('operator', 'eq'),
+                        value=f_data.get('value'),
+                        enabled=f_data.get('enabled', True)
+                    )
+                    self._filters.append(f)
+
+            # 정렬 복원 (include_sorts가 True인 경우만)
+            if setting.include_sorts:
+                self._sorts.clear()
+                for s_data in setting.sorts:
+                    s = SortCondition(
+                        column=s_data.get('column', ''),
+                        descending=s_data.get('descending', False)
+                    )
+                    self._sorts.append(s)
+
+            # 시그널을 배치 큐에 추가
+            self._batch_pending_signals.extend([
+                "group_zone_changed",
+                "value_zone_changed",
+                "hover_zone_changed",
+                "chart_settings_changed",
+            ])
+            if setting.include_filters:
+                self._batch_pending_signals.append("filter_changed")
+            if setting.include_sorts:
+                self._batch_pending_signals.append("sort_changed")
+        finally:
+            self.end_batch_update()

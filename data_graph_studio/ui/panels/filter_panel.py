@@ -403,6 +403,9 @@ if HAS_QT:
             self._model = FilterPanelModel()
             self._filter_widgets: Dict[str, FilterWidget] = {}
 
+            self.setAccessibleName("Filter Panel")
+            self.setAccessibleDescription("Data filtering controls for each column")
+
             self._setup_ui()
 
         def _setup_ui(self) -> None:

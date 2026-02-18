@@ -398,11 +398,40 @@ class DataQuery:
         if df is None:
             return None
 
+        mask = self.search_mask(df, query, columns, case_sensitive, max_columns)
+        if mask is None:
+            return df.head(0)
+
+        return df.filter(mask)
+
+    def search_mask(
+        self,
+        df: pl.DataFrame,
+        query: str,
+        columns: Optional[List[str]] = None,
+        case_sensitive: bool = False,
+        max_columns: int = 20,
+    ) -> Optional[pl.Series]:
+        """텍스트 검색의 boolean mask를 반환한다.
+
+        Args:
+            df: 대상 DataFrame.
+            query: 검색어.
+            columns: 검색할 컬럼 목록 (None이면 전체).
+            case_sensitive: 대소문자 구분 여부.
+            max_columns: 검색할 최대 컬럼 수.
+
+        Returns:
+            boolean mask (pl.Series of bool) 또는 None.
+        """
+        if df is None:
+            return None
+
         if columns is None:
             columns = df.columns[:max_columns]
 
         if not columns:
-            return df.head(0)
+            return None
 
         if not case_sensitive:
             query_pattern = f"(?i){re.escape(query)}"
@@ -420,13 +449,13 @@ class DataQuery:
                 continue
 
         if not conditions:
-            return df.head(0)
+            return None
 
         combined = conditions[0]
         for cond in conditions[1:]:
             combined = combined | cond
 
-        return df.filter(combined)
+        return df.select(combined.alias("__mask__")).to_series()
 
     def create_index(self, df: pl.DataFrame, column: str) -> Dict[Any, List[int]]:
         """인덱스를 생성한다 (deprecated).

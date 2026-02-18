@@ -129,8 +129,12 @@ class PolarsTableModel(QAbstractTableModel):
         self._search_brush = QBrush(QColor(255, 235, 59, 100))  # 연한 노랑
         # 조건부 서식 (F3)
         self._conditional_formats: Dict[str, ConditionalFormat] = {}
+        # 조건부 서식 min/max 캐시 (#15)
+        self._cond_fmt_ranges: Dict[str, Tuple[float, float]] = {}
         # 인라인 편집 (F2)
         self._editable = False
+        # 헤더 ToolTip 통계 캐시 (#12)
+        self._column_stats: Dict[str, str] = {}
 
     def set_dataframe(self, df: Optional[pl.DataFrame]):
         self.beginResetModel()
@@ -156,6 +160,8 @@ class PolarsTableModel(QAbstractTableModel):
             self._row_count = self._loaded_rows
             # Update conditional format ranges
             self._update_conditional_format_ranges()
+            # Pre-compute header tooltip stats (#12)
+            self._precompute_column_stats()
         else:
             self._visible_columns = []
             self._row_count = 0
@@ -209,15 +215,27 @@ class PolarsTableModel(QAbstractTableModel):
         col_name = self._visible_columns[col_idx]
         original_row = self._get_original_row(row_idx)
         try:
-            series_list = self._df[col_name].to_list()
-            series_list[original_row] = value
-            new_df = self._df.with_columns(pl.Series(col_name, series_list))
+            # Optimized: use pl.when/then instead of .to_list() + rebuild
+            series = self._df[col_name]
+            row_count = len(series)
+            new_series = (
+                pl.when(pl.arange(0, row_count, eager=False) == original_row)
+                .then(pl.lit(value, dtype=series.dtype))
+                .otherwise(pl.col(col_name))
+                .alias(col_name)
+            )
+            new_df = self._df.with_columns(new_series)
             self._df = new_df
             if self._original_df is not None and self._sort_indices is not None:
-                # Also update original
-                orig_list = self._original_df[col_name].to_list()
-                orig_list[original_row] = value
-                self._original_df = self._original_df.with_columns(pl.Series(col_name, orig_list))
+                orig_series = self._original_df[col_name]
+                orig_count = len(orig_series)
+                orig_new = (
+                    pl.when(pl.arange(0, orig_count, eager=False) == original_row)
+                    .then(pl.lit(value, dtype=orig_series.dtype))
+                    .otherwise(pl.col(col_name))
+                    .alias(col_name)
+                )
+                self._original_df = self._original_df.with_columns(orig_new)
             else:
                 self._original_df = new_df
             # Invalidate column cache
@@ -325,20 +343,19 @@ class PolarsTableModel(QAbstractTableModel):
         self.set_search_matches(set())
 
     def _cache_column(self, col: int):
-        """컬럼 데이터를 LRU 캐시에 로드"""
+        """컬럼 데이터를 LRU 캐시에 로드 (Polars Series 그대로 캐시)"""
         if self._df is None or col >= len(self._visible_columns):
             return
 
         col_name = self._visible_columns[col]
         try:
+            series = self._df[col_name]
             if self._row_count < self._actual_row_count:
-                col_data = self._df[col_name].head(self._row_count).to_list()
-            else:
-                col_data = self._df[col_name].to_list()
-            self._column_cache[col] = col_data
+                series = series.head(self._row_count)
+            self._column_cache[col] = series
             self._column_cache.move_to_end(col)
         except Exception:
-            self._column_cache[col] = []
+            self._column_cache[col] = pl.Series([], dtype=pl.Utf8)
 
         # LRU eviction
         MAX_CACHED_COLUMNS = 50
@@ -364,22 +381,11 @@ class PolarsTableModel(QAbstractTableModel):
                     return col_name
             else:
                 return str(section + 1)
-        # F4: Column stats tooltip
+        # F4: Column stats tooltip (cached at set_dataframe time)
         elif role == Qt.ToolTipRole and orientation == Qt.Horizontal:
-            if self._df is not None and 0 <= section < len(self._visible_columns):
+            if 0 <= section < len(self._visible_columns):
                 col_name = self._visible_columns[section]
-                try:
-                    series = self._df[col_name]
-                    dtype = str(series.dtype)
-                    null_count = series.null_count()
-                    total = len(series)
-                    pct = (null_count / total * 100) if total > 0 else 0
-                    tooltip = f"<b>{col_name}</b><br>Type: {dtype}<br>Nulls: {null_count} ({pct:.1f}%)"
-                    if series.dtype.is_numeric():
-                        tooltip += f"<br>Min: {series.min()}<br>Max: {series.max()}<br>Mean: {series.mean():.2f}"
-                    return tooltip
-                except Exception:
-                    return col_name
+                return self._column_stats.get(col_name, col_name)
         return None
 
     def get_column_name(self, index: int) -> Optional[str]:
@@ -414,17 +420,40 @@ class PolarsTableModel(QAbstractTableModel):
                 )
 
     def _update_conditional_format_ranges(self):
-        """Update min/max ranges for conditional formats."""
+        """Update min/max ranges for conditional formats (cached #15)."""
         if self._df is None:
+            self._cond_fmt_ranges.clear()
             return
         for col_name, fmt in self._conditional_formats.items():
             if col_name in self._df.columns:
                 try:
                     series = self._df[col_name]
                     if series.dtype.is_numeric():
-                        fmt.set_range(float(series.min()), float(series.max()))
+                        min_val = float(series.min())
+                        max_val = float(series.max())
+                        self._cond_fmt_ranges[col_name] = (min_val, max_val)
+                        fmt.set_range(min_val, max_val)
                 except Exception:
                     pass
+
+    def _precompute_column_stats(self):
+        """Pre-compute header tooltip stats at set_dataframe time (#12)."""
+        self._column_stats.clear()
+        if self._df is None:
+            return
+        total = len(self._df)
+        for col_name in self._visible_columns:
+            try:
+                series = self._df[col_name]
+                dtype = str(series.dtype)
+                null_count = series.null_count()
+                pct = (null_count / total * 100) if total > 0 else 0
+                tooltip = f"<b>{col_name}</b><br>Type: {dtype}<br>Nulls: {null_count} ({pct:.1f}%)"
+                if series.dtype.is_numeric():
+                    tooltip += f"<br>Min: {series.min()}<br>Max: {series.max()}<br>Mean: {series.mean():.2f}"
+                self._column_stats[col_name] = tooltip
+            except Exception:
+                self._column_stats[col_name] = col_name
 
     # ==================== 정렬 기능 ====================
 
@@ -660,8 +689,9 @@ class ChipWidget(QFrame):
         layout.addWidget(label, 1)
 
         remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(16, 16)
+        remove_btn.setFixedSize(24, 24)
         remove_btn.setObjectName("chipRemoveBtn")
+        remove_btn.setAccessibleName("Remove column chip")
         remove_btn.clicked.connect(self.remove_clicked.emit)
         layout.addWidget(remove_btn)
 
@@ -710,8 +740,9 @@ class ValueChipWidget(QFrame):
         row1.addWidget(name_label, 1)
 
         remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(16, 16)
+        remove_btn.setFixedSize(24, 24)
         remove_btn.setObjectName("chipRemoveBtn")
+        remove_btn.setAccessibleName("Remove value column chip")
         remove_btn.clicked.connect(self.remove_clicked.emit)
         row1.addWidget(remove_btn)
         main_layout.addLayout(row1)
@@ -843,6 +874,9 @@ class XAxisZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("XAxisZone")
+        self.setAccessibleName("X Axis Column Selector")
+        self.setAccessibleDescription("Drop a column here to set as X axis, or press Enter to select")
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(140)
         self.setMaximumWidth(180)
         self.setAcceptDrops(True)
@@ -969,6 +1003,32 @@ class XAxisZone(QFrame):
             self._on_chip_dropped(payload["name"], payload)
             event.acceptProposedAction()
 
+    def keyPressEvent(self, event):
+        """Keyboard alternative for drag-and-drop (Item 4)"""
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self._show_column_selector()
+        else:
+            super().keyPressEvent(event)
+
+    def _show_column_selector(self):
+        """Show column selection menu as keyboard alternative to drag-and-drop"""
+        from PySide6.QtWidgets import QMenu
+        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
+        if not columns and hasattr(self.state, '_data_columns'):
+            columns = self.state._data_columns
+        if not columns:
+            return
+        menu = QMenu("Select X-Axis Column", self)
+        menu.setAccessibleName("X Axis Column Selection Menu")
+        for col in columns:
+            action = menu.addAction(col)
+            action.triggered.connect(lambda checked, c=col: self._set_x_column(c))
+        # Add clear option
+        menu.addSeparator()
+        clear_action = menu.addAction("(Use Index)")
+        clear_action.triggered.connect(self._clear_x_column)
+        menu.exec(self.mapToGlobal(self.rect().center()))
+
 
 # ==================== Group Zone ====================
 
@@ -981,6 +1041,9 @@ class GroupZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GroupZone")
+        self.setAccessibleName("Group By Column Selector")
+        self.setAccessibleDescription("Drop columns here to group data, or press Enter to select")
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(130)
         self.setMaximumWidth(170)
         self.setAcceptDrops(True)
@@ -1063,6 +1126,27 @@ class GroupZone(QFrame):
             self._on_column_dropped(payload["name"], payload)
             event.acceptProposedAction()
 
+    def keyPressEvent(self, event):
+        """Keyboard alternative for drag-and-drop"""
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self._show_column_selector()
+        else:
+            super().keyPressEvent(event)
+
+    def _show_column_selector(self):
+        from PySide6.QtWidgets import QMenu
+        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
+        if not columns and hasattr(self.state, '_data_columns'):
+            columns = self.state._data_columns
+        if not columns:
+            return
+        menu = QMenu("Select Group Column", self)
+        menu.setAccessibleName("Group Column Selection Menu")
+        for col in columns:
+            action = menu.addAction(col)
+            action.triggered.connect(lambda checked, c=col: self.state.add_group_column(c))
+        menu.exec(self.mapToGlobal(self.rect().center()))
+
 
 # ==================== Value Zone ====================
 
@@ -1075,6 +1159,9 @@ class ValueZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("ValueZone")
+        self.setAccessibleName("Y Axis Value Column Selector")
+        self.setAccessibleDescription("Drop numeric columns here for Y axis values, or press Enter to select")
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(160)
         self.setAcceptDrops(True)
         
@@ -1163,6 +1250,27 @@ class ValueZone(QFrame):
             self._on_column_dropped(payload["name"], payload)
             event.acceptProposedAction()
 
+    def keyPressEvent(self, event):
+        """Keyboard alternative for drag-and-drop"""
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self._show_column_selector()
+        else:
+            super().keyPressEvent(event)
+
+    def _show_column_selector(self):
+        from PySide6.QtWidgets import QMenu
+        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
+        if not columns and hasattr(self.state, '_data_columns'):
+            columns = self.state._data_columns
+        if not columns:
+            return
+        menu = QMenu("Select Value Column", self)
+        menu.setAccessibleName("Value Column Selection Menu")
+        for col in columns:
+            action = menu.addAction(col)
+            action.triggered.connect(lambda checked, c=col: self.state.add_value_column(c))
+        menu.exec(self.mapToGlobal(self.rect().center()))
+
 
 # ==================== Hover Zone ====================
 
@@ -1175,6 +1283,9 @@ class HoverZone(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("HoverZone")
+        self.setAccessibleName("Hover Tooltip Column Selector")
+        self.setAccessibleDescription("Drop columns here to show in hover tooltip, or press Enter to select")
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(150)
         self.setAcceptDrops(True)
 
@@ -1254,6 +1365,27 @@ class HoverZone(QFrame):
         if payload.get("name"):
             self._on_column_dropped(payload["name"], payload)
             event.acceptProposedAction()
+
+    def keyPressEvent(self, event):
+        """Keyboard alternative for drag-and-drop"""
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self._show_column_selector()
+        else:
+            super().keyPressEvent(event)
+
+    def _show_column_selector(self):
+        from PySide6.QtWidgets import QMenu
+        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
+        if not columns and hasattr(self.state, '_data_columns'):
+            columns = self.state._data_columns
+        if not columns:
+            return
+        menu = QMenu("Select Hover Column", self)
+        menu.setAccessibleName("Hover Column Selection Menu")
+        for col in columns:
+            action = menu.addAction(col)
+            action.triggered.connect(lambda checked, c=col: self.state.add_hover_column(c))
+        menu.exec(self.mapToGlobal(self.rect().center()))
 
 
 # ==================== Data Table View ====================
@@ -1562,8 +1694,9 @@ class FilterBar(QFrame):
         
         # Remove button
         remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(18, 18)
+        remove_btn.setFixedSize(24, 24)
         remove_btn.setObjectName("chipRemoveBtn")
+        remove_btn.setAccessibleName(f"Remove filter for {filter_cond.column}")
         remove_btn.clicked.connect(lambda: self.filter_removed.emit(index))
         layout.addWidget(remove_btn)
         
@@ -1651,9 +1784,10 @@ class HiddenColumnsBar(QFrame):
         layout.addWidget(label)
         
         show_btn = QPushButton("👁")
-        show_btn.setFixedSize(16, 16)
+        show_btn.setFixedSize(24, 24)
         show_btn.setObjectName("chipRemoveBtn")
         show_btn.setToolTip(f"Show {column}")
+        show_btn.setAccessibleName(f"Show hidden column {column}")
         show_btn.clicked.connect(lambda: self.show_column.emit(column))
         layout.addWidget(show_btn)
         
@@ -1683,6 +1817,10 @@ class TablePanel(QWidget):
         self.graph_panel = graph_panel
 
         self.setAcceptDrops(True)
+
+        # Filter result cache (#14)
+        self._cached_filter_hash: Optional[int] = None
+        self._cached_filter_df: Optional[pl.DataFrame] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -1969,6 +2107,8 @@ class TablePanel(QWidget):
 
     def set_data(self, df: Optional[pl.DataFrame]):
         # 기존 캐시 클리어
+        self._cached_filter_hash = None
+        self._cached_filter_df = None
         self.table_model._column_cache.clear()
         if self.grouped_model:
             self.grouped_model._row_cache = []
@@ -2390,9 +2530,19 @@ class TablePanel(QWidget):
             self._apply_filters_and_update()
     
     def _apply_filters_and_update(self):
-        """Apply filters to data and update table"""
+        """Apply filters to data and update table (with filter cache #14)"""
         df = self.engine.df
         if df is None:
+            return
+
+        # Check filter cache
+        filter_hash = hash(tuple(
+            (f.column, f.operator, str(f.value), f.enabled)
+            for f in self.state.filters
+        ))
+        if self._cached_filter_hash == filter_hash and self._cached_filter_df is not None:
+            self.state.set_visible_rows(len(self._cached_filter_df))
+            self._update_table_model(self._cached_filter_df)
             return
 
         # Apply all enabled filters sequentially
@@ -2428,6 +2578,9 @@ class TablePanel(QWidget):
 
         # Update visible rows count in state
         self.state.set_visible_rows(len(filtered_df))
+        # Cache filter result (#14)
+        self._cached_filter_hash = filter_hash
+        self._cached_filter_df = filtered_df
         self._update_table_model(filtered_df)
     
     def _on_show_column(self, column: str):
@@ -2519,7 +2672,7 @@ class TablePanel(QWidget):
             if valid_indices:
                 # Bug 2: O(n) with polars is_in instead of O(n×m) list comprehension
                 valid_series = pl.Series("valid", valid_indices)
-                idx_series = pl.Series("idx", list(range(len(df))))
+                idx_series = pl.arange(0, len(df), eager=True).alias("idx")
                 mask = idx_series.is_in(valid_series)
                 filtered_df = df.filter(mask)
                 

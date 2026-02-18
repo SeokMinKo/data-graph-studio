@@ -68,6 +68,9 @@ class DataEngine:
     MAX_RETRIES = 3
     RETRY_DELAY_SECONDS = 0.5
 
+    # Maximum cache memory in bytes (256 MB)
+    CACHE_MAX_MEMORY_BYTES: int = 256 * 1024 * 1024
+
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
         from .transform_chain import TransformChain
 
@@ -79,6 +82,8 @@ class DataEngine:
         self._comparison = CE(self._datasets_mgr)
         self._cache: OrderedDict = OrderedDict()
         self._cache_maxsize: int = 128
+        self._cache_total_bytes: int = 0
+        self._cache_sizes: Dict[str, int] = {}  # key -> estimated size in bytes
         self._indexes: Dict[str, Dict] = {}
         self._precision_mode = precision_mode
         self._transform_chain = TransformChain()
@@ -95,17 +100,40 @@ class DataEngine:
         return None
 
     def _set_cache(self, key: str, value: Any) -> None:
-        """캐시에 값을 저장한다."""
+        """캐시에 값을 저장한다 (메모리 기반 eviction 포함)."""
+        import sys
+        # Remove old entry size if updating
+        if key in self._cache_sizes:
+            self._cache_total_bytes -= self._cache_sizes[key]
+
+        # Estimate size
+        if isinstance(value, pl.DataFrame):
+            size = value.estimated_size()
+        else:
+            size = sys.getsizeof(value)
+
         self._cache[key] = value
+        self._cache_sizes[key] = size
+        self._cache_total_bytes += size
         self._cache.move_to_end(key)
         self._evict_cache()
 
     def _evict_cache(self) -> None:
+        # Evict by count
         while len(self._cache) > self._cache_maxsize:
-            self._cache.popitem(last=False)  # 가장 오래 안 쓴 것 제거
+            evicted_key, _ = self._cache.popitem(last=False)
+            if evicted_key in self._cache_sizes:
+                self._cache_total_bytes -= self._cache_sizes.pop(evicted_key)
+        # Evict by memory
+        while self._cache_total_bytes > self.CACHE_MAX_MEMORY_BYTES and self._cache:
+            evicted_key, _ = self._cache.popitem(last=False)
+            if evicted_key in self._cache_sizes:
+                self._cache_total_bytes -= self._cache_sizes.pop(evicted_key)
 
     def _clear_cache(self) -> None:
         self._cache.clear()
+        self._cache_sizes.clear()
+        self._cache_total_bytes = 0
 
     def _cache_key(self, operation: str, *args) -> str:
         """dataset별 캐시 키 생성 (F5)."""
@@ -279,8 +307,8 @@ class DataEngine:
     def append_rows(self, file_path: str, new_row_count: int) -> bool:
         """Incrementally append new rows from the end of a file (streaming optimization).
 
-        Reads the last *new_row_count* rows from *file_path* and concatenates
-        them to the current DataFrame.  Falls back to full reload on error.
+        Uses scan_csv + tail to avoid loading the entire file into memory (#13).
+        Falls back to full reload on error.
         """
         import polars as pl
 
@@ -289,14 +317,23 @@ class DataEngine:
             return self.load_file(file_path, optimize_memory=True)
 
         try:
-            full_df = pl.read_csv(file_path)
-            new_rows = full_df.tail(new_row_count)
+            # Incremental: scan lazily and collect only tail rows
+            new_rows = pl.scan_csv(file_path).tail(new_row_count).collect()
             merged = pl.concat([current_df, new_rows], how="vertical_relaxed")
             self.update_dataframe(merged)
             self._clear_cache()
             return True
         except Exception:
-            return self.load_file(file_path, optimize_memory=True)
+            try:
+                # Fallback: eager read
+                full_df = pl.read_csv(file_path)
+                new_rows = full_df.tail(new_row_count)
+                merged = pl.concat([current_df, new_rows], how="vertical_relaxed")
+                self.update_dataframe(merged)
+                self._clear_cache()
+                return True
+            except Exception:
+                return self.load_file(file_path, optimize_memory=True)
 
     @staticmethod
     def is_binary_etl(path: str) -> bool:
@@ -539,12 +576,13 @@ class DataEngine:
             return {}
         df = self.df
         row_count = len(df)
+        null_counts = {col: df[col].null_count() for col in df.columns}
         return {
             'row_count': row_count,
             'col_count': len(df.columns),
-            'null_counts': {col: df[col].null_count() for col in df.columns},
-            'null_pct': {col: df[col].null_count() / max(row_count, 1) * 100 for col in df.columns},
-            'duplicate_rows': row_count - len(df.unique()),
+            'null_counts': null_counts,
+            'null_pct': {col: cnt / max(row_count, 1) * 100 for col, cnt in null_counts.items()},
+            'duplicate_rows': row_count - df.n_unique(),
             'dtypes': dict(zip(df.columns, [str(d) for d in df.dtypes])),
         }
 

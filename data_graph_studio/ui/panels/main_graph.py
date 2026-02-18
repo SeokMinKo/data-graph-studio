@@ -486,16 +486,20 @@ class MainGraph(pg.PlotWidget):
             series_colors[s['name']] = s.get('color', default_colors[0])
             series_visible[s['name']] = s.get('visible', True)
         
+        # Item 14: Vary marker shapes per series for accessibility
+        _marker_shapes = ['o', 's', 't', 'd', '+', 'x', 'star', 'p', 'h']
+
         if groups:
             for i, (group_name, mask) in enumerate(groups.items()):
                 if not series_visible.get(group_name, True):
                     continue  # Skip hidden series
                 
                 color = series_colors.get(group_name, default_colors[i % len(default_colors)])
+                series_marker = _marker_shapes[i % len(_marker_shapes)]
                 self._plot_series(
                     x_data[mask], y_data[mask],
                     chart_type, color, group_name,
-                    line_width, marker_size, line_style, marker_symbol,
+                    line_width, marker_size, line_style, series_marker,
                     show_points,
                     show_labels=options.get('show_labels', False),
                     smooth=options.get('smooth', False),
