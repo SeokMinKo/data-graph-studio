@@ -468,6 +468,20 @@ class MainWindow(QMainWindow):
     def _on_redo(self):
         self._undo_stack.redo()
 
+    def _on_copy_selection(self):
+        """Copy current selection to clipboard."""
+        if hasattr(self, 'table_panel') and hasattr(self.table_panel, 'copy_selection'):
+            self.table_panel.copy_selection()
+        else:
+            self.statusbar.showMessage("Nothing to copy", 3000)
+
+    def _on_select_all(self):
+        """Select all data in table."""
+        if hasattr(self, 'table_panel') and hasattr(self.table_panel, 'select_all'):
+            self.table_panel.select_all()
+        else:
+            self.statusbar.showMessage("Select all not available", 3000)
+
     def _reset_layout(self):
         """레이아웃 비율 초기화 및 모든 Float 창 Dock"""
         # First, dock all floating panels back to main window
@@ -1038,6 +1052,7 @@ class MainWindow(QMainWindow):
     def _on_data_loaded(self):
         """데이터 로드 완료"""
         self._update_ui_state()
+        self._menu_setup_ctrl._update_menu_state()
         
         # 패널들에 데이터 전달
         self.table_panel.set_data(self.engine.df)
@@ -1681,20 +1696,27 @@ class MainWindow(QMainWindow):
         return self._view_actions_ctrl._on_toggle_legend(*a, **kw)
 
     def _on_add_trend_line(self):
-        """추세선 추가"""
+        """추세선 추가 - main_graph의 실제 구현 호출"""
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Add Trend Line", "No data loaded.")
             return
-        
-        types = ["Linear", "Polynomial (2nd)", "Polynomial (3rd)", "Exponential", "Logarithmic"]
+
+        types = ["Linear", "Polynomial (2nd)", "Polynomial (3rd)", "Exponential"]
         trend_type, ok = QInputDialog.getItem(
             self, "Add Trend Line", "Select trend line type:",
             types, 0, False
         )
-        if ok:
-            self.statusbar.showMessage(f"Adding {trend_type} trend line...", 3000)
-            # TODO: 실제 추세선 추가 구현
-            # self.graph_panel.add_trend_line(trend_type)
+        if ok and hasattr(self.graph_panel, 'main_graph') and self.graph_panel.main_graph:
+            mg = self.graph_panel.main_graph
+            degree_map = {"Linear": 1, "Polynomial (2nd)": 2, "Polynomial (3rd)": 3}
+            if trend_type in degree_map:
+                mg._add_trendline_degree(degree_map[trend_type])
+            elif trend_type == "Exponential":
+                if hasattr(mg, '_add_exponential_trendline'):
+                    mg._add_exponential_trendline()
+                else:
+                    mg._add_trendline_degree(1)
+            self.statusbar.showMessage(f"Added {trend_type} trend line", 3000)
 
     def _on_curve_fitting(self):
         """곡선 피팅 설정"""

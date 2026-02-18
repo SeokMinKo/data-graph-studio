@@ -1,44 +1,15 @@
 """ToolbarController - extracted from MainWindow."""
 from __future__ import annotations
 
-import os
-import gc
-import json
 import logging
-import time
-from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional, List, Any
+from typing import TYPE_CHECKING
 
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget
-)
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
+from PySide6.QtWidgets import QToolBar, QLabel, QPushButton
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QAction, QColor
 
-from ...core.state import ToolMode, ChartType, ComparisonMode, AggregationType
-from ...core.export_controller import ExportFormat
-from ...core.updater import (
-    get_current_version, check_github_latest, is_update_available,
-    download_asset, read_sha256_file, sha256sum, run_windows_installer,
-)
-from ..dialogs.streaming_dialog import StreamingDialog
-from ..dialogs.command_palette_dialog import CommandPaletteDialog
-from ..dialogs.computed_column_dialog import ComputedColumnDialog
-from ..dialogs.profile_manager_dialog import ProfileManagerDialog
-from ..panels.side_by_side_layout import SideBySideLayout
-from ..panels.comparison_stats_panel import ComparisonStatsPanel
-from ..panels.overlay_stats_widget import OverlayStatsWidget
-from ..panels.annotation_panel import AnnotationPanel
-from ..panels.dashboard_panel import DashboardPanel
+from ...core.state import ToolMode, ChartType
 from ..toolbars.compare_toolbar import CompareToolbar
-from ..dialogs.parsing_preview_dialog import ParsingPreviewDialog
-from ..dialogs.save_setting_dialog import SaveSettingDialog
-from ..dialogs.multi_file_dialog import open_multi_file_dialog
-from ..wizards.new_project_wizard import NewProjectWizard
-from ...core.parsing import ParsingSettings
 
 logger = logging.getLogger(__name__)
 
@@ -166,10 +137,13 @@ class ToolbarController:
         toolbar.setIconSize(QSize(16, 16))
         self.w.addToolBar(Qt.TopToolBarArea, toolbar)
 
-        # === Streaming Controls ===
+        # === Streaming Controls (hidden by default, shown when streaming) ===
+        self.w._streaming_widgets = []
+
         streaming_label = QLabel(" Streaming: ")
         streaming_label.setObjectName("toolbarLabel")
         toolbar.addWidget(streaming_label)
+        self.w._streaming_widgets.append(streaming_label)
 
         # Play/Pause
         self.w._streaming_play_action = QAction("▶", self.w)
@@ -177,22 +151,26 @@ class ToolbarController:
         self.w._streaming_play_action.setCheckable(True)
         self.w._streaming_play_action.triggered.connect(self.w._on_streaming_play)
         toolbar.addAction(self.w._streaming_play_action)
+        self.w._streaming_widgets.append(self.w._streaming_play_action)
 
         self.w._streaming_pause_action = QAction("⏸", self.w)
         self.w._streaming_pause_action.setToolTip("Pause Streaming")
         self.w._streaming_pause_action.triggered.connect(self.w._on_streaming_pause)
         toolbar.addAction(self.w._streaming_pause_action)
+        self.w._streaming_widgets.append(self.w._streaming_pause_action)
 
         self.w._streaming_stop_action = QAction("⏹", self.w)
         self.w._streaming_stop_action.setToolTip("Stop Streaming")
         self.w._streaming_stop_action.triggered.connect(self.w._on_streaming_stop)
         toolbar.addAction(self.w._streaming_stop_action)
+        self.w._streaming_widgets.append(self.w._streaming_stop_action)
 
         # Speed control
         from PySide6.QtWidgets import QComboBox
         speed_label = QLabel(" Speed: ")
         speed_label.setObjectName("toolbarLabel")
         toolbar.addWidget(speed_label)
+        self.w._streaming_widgets.append(speed_label)
 
         self.w._streaming_speed_combo = QComboBox()
         self.w._streaming_speed_combo.addItems(["0.5x", "1x", "2x", "5x", "10x"])
@@ -200,11 +178,13 @@ class ToolbarController:
         self.w._streaming_speed_combo.currentTextChanged.connect(self.w._on_streaming_speed_changed)
         self.w._streaming_speed_combo.setFixedWidth(60)
         toolbar.addWidget(self.w._streaming_speed_combo)
+        self.w._streaming_widgets.append(self.w._streaming_speed_combo)
 
         # Window size
         window_label = QLabel(" Window: ")
         window_label.setObjectName("toolbarLabel")
         toolbar.addWidget(window_label)
+        self.w._streaming_widgets.append(window_label)
 
         self.w._streaming_window_combo = QComboBox()
         self.w._streaming_window_combo.addItems(["100", "500", "1000", "5000", "All"])
@@ -212,10 +192,14 @@ class ToolbarController:
         self.w._streaming_window_combo.currentTextChanged.connect(self.w._on_streaming_window_changed)
         self.w._streaming_window_combo.setFixedWidth(70)
         toolbar.addWidget(self.w._streaming_window_combo)
+        self.w._streaming_widgets.append(self.w._streaming_window_combo)
+
+        # Hide streaming controls initially
+        self._hide_streaming_controls()
 
         toolbar.addSeparator()
 
-        # === View Controls ===
+        # === View Controls (always visible) ===
         view_label = QLabel(" View: ")
         view_label.setObjectName("toolbarLabel")
         toolbar.addWidget(view_label)
@@ -237,7 +221,34 @@ class ToolbarController:
         toolbar.addAction(autofit_btn)
         self.w._autofit_btn_action = autofit_btn
 
-    # Streaming toolbar event handlers
+        toolbar.addSeparator()
+
+        # === Quick Actions ===
+        theme_toggle_btn = QAction("🌓", self.w)
+        theme_toggle_btn.setToolTip(self.w._format_tooltip("Cycle Theme", "Ctrl+T"))
+        theme_toggle_btn.triggered.connect(self.w._on_cycle_theme)
+        toolbar.addAction(theme_toggle_btn)
+
+        export_btn = QAction("📤", self.w)
+        export_btn.setToolTip(self.w._format_tooltip("Export", "Ctrl+E"))
+        export_btn.triggered.connect(self.w._on_export_dialog)
+        toolbar.addAction(export_btn)
+
+    def _show_streaming_controls(self):
+        """Show streaming-related toolbar widgets."""
+        for widget in self.w._streaming_widgets:
+            if isinstance(widget, QAction):
+                widget.setVisible(True)
+            else:
+                widget.setVisible(True)
+
+    def _hide_streaming_controls(self):
+        """Hide streaming-related toolbar widgets."""
+        for widget in self.w._streaming_widgets:
+            if isinstance(widget, QAction):
+                widget.setVisible(False)
+            else:
+                widget.setVisible(False)
 
     def _setup_compare_toolbar(self):
         """Setup the Compare Toolbar (hidden by default, auto-shown during comparison)."""

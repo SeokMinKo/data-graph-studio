@@ -1,44 +1,12 @@
 """ComparisonUIController - extracted from MainWindow."""
 from __future__ import annotations
 
-import os
-import gc
-import json
 import logging
-import time
-from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional, List, Any
+from typing import TYPE_CHECKING, List
 
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget
-)
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
+from PySide6.QtWidgets import QWidget
 
-from ...core.state import ToolMode, ChartType, ComparisonMode, AggregationType
-from ...core.export_controller import ExportFormat
-from ...core.updater import (
-    get_current_version, check_github_latest, is_update_available,
-    download_asset, read_sha256_file, sha256sum, run_windows_installer,
-)
-from ..dialogs.streaming_dialog import StreamingDialog
-from ..dialogs.command_palette_dialog import CommandPaletteDialog
-from ..dialogs.computed_column_dialog import ComputedColumnDialog
-from ..dialogs.profile_manager_dialog import ProfileManagerDialog
-from ..panels.side_by_side_layout import SideBySideLayout
-from ..panels.comparison_stats_panel import ComparisonStatsPanel
-from ..panels.overlay_stats_widget import OverlayStatsWidget
-from ..panels.annotation_panel import AnnotationPanel
-from ..panels.dashboard_panel import DashboardPanel
-from ..toolbars.compare_toolbar import CompareToolbar
-from ..dialogs.parsing_preview_dialog import ParsingPreviewDialog
-from ..dialogs.save_setting_dialog import SaveSettingDialog
-from ..dialogs.multi_file_dialog import open_multi_file_dialog
-from ..wizards.new_project_wizard import NewProjectWizard
-from ...core.parsing import ParsingSettings
+from ...core.state import ComparisonMode
 
 logger = logging.getLogger(__name__)
 

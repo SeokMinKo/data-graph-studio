@@ -1,44 +1,14 @@
 """MenuSetupController - extracted from MainWindow."""
 from __future__ import annotations
 
-import os
-import gc
-import json
 import logging
-import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional, List, Any
+from typing import TYPE_CHECKING
 
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget
-)
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor
+from PySide6.QtGui import QAction, QKeySequence
 
-from ...core.state import ToolMode, ChartType, ComparisonMode, AggregationType
+from ...core.state import ChartType
 from ...core.export_controller import ExportFormat
-from ...core.updater import (
-    get_current_version, check_github_latest, is_update_available,
-    download_asset, read_sha256_file, sha256sum, run_windows_installer,
-)
-from ..dialogs.streaming_dialog import StreamingDialog
-from ..dialogs.command_palette_dialog import CommandPaletteDialog
-from ..dialogs.computed_column_dialog import ComputedColumnDialog
-from ..dialogs.profile_manager_dialog import ProfileManagerDialog
-from ..panels.side_by_side_layout import SideBySideLayout
-from ..panels.comparison_stats_panel import ComparisonStatsPanel
-from ..panels.overlay_stats_widget import OverlayStatsWidget
-from ..panels.annotation_panel import AnnotationPanel
-from ..panels.dashboard_panel import DashboardPanel
-from ..toolbars.compare_toolbar import CompareToolbar
-from ..dialogs.parsing_preview_dialog import ParsingPreviewDialog
-from ..dialogs.save_setting_dialog import SaveSettingDialog
-from ..dialogs.multi_file_dialog import open_multi_file_dialog
-from ..wizards.new_project_wizard import NewProjectWizard
-from ...core.parsing import ParsingSettings
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +194,57 @@ class MenuSetupController:
         exit_action.setStatusTip("Exit application (Ctrl+Q)")
         exit_action.triggered.connect(self.w.close)
         file_menu.addAction(exit_action)
+
+        # ============================================================
+        # Edit Menu
+        # ============================================================
+        edit_menu = menubar.addMenu("&Edit")
+
+        undo_action = QAction("&Undo", self.w)
+        undo_action.setShortcut(QKeySequence.Undo)
+        undo_action.setStatusTip("Undo last action (Ctrl+Z)")
+        undo_action.triggered.connect(self.w._on_undo)
+        edit_menu.addAction(undo_action)
+
+        redo_action = QAction("&Redo", self.w)
+        redo_action.setShortcut(QKeySequence("Ctrl+Y"))
+        redo_action.setStatusTip("Redo last undone action (Ctrl+Y)")
+        redo_action.triggered.connect(self.w._on_redo)
+        edit_menu.addAction(redo_action)
+
+        edit_menu.addSeparator()
+
+        copy_action = QAction("&Copy", self.w)
+        copy_action.setShortcut(QKeySequence.Copy)
+        copy_action.setStatusTip("Copy selection (Ctrl+C)")
+        copy_action.triggered.connect(self.w._on_copy_selection)
+        edit_menu.addAction(copy_action)
+
+        paste_action = QAction("&Paste", self.w)
+        paste_action.setShortcut(QKeySequence.Paste)
+        paste_action.setStatusTip("Paste from clipboard (Ctrl+V)")
+        paste_action.triggered.connect(self.w._paste_from_clipboard)
+        edit_menu.addAction(paste_action)
+
+        edit_menu.addSeparator()
+
+        find_action = QAction("&Find...", self.w)
+        find_action.setShortcut(QKeySequence.Find)
+        find_action.setStatusTip("Find data (Ctrl+F)")
+        find_action.triggered.connect(self.w._on_find_data)
+        edit_menu.addAction(find_action)
+
+        goto_row_action = QAction("&Go to Row...", self.w)
+        goto_row_action.setShortcut(QKeySequence("Ctrl+G"))
+        goto_row_action.setStatusTip("Go to specific row (Ctrl+G)")
+        goto_row_action.triggered.connect(self.w._on_goto_row)
+        edit_menu.addAction(goto_row_action)
+
+        select_all_action = QAction("Select &All", self.w)
+        select_all_action.setShortcut(QKeySequence.SelectAll)
+        select_all_action.setStatusTip("Select all data (Ctrl+A)")
+        select_all_action.triggered.connect(self.w._on_select_all)
+        edit_menu.addAction(select_all_action)
 
         # ============================================================
         # View Menu
@@ -425,17 +446,45 @@ class MenuSetupController:
         data_menu = menubar.addMenu("&Data")
 
         # Add Calculated Field
-        add_calc_field_action = QAction("&Add Calculated Field...", self.w)
-        add_calc_field_action.setShortcut("Ctrl+Alt+F")
-        add_calc_field_action.setStatusTip("Add a new calculated column based on expression")
-        add_calc_field_action.triggered.connect(self.w._on_add_calculated_field)
-        data_menu.addAction(add_calc_field_action)
+        self.w._add_calc_field_action = QAction("&Add Calculated Field...", self.w)
+        self.w._add_calc_field_action.setShortcut("Ctrl+Alt+F")
+        self.w._add_calc_field_action.setStatusTip("Add a new calculated column based on expression")
+        self.w._add_calc_field_action.triggered.connect(self.w._on_add_calculated_field)
+        data_menu.addAction(self.w._add_calc_field_action)
 
         # Remove Field
-        remove_field_action = QAction("&Remove Field...", self.w)
-        remove_field_action.setStatusTip("Remove a field/column from the data")
-        remove_field_action.triggered.connect(self.w._on_remove_field)
-        data_menu.addAction(remove_field_action)
+        self.w._remove_field_action = QAction("&Remove Field...", self.w)
+        self.w._remove_field_action.setStatusTip("Remove a field/column from the data")
+        self.w._remove_field_action.triggered.connect(self.w._on_remove_field)
+        data_menu.addAction(self.w._remove_field_action)
+
+        data_menu.addSeparator()
+
+        # Sort
+        self.w._sort_data_action = QAction("&Sort...", self.w)
+        self.w._sort_data_action.setStatusTip("Sort data by column")
+        self.w._sort_data_action.triggered.connect(self.w._on_sort_data)
+        data_menu.addAction(self.w._sort_data_action)
+
+        # Filter
+        self.w._filter_data_action = QAction("&Filter Data", self.w)
+        self.w._filter_data_action.setStatusTip("Toggle data filter")
+        self.w._filter_data_action.triggered.connect(self.w._on_filter_data)
+        data_menu.addAction(self.w._filter_data_action)
+
+        data_menu.addSeparator()
+
+        # Remove Duplicates
+        self.w._remove_duplicates_action = QAction("Remove &Duplicates", self.w)
+        self.w._remove_duplicates_action.setStatusTip("Remove duplicate rows")
+        self.w._remove_duplicates_action.triggered.connect(self.w._on_remove_duplicates)
+        data_menu.addAction(self.w._remove_duplicates_action)
+
+        # Data Summary
+        self.w._data_summary_action = QAction("Data Su&mmary...", self.w)
+        self.w._data_summary_action.setStatusTip("Show data summary statistics")
+        self.w._data_summary_action.triggered.connect(self.w._on_data_summary)
+        data_menu.addAction(self.w._data_summary_action)
 
         # ============================================================
         # Logger Menu
@@ -494,10 +543,18 @@ class MenuSetupController:
         # Options submenu
         options_menu = graph_menu.addMenu("&Options")
 
-        # Chart Type submenu within Options
+        # Chart Type submenu within Options (with shortcut hints)
         chart_type_menu = options_menu.addMenu("Chart &Type")
+        _chart_shortcuts = {
+            ChartType.LINE: "1", ChartType.BAR: "2", ChartType.SCATTER: "3",
+            ChartType.AREA: "5",
+        }
         for chart_type in ChartType:
-            action = QAction(chart_type.value.title(), self.w)
+            shortcut_hint = _chart_shortcuts.get(chart_type, "")
+            label = chart_type.value.title()
+            if shortcut_hint:
+                label = f"{label} ({shortcut_hint})"
+            action = QAction(label, self.w)
             action.triggered.connect(lambda checked, ct=chart_type: self.w.state.set_chart_type(ct))
             chart_type_menu.addAction(action)
 
@@ -516,10 +573,10 @@ class MenuSetupController:
         options_menu.addAction(curve_fitting_action)
 
         # Trend line
-        trend_line_action = QAction("Add &Trend Line...", self.w)
-        trend_line_action.setStatusTip("Add a trend line to the current graph")
-        trend_line_action.triggered.connect(self.w._on_add_trend_line)
-        options_menu.addAction(trend_line_action)
+        self.w._trend_line_action = QAction("Add &Trend Line...", self.w)
+        self.w._trend_line_action.setStatusTip("Add a trend line to the current graph")
+        self.w._trend_line_action.triggered.connect(self.w._on_add_trend_line)
+        options_menu.addAction(self.w._trend_line_action)
 
         # ============================================================
         # Help Menu
@@ -588,6 +645,25 @@ class MenuSetupController:
             clear_action.triggered.connect(self.w._clear_recent_files)
             self.w._recent_files_menu.addAction(clear_action)
 
+
+    def _update_menu_state(self):
+        """Enable/disable Data and Graph menu items based on data state."""
+        has_data = self.w.state.is_data_loaded
+
+        # Data menu items
+        for action in (
+            self.w._add_calc_field_action,
+            self.w._remove_field_action,
+            self.w._sort_data_action,
+            self.w._filter_data_action,
+            self.w._remove_duplicates_action,
+            self.w._data_summary_action,
+        ):
+            action.setEnabled(has_data)
+
+        # Graph menu items
+        if hasattr(self.w, '_trend_line_action'):
+            self.w._trend_line_action.setEnabled(has_data)
 
     def _update_export_menu_state(self):
         """Enable/disable export menu items based on data/graph state"""
