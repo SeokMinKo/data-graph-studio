@@ -186,7 +186,7 @@ class ShortcutManager:
         
         # Help
         self.register("help.shortcuts", "Keyboard Shortcuts", "Ctrl+/", ShortcutCategory.HELP)
-        self.register("help.about", "About", "F1", ShortcutCategory.HELP)
+        self.register("help.about", "About", "", ShortcutCategory.HELP)
     
     def to_dict(self) -> Dict:
         """딕셔너리로 변환"""

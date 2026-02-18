@@ -35,7 +35,7 @@ from data_graph_studio.graph.trellis import (
 
 # UI imports
 from data_graph_studio.ui.dashboard import (
-    DashboardWidget, DashboardLayout, DashboardItem, 
+    DashboardLayout, DashboardItem, 
     DashboardManager, GridPosition
 )
 

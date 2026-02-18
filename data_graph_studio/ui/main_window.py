@@ -1719,16 +1719,79 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage(f"Added {trend_type} trend line", 3000)
 
     def _on_curve_fitting(self):
-        """곡선 피팅 설정"""
+        """곡선 피팅 설정 — CurveFitter를 사용하여 피팅 수행"""
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Curve Fitting", "No data loaded.")
             return
-        
+
+        from data_graph_studio.graph.curve_fitting import CurveFitter, FitType, CurveFitSettings
+        import numpy as np
+
+        # 컬럼 선택
+        columns = self.engine.columns
+        numeric_cols = [c for c in columns if self.engine.df[c].dtype.is_numeric()]
+        if len(numeric_cols) < 2:
+            QMessageBox.warning(self, "Curve Fitting", "Need at least 2 numeric columns.")
+            return
+
+        x_col, ok = QInputDialog.getItem(self, "Curve Fitting", "Select X column:", numeric_cols, 0, False)
+        if not ok:
+            return
+        y_col, ok = QInputDialog.getItem(self, "Curve Fitting", "Select Y column:", numeric_cols, 0, False)
+        if not ok:
+            return
+
+        # 피팅 타입 선택
+        fit_options = ["Linear", "Polynomial (degree 2)", "Polynomial (degree 3)",
+                       "Exponential", "Power", "Logarithmic"]
+        fit_choice, ok = QInputDialog.getItem(self, "Curve Fitting", "Select fit type:", fit_options, 0, False)
+        if not ok:
+            return
+
+        fit_map = {
+            "Linear": (FitType.LINEAR, 1),
+            "Polynomial (degree 2)": (FitType.POLYNOMIAL, 2),
+            "Polynomial (degree 3)": (FitType.POLYNOMIAL, 3),
+            "Exponential": (FitType.EXPONENTIAL, 1),
+            "Power": (FitType.POWER, 1),
+            "Logarithmic": (FitType.LOGARITHMIC, 1),
+        }
+        fit_type, degree = fit_map[fit_choice]
+
+        df = self.engine.df
+        x = df[x_col].drop_nulls().to_numpy().astype(float)
+        y = df[y_col].drop_nulls().to_numpy().astype(float)
+        min_len = min(len(x), len(y))
+        x, y = x[:min_len], y[:min_len]
+
+        fitter = CurveFitter()
+        settings = CurveFitSettings(fit_type=fit_type, degree=degree)
+        result = fitter.fit(x, y, fit_type, settings)
+
+        if result is None or result.predict_func is None:
+            QMessageBox.warning(self, "Curve Fitting", "Fitting failed for the selected data.")
+            return
+
+        # 결과 표시
+        eq = result.get_equation_string()
+        stats_str = result.get_statistics_string()
         QMessageBox.information(
-            self, "Curve Fitting",
-            "Curve fitting dialog will be implemented.\n\n"
-            "This feature allows you to fit various curves to your data."
+            self, "Curve Fitting Result",
+            f"{eq}\n\n{stats_str}"
         )
+
+        # 그래프에 피팅 커브 추가
+        x_line = np.linspace(x.min(), x.max(), 200)
+        y_line = result.predict_func(x_line)
+        try:
+            import pyqtgraph as pg
+            pen = pg.mkPen(color='r', width=2, style=pg.QtCore.Qt.DashLine)
+            plot_widget = self.graph_panel._plot_widget
+            plot_widget.plot(x_line, y_line, pen=pen, name=f"Fit: {eq}")
+        except Exception:
+            pass
+
+        self.statusbar.showMessage(f"Curve fit: {eq} (R²={result.r_squared:.4f})", 5000)
 
     def _on_calculate_statistics(self):
         """통계 계산 트리거"""

@@ -139,11 +139,28 @@ class DataOpsController:
                 orders, 0, False
             )
             if ok2:
-                ascending = (order == "Ascending")
+                from ..core.undo_manager import UndoCommand, UndoActionType
+
+                before_df = self.w.engine.df
+                sorted_df = before_df.sort(column, descending=(order == "Descending"))
+
+                def _apply(df):
+                    self.w.engine._df = df
+                    self.w.table_panel.set_data(df)
+                    self.w.graph_panel.refresh()
+
+                _apply(sorted_df)
+
+                self.w._undo_stack.record(
+                    UndoCommand(
+                        action_type=UndoActionType.COLUMN_ADD,
+                        description=f"Sort by '{column}' ({order})",
+                        do=lambda: _apply(sorted_df),
+                        undo=lambda: _apply(before_df),
+                        timestamp=time.time(),
+                    )
+                )
                 self.w.statusbar.showMessage(f"Sorted by '{column}' ({order})", 3000)
-                # TODO: 실제 정렬 구현
-                # self.w.engine.sort_data(column, ascending)
-                # self.w._on_data_loaded()
 
 
     def _on_add_calculated_field(self):
@@ -231,8 +248,29 @@ class DataOpsController:
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            # TODO: 실제 중복 제거 구현
-            self.w.statusbar.showMessage("Duplicate removal feature coming soon", 3000)
+            from ..core.undo_manager import UndoCommand, UndoActionType
+
+            before_df = self.w.engine.df
+            after_df = before_df.unique()
+            removed = len(before_df) - len(after_df)
+
+            def _apply(df):
+                self.w.engine._df = df
+                self.w.table_panel.set_data(df)
+                self.w.graph_panel.refresh()
+
+            _apply(after_df)
+
+            self.w._undo_stack.record(
+                UndoCommand(
+                    action_type=UndoActionType.COLUMN_ADD,
+                    description=f"Remove {removed:,} duplicate rows",
+                    do=lambda: _apply(after_df),
+                    undo=lambda: _apply(before_df),
+                    timestamp=time.time(),
+                )
+            )
+            self.w.statusbar.showMessage(f"Removed {removed:,} duplicate rows", 3000)
 
 
     def _on_data_summary(self):

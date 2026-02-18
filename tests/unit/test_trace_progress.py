@@ -17,12 +17,8 @@ from data_graph_studio.ui.dialogs.trace_progress_dialog import (
     AdbTraceController,
     TraceProgressDialog,
 )
-from data_graph_studio.ui.dialogs.android_logger_wizard import (
-    RootCheckPage,
-    load_logger_config,
-    migrate_config,
-    AndroidLoggerWizard,
-)
+
+# android_logger_wizard removed (replaced by TraceConfigDialog)
 
 
 # UT-11: _detect_sysfs_path
@@ -176,64 +172,4 @@ class TestTraceProgressDialog:
         assert not dlg._stop_btn.isEnabled()
 
 
-# UT-16: RootCheckPage
-class TestRootCheckPage:
-    def test_root_check_success(self) -> None:
-        page = RootCheckPage()
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="uid=0(root)", stderr=""
-            )
-            page._serial = "SERIAL"
-            page._check_root()
-            assert page._root_found is True
-
-    def test_root_check_fallback_su_0(self) -> None:
-        page = RootCheckPage()
-        call_count = 0
-
-        def side_effect(*args, **kwargs) -> subprocess.CompletedProcess:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="error")
-            return subprocess.CompletedProcess(args=[], returncode=0, stdout="uid=0(root)", stderr="")
-
-        with patch("subprocess.run", side_effect=side_effect):
-            page._serial = "SERIAL"
-            page._check_root()
-            assert page._root_found is True
-            assert call_count == 2
-
-    def test_root_check_failure(self) -> None:
-        page = RootCheckPage()
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=1, stdout="", stderr="error"
-            )
-            page._serial = "SERIAL"
-            page._check_root()
-            assert page._root_found is False
-
-
-# UT-17: Config migration
-class TestConfigMigration:
-    def test_v0_to_v1_adds_capture_mode(self) -> None:
-        v0 = {"buffer_size_mb": 64, "events": []}
-        v1 = migrate_config(v0)
-        assert v1["version"] == 1
-        assert v1["capture_mode"] == "perfetto"
-        assert v1["sysfs_path"] == "/sys/kernel/tracing"
-
-    def test_v1_unchanged(self) -> None:
-        v1 = {"version": 1, "capture_mode": "raw_ftrace", "sysfs_path": "/sys/kernel/tracing"}
-        result = migrate_config(v1)
-        assert result["capture_mode"] == "raw_ftrace"
-
-    def test_load_config_migrates(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "logger_config.json"
-        config_path.write_text(json.dumps({"buffer_size_mb": 32}))
-        with patch("data_graph_studio.ui.dialogs.android_logger_wizard.CONFIG_PATH", config_path):
-            cfg = load_logger_config()
-            assert cfg["version"] == 1
-            assert cfg["capture_mode"] == "perfetto"
+# UT-16, UT-17: Removed (android_logger_wizard deleted, replaced by TraceConfigDialog)

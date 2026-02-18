@@ -16,7 +16,6 @@ if project_path not in sys.path:
 from data_graph_studio.core.state import ChartType
 from data_graph_studio.ui import dashboard
 
-DashboardWidget = dashboard.DashboardWidget
 DashboardLayout = dashboard.DashboardLayout
 DashboardItem = dashboard.DashboardItem
 DashboardManager = dashboard.DashboardManager

@@ -297,9 +297,31 @@ class DataGraphStudio:
             print("IPython not available. Use save() instead.")
     
     def to_html(self) -> str:
-        """HTML로 변환 (인터랙티브)"""
-        # TODO: Plotly 등으로 인터랙티브 차트 생성
-        raise NotImplementedError("HTML export not yet implemented")
+        """HTML로 변환 — HTMLReportGenerator 사용"""
+        from data_graph_studio.report.html_generator import HTMLReportGenerator
+        from data_graph_studio.core.report import (
+            ReportData, ReportOptions, ReportMetadata, DatasetSummary,
+        )
+
+        if self._df is None:
+            raise ValueError("No data loaded")
+
+        metadata = ReportMetadata(title=self._title or "Data Graph Studio Report")
+        dataset = DatasetSummary(
+            id="api",
+            name=self._title or "Dataset",
+            row_count=len(self._df),
+            column_count=len(self._df.columns),
+            column_types={c: str(self._df[c].dtype) for c in self._df.columns},
+            memory_bytes=self._df.estimated_size(),
+            color="#4A90D9",
+        )
+        report_data = ReportData(metadata=metadata, datasets=[dataset])
+        options = ReportOptions()
+
+        generator = HTMLReportGenerator()
+        html_bytes = generator.generate(report_data, options)
+        return html_bytes.decode("utf-8")
     
     # ==================== Data Access ====================
     
