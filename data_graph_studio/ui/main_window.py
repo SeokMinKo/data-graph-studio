@@ -1443,9 +1443,8 @@ class MainWindow(QMainWindow):
                 # 데이터 파일 로드 (마법사 사용)
                 self._show_new_project_wizard(file_path)
         else:
-            # 여러 파일 - 첫 번째 파일만 로드 (또는 다중 로드 다이얼로그)
-            self._show_new_project_wizard(files[0])
-            self.statusBar().showMessage(f"Loaded first file. {len(files)-1} more files ignored.")
+            # 여러 파일 → 멀티파일 다이얼로그 활용
+            self._file_controller._on_open_multiple_files_with_paths(files)
     
     # ==================== Clipboard ====================
     
@@ -1598,57 +1597,16 @@ class MainWindow(QMainWindow):
         return self._menu_setup_ctrl._update_recent_files_menu(*a, **kw)
 
     def _get_recent_files(self) -> List[str]:
-        """최근 파일 목록 가져오기"""
-        try:
-            recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
-            if recent_file_path.exists():
-                with open(recent_file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    return [f for f in data.get('files', []) if Path(f).exists()]
-        except Exception:
-            pass
-        return []
+        return self._file_controller._get_recent_files()
 
     def _add_to_recent_files(self, file_path: str):
-        """최근 파일에 추가"""
-        try:
-            recent_dir = Path.home() / ".data_graph_studio"
-            recent_dir.mkdir(parents=True, exist_ok=True)
-            recent_file_path = recent_dir / "recent_files.json"
-            
-            recent_files = self._get_recent_files()
-            # 중복 제거 후 맨 앞에 추가
-            if file_path in recent_files:
-                recent_files.remove(file_path)
-            recent_files.insert(0, file_path)
-            # 최대 20개 유지
-            recent_files = recent_files[:20]
-            
-            with open(recent_file_path, 'w', encoding='utf-8') as f:
-                json.dump({'files': recent_files}, f, ensure_ascii=False, indent=2)
-            
-            self._update_recent_files_menu()
-        except Exception as e:
-            logger.debug(f"Failed to add to recent files: {e}")
+        self._file_controller._add_to_recent_files(file_path)
 
     def _open_recent_file(self, file_path: str):
-        """최근 파일 열기"""
-        if Path(file_path).exists():
-            self._show_parsing_preview(file_path)
-        else:
-            QMessageBox.warning(self, "File Not Found", f"File no longer exists:\n{file_path}")
-            self._update_recent_files_menu()
+        self._file_controller._open_recent_file(file_path)
 
     def _clear_recent_files(self):
-        """최근 파일 목록 지우기"""
-        try:
-            recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
-            if recent_file_path.exists():
-                recent_file_path.unlink()
-            self._update_recent_files_menu()
-            self.statusbar.showMessage("Recent files cleared", 3000)
-        except Exception as e:
-            logger.debug(f"Failed to clear recent files: {e}")
+        self._file_controller._clear_recent_files()
 
     def _on_import_from_clipboard(self, *a, **kw):
         return self._data_ops_ctrl._on_import_from_clipboard(*a, **kw)
@@ -1864,21 +1822,27 @@ class MainWindow(QMainWindow):
 
 
     def _on_save_data(self):
-        """Save Data - 현재 데이터 저장"""
+        """Save Data - 현재 데이터를 원본 포맷으로 저장"""
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Save Data", "No data loaded.")
             return
         
-        # 현재 로드된 파일 경로가 있으면 그대로 저장
         current_path = getattr(self.engine, '_current_file_path', None)
         if current_path:
             try:
-                self.engine.df.write_csv(current_path)
+                ext = Path(current_path).suffix.lower()
+                if ext == '.parquet':
+                    self.engine.df.write_parquet(current_path)
+                elif ext in ('.xlsx', '.xls'):
+                    self.engine.df.write_excel(current_path)
+                elif ext == '.json':
+                    self.engine.df.write_json(current_path)
+                else:
+                    self.engine.df.write_csv(current_path)
                 self.statusbar.showMessage(f"Data saved to {current_path}", 3000)
             except Exception as e:
                 QMessageBox.warning(self, "Save Data", f"Failed to save: {e}")
         else:
-            # 경로가 없으면 Save As로 전환
             self._on_save_data_as()
 
     def _on_save_data_as(self):
@@ -1907,29 +1871,7 @@ class MainWindow(QMainWindow):
     def _on_import_data(self):
         """Import - 데이터 임포트"""
         # 다양한 소스에서 데이터 가져오기
-        sources = ["From File...", "From Clipboard", "From URL...", "From Database..."]
-        source, ok = QInputDialog.getItem(
-            self, "Import Data", "Select import source:",
-            sources, 0, False
-        )
-        if ok:
-            if source == "From File...":
-                self._on_open_file()
-            elif source == "From Clipboard":
-                self._on_import_from_clipboard()
-            elif source == "From URL...":
-                url, url_ok = QInputDialog.getText(
-                    self, "Import from URL", "Enter URL:"
-                )
-                if url_ok and url:
-                    self.statusbar.showMessage(f"Importing from {url}...", 3000)
-                    # TODO: URL에서 데이터 로드 구현
-            elif source == "From Database...":
-                QMessageBox.information(
-                    self, "Import from Database",
-                    "Database import will be implemented.\n\n"
-                    "Supported: PostgreSQL, MySQL, SQLite, etc."
-                )
+        self._file_controller._on_import_data()
 
     # ============================================================
     # New Menu Action Methods (View Menu - Graph Elements)

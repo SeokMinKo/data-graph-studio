@@ -92,6 +92,8 @@ class FileLoadingController:
 
     def __init__(self, window: 'MainWindow'):
         self._w = window
+        self._file_watcher = None
+        self._watch_enabled = False
 
     # ==================== File Open ====================
 
@@ -211,6 +213,53 @@ class FileLoadingController:
                 w.state.set_comparison_mode(ComparisonMode.OVERLAY)
                 w._on_comparison_started(loaded_ids[:4])
 
+    def _on_open_multiple_files_with_paths(self, file_paths: List[str]):
+        """드롭된 여러 파일을 멀티 데이터셋으로 로드"""
+        from ...core.state import ComparisonMode
+        w = self._w
+
+        progress = QProgressDialog(
+            "Loading files...", "Cancel", 0, len(file_paths), w
+        )
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+
+        loaded_ids = []
+        for i, file_path in enumerate(file_paths):
+            if progress.wasCanceled():
+                break
+            progress.setValue(i)
+            progress.setLabelText(f"Loading: {Path(file_path).name}")
+            QApplication.processEvents()
+
+            name = Path(file_path).name
+            dataset_id = w.engine.load_dataset(file_path, name=name)
+            if dataset_id:
+                loaded_ids.append(dataset_id)
+                dataset = w.engine.get_dataset(dataset_id)
+                if dataset:
+                    w.state.add_dataset(
+                        dataset_id=dataset_id,
+                        name=name,
+                        row_count=dataset.row_count,
+                        column_count=dataset.column_count,
+                        memory_bytes=dataset.memory_bytes,
+                    )
+
+        progress.setValue(len(file_paths))
+        progress.close()
+
+        if loaded_ids:
+            w.engine.activate_dataset(loaded_ids[0])
+            w._on_data_loaded()
+            w.statusbar.showMessage(f"Loaded {len(loaded_ids)} datasets", 3000)
+
+            if len(loaded_ids) >= 2:
+                w.state.set_comparison_datasets(loaded_ids[:4])
+                w.state.set_comparison_mode(ComparisonMode.OVERLAY)
+                w._on_comparison_started(loaded_ids[:4])
+
     # ==================== Wizard / Preview ====================
 
     def _show_new_project_wizard(self, file_path: str):
@@ -240,14 +289,15 @@ class FileLoadingController:
         self._load_file_with_settings(parsing_settings.file_path, parsing_settings)
 
     def _show_parsing_preview(self, file_path: str):
-        """파싱 미리보기 다이얼로그 표시"""
+        """파싱 미리보기 다이얼로그 표시 (모든 포맷 지원)"""
         if not self._check_large_file_warning(file_path):
             return
 
         ext = Path(file_path).suffix.lower()
 
         if ext in ['.parquet', '.xlsx', '.xls', '.json']:
-            self._load_file(file_path)
+            # Show quick preview for binary formats before loading
+            self._show_binary_format_preview(file_path, ext)
             return
 
         from ..dialogs.parsing_preview_dialog import ParsingPreviewDialog
@@ -255,6 +305,42 @@ class FileLoadingController:
         if dialog.exec() == QDialog.Accepted:
             settings = dialog.get_settings()
             self._load_file_with_settings(file_path, settings)
+
+    def _show_binary_format_preview(self, file_path: str, ext: str):
+        """Parquet/Excel/JSON 파일 미리보기 후 로드"""
+        import polars as pl
+        w = self._w
+        try:
+            if ext == '.parquet':
+                preview_df = pl.read_parquet(file_path, n_rows=20)
+            elif ext in ('.xlsx', '.xls'):
+                preview_df = pl.read_excel(file_path).head(20)
+            elif ext == '.json':
+                preview_df = pl.read_json(file_path).head(20)
+            else:
+                self._load_file(file_path)
+                return
+
+            # Show preview dialog
+            info = (
+                f"File: {Path(file_path).name}\n"
+                f"Format: {ext.upper().lstrip('.')}\n"
+                f"Preview: {len(preview_df)} rows × {len(preview_df.columns)} columns\n\n"
+                f"Columns: {', '.join(preview_df.columns[:20])}"
+                f"{'...' if len(preview_df.columns) > 20 else ''}"
+            )
+            reply = QMessageBox.question(
+                w, "File Preview",
+                f"{info}\n\nLoad this file?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply == QMessageBox.Yes:
+                self._load_file(file_path)
+        except Exception as e:
+            # If preview fails, just load directly
+            logger.warning(f"Preview failed for {file_path}: {e}")
+            self._load_file(file_path)
 
     def _check_large_file_warning(self, file_path: str) -> bool:
         """대용량 파일 경고 다이얼로그 표시. 계속 진행하면 True 반환"""
@@ -424,6 +510,11 @@ class FileLoadingController:
             gc.collect()
             logger.info(f"Data loaded: {w.engine.row_count:,} rows, {w.engine.column_count} columns")
 
+            # Add to recent files
+            source_path = w.engine._source.path if w.engine._source and w.engine._source.path else None
+            if source_path and source_path != "clipboard":
+                self._add_to_recent_files(source_path)
+
             w._apply_pending_wizard_result()
         else:
             error_msg = w.engine.progress.error_message or "Unknown error"
@@ -566,24 +657,26 @@ class FileLoadingController:
 
         if df is not None and len(df) > 0:
             try:
-                import uuid
-                dataset_id = f"clipboard_{uuid.uuid4().hex[:8]}"
-
-                w.engine._df = df
-
-                w.state.set_data_loaded(True, len(df))
-                w.state.set_column_order(df.columns)
-
-                w.table_panel.set_data(df)
-                w.graph_panel.set_columns(df.columns)
-
-                if hasattr(w.graph_panel.options_panel, 'data_tab'):
-                    w.graph_panel.options_panel.data_tab.set_columns(
-                        df.columns, w.engine
+                # Use official DatasetManager API instead of direct _df assignment
+                dataset_id = w.engine.load_dataset_from_dataframe(
+                    df, name="Clipboard Data", source_path="clipboard"
+                )
+                if dataset_id:
+                    w.engine.activate_dataset(dataset_id)
+                    memory_bytes = df.estimated_size()
+                    w.state.add_dataset(
+                        dataset_id=dataset_id,
+                        name="Clipboard Data",
+                        row_count=len(df),
+                        column_count=len(df.columns),
+                        memory_bytes=memory_bytes,
                     )
-
-                w.statusBar().showMessage(f"✓ {message}", 5000)
-
+                    w.state.set_data_loaded(True, len(df))
+                    w.state.set_column_order(df.columns)
+                    w._on_data_loaded()
+                    w.statusBar().showMessage(f"✓ {message}", 5000)
+                else:
+                    w.statusBar().showMessage("Failed to load clipboard data", 5000)
             except Exception as e:
                 w.statusBar().showMessage(f"Paste error: {e}", 5000)
         else:
@@ -592,22 +685,41 @@ class FileLoadingController:
     # ==================== Recent Files ====================
 
     def _update_recent_files_menu(self):
-        """최근 파일 메뉴 업데이트"""
+        """최근 파일 메뉴 업데이트 (Enhanced UX: parent folder, pin, gray missing)"""
         from PySide6.QtGui import QAction
         w = self._w
         w._recent_files_menu.clear()
 
-        recent_files = self._get_recent_files()
+        recent_data = self._get_recent_files_data()
+        pinned = recent_data.get('pinned', [])
+        files = recent_data.get('files', [])
 
-        if not recent_files:
+        # Show pinned first
+        all_entries = [(f, True) for f in pinned if f not in files[:0]] + [(f, False) for f in files]
+        # Deduplicate
+        seen = set()
+        unique_entries = []
+        for fp, is_pinned in all_entries:
+            if fp not in seen:
+                seen.add(fp)
+                unique_entries.append((fp, fp in pinned))
+
+        if not unique_entries:
             no_files_action = QAction("(No recent files)", w)
             no_files_action.setEnabled(False)
             w._recent_files_menu.addAction(no_files_action)
         else:
-            for file_path in recent_files[:10]:
-                action = QAction(Path(file_path).name, w)
+            for file_path, is_pinned in unique_entries[:15]:
+                p = Path(file_path)
+                parent = str(p.parent).replace(str(Path.home()), '~')
+                prefix = "📌 " if is_pinned else ""
+                label = f"{prefix}{p.name}  ({parent})"
+                action = QAction(label, w)
                 action.setToolTip(file_path)
                 action.setStatusTip(file_path)
+                exists = p.exists()
+                if not exists:
+                    action.setEnabled(False)
                 action.triggered.connect(lambda checked, fp=file_path: self._open_recent_file(fp))
                 w._recent_files_menu.addAction(action)
 
@@ -616,17 +728,38 @@ class FileLoadingController:
             clear_action.triggered.connect(self._clear_recent_files)
             w._recent_files_menu.addAction(clear_action)
 
-    def _get_recent_files(self) -> List[str]:
-        """최근 파일 목록 가져오기"""
+    def _get_recent_files_data(self) -> dict:
+        """최근 파일 데이터 (files + pinned) 가져오기"""
         try:
             recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
             if recent_file_path.exists():
                 with open(recent_file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    return [f for f in data.get('files', []) if Path(f).exists()]
+                    return json.load(f)
         except Exception:
             pass
-        return []
+        return {'files': [], 'pinned': []}
+
+    def _get_recent_files(self) -> List[str]:
+        """최근 파일 목록 가져오기 (existing files only)"""
+        data = self._get_recent_files_data()
+        return [f for f in data.get('files', []) if Path(f).exists()]
+
+    def _pin_recent_file(self, file_path: str):
+        """최근 파일 핀 토글"""
+        try:
+            data = self._get_recent_files_data()
+            pinned = data.get('pinned', [])
+            if file_path in pinned:
+                pinned.remove(file_path)
+            else:
+                pinned.insert(0, file_path)
+            data['pinned'] = pinned
+            recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
+            with open(recent_file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            self._update_recent_files_menu()
+        except Exception as e:
+            logger.debug(f"Failed to pin recent file: {e}")
 
     def _add_to_recent_files(self, file_path: str):
         """최근 파일에 추가"""
@@ -635,14 +768,16 @@ class FileLoadingController:
             recent_dir.mkdir(parents=True, exist_ok=True)
             recent_file_path = recent_dir / "recent_files.json"
 
-            recent_files = self._get_recent_files()
+            data = self._get_recent_files_data()
+            recent_files = data.get('files', [])
             if file_path in recent_files:
                 recent_files.remove(file_path)
             recent_files.insert(0, file_path)
             recent_files = recent_files[:20]
+            data['files'] = recent_files
 
             with open(recent_file_path, 'w', encoding='utf-8') as f:
-                json.dump({'files': recent_files}, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False, indent=2)
 
             self._update_recent_files_menu()
         except Exception as e:
@@ -667,6 +802,158 @@ class FileLoadingController:
         except Exception as e:
             logger.debug(f"Failed to clear recent files: {e}")
 
+    # ==================== File Watch ====================
+
+    def _toggle_file_watch(self, enabled: bool):
+        """파일 감시 토글"""
+        from PySide6.QtCore import QFileSystemWatcher
+        w = self._w
+        self._watch_enabled = enabled
+
+        if enabled:
+            source_path = w.engine._source.path if w.engine._source else None
+            if source_path and Path(source_path).exists():
+                if self._file_watcher is None:
+                    self._file_watcher = QFileSystemWatcher(w)
+                    self._file_watcher.fileChanged.connect(self._on_watched_file_changed)
+                self._file_watcher.addPath(source_path)
+                w.statusbar.showMessage(f"Watching: {Path(source_path).name}", 3000)
+            else:
+                w.statusbar.showMessage("No file to watch", 3000)
+        else:
+            if self._file_watcher is not None:
+                paths = self._file_watcher.files()
+                if paths:
+                    self._file_watcher.removePaths(paths)
+                w.statusbar.showMessage("File watch disabled", 3000)
+
+    def _on_watched_file_changed(self, path: str):
+        """감시 중인 파일이 변경되었을 때"""
+        w = self._w
+        reply = QMessageBox.question(
+            w, "File Changed",
+            f"The file has been modified externally:\n{Path(path).name}\n\nReload?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if reply == QMessageBox.Yes:
+            self._load_file(path)
+        # Re-add to watcher (some OS remove after change)
+        if self._file_watcher and Path(path).exists():
+            self._file_watcher.addPath(path)
+
+    # ==================== URL Import ====================
+
+    def _import_from_url(self):
+        """URL에서 데이터 임포트"""
+        from PySide6.QtWidgets import QInputDialog
+        import polars as pl
+
+        w = self._w
+        url, ok = QInputDialog.getText(
+            w, "Import from URL",
+            "Enter data URL (CSV, Parquet, or JSON):"
+        )
+        if not ok or not url.strip():
+            return
+
+        url = url.strip()
+        w.statusbar.showMessage(f"Importing from {url}...", 0)
+        QApplication.processEvents()
+
+        try:
+            url_lower = url.lower()
+            if url_lower.endswith('.parquet'):
+                df = pl.read_parquet(url)
+            elif url_lower.endswith('.json'):
+                df = pl.read_json(url)
+            else:
+                df = pl.read_csv(url)
+
+            dataset_id = w.engine.load_dataset_from_dataframe(
+                df, name=Path(url).name or "URL Data", source_path=url
+            )
+            if dataset_id:
+                w.engine.activate_dataset(dataset_id)
+                memory_bytes = df.estimated_size()
+                w.state.add_dataset(
+                    dataset_id=dataset_id,
+                    name=Path(url).name or "URL Data",
+                    row_count=len(df),
+                    column_count=len(df.columns),
+                    memory_bytes=memory_bytes,
+                )
+                w._on_data_loaded()
+                w.statusbar.showMessage(f"✓ Loaded {len(df):,} rows from URL", 5000)
+            else:
+                w.statusbar.showMessage("Failed to load URL data", 5000)
+        except Exception as e:
+            QMessageBox.warning(w, "URL Import Error", f"Failed to import from URL:\n{e}")
+            w.statusbar.showMessage("URL import failed", 3000)
+
+    # ==================== Loading Profiles ====================
+
+    def _save_loading_profile(self):
+        """현재 파싱 설정을 프로필로 저장"""
+        from PySide6.QtWidgets import QInputDialog
+        w = self._w
+
+        name, ok = QInputDialog.getText(w, "Save Loading Profile", "Profile name:")
+        if not ok or not name.strip():
+            return
+
+        source = w.engine._source
+        if not source:
+            w.statusbar.showMessage("No loading settings to save", 3000)
+            return
+
+        profile = {
+            'name': name.strip(),
+            'encoding': source.encoding if source.encoding else 'utf-8',
+            'delimiter': source.delimiter if source.delimiter else ',',
+            'has_header': source.has_header,
+            'skip_rows': source.skip_rows,
+            'comment_char': source.comment_char,
+        }
+
+        profiles_dir = Path.home() / ".data_graph_studio" / "loading_profiles"
+        profiles_dir.mkdir(parents=True, exist_ok=True)
+        profile_path = profiles_dir / f"{name.strip().replace(' ', '_')}.json"
+
+        with open(profile_path, 'w', encoding='utf-8') as f:
+            json.dump(profile, f, ensure_ascii=False, indent=2)
+
+        w.statusbar.showMessage(f"Loading profile saved: {name}", 3000)
+
+    def _load_loading_profile(self):
+        """저장된 파싱 프로필 로드"""
+        from PySide6.QtWidgets import QInputDialog
+        w = self._w
+
+        profiles_dir = Path.home() / ".data_graph_studio" / "loading_profiles"
+        if not profiles_dir.exists():
+            w.statusbar.showMessage("No saved loading profiles", 3000)
+            return
+
+        profile_files = list(profiles_dir.glob("*.json"))
+        if not profile_files:
+            w.statusbar.showMessage("No saved loading profiles", 3000)
+            return
+
+        names = [p.stem.replace('_', ' ') for p in profile_files]
+        name, ok = QInputDialog.getItem(
+            w, "Load Profile", "Select loading profile:", names, 0, False
+        )
+        if not ok:
+            return
+
+        idx = names.index(name)
+        with open(profile_files[idx], 'r', encoding='utf-8') as f:
+            profile = json.load(f)
+
+        w.statusbar.showMessage(f"Loading profile loaded: {profile.get('name', name)}", 3000)
+        return profile
+
     # ==================== Data Save ====================
 
     def _on_save_data(self):
@@ -679,7 +966,15 @@ class FileLoadingController:
         current_path = getattr(w.engine, '_current_file_path', None)
         if current_path:
             try:
-                w.engine.df.write_csv(current_path)
+                ext = Path(current_path).suffix.lower()
+                if ext == '.parquet':
+                    w.engine.df.write_parquet(current_path)
+                elif ext in ('.xlsx', '.xls'):
+                    w.engine.df.write_excel(current_path)
+                elif ext == '.json':
+                    w.engine.df.write_json(current_path)
+                else:
+                    w.engine.df.write_csv(current_path)
                 w.statusbar.showMessage(f"Data saved to {current_path}", 3000)
             except Exception as e:
                 QMessageBox.warning(w, "Save Data", f"Failed to save: {e}")
@@ -714,7 +1009,7 @@ class FileLoadingController:
         """Import - 데이터 임포트"""
         from PySide6.QtWidgets import QInputDialog
         w = self._w
-        sources = ["From File...", "From Clipboard", "From URL...", "From Database..."]
+        sources = ["From File...", "From Clipboard", "From URL...", "From Database (Coming Soon)"]
         source, ok = QInputDialog.getItem(
             w, "Import Data", "Select import source:",
             sources, 0, False
@@ -725,14 +1020,6 @@ class FileLoadingController:
             elif source == "From Clipboard":
                 self._on_import_from_clipboard()
             elif source == "From URL...":
-                url, url_ok = QInputDialog.getText(
-                    w, "Import from URL", "Enter URL:"
-                )
-                if url_ok and url:
-                    w.statusbar.showMessage(f"Importing from {url}...", 3000)
-            elif source == "From Database...":
-                QMessageBox.information(
-                    w, "Import from Database",
-                    "Database import will be implemented.\n\n"
-                    "Supported: PostgreSQL, MySQL, SQLite, etc."
-                )
+                self._import_from_url()
+            elif source == "From Database (Coming Soon)":
+                pass  # disabled

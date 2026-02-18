@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox
 from PySide6.QtCore import Qt
 
 from ..dialogs.computed_column_dialog import ComputedColumnDialog
+from ...core.clipboard_manager import ClipboardManager
 
 logger = logging.getLogger(__name__)
 
@@ -31,31 +32,28 @@ class DataOpsController:
         df, message = ClipboardManager.paste_as_dataframe()
         
         if df is not None and len(df) > 0:
-            # 데이터 로드
             try:
-                # 임시 데이터셋으로 추가
-                import uuid
-                dataset_id = f"clipboard_{uuid.uuid4().hex[:8]}"
-                
-                # 엔진에 직접 설정
-                self.w.engine._df = df
-                
-                # 상태 업데이트
-                self.w.state.set_data_loaded(True, len(df))
-                self.w.state.set_column_order(df.columns)
-                
-                # UI 업데이트
-                self.w.table_panel.set_data(df)
-                self.w.graph_panel.set_columns(df.columns)
-                
-                # Data 탭에 컬럼 목록 전달
-                if hasattr(self.w.graph_panel.options_panel, 'data_tab'):
-                    self.w.graph_panel.options_panel.data_tab.set_columns(
-                        df.columns, self.w.engine
+                # Use official DatasetManager API instead of direct _df assignment
+                dataset_id = self.w.engine.load_dataset_from_dataframe(
+                    df, name="Clipboard Data", source_path="clipboard"
+                )
+                if dataset_id:
+                    self.w.engine.activate_dataset(dataset_id)
+                    # Update state
+                    memory_bytes = df.estimated_size()
+                    self.w.state.add_dataset(
+                        dataset_id=dataset_id,
+                        name="Clipboard Data",
+                        row_count=len(df),
+                        column_count=len(df.columns),
+                        memory_bytes=memory_bytes,
                     )
-                
-                self.w.statusBar().showMessage(f"✓ {message}", 5000)
-                
+                    self.w.state.set_data_loaded(True, len(df))
+                    self.w.state.set_column_order(df.columns)
+                    self.w._on_data_loaded()
+                    self.w.statusBar().showMessage(f"✓ {message}", 5000)
+                else:
+                    self.w.statusBar().showMessage("Failed to load clipboard data", 5000)
             except Exception as e:
                 self.w.statusBar().showMessage(f"Paste error: {e}", 5000)
         else:

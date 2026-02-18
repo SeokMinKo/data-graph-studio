@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QMessageBox, QProgressDialog
 from PySide6.QtCore import Qt, QTimer
 
 from ...core.state import AggregationType, ChartType
+from ...core.profile import GraphSetting
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ class AutorecoveryController:
                         os.remove(self.w._autosave_path)
                     except OSError:
                         pass
-                    if hasattr(self, 'statusBar'):
+                    if hasattr(self.w, 'statusBar'):
                         self.w.statusBar().showMessage(
                             f"Recovery failed: {exc}. Backup saved to autosave.json.bak",
                             8000,
@@ -148,7 +149,7 @@ class AutorecoveryController:
                 "active_dataset_id": self.w.state.active_dataset_id,
                 "graph_state": self.w.state.get_current_graph_state(),
                 "profiles": profiles,
-                "drawings": self.w.graph_panel.get_drawings_data() if hasattr(self, 'graph_panel') else {},
+                "drawings": self.w.graph_panel.get_drawings_data() if hasattr(self.w, 'graph_panel') else {},
                 "ts": time.time()
             }
 
@@ -185,7 +186,7 @@ class AutorecoveryController:
 
     def _restore_next(self):
         """Restore one dataset per event-loop tick to keep UI responsive."""
-        if not getattr(self, "_restore_queue", None):
+        if not getattr(self.w, "_restore_queue", None):
             self.w._restore_finalize()
             return
 
@@ -221,8 +222,8 @@ class AutorecoveryController:
 
     def _restore_finalize(self):
         """Finalize autosave restore after queued dataset loading."""
-        data = getattr(self, "_restore_data", {}) or {}
-        datasets = getattr(self, "_restore_datasets", []) or []
+        data = getattr(self.w, "_restore_data", {}) or {}
+        datasets = getattr(self.w, "_restore_datasets", []) or []
 
         if self.w._restore_progress:
             self.w._restore_progress.setValue(len(datasets))
@@ -238,7 +239,7 @@ class AutorecoveryController:
 
         # Restore profiles into ProfileStore
         profiles_data = data.get("profiles", [])
-        loaded_ids = getattr(self, "_restore_loaded_dataset_ids", set())
+        loaded_ids = getattr(self.w, "_restore_loaded_dataset_ids", set())
         for p_data in profiles_data:
             try:
                 gs = GraphSetting.from_dict(p_data)
@@ -254,7 +255,7 @@ class AutorecoveryController:
 
         # Restore drawings
         drawings = data.get("drawings", {})
-        if drawings and hasattr(self, 'graph_panel'):
+        if drawings and hasattr(self.w, 'graph_panel'):
             self.w.graph_panel.load_drawings_data(drawings)
 
         # Refresh profile tree + graph

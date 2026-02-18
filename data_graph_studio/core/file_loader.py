@@ -33,6 +33,25 @@ from .etl_helpers import HAS_ETL_PARSER
 
 logger = logging.getLogger(__name__)
 
+def detect_encoding(path: str, sample_size: int = 10000) -> str:
+    """파일 인코딩을 자동 감지한다."""
+    try:
+        from charset_normalizer import from_path
+        result = from_path(path)
+        best = result.best()
+        return best.encoding if best else 'utf-8'
+    except ImportError:
+        # Fallback: try utf-8, then latin-1
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                f.read(sample_size)
+            return 'utf-8'
+        except UnicodeDecodeError:
+            return 'latin-1'
+    except Exception:
+        return 'utf-8'
+
+
 class FileLoader:
     """파일 로딩 전담 클래스.
     DataEngine의 파일 I/O 관련 상태와 메서드를 모두 소유한다.
@@ -214,8 +233,13 @@ class FileLoader:
         excluded_columns: Optional[List[str]] = None,
         process_filter: Optional[List[str]] = None,
         precision_mode: Optional[PrecisionMode] = None,
+        sample_n: Optional[int] = None,
     ) -> bool:
-        """파일을 로드한다."""
+        """파일을 로드한다.
+
+        Args:
+            sample_n: 로드 후 N개 행만 샘플링 (None이면 전체 로드).
+        """
         if precision_mode is not None:
             self._precision_mode = precision_mode
 
@@ -225,6 +249,13 @@ class FileLoader:
 
         if file_type is None:
             file_type = self.detect_file_type(path)
+
+        # Auto-detect encoding for text-based formats
+        if encoding == "utf-8" and file_type in (FileType.CSV, FileType.TSV, FileType.TXT, FileType.CUSTOM):
+            detected = detect_encoding(path)
+            if detected and detected != 'utf-8':
+                logger.info(f"Auto-detected encoding: {detected}")
+                encoding = detected
 
         if delimiter_type == DelimiterType.AUTO:
             delimiter = self.detect_delimiter(path, encoding)
@@ -265,7 +296,7 @@ class FileLoader:
                 args=(path, file_type, encoding, delimiter, delimiter_type,
                       regex_pattern, has_header, skip_rows, comment_char,
                       sheet_name, chunk_size, optimize_memory, excluded_columns,
-                      process_filter),
+                      process_filter, sample_n),
             )
             self._loading_thread.start()
             return True
@@ -274,7 +305,7 @@ class FileLoader:
             path, file_type, encoding, delimiter, delimiter_type,
             regex_pattern, has_header, skip_rows, comment_char,
             sheet_name, chunk_size, optimize_memory, excluded_columns,
-            process_filter,
+            process_filter, sample_n,
         )
 
     def set_window(self, start: int, size: int) -> bool:
@@ -468,6 +499,7 @@ class FileLoader:
         chunk_size: Optional[int], optimize_memory: bool,
         excluded_columns: Optional[List[str]] = None,
         process_filter: Optional[List[str]] = None,
+        sample_n: Optional[int] = None,
     ) -> bool:
         """실제 파일 로드를 수행한다."""
         start_time = time.time()
@@ -537,6 +569,11 @@ class FileLoader:
             if process_filter and self._df is not None:
                 self._df = self._apply_process_filter(self._df, process_filter)
 
+            if sample_n is not None and self._df is not None and len(self._df) > sample_n:
+                self._update_progress(status="sampling")
+                self._df = self._df.sample(n=sample_n, seed=42)
+                logger.info(f"Sampled {sample_n:,} rows from {len(self._df):,}")
+
             if optimize_memory and self._df is not None:
                 self._update_progress(status="optimizing")
                 self._df = self._optimize_memory(self._df)
@@ -582,8 +619,16 @@ class FileLoader:
                    has_header: bool, skip_rows: int = 0,
                    comment_char: Optional[str] = None) -> pl.DataFrame:
         """텍스트 파일을 로드한다."""
-        with open(path, 'r', encoding=encoding, errors='ignore') as f:
-            lines = f.readlines()
+        MAX_TEXT_LINES = 1_000_000
+        lines = []
+        with open(path, 'r', encoding=encoding, errors='replace') as f:
+            for i, line in enumerate(f):
+                if self._cancel_loading:
+                    return pl.DataFrame()
+                if i >= MAX_TEXT_LINES:
+                    logger.warning(f"Text file truncated at {MAX_TEXT_LINES:,} lines")
+                    break
+                lines.append(line)
 
         lines = lines[skip_rows:]
         if comment_char:
@@ -629,14 +674,23 @@ class FileLoader:
         df_dict = {headers[i]: [row[i] for row in normalized_data] for i in range(max_cols)}
         df = pl.DataFrame(df_dict)
 
+        # Type inference via sampling instead of exception-based casting
+        int_pattern = re.compile(r'^-?\d+$')
+        float_pattern = re.compile(r'^-?\d+\.?\d*(?:[eE][+-]?\d+)?$')
+
+        cast_exprs = []
         for col in df.columns:
-            try:
-                df = df.with_columns(pl.col(col).cast(pl.Int64).alias(col))
-            except Exception:
-                try:
-                    df = df.with_columns(pl.col(col).cast(pl.Float64).alias(col))
-                except Exception:
-                    pass
+            sample = df[col].drop_nulls().head(100).to_list()
+            sample = [s for s in sample if s.strip()] if sample else []
+            if not sample:
+                continue
+            if all(int_pattern.match(s) for s in sample):
+                cast_exprs.append(pl.col(col).cast(pl.Int64, strict=False))
+            elif all(float_pattern.match(s) for s in sample):
+                cast_exprs.append(pl.col(col).cast(pl.Float64, strict=False))
+
+        if cast_exprs:
+            df = df.with_columns(cast_exprs)
         return df
 
     def _load_etl(self, path: str, encoding: str, delimiter: str,
@@ -723,9 +777,9 @@ class FileLoader:
         return False
 
     def _optimize_memory(self, df: pl.DataFrame) -> pl.DataFrame:
-        """메모리를 최적화한다.
+        """메모리를 최적화한다 (with_columns 패턴으로 피크 메모리 절감).
             df: 최적화할 DataFrame."""
-        optimized_cols = []
+        cast_exprs = []
 
         for col in df.columns:
             dtype = df[col].dtype
@@ -736,11 +790,11 @@ class FileLoader:
                 max_val = series.max()
                 if min_val is not None and max_val is not None:
                     if min_val >= -128 and max_val <= 127:
-                        series = series.cast(pl.Int8)
+                        cast_exprs.append(pl.col(col).cast(pl.Int8))
                     elif min_val >= -32768 and max_val <= 32767:
-                        series = series.cast(pl.Int16)
-                    elif min_val >= -2147483648 and max_val <= 2147483647:
-                        series = series.cast(pl.Int32)
+                        cast_exprs.append(pl.col(col).cast(pl.Int16))
+                    elif dtype == pl.Int64 and min_val >= -2147483648 and max_val <= 2147483647:
+                        cast_exprs.append(pl.col(col).cast(pl.Int32))
 
             elif dtype == pl.Float64:
                 should_keep = (
@@ -749,16 +803,17 @@ class FileLoader:
                     or self._is_precision_sensitive_column(col)
                 )
                 if not should_keep:
-                    series = series.cast(pl.Float32)
+                    cast_exprs.append(pl.col(col).cast(pl.Float32))
 
             elif dtype == pl.Utf8:
                 unique_ratio = series.n_unique() / len(series) if len(series) > 0 else 1
                 if unique_ratio < 0.5:
-                    series = series.cast(pl.Categorical)
+                    cast_exprs.append(pl.col(col).cast(pl.Categorical))
 
-            optimized_cols.append(series)
+        if cast_exprs:
+            df = df.with_columns(cast_exprs)
 
-        return pl.DataFrame(optimized_cols)
+        return df
 
     def _create_profile(self, df: pl.DataFrame, load_time: float) -> DataProfile:
         """데이터 프로파일을 생성한다.

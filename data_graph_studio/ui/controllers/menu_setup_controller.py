@@ -181,6 +181,16 @@ class MenuSetupController:
 
         file_menu.addSeparator()
 
+        # Watch for Changes
+        self.w._watch_file_action = QAction("Watch for Changes", self.w)
+        self.w._watch_file_action.setCheckable(True)
+        self.w._watch_file_action.setChecked(False)
+        self.w._watch_file_action.setStatusTip("Auto-reload when the source file changes on disk")
+        self.w._watch_file_action.triggered.connect(self.w._file_controller._toggle_file_watch)
+        file_menu.addAction(self.w._watch_file_action)
+
+        file_menu.addSeparator()
+
         # Recent Files submenu
         self.w._recent_files_menu = file_menu.addMenu("Recent Files")
         self.w._recent_files_menu.setStatusTip("Recently opened files")
@@ -527,6 +537,19 @@ class MenuSetupController:
         manage_profiles_action.triggered.connect(self.w._on_manage_parser_profiles)
         parser_menu.addAction(manage_profiles_action)
 
+        parser_menu.addSeparator()
+
+        # Loading profiles
+        save_loading_profile_action = QAction("Save Loading Profile...", self.w)
+        save_loading_profile_action.setStatusTip("Save current parsing settings as a reusable profile")
+        save_loading_profile_action.triggered.connect(self.w._file_controller._save_loading_profile)
+        parser_menu.addAction(save_loading_profile_action)
+
+        load_loading_profile_action = QAction("Load Profile...", self.w)
+        load_loading_profile_action.setStatusTip("Load saved parsing settings profile")
+        load_loading_profile_action.triggered.connect(self.w._file_controller._load_loading_profile)
+        parser_menu.addAction(load_loading_profile_action)
+
         # ============================================================
         # Graph Menu
         # ============================================================
@@ -622,28 +645,8 @@ class MenuSetupController:
 
 
     def _update_recent_files_menu(self):
-        """최근 파일 메뉴 업데이트"""
-        self.w._recent_files_menu.clear()
-        
-        # 최근 파일 목록 로드 (최대 10개)
-        recent_files = self.w._get_recent_files()
-        
-        if not recent_files:
-            no_files_action = QAction("(No recent files)", self.w)
-            no_files_action.setEnabled(False)
-            self.w._recent_files_menu.addAction(no_files_action)
-        else:
-            for file_path in recent_files[:10]:
-                action = QAction(Path(file_path).name, self.w)
-                action.setToolTip(file_path)
-                action.setStatusTip(file_path)
-                action.triggered.connect(lambda checked, fp=file_path: self.w._open_recent_file(fp))
-                self.w._recent_files_menu.addAction(action)
-            
-            self.w._recent_files_menu.addSeparator()
-            clear_action = QAction("Clear Recent Files", self.w)
-            clear_action.triggered.connect(self.w._clear_recent_files)
-            self.w._recent_files_menu.addAction(clear_action)
+        """최근 파일 메뉴 업데이트 — delegates to FileLoadingController"""
+        self.w._file_controller._update_recent_files_menu()
 
 
     def _update_menu_state(self):
