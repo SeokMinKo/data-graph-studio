@@ -54,41 +54,12 @@ DEFAULT_EVENTS = [
 ]
 
 
-def migrate_config(config: dict[str, Any]) -> dict[str, Any]:
-    """설정을 최신 버전으로 마이그레이션한다.
-
-    Args:
-        config: 원본 설정 딕셔너리.
-
-    Returns:
-        마이그레이션된 설정.
-    """
-    version = config.get("version", 0)
-    if version < 1:
-        config.setdefault("capture_mode", "perfetto")
-        config.setdefault("sysfs_path", "/sys/kernel/tracing")
-        config["version"] = 1
-    return config
-
-
-def load_logger_config() -> dict[str, Any]:
-    """저장된 logger 설정을 로드한다. 없으면 기본값 반환."""
-    if CONFIG_PATH.exists():
-        try:
-            config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            return migrate_config(config)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return migrate_config({})
-
-
-def save_logger_config(config: dict[str, Any]) -> None:
-    """logger 설정을 JSON으로 저장한다."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(
-        json.dumps(config, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+# Config functions moved to trace_config_dialog (canonical source)
+from data_graph_studio.ui.dialogs.trace_config_dialog import (
+    migrate_config,
+    load_logger_config,
+    save_logger_config,
+)
 
 
 # ============================================================

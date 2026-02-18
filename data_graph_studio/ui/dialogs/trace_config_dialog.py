@@ -49,6 +49,9 @@ DEFAULT_EVENTS: list[tuple[str, bool]] = [
     ("block/block_bio_complete", False),
     ("block/block_bio_queue", False),
     ("block/block_rq_requeue", False),
+    ("sched/sched_switch", False),
+    ("sched/sched_wakeup", False),
+    ("sched/sched_waking", False),
 ]
 
 _DEFAULT_CONFIG: dict[str, Any] = {

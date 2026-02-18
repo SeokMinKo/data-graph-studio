@@ -885,6 +885,9 @@ class MainWindow(QMainWindow):
     def _on_start_trace(self, *a, **kw):
         return self._trace_ctrl._on_start_trace(*a, **kw)
 
+    def _on_compare_traces(self, *a, **kw):
+        return self._trace_ctrl._on_compare_traces(*a, **kw)
+
     def _verify_capture_mode(self, *a, **kw):
         return self._trace_ctrl._verify_capture_mode(*a, **kw)
 

@@ -449,6 +449,13 @@ class MenuSetupController:
 
         logger_menu.addSeparator()
 
+        compare_traces_action = QAction("Compare &Traces...", self.w)
+        compare_traces_action.setStatusTip("Compare two ftrace files (before/after)")
+        compare_traces_action.triggered.connect(self.w._on_compare_traces)
+        logger_menu.addAction(compare_traces_action)
+
+        logger_menu.addSeparator()
+
         configure_action = QAction("&Configure...", self.w)
         configure_action.setStatusTip("Open the Trace Configuration dialog")
         configure_action.triggered.connect(self.w._on_configure_trace)

@@ -284,6 +284,46 @@ class TestBlocklayerNewColumns:
             assert abs(df["d2c_ms"][i] - df["d2c_ms"][i]) < 0.001
 
 
+class TestBlocklayerQ2D:
+    """Q2D (Queue-to-Dispatch) latency: insert → issue."""
+
+    def test_q2d_column_exists(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_WITH_INSERT)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert "q2d_ms" in df.columns
+        assert "insert_time" in df.columns
+
+    def test_q2d_latency_values(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_WITH_INSERT)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        df_sorted = df.sort("sector")
+        # sector 1000: insert=0.000000, issue=0.000300 → q2d=0.3ms
+        assert abs(df_sorted["q2d_ms"][0] - 0.3) < 0.01
+        # sector 2000: insert=0.002000, issue=0.002500 → q2d=0.5ms
+        assert abs(df_sorted["q2d_ms"][1] - 0.5) < 0.01
+
+    def test_q2d_none_without_insert(self, parser: FtraceParser):
+        """No insert events → q2d_ms is None."""
+        path = _write_trace(BLOCK_TRACE_SIMPLE)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert df["q2d_ms"][0] is None
+
+    def test_insert_time_recorded(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_WITH_INSERT)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        df_sorted = df.sort("sector")
+        assert abs(df_sorted["insert_time"][0] - 1000.000000) < 0.0001
+        assert abs(df_sorted["insert_time"][1] - 1000.002000) < 0.0001
+
+
 class TestBlocklayerSequentiality:
     """LBA sequentiality: sequential if current_sector == prev_sector + prev_nr_sectors."""
 
@@ -455,6 +495,14 @@ class TestBuiltinPresets:
         assert "Queue Depth" in presets
         p = presets["Queue Depth"]
         assert p.x_column == "send_time"
+
+    def test_q2d_latency_preset(self):
+        presets = {p.name: p for p in BUILTIN_PRESETS["blocklayer"]}
+        assert "Q2D Latency" in presets
+        p = presets["Q2D Latency"]
+        assert p.chart_type == "scatter"
+        assert "q2d_ms" in p.y_columns
+        assert p.group_column == "cmd"
 
     def test_all_presets_have_valid_chart_types(self):
         valid_types = {"line", "scatter", "bar", "area", "histogram", "heatmap", "box"}

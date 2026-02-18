@@ -188,7 +188,7 @@ class TraceController:
             try:
                 PerfettoTraceController.find_trace_processor()
             except FileNotFoundError as e:
-                QMessageBox.warning(self, "Logger", str(e))
+                QMessageBox.warning(self.w, "Logger", str(e))
                 return
             controller = PerfettoTraceController(self.w)
         else:
@@ -199,7 +199,7 @@ class TraceController:
             controller.start_trace(serial, logger_cfg)
         except Exception as e:
             logger.error("[Logger] start_trace failed: %s", e, exc_info=True)
-            QMessageBox.warning(self, "Logger", f"Failed to start trace:\n{e}")
+            QMessageBox.warning(self.w, "Logger", f"Failed to start trace:\n{e}")
             controller.cleanup()
             return
 
@@ -274,12 +274,12 @@ class TraceController:
                 )
             else:
                 logger.error("[Logger] load_dataset_from_dataframe returned None for %s", csv_path)
-                QMessageBox.warning(self, "Logger", "Failed to load CSV data.")
+                QMessageBox.warning(self.w, "Logger", "Failed to load CSV data.")
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
             logger.error("[Logger] CSV load failed: %s", msg)
-            QMessageBox.critical(self, "Logger", f"CSV load failed:\n{msg}")
+            QMessageBox.critical(self.w, "Logger", f"CSV load failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
         worker.finished.connect(on_finished)
@@ -338,12 +338,12 @@ class TraceController:
                 )
             else:
                 logger.error("[Logger] ftrace load_dataset_from_dataframe returned None")
-                QMessageBox.warning(self, "Ftrace Parser", "Failed to load parsed data.")
+                QMessageBox.warning(self.w, "Ftrace Parser", "Failed to load parsed data.")
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
             logger.error("[Logger] ftrace parse failed: %s", msg)
-            QMessageBox.critical(self, "Ftrace Parser", f"Parse failed:\n{msg}")
+            QMessageBox.critical(self.w, "Ftrace Parser", f"Parse failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
         worker.finished.connect(on_finished)
@@ -352,6 +352,127 @@ class TraceController:
         self.w._parse_worker = worker
         worker.start()
 
+
+    def _on_compare_traces(self) -> None:
+        """Open the Compare Traces dialog and run comparison."""
+        from ..dialogs.trace_compare_dialog import TraceCompareDialog
+
+        dialog = TraceCompareDialog(self.w)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        path_a = dialog.path_a
+        path_b = dialog.path_b
+        converter = dialog.converter
+        compare_mode = dialog.compare_mode
+
+        self._compare_traces_async(path_a, path_b, converter, compare_mode)
+
+    def _compare_traces_async(
+        self, path_a: str, path_b: str, converter: str, compare_mode: ComparisonMode
+    ) -> None:
+        """Parse two ftrace files in background and start comparison."""
+        from data_graph_studio.parsers import FtraceParser
+
+        parser = FtraceParser()
+        settings = parser.default_settings()
+        settings["converter"] = converter
+
+        class _CompareWorker(QThread):
+            from PySide6.QtCore import Signal as QtSignal
+            finished = QtSignal(object, object)  # (df_a, df_b)
+            error = QtSignal(str)
+            progress = QtSignal(str)
+
+            def run(self_w):
+                try:
+                    self_w.progress.emit("Parsing Trace A...")
+                    df_a = parser.parse(path_a, settings)
+                    self_w.progress.emit("Parsing Trace B...")
+                    df_b = parser.parse(path_b, settings)
+                    self_w.finished.emit(df_a, df_b)
+                except Exception as e:
+                    self_w.error.emit(str(e))
+
+        progress_dlg = QProgressDialog("Parsing trace files...", "Cancel", 0, 0, self.w)
+        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dlg.setMinimumDuration(0)
+        progress_dlg.show()
+
+        worker = _CompareWorker(self.w)
+
+        def on_progress(msg):
+            progress_dlg.setLabelText(msg)
+
+        def on_finished(df_a, df_b):
+            progress_dlg.close()
+            self._finish_compare(df_a, df_b, path_a, path_b, converter, compare_mode)
+
+        def on_error(msg):
+            progress_dlg.close()
+            QMessageBox.critical(self.w, "Compare Traces", f"Parse failed:\n{msg}")
+
+        worker.progress.connect(on_progress)
+        worker.finished.connect(on_finished)
+        worker.error.connect(on_error)
+        self.w._compare_worker = worker  # prevent GC
+        worker.start()
+
+    def _finish_compare(
+        self, df_a, df_b, path_a: str, path_b: str,
+        converter: str, compare_mode: ComparisonMode
+    ) -> None:
+        """Load both DataFrames as datasets and activate comparison mode."""
+        name_a = Path(path_a).stem + " (Before)"
+        name_b = Path(path_b).stem + " (After)"
+
+        id_a = self.w.engine.load_dataset_from_dataframe(
+            df_a, name=name_a, source_path=path_a
+        )
+        if not id_a:
+            QMessageBox.warning(self.w, "Compare Traces", "Failed to load Trace A.")
+            return
+
+        # Register in state
+        memory_a = df_a.estimated_size() if hasattr(df_a, 'estimated_size') else 0
+        self.w.state.add_dataset(
+            dataset_id=id_a, name=name_a, file_path=path_a,
+            row_count=len(df_a), column_count=len(df_a.columns),
+            memory_bytes=memory_a,
+        )
+
+        id_b = self.w.engine.load_dataset_from_dataframe(
+            df_b, name=name_b, source_path=path_b
+        )
+        if not id_b:
+            QMessageBox.warning(self.w, "Compare Traces", "Failed to load Trace B.")
+            return
+
+        memory_b = df_b.estimated_size() if hasattr(df_b, 'estimated_size') else 0
+        self.w.state.add_dataset(
+            dataset_id=id_b, name=name_b, file_path=path_b,
+            row_count=len(df_b), column_count=len(df_b.columns),
+            memory_bytes=memory_b,
+        )
+
+        # Refresh UI
+        self.w._on_data_loaded()
+
+        # Set comparison mode and start comparison
+        self.w.state.set_comparison_mode(compare_mode)
+        self.w._dataset_controller._on_comparison_mode_changed(compare_mode.value)
+        self.w._dataset_controller._on_comparison_started([id_a, id_b])
+
+        # Apply graph presets for the converter
+        self._apply_graph_presets(df_a, converter)
+
+        self.w.statusBar().showMessage(
+            f"Comparing: {name_a} vs {name_b} ({compare_mode.value})", 5000
+        )
+        logger.info(
+            "Compare traces: %s (%d rows) vs %s (%d rows), mode=%s",
+            name_a, len(df_a), name_b, len(df_b), compare_mode.value,
+        )
 
     def _apply_graph_presets(self, df, converter: str = "") -> None:
         """Create DGS profiles from graph presets and apply the first one.
