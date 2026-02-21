@@ -40,8 +40,10 @@ def controller(store, state) -> ProfileController:
 SAMPLE_BLOCKLAYER_DF = pl.DataFrame({
     "send_time": [1000.0, 1000.001, 1000.002],
     "complete_time": [1000.0005, 1000.0022, 1000.0028],
+    "insert_time": [999.999, 1000.0005, 1000.0015],
     "lba_mb": [0.024, 0.049, 0.073],
     "d2c_ms": [0.5, 1.2, 0.8],
+    "q2d_ms": [0.1, 0.05, 0.1],
     "d2d_ms": [None, 1.0, 1.0],
     "c2c_ms": [None, 1.7, 0.6],
     "size_kb": [4.0, 8.0, 4.0],
@@ -50,6 +52,7 @@ SAMPLE_BLOCKLAYER_DF = pl.DataFrame({
     "sector": [100, 200, 300],
     "nr_sectors": [8, 16, 8],
     "device": ["8,0", "8,0", "8,0"],
+    "is_sequential": ["sequential", "random", "sequential"],
 })
 
 DATASET_ID = "test-dataset-001"
@@ -312,12 +315,12 @@ class TestE2EBlocklayerPresets:
 
     def test_creates_4_profiles(self, store):
         ids = self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
-        assert len(ids) == 7
+        assert len(ids) == 14
 
     def test_profiles_retrievable_by_dataset(self, store):
         self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
         profiles = store.get_by_dataset(DATASET_ID)
-        assert len(profiles) == 7
+        assert len(profiles) == 14
         names = {p.name for p in profiles}
         assert "LBA Map" in names
         assert "D2C Latency" in names
@@ -332,6 +335,7 @@ class TestE2EBlocklayerPresets:
             # State should have valid chart type
             assert state._chart_settings.chart_type in (
                 ChartType.SCATTER, ChartType.LINE, ChartType.HISTOGRAM,
+                ChartType.BOX, ChartType.HEATMAP,
             )
 
     def test_no_duplicates_on_second_run(self, store):

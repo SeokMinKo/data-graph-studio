@@ -141,6 +141,52 @@ BUILTIN_PRESETS: Dict[str, List[GraphPreset]] = {
             y_columns=["queue_depth"],
             description="Queue depth over time (send + complete timeline)",
         ),
+        # ── Correlation & Locality presets ──
+        GraphPreset(
+            name="Latency vs Size",
+            chart_type="scatter",
+            x_column="size_kb",
+            y_columns=["d2c_ms"],
+            group_column="cmd",
+            description="D2C latency vs I/O size — does latency scale with size?",
+        ),
+        GraphPreset(
+            name="Latency vs Queue Depth",
+            chart_type="scatter",
+            x_column="queue_depth",
+            y_columns=["d2c_ms"],
+            group_column="cmd",
+            description="D2C latency vs queue depth — load impact on latency",
+        ),
+        GraphPreset(
+            name="Latency vs LBA",
+            chart_type="scatter",
+            x_column="lba_mb",
+            y_columns=["d2c_ms"],
+            group_column="cmd",
+            description="D2C latency by LBA position — identify hot/cold zones",
+        ),
+        GraphPreset(
+            name="Latency by Pattern",
+            chart_type="box",
+            x_column="is_sequential",
+            y_columns=["d2c_ms"],
+            description="Sequential vs Random latency distribution (box plot)",
+        ),
+        GraphPreset(
+            name="Size Distribution",
+            chart_type="box",
+            x_column="cmd",
+            y_columns=["size_kb"],
+            description="I/O size distribution by command type",
+        ),
+        GraphPreset(
+            name="LBA Heatmap",
+            chart_type="heatmap",
+            x_column="send_time",
+            y_columns=["lba_mb"],
+            description="LBA access density over time — spatial locality heatmap",
+        ),
     ],
     "sched": [
         GraphPreset(
