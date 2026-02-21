@@ -187,6 +187,20 @@ BUILTIN_PRESETS: Dict[str, List[GraphPreset]] = {
             y_columns=["lba_mb"],
             description="LBA access density over time — spatial locality heatmap",
         ),
+        GraphPreset(
+            name="Idle Time",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["idle_time_ms"],
+            description="Device idle time (Q=0: prev_complete → dispatch gap)",
+        ),
+        GraphPreset(
+            name="Busy Time",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["busy_time_ms"],
+            description="Device busy time (Q≥63: complete → complete interval)",
+        ),
     ],
     "sched": [
         GraphPreset(

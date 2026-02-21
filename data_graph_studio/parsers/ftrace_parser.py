@@ -222,6 +222,8 @@ class FtraceParser(BaseParser):
         "q2d_ms": pl.Float64,
         "d2d_ms": pl.Float64,
         "c2c_ms": pl.Float64,
+        "idle_time_ms": pl.Float64,
+        "busy_time_ms": pl.Float64,
         "size_kb": pl.Float64,
         "cmd": pl.Utf8,
         "queue_depth": pl.Int32,
@@ -409,6 +411,36 @@ class FtraceParser(BaseParser):
 
         result = result.with_columns(pl.Series("queue_depth", queue_depths, dtype=pl.Int32))
 
+        # Idle time (Q=0): gap between previous complete and current dispatch
+        # Busy time (Q=max/63): gap between previous complete and current complete
+        # These measure device utilization from the host perspective.
+        idle_times: list[float | None] = [None] * n
+        busy_times: list[float | None] = [None] * n
+
+        # Find max queue depth for busy threshold (default 63, or max Q if < 63)
+        max_q = max(queue_depths) if queue_depths else 0
+        busy_threshold = min(63, max(max_q, 1))  # At least 1 to avoid division issues
+
+        for i in range(1, n):
+            prev_ct = complete_times[i - 1]
+            # Idle: queue depth == 1 after being 0 (device was idle before this I/O)
+            # = time between previous complete and current dispatch
+            if queue_depths[i] == 1 and (i == 1 or queue_depths[i - 1] <= 1):
+                gap = (issue_times[i] - prev_ct) * 1000  # ms
+                if gap >= 0:
+                    idle_times[i] = gap
+            # Busy: queue depth at max → device saturated
+            # = complete-to-complete interval when queue is full
+            if queue_depths[i] >= busy_threshold:
+                gap = (complete_times[i] - prev_ct) * 1000  # ms
+                if gap >= 0:
+                    busy_times[i] = gap
+
+        result = result.with_columns([
+            pl.Series("idle_time_ms", idle_times, dtype=pl.Float64),
+            pl.Series("busy_time_ms", busy_times, dtype=pl.Float64),
+        ])
+
         # Is_sequential: per-device, sector == prev_sector + prev_nr_sectors
         devices = result["device"].to_list()
         sectors = result["sector"].to_list()
@@ -436,6 +468,8 @@ class FtraceParser(BaseParser):
             "q2d_ms",
             "d2d_ms",
             "c2c_ms",
+            "idle_time_ms",
+            "busy_time_ms",
             "size_kb",
             pl.col("rwbs").alias("cmd"),
             "queue_depth",
