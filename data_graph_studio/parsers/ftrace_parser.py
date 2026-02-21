@@ -277,26 +277,53 @@ class FtraceParser(BaseParser):
             return pl.DataFrame(schema=self._RESULT_SCHEMA)
 
         # ── 2. Parse details (vectorized regex) ──
-        # issue/insert format: <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
-        issue_parse_cols = [
-            pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
-            pl.col("details").str.extract(r"^\S+\s+(\S+)", 1).alias("rwbs"),
-            pl.col("details").str.extract(r"^\S+\s+\S+\s+(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
-            pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
-            pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
-        ]
+        # Two detail formats supported:
+        # Raw ftrace: <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
+        # Perfetto:   dev=<dev> sector=<sector> nr_sector=<nr> bytes=<bytes> rwbs=<rwbs> comm=<comm> cmd=
+        #
+        # Detect format from first non-null detail
+        sample_detail = issues["details"].drop_nulls().head(1).to_list()
+        is_perfetto_fmt = bool(sample_detail and "dev=" in sample_detail[0])
+        logger.debug("[blocklayer-vec] detail format: %s", "perfetto" if is_perfetto_fmt else "raw")
+
+        if is_perfetto_fmt:
+            # Perfetto key=value format
+            issue_parse_cols = [
+                pl.col("details").str.extract(r"dev=(\S+)", 1).alias("device"),
+                pl.col("details").str.extract(r"rwbs=(\S+)", 1).alias("rwbs"),
+                pl.col("details").str.extract(r"bytes=(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
+                pl.col("details").str.extract(r"sector=(\d+)", 1).cast(pl.Int64).alias("sector"),
+                pl.col("details").str.extract(r"nr_sector=(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+            ]
+        else:
+            # Raw ftrace format
+            issue_parse_cols = [
+                pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
+                pl.col("details").str.extract(r"^\S+\s+(\S+)", 1).alias("rwbs"),
+                pl.col("details").str.extract(r"^\S+\s+\S+\s+(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
+                pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
+                pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+            ]
         issues = issues.with_columns(issue_parse_cols)
         issues = issues.with_columns(
             (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
              pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
         ).with_row_index("issue_idx")
 
-        # complete format: <dev> <rwbs> () <sector> + <nr_sectors> [<errno>]
-        completes = completes.with_columns([
-            pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
-            pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
-            pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
-        ]).with_columns(
+        # Complete format — same dual-format detection
+        if is_perfetto_fmt:
+            complete_parse_cols = [
+                pl.col("details").str.extract(r"dev=(\S+)", 1).alias("device"),
+                pl.col("details").str.extract(r"sector=(\d+)", 1).cast(pl.Int64).alias("sector"),
+                pl.col("details").str.extract(r"nr_sector=(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+            ]
+        else:
+            complete_parse_cols = [
+                pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
+                pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
+                pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+            ]
+        completes = completes.with_columns(complete_parse_cols).with_columns(
             (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
              pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
         )
