@@ -224,6 +224,12 @@ class FtraceParser(BaseParser):
         "c2c_ms": pl.Float64,
         "idle_time_ms": pl.Float64,
         "busy_time_ms": pl.Float64,
+        "iops": pl.Float64,
+        "bw_mbps": pl.Float64,
+        "rw_ratio": pl.Float64,
+        "seq_run_length": pl.Int32,
+        "latency_tier": pl.Utf8,
+        "drain_time_ms": pl.Float64,
         "size_kb": pl.Float64,
         "cmd": pl.Utf8,
         "queue_depth": pl.Int32,
@@ -458,7 +464,93 @@ class FtraceParser(BaseParser):
 
         result = result.with_columns(pl.Series("is_sequential", seq_flags, dtype=pl.Utf8))
 
-        # ── 6. Select final columns ──
+        # ── 6. Windowed / derived metrics ──
+
+        # 6a. IOPS & Bandwidth (rolling window = 100ms)
+        # Group I/Os into time bins and count/sum per bin
+        timestamps = result["timestamp"].to_list()
+        size_kb_list = result["size_kb"].to_list()
+        rwbs_list = result["rwbs"].to_list()
+        window_sec = 0.1  # 100ms window
+
+        iops_list = [0.0] * n
+        bw_mbps_list = [0.0] * n
+        rw_ratio_list: list[float | None] = [None] * n
+        for i in range(n):
+            t_center = timestamps[i]
+            t_start = t_center - window_sec / 2
+            t_end = t_center + window_sec / 2
+            count = 0
+            total_kb = 0.0
+            reads = 0
+            writes = 0
+            for j in range(n):
+                if t_start <= timestamps[j] <= t_end:
+                    count += 1
+                    total_kb += size_kb_list[j] if size_kb_list[j] else 0
+                    if rwbs_list[j] and 'R' in rwbs_list[j]:
+                        reads += 1
+                    elif rwbs_list[j] and 'W' in rwbs_list[j]:
+                        writes += 1
+            iops_list[i] = count / window_sec  # IOPS
+            bw_mbps_list[i] = (total_kb / 1024) / window_sec  # MB/s
+            total_rw = reads + writes
+            if total_rw > 0:
+                rw_ratio_list[i] = reads / total_rw  # 1.0 = all reads, 0.0 = all writes
+
+        result = result.with_columns([
+            pl.Series("iops", iops_list, dtype=pl.Float64),
+            pl.Series("bw_mbps", bw_mbps_list, dtype=pl.Float64),
+            pl.Series("rw_ratio", rw_ratio_list, dtype=pl.Float64),
+        ])
+
+        # 6b. Sequential run length
+        seq_run_lengths = [0] * n
+        current_run = 0
+        for i in range(n):
+            if seq_flags[i] == "sequential":
+                current_run += 1
+            else:
+                current_run = 0
+            seq_run_lengths[i] = current_run
+        result = result.with_columns(
+            pl.Series("seq_run_length", seq_run_lengths, dtype=pl.Int32)
+        )
+
+        # 6c. Tail latency flag (P99 outlier)
+        d2c_vals = result["d2c_ms"].drop_nulls().to_numpy()
+        if len(d2c_vals) > 0:
+            import numpy as _np
+            p99 = float(_np.percentile(d2c_vals, 99))
+            p95 = float(_np.percentile(d2c_vals, 95))
+            result = result.with_columns(
+                pl.when(pl.col("d2c_ms") >= p99).then(pl.lit("P99+"))
+                .when(pl.col("d2c_ms") >= p95).then(pl.lit("P95-P99"))
+                .otherwise(pl.lit("normal"))
+                .alias("latency_tier")
+            )
+        else:
+            result = result.with_columns(
+                pl.lit("normal").alias("latency_tier")
+            )
+
+        # 6d. Queue drain time (time from max Q to Q=1)
+        drain_times: list[float | None] = [None] * n
+        if max_q > 1:
+            in_drain = False
+            drain_start_time = 0.0
+            for i in range(n):
+                if queue_depths[i] >= max_q and not in_drain:
+                    in_drain = True
+                    drain_start_time = complete_times[i]
+                elif in_drain and queue_depths[i] <= 1:
+                    drain_times[i] = (complete_times[i] - drain_start_time) * 1000  # ms
+                    in_drain = False
+        result = result.with_columns(
+            pl.Series("drain_time_ms", drain_times, dtype=pl.Float64)
+        )
+
+        # ── 7. Select final columns ──
         result = result.select([
             pl.col("timestamp").alias("send_time"),
             "complete_time",
@@ -470,6 +562,12 @@ class FtraceParser(BaseParser):
             "c2c_ms",
             "idle_time_ms",
             "busy_time_ms",
+            "iops",
+            "bw_mbps",
+            "rw_ratio",
+            "seq_run_length",
+            "latency_tier",
+            "drain_time_ms",
             "size_kb",
             pl.col("rwbs").alias("cmd"),
             "queue_depth",

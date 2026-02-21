@@ -239,6 +239,85 @@ BUILTIN_PRESETS: Dict[str, List[GraphPreset]] = {
             y_columns=["queue_depth"],
             description="Queue depth distribution — device load profile",
         ),
+        # ── Throughput presets ──
+        GraphPreset(
+            name="IOPS Timeline",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["iops"],
+            description="I/O operations per second (100ms window) over time",
+        ),
+        GraphPreset(
+            name="Bandwidth Timeline",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["bw_mbps"],
+            group_column="cmd",
+            description="Throughput in MB/s (100ms window) over time",
+        ),
+        # ── Access pattern presets ──
+        GraphPreset(
+            name="R/W Ratio Timeline",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["rw_ratio"],
+            description="Read/Write ratio over time (1.0=all read, 0.0=all write)",
+        ),
+        GraphPreset(
+            name="Sequential Run Length",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["seq_run_length"],
+            description="Consecutive sequential I/O count — prefetch effectiveness",
+        ),
+        GraphPreset(
+            name="Seq Run Histogram",
+            chart_type="histogram",
+            x_column="seq_run_length",
+            y_columns=["seq_run_length"],
+            description="Sequential run length distribution",
+        ),
+        # ── Tail latency presets ──
+        GraphPreset(
+            name="Latency Outlier Map",
+            chart_type="scatter",
+            x_column="lba_mb",
+            y_columns=["d2c_ms"],
+            group_column="latency_tier",
+            description="Latency by LBA colored by P95/P99 tier — find problem areas",
+        ),
+        GraphPreset(
+            name="Latency Tier Timeline",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["d2c_ms"],
+            group_column="latency_tier",
+            description="D2C latency colored by percentile tier over time",
+        ),
+        # ── Queue behavior presets ──
+        GraphPreset(
+            name="QD vs IOPS",
+            chart_type="scatter",
+            x_column="queue_depth",
+            y_columns=["iops"],
+            description="Queue depth vs IOPS — find saturation point",
+        ),
+        GraphPreset(
+            name="Queue Drain Time",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["drain_time_ms"],
+            description="Time for queue to drain from max to empty (ms)",
+        ),
+        # ── Multi-device preset ──
+        GraphPreset(
+            name="Device Latency Compare",
+            chart_type="scatter",
+            x_column="send_time",
+            y_columns=["d2c_ms"],
+            group_column="device",
+            description="D2C latency by device — multi-device comparison",
+        ),
     ],
     "sched": [
         GraphPreset(

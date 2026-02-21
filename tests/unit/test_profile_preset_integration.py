@@ -55,6 +55,12 @@ SAMPLE_BLOCKLAYER_DF = pl.DataFrame({
     "is_sequential": ["sequential", "random", "sequential"],
     "idle_time_ms": [None, 0.5, 0.3],
     "busy_time_ms": [None, None, 1.2],
+    "iops": [100.0, 200.0, 150.0],
+    "bw_mbps": [0.4, 1.6, 0.6],
+    "rw_ratio": [1.0, 0.0, 1.0],
+    "seq_run_length": [0, 0, 1],
+    "latency_tier": ["normal", "P95-P99", "normal"],
+    "drain_time_ms": [None, None, 2.5],
 })
 
 DATASET_ID = "test-dataset-001"
@@ -317,12 +323,12 @@ class TestE2EBlocklayerPresets:
 
     def test_creates_4_profiles(self, store):
         ids = self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
-        assert len(ids) == 21
+        assert len(ids) == 31
 
     def test_profiles_retrievable_by_dataset(self, store):
         self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
         profiles = store.get_by_dataset(DATASET_ID)
-        assert len(profiles) == 21
+        assert len(profiles) == 31
         names = {p.name for p in profiles}
         assert "LBA Map" in names
         assert "D2C Latency" in names
