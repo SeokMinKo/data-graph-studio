@@ -263,9 +263,45 @@ class FtraceParser(BaseParser):
 
             block_rq_insert (Q) → block_rq_issue (D) → block_rq_complete (C)
 
-        Computes d2c_ms, q2d_ms, d2d_ms, c2c_ms, queue_depth, is_sequential.
+        Computes d2c_ms, q2d_ms, d2d_ms, c2c_ms, queue_depth, is_sequential,
+        iops, bw_mbps, rw_ratio, seq_run_length, latency_tier, drain_time_ms,
+        idle_time_ms, busy_time_ms.
+
+        Configurable thresholds via ``options["converter_options"]``:
+
+        - ``busy_queue_depth`` (int, default 63): Queue depth threshold for busy time.
+          When observed max Q < this value, max Q is used instead.
+        - ``idle_queue_depth`` (int, default 1): Queue depth at/below which device
+          is considered idle. Idle time = prev_complete → current dispatch gap.
+        - ``window_sec`` (float, default 0.1): Rolling window size in seconds for
+          IOPS, bandwidth, and R/W ratio calculations.
+        - ``latency_percentiles`` (list[float], default [95, 99]): Percentile thresholds
+          for latency tier classification.  First value = P95 boundary, second = P99.
+        - ``drain_target_depth`` (int, default 1): Queue depth that marks the end
+          of a drain event.
+
+        Example::
+
+            settings["converter_options"] = {
+                "busy_queue_depth": 32,
+                "window_sec": 0.05,
+                "latency_percentiles": [90, 99],
+            }
         """
         logger.info("[blocklayer-vec] converting %d raw events", len(raw_df))
+
+        # Read configurable thresholds
+        copts = options.get("converter_options", {})
+        cfg_busy_qd = int(copts.get("busy_queue_depth", 63))
+        cfg_idle_qd = int(copts.get("idle_queue_depth", 1))
+        cfg_window_sec = float(copts.get("window_sec", 0.1))
+        cfg_latency_pcts = copts.get("latency_percentiles", [95, 99])
+        cfg_drain_target = int(copts.get("drain_target_depth", 1))
+
+        if len(cfg_latency_pcts) < 2:
+            cfg_latency_pcts = [95, 99]
+        pct_low = float(cfg_latency_pcts[0])
+        pct_high = float(cfg_latency_pcts[1])
 
         block_events = raw_df.filter(
             pl.col("event").is_in([
@@ -423,15 +459,15 @@ class FtraceParser(BaseParser):
         idle_times: list[float | None] = [None] * n
         busy_times: list[float | None] = [None] * n
 
-        # Find max queue depth for busy threshold (default 63, or max Q if < 63)
+        # Find max queue depth for busy threshold
         max_q = max(queue_depths) if queue_depths else 0
-        busy_threshold = min(63, max(max_q, 1))  # At least 1 to avoid division issues
+        busy_threshold = min(cfg_busy_qd, max(max_q, 1))
 
         for i in range(1, n):
             prev_ct = complete_times[i - 1]
-            # Idle: queue depth == 1 after being 0 (device was idle before this I/O)
+            # Idle: queue depth at idle threshold after being empty
             # = time between previous complete and current dispatch
-            if queue_depths[i] == 1 and (i == 1 or queue_depths[i - 1] <= 1):
+            if queue_depths[i] <= cfg_idle_qd and (i == 1 or queue_depths[i - 1] <= cfg_idle_qd):
                 gap = (issue_times[i] - prev_ct) * 1000  # ms
                 if gap >= 0:
                     idle_times[i] = gap
@@ -471,7 +507,7 @@ class FtraceParser(BaseParser):
         timestamps = result["timestamp"].to_list()
         size_kb_list = result["size_kb"].to_list()
         rwbs_list = result["rwbs"].to_list()
-        window_sec = 0.1  # 100ms window
+        window_sec = cfg_window_sec
 
         iops_list = [0.0] * n
         bw_mbps_list = [0.0] * n
@@ -521,11 +557,13 @@ class FtraceParser(BaseParser):
         d2c_vals = result["d2c_ms"].drop_nulls().to_numpy()
         if len(d2c_vals) > 0:
             import numpy as _np
-            p99 = float(_np.percentile(d2c_vals, 99))
-            p95 = float(_np.percentile(d2c_vals, 95))
+            p_high = float(_np.percentile(d2c_vals, pct_high))
+            p_low = float(_np.percentile(d2c_vals, pct_low))
+            label_high = f"P{int(pct_high)}+"
+            label_mid = f"P{int(pct_low)}-P{int(pct_high)}"
             result = result.with_columns(
-                pl.when(pl.col("d2c_ms") >= p99).then(pl.lit("P99+"))
-                .when(pl.col("d2c_ms") >= p95).then(pl.lit("P95-P99"))
+                pl.when(pl.col("d2c_ms") >= p_high).then(pl.lit(label_high))
+                .when(pl.col("d2c_ms") >= p_low).then(pl.lit(label_mid))
                 .otherwise(pl.lit("normal"))
                 .alias("latency_tier")
             )
@@ -536,14 +574,14 @@ class FtraceParser(BaseParser):
 
         # 6d. Queue drain time (time from max Q to Q=1)
         drain_times: list[float | None] = [None] * n
-        if max_q > 1:
+        if max_q > cfg_drain_target:
             in_drain = False
             drain_start_time = 0.0
             for i in range(n):
                 if queue_depths[i] >= max_q and not in_drain:
                     in_drain = True
                     drain_start_time = complete_times[i]
-                elif in_drain and queue_depths[i] <= 1:
+                elif in_drain and queue_depths[i] <= cfg_drain_target:
                     drain_times[i] = (complete_times[i] - drain_start_time) * 1000  # ms
                     in_drain = False
         result = result.with_columns(
