@@ -201,6 +201,44 @@ BUILTIN_PRESETS: Dict[str, List[GraphPreset]] = {
             y_columns=["busy_time_ms"],
             description="Device busy time (Q≥63: complete → complete interval)",
         ),
+        # ── Histogram presets ──
+        GraphPreset(
+            name="D2C Histogram",
+            chart_type="histogram",
+            x_column="d2c_ms",
+            y_columns=["d2c_ms"],
+            group_column="cmd",
+            description="Latency distribution (R/W split)",
+        ),
+        GraphPreset(
+            name="I/O Size Histogram",
+            chart_type="histogram",
+            x_column="size_kb",
+            y_columns=["size_kb"],
+            group_column="cmd",
+            description="I/O size distribution by command",
+        ),
+        GraphPreset(
+            name="Idle Time Histogram",
+            chart_type="histogram",
+            x_column="idle_time_ms",
+            y_columns=["idle_time_ms"],
+            description="Device idle time distribution — temporal locality",
+        ),
+        GraphPreset(
+            name="Busy Time Histogram",
+            chart_type="histogram",
+            x_column="busy_time_ms",
+            y_columns=["busy_time_ms"],
+            description="Device busy time distribution — saturation behavior",
+        ),
+        GraphPreset(
+            name="Queue Depth Histogram",
+            chart_type="histogram",
+            x_column="queue_depth",
+            y_columns=["queue_depth"],
+            description="Queue depth distribution — device load profile",
+        ),
     ],
     "sched": [
         GraphPreset(

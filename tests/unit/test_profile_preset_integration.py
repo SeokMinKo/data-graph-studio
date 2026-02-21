@@ -317,12 +317,12 @@ class TestE2EBlocklayerPresets:
 
     def test_creates_4_profiles(self, store):
         ids = self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
-        assert len(ids) == 16
+        assert len(ids) == 21
 
     def test_profiles_retrievable_by_dataset(self, store):
         self._create_profiles_from_presets(store, SAMPLE_BLOCKLAYER_DF, DATASET_ID)
         profiles = store.get_by_dataset(DATASET_ID)
-        assert len(profiles) == 16
+        assert len(profiles) == 21
         names = {p.name for p in profiles}
         assert "LBA Map" in names
         assert "D2C Latency" in names
