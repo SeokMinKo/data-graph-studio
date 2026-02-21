@@ -9,7 +9,7 @@ No UI-specific panel classes are imported.
 from __future__ import annotations
 
 import weakref
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QWidget

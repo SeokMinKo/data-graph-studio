@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Optional
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QComboBox, QFileDialog, QDialogButtonBox, QGroupBox, QFormLayout,
 )
-from PySide6.QtCore import Qt
 
 from ...core.state import ComparisonMode
 

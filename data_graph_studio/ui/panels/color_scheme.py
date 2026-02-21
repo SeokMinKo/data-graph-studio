@@ -4,7 +4,7 @@ Color Scheme - Spotfire 스타일 색상 스킴
 시각화에서 사용하는 색상 팔레트와 스케일을 관리합니다.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import colorsys
@@ -363,12 +363,12 @@ class ColorSchemeManager:
     def _generate_sequential_colors(self, base_color: str, count: int) -> List[str]:
         """순차적 색상 생성"""
         r, g, b = self._hex_to_rgb(base_color)
-        h, l, s = colorsys.rgb_to_hls(r/255, g/255, b/255)
+        h, light, s = colorsys.rgb_to_hls(r/255, g/255, b/255)
 
         colors = []
         for i in range(count):
             # 밝기를 변화
-            new_l = 0.1 + (0.8 * i / (count - 1)) if count > 1 else l
+            new_l = 0.1 + (0.8 * i / (count - 1)) if count > 1 else light
             new_r, new_g, new_b = colorsys.hls_to_rgb(h, new_l, s)
             colors.append(self._rgb_to_hex(
                 int(new_r * 255),

@@ -3,8 +3,8 @@ from __future__ import annotations
 import warnings
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal, QSize, QSortFilterProxyModel
-from PySide6.QtGui import QPainter, QPalette, QAccessible
+from PySide6.QtCore import Qt, Signal, QSortFilterProxyModel
+from PySide6.QtGui import QPainter, QPalette
 from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem, QStyle
 
 from ..models.profile_model import ProfileModel

@@ -5,14 +5,14 @@ Details-on-Demand Panel - Spotfire 스타일 상세 정보 패널
 """
 
 from typing import Dict, List, Optional, Set, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableView, QHeaderView,
     QLabel, QPushButton, QMenu, QFileDialog, QApplication,
-    QFrame, QToolButton, QSizePolicy
+    QFrame, QToolButton
 )
-from PySide6.QtGui import QAction, QClipboard
+from PySide6.QtGui import QAction
 import polars as pl
 
 

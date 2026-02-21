@@ -2,9 +2,8 @@
 Expression Engine - 계산 필드를 위한 수식 엔진
 """
 
-import re
 import math
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 

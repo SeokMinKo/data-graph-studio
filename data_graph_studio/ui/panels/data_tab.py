@@ -6,17 +6,16 @@ Search + ListBox UI pattern for Y-Axis, Group By, Hover, and Filter sections.
 
 from __future__ import annotations
 
-import functools
-from typing import Optional, List, Dict, Set, Any, TYPE_CHECKING
+from typing import List, Dict, Set, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QComboBox, QCheckBox, QLineEdit, QPushButton,
+    QComboBox, QLineEdit, QPushButton,
     QScrollArea, QSizePolicy, QToolButton, QCompleter,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QStringListModel, QSortFilterProxyModel
+from PySide6.QtCore import Qt, Signal, Slot, QStringListModel
 
-from ...core.state import AppState, AggregationType, ValueColumn, GroupColumn
+from ...core.state import AppState, AggregationType
 
 if TYPE_CHECKING:
     from ...core.data_engine import DataEngine

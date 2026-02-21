@@ -4,7 +4,7 @@ Curve Fitting - Spotfire 스타일 Lines & Curves
 추세선, 회귀 분석, 예측 기능을 제공합니다.
 """
 
-from typing import List, Dict, Any, Optional, Tuple, Callable
+from typing import List, Dict, Optional, Tuple, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np

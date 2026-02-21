@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QPushButton, QSizePolicy,
+    QPushButton,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
@@ -64,7 +64,7 @@ class ProfileOverlayRenderer(QWidget):
         self._header_title: Optional[QLabel] = None
         self._warning_label: Optional[QLabel] = None
         self._x_col_label: Optional[QLabel] = None
-        self._series_items: Dict[str, "pg.PlotCurveItem"] = {}
+        self._series_items: Dict[str, "pg.PlotCurveItem"] = {}  # noqa: F821
         self._series_visible: Dict[str, bool] = {}
 
         self._setup_ui()
@@ -270,9 +270,9 @@ class ProfileOverlayRenderer(QWidget):
         try:
             for sample, label in self._legend.items:
                 # Store reference for the click handler
-                def make_handler(s, l):
+                def make_handler(s, lbl):
                     def handler(event):
-                        self._on_legend_clicked(s, l)
+                        self._on_legend_clicked(s, lbl)
                     return handler
                 label.mousePressEvent = make_handler(sample, label)
                 sample.mousePressEvent = make_handler(sample, label)

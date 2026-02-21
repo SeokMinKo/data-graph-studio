@@ -9,23 +9,22 @@ import polars as pl
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QTableView, QHeaderView, QAbstractItemView, QMenu,
+    QTableView, QAbstractItemView, QMenu,
     QLineEdit, QComboBox, QPushButton, QMessageBox,
-    QSplitter, QSizePolicy, QApplication, QListWidget,
-    QListWidgetItem, QGroupBox, QSlider, QDialog,
-    QDialogButtonBox, QFormLayout, QColorDialog
+    QApplication, QListWidget,
+    QListWidgetItem, QSlider, QDialog,
+    QDialogButtonBox, QFormLayout
 )
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
-    Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
-    QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QEvent, QSize
+    Qt, Signal, QAbstractTableModel, QModelIndex,
+    QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QSize
 )
 from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnterEvent, QKeySequence
 
-from ...core.state import AppState, AggregationType, GroupColumn, ValueColumn
+from ...core.state import AppState, AggregationType, ValueColumn
 from ...core.data_engine import DataEngine
 from .grouped_table_model import GroupedTableModel
-from ..floatable import FloatButton, FloatWindow
 
 
 class ConditionalFormat:
@@ -691,7 +690,6 @@ class ValueChipWidget(QFrame):
         self._name = value_col.name
         self._index = index
         self._start_pos = None
-        accent = value_col.color
         self.setObjectName("valueChipWidget")
         self.setMinimumHeight(28)
 

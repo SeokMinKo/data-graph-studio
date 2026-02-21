@@ -2,13 +2,12 @@
 Floatable Section - 섹션을 독립 창으로 분리하는 기능
 """
 
-from typing import Optional, Callable
+from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QSizePolicy, QDialog, QApplication
+    QPushButton, QDialog
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, Signal
 
 
 class FloatWindow(QDialog):

@@ -2,7 +2,7 @@
 TreeMap Chart - 트리맵 차트
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dataclasses import dataclass
 import polars as pl
 
@@ -146,9 +146,9 @@ class TreeMapCalculator:
                 row_area = test_total * scale
 
                 if is_horizontal:
-                    row_length = row_area / current_height if current_height > 0 else 0
+                    row_area / current_height if current_height > 0 else 0
                 else:
-                    row_length = row_area / current_width if current_width > 0 else 0
+                    row_area / current_width if current_width > 0 else 0
 
                 # Aspect ratio 계산
                 worst_ratio = 0

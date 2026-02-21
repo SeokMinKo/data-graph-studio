@@ -17,7 +17,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence, QFont
 
 from ...core.shortcut_controller import ShortcutController
-from ..shortcuts import ShortcutCategory
 
 
 class ShortcutEditDialog(QDialog):

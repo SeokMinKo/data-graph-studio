@@ -4,7 +4,7 @@ Heatmap Chart
 
 import numpy as np
 import polars as pl
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 

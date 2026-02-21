@@ -2,46 +2,34 @@
 Graph Panel - 메인 그래프 + 옵션 + 범례 + 통계
 """
 
+import logging
 from typing import Optional, List, Dict, Any
+
 import numpy as np
-
+import polars as pl
+import pyqtgraph as pg
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QScrollArea, QSplitter, QToolButton, QButtonGroup,
-    QSizePolicy, QGroupBox, QDialog, QDialogButtonBox,
-    QLineEdit, QColorDialog, QPushButton, QSlider,
-    QTabWidget, QListWidget, QListWidgetItem, QGridLayout,
-    QMessageBox
+    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QSplitter, QDialog, QGridLayout
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer
-from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter, QBrush
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor
 
-from ..floatable import FloatableSection, FloatButton, FloatWindow
-from .sliding_window import SlidingWindowWidget
-from .graph_widgets import ColorButton, ExpandedChartDialog, ClickablePlotWidget, FormattedAxisItem
-from .data_tab import DataTab
-
-from ...core.state import AppState, ChartType, ToolMode, ComparisonMode, AggregationType
+from ...core.state import AppState, ChartType, ComparisonMode, AggregationType
 from ...core.data_engine import DataEngine
 from ...core.expression_engine import ExpressionEngine, ExpressionError
 from ...graph.sampling import DataSampler
 from ..drawing import (
-    DrawingManager, DrawingStyle, LineStyle,
-    LineDrawing, CircleDrawing, RectDrawing, TextDrawing,
-    DrawingStyleDialog, RectStyleDialog, TextInputDialog,
-    snap_to_angle
+    DrawingManager, DrawingStyle, DrawingStyleDialog
 )
 from .empty_state import EmptyStateWidget
-import polars as pl
-import pyqtgraph as pg
-
-# Import extracted classes
+from .sliding_window import SlidingWindowWidget
+from .graph_widgets import ColorButton, ExpandedChartDialog, ClickablePlotWidget, FormattedAxisItem  # noqa: F401 — re-exported
 from .graph_options_panel import GraphOptionsPanel
-from .legend_settings_panel import LegendSettingsPanel
 from .stat_panel import StatPanel
 from .main_graph import MainGraph
 from .minimap_widget import MinimapWidget
+
+_lg = logging.getLogger(__name__)
 
 
 
@@ -695,7 +683,7 @@ class GraphPanel(QWidget):
                             
                             # Create new group mask for sampled data
                             group_len = len(x_group_sampled)
-                            new_mask = np.zeros(0, dtype=bool)  # Will be resized later
+                            np.zeros(0, dtype=bool)  # Will be resized later
                             
                             x_sampled_list.append(x_group_sampled)
                             y_sampled_list.append(y_group_sampled)
@@ -1039,7 +1027,7 @@ class GraphPanel(QWidget):
             return
 
         value_cols = self.state.value_columns
-        chart_type = options.get('chart_type', ChartType.LINE)
+        options.get('chart_type', ChartType.LINE)
         bg_color = options.get('bg_color', QColor('#323D4A'))
         self.main_graph.setBackground(bg_color.name())
         line_width = options.get('line_width', 2)
@@ -2177,13 +2165,11 @@ class GraphPanel(QWidget):
         # Calculate grid dimensions based on direction
         if direction == GridDirection.ROW:
             n_cols = n_facets
-            n_rows = 1
         elif direction == GridDirection.COLUMN:
             n_cols = 1
-            n_rows = n_facets
         else:  # WRAP
             n_cols = min(max_columns, n_facets)
-            n_rows = (n_facets + n_cols - 1) // n_cols
+            (n_facets + n_cols - 1) // n_cols
 
         # Clear existing grid cells
         self._clear_grid_cells()
@@ -2293,9 +2279,9 @@ class GraphPanel(QWidget):
                     vals = row[:-1]
                     indices = row[-1]
                     if len(group_col_names) == 1:
-                        g_name = str(vals[0]) if vals[0] is not None else "(Empty)"
+                        str(vals[0]) if vals[0] is not None else "(Empty)"
                     else:
-                        g_name = " / ".join(str(v) if v is not None else "(Empty)" for v in vals)
+                        " / ".join(str(v) if v is not None else "(Empty)" for v in vals)
 
                     g_color = _grid_group_colors[g_idx % len(_grid_group_colors)]
                     g_pen = pg.mkPen(color=g_color, width=line_width)

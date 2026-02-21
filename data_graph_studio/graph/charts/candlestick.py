@@ -5,7 +5,6 @@ Candlestick (OHLC) Chart
 import numpy as np
 import polars as pl
 from typing import Dict, List, Any, Optional
-from datetime import date, datetime
 
 
 class CandlestickChart:

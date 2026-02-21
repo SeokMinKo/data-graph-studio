@@ -16,7 +16,7 @@ from typing import Optional, List, Dict, Tuple, Callable, Any
 
 import polars as pl
 
-from .types import DatasetInfo, DataSource, DataProfile
+from .types import DatasetInfo, DataSource
 from .file_loader import FileLoader
 
 logger = logging.getLogger(__name__)

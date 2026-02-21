@@ -8,16 +8,16 @@ import subprocess
 import tempfile
 import platform
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QComboBox, QSpinBox, QLineEdit, QCheckBox,
     QPushButton, QTableWidget, QTableWidgetItem, QGroupBox,
-    QSplitter, QTextEdit, QFrame, QSizePolicy, QHeaderView,
+    QSplitter, QTextEdit, QHeaderView,
     QWidget, QScrollArea, QListWidget, QListWidgetItem, QProgressBar
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QThread
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QColor
 
 from ...core.data_engine import FileType, DelimiterType
 from ...core.parsing import ParsingSettings
@@ -740,7 +740,7 @@ class ParsingPreviewDialog(QDialog):
             '.dat': FileType.TXT,
             '.etl': FileType.ETL,
         }
-        file_type = type_map.get(ext, FileType.TXT)
+        type_map.get(ext, FileType.TXT)
         
         # Delimiter detection
         if ext == '.tsv':
@@ -836,7 +836,7 @@ class ParsingPreviewDialog(QDialog):
             if delimiter_type == DelimiterType.REGEX and delimiter:
                 try:
                     fields = re.split(delimiter, line)
-                except:
+                except Exception:
                     fields = [line]
             elif delimiter_type == DelimiterType.SPACE or delimiter == " ":
                 fields = line.split()

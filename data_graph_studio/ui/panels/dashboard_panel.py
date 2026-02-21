@@ -9,20 +9,18 @@ custom grid size, dashboard name editing, and multi-dashboard tabs.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QFrame,
-    QLabel, QPushButton, QComboBox, QScrollArea, QSizePolicy,
-    QToolButton, QDialog, QSpinBox, QDialogButtonBox, QFormLayout,
-    QLineEdit, QTabWidget, QInputDialog, QMenu,
+    QLabel, QPushButton, QComboBox, QScrollArea, QToolButton, QDialog, QSpinBox, QDialogButtonBox, QFormLayout,
+    QLineEdit,
 )
-from PySide6.QtCore import Qt, Signal, QTimer, QMimeData
+from PySide6.QtCore import Qt, Signal, QMimeData
 from PySide6.QtGui import QDrag
 
 from ...core.dashboard_layout import (
     DashboardLayout,
-    DashboardCell,
     LAYOUT_PRESETS,
     MIN_CELL_WIDTH,
     MIN_CELL_HEIGHT,
@@ -30,8 +28,6 @@ from ...core.dashboard_layout import (
 
 if TYPE_CHECKING:
     from ...core.dashboard_controller import DashboardController
-    from ...core.state import AppState
-    from ...core.data_engine import DataEngine
 
 
 # ---------------------------------------------------------------------------

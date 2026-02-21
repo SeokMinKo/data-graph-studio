@@ -3,7 +3,7 @@ Cross Table (Pivot Table) - 크로스 테이블/피벗 테이블
 """
 
 from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import polars as pl
 
 

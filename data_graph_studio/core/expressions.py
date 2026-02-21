@@ -4,7 +4,7 @@ Advanced Expressions - Spotfire 스타일 수식 엔진
 계산 컬럼, OVER 표현식 (윈도우 함수), 데이터 함수 등을 지원합니다.
 """
 
-from typing import List, Dict, Any, Optional, Union, Callable, Set
+from typing import List, Dict, Any, Optional, Union, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import re
@@ -186,7 +186,7 @@ class ExpressionParser:
                 return pl.Series([result] * len(data))
             return pl.Series(result)
 
-        except Exception as e:
+        except Exception:
             # 평가 실패 시 None 반환
             return pl.Series([None] * len(data))
 
@@ -444,22 +444,22 @@ class ExpressionParser:
         # 비교
         result = []
         for i in range(len(data)):
-            l = left_val[i] if isinstance(left_val, (list, pl.Series, np.ndarray)) else left_val
-            r = right_val[i] if isinstance(right_val, (list, pl.Series, np.ndarray)) else right_val
+            lv = left_val[i] if isinstance(left_val, (list, pl.Series, np.ndarray)) else left_val
+            rv = right_val[i] if isinstance(right_val, (list, pl.Series, np.ndarray)) else right_val
 
             try:
                 if op == '=' or op == '==':
-                    result.append(l == r)
+                    result.append(lv == rv)
                 elif op == '!=' or op == '<>':
-                    result.append(l != r)
+                    result.append(lv != rv)
                 elif op == '>':
-                    result.append(l > r)
+                    result.append(lv > rv)
                 elif op == '<':
-                    result.append(l < r)
+                    result.append(lv < rv)
                 elif op == '>=':
-                    result.append(l >= r)
+                    result.append(lv >= rv)
                 elif op == '<=':
-                    result.append(l <= r)
+                    result.append(lv <= rv)
                 else:
                     result.append(False)
             except Exception:
@@ -727,7 +727,7 @@ class DataFunction:
         try:
             exec(self.body, {"__builtins__": {}}, local_vars)
             return local_vars.get('result')
-        except Exception as e:
+        except Exception:
             return None
 
 

@@ -2,12 +2,11 @@
 Keyboard Shortcuts Manager
 """
 
-from typing import Dict, List, Optional, Callable, Any, Union
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Callable, Union
+from dataclasses import dataclass
 from enum import Enum
 
 from PySide6.QtGui import QKeySequence
-from PySide6.QtCore import Qt
 
 
 class ShortcutCategory(Enum):

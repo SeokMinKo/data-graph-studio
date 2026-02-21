@@ -5,7 +5,7 @@ Graph Setup Step - Step 2 of New Project Wizard
 from __future__ import annotations
 
 import uuid
-from typing import List, Optional, Sequence
+from typing import List, Optional
 
 import numpy as np
 import pyqtgraph as pg
@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,

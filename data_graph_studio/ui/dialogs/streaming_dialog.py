@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QLineEdit, QSpinBox, QComboBox, QPushButton,
     QDialogButtonBox, QFrame, QGridLayout, QFileDialog,
 )
-from PySide6.QtCore import Qt
 
 
 class StreamingDialog(QDialog):

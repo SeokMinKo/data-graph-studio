@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
-    QListWidgetItem, QComboBox, QPushButton, QDialogButtonBox,
+    QListWidgetItem, QComboBox, QDialogButtonBox,
     QGroupBox, QAbstractItemView,
 )
 from PySide6.QtCore import Qt
@@ -17,7 +17,6 @@ from ..panels.profile_difference import ProfileDifferenceRenderer
 
 if TYPE_CHECKING:
     from ...core.profile import GraphSetting
-    from ...core.profile_store import ProfileStore
 
 
 class ProfileComparisonDialog(QDialog):

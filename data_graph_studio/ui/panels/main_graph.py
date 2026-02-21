@@ -15,9 +15,7 @@ from PySide6.QtWidgets import QApplication
 from .graph_widgets import FormattedAxisItem
 from ...core.state import AppState, ChartType, ToolMode
 from ..drawing import (
-    DrawingManager, DrawingStyle, LineStyle,
-    LineDrawing, ArrowDrawing, CircleDrawing, RectDrawing, TextDrawing,
-    DrawingStyleDialog, RectStyleDialog, TextInputDialog,
+    DrawingManager, DrawingStyle, LineDrawing, ArrowDrawing, CircleDrawing, RectDrawing, DrawingStyleDialog, TextInputDialog,
     snap_to_angle
 )
 import pyqtgraph as pg
@@ -591,7 +589,7 @@ class MainGraph(pg.PlotWidget):
             self.addItem(item)
             
         elif chart_type == ChartType.AREA:
-            fill_brush = pg.mkBrush(color=color)
+            pg.mkBrush(color=color)
             fill_color = QColor(color)
             fill_color.setAlpha(50)
             item = self.plot(x, y, pen=pen, fillLevel=0, brush=fill_color, name=name)
@@ -692,7 +690,6 @@ class MainGraph(pg.PlotWidget):
 
     def _prompt_add_annotation(self, data_x: float, data_y: float):
         """Show dialog and add annotation at given data point."""
-        from PySide6.QtWidgets import QInputDialog
         text, ok = QInputDialog.getText(
             self, "Add Annotation",
             f"Annotation text for point ({data_x:.4g}, {data_y:.4g}):"
@@ -1333,7 +1330,7 @@ class MainGraph(pg.PlotWidget):
             
             if len(self._lasso_points) >= 2:
                 # Create path
-                from PySide6.QtGui import QPainterPath, QPolygonF
+                from PySide6.QtGui import QPainterPath
                 from PySide6.QtCore import QPointF
                 
                 path = QPainterPath()
@@ -2023,7 +2020,6 @@ class MainGraph(pg.PlotWidget):
 
     def _add_custom_line(self):
         """Add a custom reference line via input dialog."""
-        from PySide6.QtWidgets import QInputDialog
         val, ok = QInputDialog.getDouble(self, "Custom Reference Line", "Value:", 0.0, -1e15, 1e15, 4)
         if ok:
             self.add_reference_line(val, color='#10B981', label=f'Ref: {val:.4g}')

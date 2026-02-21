@@ -3,27 +3,22 @@ Main Window - 메인 윈도우 및 레이아웃
 """
 
 import os
-import gc
-import json
 import logging
-import time
 from pathlib import Path
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget,
+    QStatusBar, QFileDialog, QMessageBox,
+    QApplication, QLabel, QFrame,
+    QInputDialog, QTabWidget, QDockWidget,
     QLineEdit
 )
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QShortcut
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut
 
-from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
-from ..core.state import AppState, ToolMode, ChartType, ComparisonMode, AggregationType
-from ..core.comparison_report import ComparisonReport
-from ..core.ipc_server import IPCServer
+from ..core.data_engine import DataEngine
+from ..core.state import AppState, ChartType
 from ..core.clipboard_manager import ClipboardManager, DragDropHandler
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
@@ -32,21 +27,8 @@ from .panels.history_panel import HistoryPanel
 from ..core.dashboard_controller import DashboardController
 from ..core.annotation_controller import AnnotationController
 from ..core.shortcut_controller import ShortcutController
-from ..core.export_controller import ExportController, ExportFormat
+from ..core.export_controller import ExportController
 from ..utils.memory import MemoryMonitor
-from ..core.updater import (
-    get_current_version,
-    check_github_latest,
-    is_update_available,
-    download_asset,
-    read_sha256_file,
-    sha256sum,
-    run_windows_installer,
-)
-
-# 에러 로깅 설정
-logger = logging.getLogger(__name__)
-
 from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
 from .panels.table_panel import TablePanel
@@ -57,32 +39,19 @@ from .panels.comparison_stats_panel import ComparisonStatsPanel
 from .panels.overlay_stats_widget import OverlayStatsWidget
 from .panels.annotation_panel import AnnotationPanel
 from .panels.dashboard_panel import DashboardPanel
-from .dialogs.parsing_preview_dialog import ParsingPreviewDialog
-from .dialogs.computed_column_dialog import ComputedColumnDialog
 from ..core.parsing import ParsingSettings
-from .dialogs.save_setting_dialog import SaveSettingDialog
-from .dialogs.streaming_dialog import StreamingDialog
-from .dialogs.command_palette_dialog import CommandPaletteDialog
-from .dialogs.profile_manager_dialog import ProfileManagerDialog
-from .dialogs.multi_file_dialog import open_multi_file_dialog
 from .floatable import FloatWindow
-from .floating_graph import FloatingGraphWindow, FloatingGraphManager
-from ..core.profile import Profile, GraphSetting, ProfileManager
+from .floating_graph import FloatingGraphManager
 from ..core.profile_store import ProfileStore
 from ..core.profile_controller import ProfileController
 from ..core.profile_comparison_controller import ProfileComparisonController
 from .models.profile_model import ProfileModel
-from .panels.profile_side_by_side import ProfileSideBySideLayout
-from .panels.profile_overlay import ProfileOverlayRenderer
-from .panels.profile_difference import ProfileDifferenceRenderer
-from .toolbars.compare_toolbar import CompareToolbar
 from .views.project_tree_view import ProjectTreeView
-from .wizards.new_project_wizard import NewProjectWizard
 
 # Controllers (extracted from MainWindow)
 from .controllers.ipc_controller import IPCController
 from .controllers.file_loading_controller import (
-    FileLoadingController, DataLoaderThread, DataLoaderThreadWithSettings,
+    FileLoadingController, DataLoaderThread,
 )
 from .controllers.dataset_controller import DatasetController
 from .controllers.profile_ui_controller import ProfileUIController
@@ -96,6 +65,9 @@ from .controllers.view_actions_controller import ViewActionsController
 from .controllers.help_controller import HelpController
 from .controllers.export_ui_controller import ExportUIController
 from .controllers.autorecovery_controller import AutorecoveryController
+
+# 에러 로깅 설정
+logger = logging.getLogger(__name__)
 
 
 class _QtTimerWrapper:
@@ -734,13 +706,10 @@ class MainWindow(QMainWindow):
 
             # 색상 결정 (메모리 사용량에 따라)
             if sys_pct > 85:
-                color = "#EF4444"  # 빨강 - 위험
                 emoji = "🔴"
             elif sys_pct > 70:
-                color = "#F59E0B"  # 노랑 - 경고
                 emoji = "🟡"
             else:
-                color = "#10B981"  # 녹색 - 정상
                 emoji = "🟢"
 
             self._status_memory_label.setText(f"{emoji} {proc_str} ({sys_pct:.0f}%)")
@@ -867,7 +836,7 @@ class MainWindow(QMainWindow):
     def _on_run_parser(self, parser_key: str):
         """Run a custom parser: open file → parse → load."""
         from pathlib import Path
-        from data_graph_studio.parsers import FtraceParser, ParserProfileStore
+        from data_graph_studio.parsers import FtraceParser
 
         parsers = {
             "ftrace": FtraceParser,
@@ -991,7 +960,7 @@ class MainWindow(QMainWindow):
         self._pending_wizard_result = None
         
         graph_setting = result.get('graph_setting')
-        project_name = result.get('project_name')
+        result.get('project_name')
         
         if graph_setting:
             active_id = self.engine.active_dataset_id
@@ -1583,7 +1552,7 @@ class MainWindow(QMainWindow):
                             data.append('\t'.join(row_data))
                         
                         text = '\n'.join(data)
-                        msg = ClipboardManager.copy_text(text)
+                        ClipboardManager.copy_text(text)
                         self.statusBar().showMessage(f"✓ Copied {len(rows)} rows", 3000)
                         return
             

@@ -331,13 +331,16 @@ class DataEngine:
     # -- DataExporter delegation ----------------------------------------------
 
     def export_csv(self, path, selected_rows=None):
-        if self.df is not None: self._exporter.export_csv(self.df, path, selected_rows)
+        if self.df is not None:
+            self._exporter.export_csv(self.df, path, selected_rows)
 
     def export_excel(self, path, selected_rows=None):
-        if self.df is not None: self._exporter.export_excel(self.df, path, selected_rows)
+        if self.df is not None:
+            self._exporter.export_excel(self.df, path, selected_rows)
 
     def export_parquet(self, path, selected_rows=None):
-        if self.df is not None: self._exporter.export_parquet(self.df, path, selected_rows)
+        if self.df is not None:
+            self._exporter.export_parquet(self.df, path, selected_rows)
 
     # -- DatasetManager delegation --------------------------------------------
 

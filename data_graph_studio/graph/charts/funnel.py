@@ -2,7 +2,7 @@
 Funnel Chart - 퍼널 차트
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dataclasses import dataclass
 
 

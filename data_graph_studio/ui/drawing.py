@@ -5,14 +5,14 @@ Line, Circle, Rectangle, Text 드로잉 지원
 """
 
 from typing import Optional, List, Dict, Any, Tuple
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 import math
 
 from PySide6.QtWidgets import (
-    QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QSpinBox, QDoubleSpinBox, QComboBox,
     QColorDialog, QPushButton, QDialogButtonBox, QFontComboBox,
     QTextEdit, QGroupBox, QCheckBox
 )
@@ -20,7 +20,6 @@ from PySide6.QtCore import Qt, Signal, QPointF, QRectF
 from PySide6.QtGui import QColor, QFont, QPen, QBrush, QPainterPath
 
 import pyqtgraph as pg
-import numpy as np
 
 
 # ==================== Drawing Object Types ====================

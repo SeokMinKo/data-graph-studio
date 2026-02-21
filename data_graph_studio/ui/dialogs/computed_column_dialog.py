@@ -12,26 +12,23 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional
 
 import polars as pl
-from PySide6.QtCore import Qt, Signal, QThread, QTimer
+from PySide6.QtCore import Signal, QThread, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
-    QHBoxLayout,
     QFormLayout,
     QLineEdit,
     QRadioButton,
     QButtonGroup,
     QSpinBox,
-    QDoubleSpinBox,
     QComboBox,
     QTextEdit,
     QLabel,
     QDialogButtonBox,
     QProgressBar,
-    QPushButton,
     QGroupBox,
     QWidget,
 )

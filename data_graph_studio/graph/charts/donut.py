@@ -42,7 +42,7 @@ class DonutChart:
             도넛 데이터
         """
         # 유효한 값만 필터링
-        valid_pairs = [(l, v) for l, v in zip(labels, values) if v > 0]
+        valid_pairs = [(lbl, v) for lbl, v in zip(labels, values) if v > 0]
 
         if not valid_pairs:
             return {

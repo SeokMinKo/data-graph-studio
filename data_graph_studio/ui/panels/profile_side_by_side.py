@@ -12,10 +12,9 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QSplitter, QCheckBox, QPushButton, QGridLayout,
-    QSizePolicy,
+    QSplitter, QPushButton, QGridLayout,
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
 
 from .side_by_side_layout import MiniGraphWidget

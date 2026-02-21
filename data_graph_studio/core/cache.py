@@ -7,7 +7,7 @@ import hashlib
 import json
 import sys
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -72,7 +72,7 @@ class CacheEntry:
         # 기본: sys.getsizeof 사용
         try:
             return sys.getsizeof(obj)
-        except:
+        except Exception:
             return 64  # 기본값
 
 

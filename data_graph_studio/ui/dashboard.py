@@ -14,11 +14,6 @@ import uuid
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFrame,
-    QLabel, QPushButton, QMenu, QSizePolicy,
-)
-from PySide6.QtCore import Qt, Signal
 
 try:
     from ..core.state import ChartType

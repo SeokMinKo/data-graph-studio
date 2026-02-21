@@ -10,10 +10,9 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QFileDialog, QGroupBox,
-    QCheckBox, QComboBox, QFrame, QMessageBox, QSizePolicy
+    QCheckBox, QComboBox, QFrame
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QIcon, QColor
 
 from ...core.data_engine import DataEngine
 

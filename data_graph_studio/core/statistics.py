@@ -4,8 +4,8 @@ Statistical Analysis - Spotfire 스타일 통계 분석 도구
 상관 분석, 클러스터링, 시계열 분석, 가설 검정 등을 제공합니다.
 """
 
-from typing import List, Dict, Any, Optional, Tuple, Union
-from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 import polars as pl
@@ -849,7 +849,7 @@ class HypothesisTester:
         k = len(groups)
         n = sum(len(g) for g in groups)
         df_between = k - 1
-        df_within = n - k
+        n - k
 
         # Eta squared 효과 크기
         grand_mean = np.mean([np.mean(g) for g in groups])

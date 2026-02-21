@@ -19,14 +19,12 @@ import subprocess
 import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable, Set
-from datetime import datetime
 
 import polars as pl
-import numpy as np
 
 from .types import (
     FileType, DelimiterType, LoadingProgress, DataProfile, ColumnInfo,
-    DataSource, PrecisionMode, DatasetInfo,
+    DataSource, PrecisionMode,
 )
 
 from .etl_helpers import HAS_ETL_PARSER
@@ -638,8 +636,8 @@ class FileLoader:
 
         lines = lines[skip_rows:]
         if comment_char:
-            lines = [l for l in lines if not l.strip().startswith(comment_char)]
-        lines = [l.strip() for l in lines if l.strip()]
+            lines = [line for line in lines if not line.strip().startswith(comment_char)]
+        lines = [line.strip() for line in lines if line.strip()]
 
         if not lines:
             return pl.DataFrame()
@@ -733,7 +731,7 @@ class FileLoader:
                     return df
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-                raise ValueError(f"ETL 파일 변환 실패")
+                raise ValueError("ETL 파일 변환 실패")
             except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 raise ValueError(f"ETL 변환 오류: {e}")
 

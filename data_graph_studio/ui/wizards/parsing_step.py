@@ -437,7 +437,6 @@ class ParsingStep(QWizardPage):
             ]
 
         try:
-            import polars as pl
             df = DataEngine.parse_etl_binary(self.file_path)
 
             if df is None or len(df) == 0:

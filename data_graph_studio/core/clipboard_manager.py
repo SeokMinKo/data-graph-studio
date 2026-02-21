@@ -212,7 +212,7 @@ class ClipboardManager:
                         df = df.with_columns(numeric.cast(pl.Int64).alias(col))
                     else:
                         df = df.with_columns(numeric.alias(col))
-            except:
+            except Exception:
                 pass
         return df
     

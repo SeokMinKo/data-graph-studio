@@ -238,7 +238,6 @@ class PerfettoTraceController(QObject):
     @staticmethod
     def _platform_bin_dir() -> str:
         """Return platform subdirectory name for bundled binaries."""
-        import platform as _platform
         s = sys.platform
         m = _platform.machine().lower()
         if s == "darwin":

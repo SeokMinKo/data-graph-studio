@@ -9,10 +9,10 @@ from typing import Optional, List
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLineEdit, QListWidget, QListWidgetItem,
-    QWidget, QLabel, QHBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence, QFont
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 
 
 class CommandEntry:

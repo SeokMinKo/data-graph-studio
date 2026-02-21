@@ -6,11 +6,10 @@ Comparison Report Generator - 비교 리포트 생성기
 
 import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+from typing import List, Dict, Any
 
 from .data_engine import DataEngine
-from .state import AppState, ComparisonMode
+from .state import AppState
 
 
 class ComparisonReport:
@@ -144,7 +143,7 @@ class ComparisonReport:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html)
             return True
-        except Exception as e:
+        except Exception:
             return False
 
     def _generate_html_report(self, data: Dict[str, Any]) -> str:

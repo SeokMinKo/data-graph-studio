@@ -46,7 +46,6 @@ class TraceController:
 
         from data_graph_studio.ui.dialogs.trace_config_dialog import (
             load_logger_config,
-            TraceConfigDialog,
         )
 
         logger_cfg = load_logger_config()
@@ -457,7 +456,6 @@ class TraceController:
         """
         from data_graph_studio.parsers.graph_preset import BUILTIN_PRESETS
         from data_graph_studio.core.profile import GraphSetting
-        from data_graph_studio.core.state import ChartType, AggregationType
 
         presets = BUILTIN_PRESETS.get(converter, [])
         if not presets:

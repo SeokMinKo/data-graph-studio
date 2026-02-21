@@ -5,17 +5,17 @@ Side-by-Side Layout - 병렬 비교 레이아웃
 스크롤/줌 동기화 지원 (ViewSyncManager 사용)
 """
 
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, TYPE_CHECKING
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QSplitter, QScrollArea, QGroupBox, QCheckBox,
-    QSizePolicy, QPushButton
+    QSplitter, QCheckBox,
+    QPushButton
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QColor
 
 from ...core.data_engine import DataEngine
-from ...core.state import AppState, ComparisonMode
+from ...core.state import AppState
 from ...core.view_sync import ViewSyncManager
 
 if TYPE_CHECKING:
@@ -462,7 +462,7 @@ class MiniGraphWidget(QWidget):
             else:
                 # Default: line
                 pen = pg.mkPen(pen_color, width=line_width)
-                plot_item = self.plot_widget.plot(
+                self.plot_widget.plot(
                     x_data, y_data,
                     pen=pen,
                     name=name,

@@ -6,9 +6,6 @@ Uses python-pptx for presentation generation.
 Creates presentation-ready slides with charts and data.
 """
 
-from typing import Optional, List, Dict, Any, Union
-from pathlib import Path
-from datetime import datetime
 import io
 import base64
 import logging
@@ -17,13 +14,6 @@ from data_graph_studio.core.report import (
     ReportGenerator,
     ReportData,
     ReportOptions,
-    ReportTemplate,
-    ReportTheme,
-    DatasetSummary,
-    StatisticalSummary,
-    ComparisonResult,
-    ChartData,
-    TableData,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,11 +22,11 @@ logger = logging.getLogger(__name__)
 PPTX_AVAILABLE = False
 try:
     from pptx import Presentation
-    from pptx.util import Inches, Pt, Emu
+    from pptx.util import Inches, Pt, Emu  # noqa: F401
     from pptx.dml.color import RGBColor
-    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR  # noqa: F401
     from pptx.enum.shapes import MSO_SHAPE
-    from pptx.enum.dml import MSO_THEME_COLOR
+    from pptx.enum.dml import MSO_THEME_COLOR  # noqa: F401
     PPTX_AVAILABLE = True
 except ImportError:
     pass
@@ -486,7 +476,7 @@ class PPTXReportGenerator(ReportGenerator):
             num_rows = min(len(stats_list), 10) + 1  # 헤더 + 최대 10행
 
             table_width = content_area['width'] - Inches(0.5)
-            col_width = table_width / num_cols
+            table_width / num_cols
             row_height = Inches(0.4)
 
             table = slide.shapes.add_table(

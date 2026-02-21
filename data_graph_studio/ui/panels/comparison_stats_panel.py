@@ -5,20 +5,16 @@ Comparison Statistics Panel - 비교 통계 패널
 통계 검정 (t-test, correlation, p-value) 포함
 """
 
-from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-    QComboBox, QPushButton, QSizePolicy, QScrollArea,
-    QTabWidget, QTextEdit, QProgressBar, QFileDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
+    QComboBox, QPushButton, QTabWidget, QTextEdit, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from ...core.data_engine import DataEngine
 from ...core.state import (
-    AppState, ComparisonMode,
-    DIFF_POSITIVE_COLOR, DIFF_NEGATIVE_COLOR, DIFF_NEUTRAL_COLOR
+    AppState, DIFF_POSITIVE_COLOR, DIFF_NEGATIVE_COLOR
 )
 
 
@@ -532,7 +528,6 @@ class ComparisonStatsPanel(QWidget):
         self.diff_table.setHorizontalHeaderLabels(columns)
 
         # 크기순 정렬
-        import polars as pl
         sorted_df = diff_df.sort("diff", descending=True)
 
         # 상위 20개만 표시

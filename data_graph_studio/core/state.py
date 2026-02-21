@@ -4,7 +4,7 @@ State Management - 앱 상태 관리
 멀티 데이터셋 비교 기능 지원
 """
 
-from typing import Optional, List, Dict, Any, Set, Callable, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
@@ -1550,7 +1550,6 @@ class AppState(QObject):
 
     def apply_graph_setting(self, setting: 'GraphSetting'):
         """GraphSetting을 현재 상태에 적용"""
-        from .profile import GraphSetting
 
         # 차트 타입
         try:

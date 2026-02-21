@@ -4,16 +4,14 @@ Overlay Statistics Widget - 오버레이 통계 위젯
 오버레이 비교 모드에서 그래프 위에 표시되는 통계 정보 위젯
 """
 
-from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QGridLayout, QPushButton, QSizePolicy, QGraphicsOpacityEffect
+    QGridLayout, QPushButton, QGraphicsOpacityEffect
 )
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QPoint
-from PySide6.QtGui import QColor, QPalette, QFont
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation
 
 from ...core.data_engine import DataEngine
-from ...core.state import AppState, ComparisonMode
+from ...core.state import AppState
 
 
 class DatasetLegendItem(QFrame):

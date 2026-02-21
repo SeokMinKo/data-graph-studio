@@ -4,7 +4,7 @@ Violin Plot Chart
 
 import numpy as np
 import polars as pl
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from scipy import stats as scipy_stats
 
 

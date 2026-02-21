@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Optional, List
 from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QProgressDialog, QApplication, QDialog,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtCore import Qt, QThread, Signal
 
 from ...core.data_engine import DataEngine, LoadingProgress
 from ...core.clipboard_manager import ClipboardManager
@@ -551,7 +551,7 @@ class FileLoadingController:
             if errors:
                 QMessageBox.warning(
                     w, "Load Project",
-                    f"Some data files not found:\n" + "\n".join(errors)
+                    "Some data files not found:\n" + "\n".join(errors)
                 )
 
             loaded_count = 0

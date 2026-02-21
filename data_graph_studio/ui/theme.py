@@ -2,8 +2,8 @@
 Theme - Modern Light/Dark Mode with Glassmorphism and Soft UI
 """
 
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
+from typing import Dict, List
+from dataclasses import dataclass
 
 
 @dataclass

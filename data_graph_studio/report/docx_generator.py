@@ -6,9 +6,6 @@ Uses python-docx for document generation.
 Supports styles, tables, images, and table of contents.
 """
 
-from typing import Optional, List, Dict, Any, Union
-from pathlib import Path
-from datetime import datetime
 import io
 import base64
 import logging
@@ -17,15 +14,8 @@ from data_graph_studio.core.report import (
     ReportGenerator,
     ReportData,
     ReportOptions,
-    ReportTemplate,
-    ReportTheme,
     PageSize,
     PageOrientation,
-    DatasetSummary,
-    StatisticalSummary,
-    ComparisonResult,
-    ChartData,
-    TableData,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,7 +26,7 @@ try:
     from docx import Document
     from docx.shared import Inches, Pt, Cm, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.enum.table import WD_TABLE_ALIGNMENT  # noqa: F401
     from docx.enum.style import WD_STYLE_TYPE
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement

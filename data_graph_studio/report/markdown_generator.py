@@ -9,22 +9,12 @@ Generates clean, readable Markdown reports suitable for:
 - Converting to other formats
 """
 
-from typing import Optional, List, Dict, Any
-from datetime import datetime
 import base64
 
 from data_graph_studio.core.report import (
     ReportGenerator,
     ReportData,
     ReportOptions,
-    ReportTemplate,
-    ReportTheme,
-    DatasetSummary,
-    StatisticalSummary,
-    ComparisonResult,
-    DifferenceAnalysis,
-    ChartData,
-    TableData,
 )
 
 

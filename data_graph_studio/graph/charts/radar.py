@@ -151,7 +151,7 @@ class RadarCalculator:
         """
         result = self.calculate(axes, series, **kwargs)
 
-        n_axes = len(result["axes"])
+        len(result["axes"])
 
         # 축 라인 끝점
         axis_endpoints = []

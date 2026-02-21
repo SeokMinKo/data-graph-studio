@@ -7,7 +7,6 @@ Requires exactly 2 profiles with the same X column.
 
 from __future__ import annotations
 
-import math
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np

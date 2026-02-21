@@ -11,11 +11,11 @@ from enum import Enum
 try:
     from PySide6.QtCore import Qt, Signal
     from PySide6.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-        QFrame, QPushButton, QLineEdit, QCheckBox, QSpinBox,
-        QDoubleSpinBox, QComboBox, QColorDialog, QFontDialog,
-        QGroupBox, QToolButton, QTreeWidget, QTreeWidgetItem,
-        QSizePolicy
+        QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,  # noqa: F401
+        QFrame, QPushButton, QLineEdit, QCheckBox, QSpinBox,  # noqa: F401
+        QDoubleSpinBox, QComboBox, QColorDialog, QFontDialog,  # noqa: F401
+        QGroupBox, QToolButton, QTreeWidget, QTreeWidgetItem,  # noqa: F401
+        QSizePolicy  # noqa: F401
     )
     from PySide6.QtGui import QColor, QFont
     HAS_QT = True

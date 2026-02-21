@@ -7,11 +7,10 @@ from typing import Optional, Dict, Any
 import numpy as np
 
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
+    QHBoxLayout, QVBoxLayout, QLabel, QFrame,
     QSpinBox, QScrollArea, QGroupBox, QGridLayout, QComboBox,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
 
 from .graph_widgets import ClickablePlotWidget
 from ...core.state import AppState
@@ -241,7 +240,7 @@ class StatPanel(QFrame):
                     hist, bins = np.histogram(clean_x, bins=self._x_bins)
                     self.x_hist_widget.plot(bins, hist, stepMode="center", fillLevel=0,
                                             brush=(100, 100, 200, 100))
-            except:
+            except Exception:
                 pass
 
     def _update_y_histogram(self):
@@ -264,7 +263,7 @@ class StatPanel(QFrame):
                         pen=pg.mkPen((100, 200, 100, 255), width=1)
                     )
                     self.y_hist_widget.addItem(bar_item)
-            except:
+            except Exception:
                 pass
 
     def _render_pie(self, labels: list, values: list, colors: list):
@@ -322,7 +321,7 @@ class StatPanel(QFrame):
                         
                         # Store for expansion
                         self.pie_widget.set_pie_data(labels, values, "Y Value Distribution by Quartile", colors)
-                except:
+                except Exception:
                     pass
             return
 
@@ -340,7 +339,7 @@ class StatPanel(QFrame):
             
             # Store for expansion
             self.pie_widget.set_pie_data(labels, values, "Y Groupby Aggregation", colors)
-        except:
+        except Exception:
             pass
 
     def _update_percentile_chart(self):
@@ -371,7 +370,7 @@ class StatPanel(QFrame):
             self.percentile_widget.set_percentile_data(
                 clean_y, "Y Values Percentile Distribution", (148, 103, 189)
             )
-        except:
+        except Exception:
             pass
     
     def update_histograms(self, x_data: Optional[np.ndarray], y_data: Optional[np.ndarray],

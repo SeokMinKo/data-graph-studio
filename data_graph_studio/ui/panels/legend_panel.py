@@ -4,7 +4,7 @@ Legend Panel - Spotfire 스타일 범례 설정
 시각화 범례의 위치, 스타일, 내용을 설정합니다.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 

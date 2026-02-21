@@ -902,7 +902,6 @@ class GraphOptionsPanel(QFrame):
 
     def _on_grid_view_changed(self, state: int):
         """Handle Grid View enable/disable"""
-        from ...core.state import GridDirection
         enabled = state == Qt.Checked
         self._grid_options_widget.setVisible(enabled)
         self.state.set_grid_view_enabled(enabled)

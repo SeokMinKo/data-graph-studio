@@ -6,10 +6,7 @@ Self-contained HTML with embedded CSS and images.
 Supports light/dark themes and interactive charts.
 """
 
-from typing import Optional, List, Dict, Any
-from datetime import datetime
 import html
-import json
 
 from data_graph_studio.core.report import (
     ReportGenerator,
@@ -17,15 +14,7 @@ from data_graph_studio.core.report import (
     ReportOptions,
     ReportTemplate,
     ReportTheme,
-    DatasetSummary,
-    StatisticalSummary,
-    ComparisonResult,
-    DifferenceAnalysis,
     ChartData,
-    TableData,
-    ChartStatistics,
-    StatisticType,
-    get_default_statistics_for_chart,
 )
 
 

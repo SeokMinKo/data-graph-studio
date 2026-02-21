@@ -2,14 +2,14 @@
 Summary Panel - Modern Statistics Cards with Micro-animations
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QScrollArea, QSizePolicy, QGraphicsDropShadowEffect, QPushButton
+    QScrollArea
 )
 from PySide6.QtCore import Qt, Slot, QPointF
-from PySide6.QtGui import QFont, QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen
 
 from ...core.state import AppState
 from ..floatable import FloatButton
@@ -363,7 +363,7 @@ class SummaryPanel(QWidget):
         
         for i, value_col in enumerate(self.state.value_columns):
             name = value_col.name
-            agg = value_col.aggregation.value.upper()
+            value_col.aggregation.value.upper()
             
             if name in stats and isinstance(stats[name], dict):
                 col_stats = stats[name]

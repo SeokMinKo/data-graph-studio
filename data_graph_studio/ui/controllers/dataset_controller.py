@@ -610,7 +610,7 @@ class DatasetController:
             return
 
         w.statusbar.showMessage(
-            f"Difference analysis: comparing 2 datasets",
+            "Difference analysis: comparing 2 datasets",
             3000
         )
 

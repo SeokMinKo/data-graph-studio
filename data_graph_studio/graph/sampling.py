@@ -3,7 +3,7 @@ Data Sampling - 대용량 데이터 샘플링 알고리즘
 """
 
 import numpy as np
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 class DataSampler:

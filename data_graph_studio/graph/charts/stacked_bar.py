@@ -2,8 +2,7 @@
 Stacked Bar Chart - 누적 막대 차트
 """
 
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Any
 import polars as pl
 
 

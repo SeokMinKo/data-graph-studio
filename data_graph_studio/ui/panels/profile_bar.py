@@ -2,13 +2,11 @@
 Profile Bar - 프로파일 설정 바 UI
 """
 
-from typing import Optional, List
 from PySide6.QtWidgets import (
     QWidget, QFrame, QHBoxLayout, QVBoxLayout, QLabel,
-    QPushButton, QComboBox, QScrollArea, QMenu, QSizePolicy,
-    QToolButton, QMessageBox, QFileDialog, QInputDialog
+    QPushButton, QComboBox, QScrollArea, QMenu, QToolButton, QMessageBox, QFileDialog, QInputDialog
 )
-from PySide6.QtCore import Qt, Signal, QSize, QMimeData
+from PySide6.QtCore import Qt, Signal, QMimeData
 from PySide6.QtGui import QDrag, QMouseEvent, QAction
 
 from ...core.state import AppState
@@ -498,7 +496,7 @@ class ProfileBar(QFrame):
                 QMessageBox.information(
                     self,
                     "Profile Saved",
-                    f"Profile saved successfully."
+                    "Profile saved successfully."
                 )
             except Exception as e:
                 QMessageBox.critical(

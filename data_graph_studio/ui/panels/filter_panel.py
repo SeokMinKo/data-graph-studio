@@ -10,12 +10,12 @@ from enum import Enum
 import polars as pl
 
 try:
-    from PySide6.QtCore import Qt, Signal, QObject
+    from PySide6.QtCore import Qt, Signal, QObject  # noqa: F401
     from PySide6.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-        QFrame, QPushButton, QLineEdit, QCheckBox, QSlider,
-        QListWidget, QListWidgetItem, QComboBox, QGroupBox,
-        QToolButton, QSizePolicy, QSpinBox, QDoubleSpinBox
+        QFrame, QPushButton, QLineEdit, QCheckBox, QSlider,  # noqa: F401
+        QListWidget, QListWidgetItem, QComboBox, QGroupBox,  # noqa: F401
+        QToolButton, QSizePolicy, QSpinBox, QDoubleSpinBox  # noqa: F401
     )
     HAS_QT = True
 except ImportError:
@@ -195,9 +195,9 @@ class FilterPanelModel:
             elif state.filter_type == FilterType.BOOLEAN:
                 conditions = []
                 if state.show_true:
-                    conditions.append(self._data[col] == True)
+                    conditions.append(self._data[col])
                 if state.show_false:
-                    conditions.append(self._data[col] == False)
+                    conditions.append(not self._data[col])
                 if state.show_null:
                     conditions.append(self._data[col].is_null())
 

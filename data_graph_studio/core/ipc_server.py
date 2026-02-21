@@ -8,7 +8,6 @@ MAX_PORT_ATTEMPTS times.  Records the chosen port in ~/.dgs/ipc_port as
 import json
 import logging
 import os
-import signal
 from pathlib import Path
 from typing import Callable, Optional
 

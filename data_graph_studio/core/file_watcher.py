@@ -377,7 +377,7 @@ class FileWatcher(QObject):
                         f.seek(entry.last_size)
                         new_data = f.read()
                     new_lines = new_data.decode("utf-8", errors="replace").splitlines()
-                    new_lines = [l for l in new_lines if l.strip()]
+                    new_lines = [line for line in new_lines if line.strip()]
                     new_rows = len(new_lines)
 
                     if new_rows > 0:

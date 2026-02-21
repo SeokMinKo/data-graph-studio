@@ -5,7 +5,6 @@ Report Generation Dialog
 Provides UI for configuring and generating reports.
 """
 
-from typing import Optional, List, Dict, Any
 from pathlib import Path
 import logging
 
@@ -14,18 +13,15 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QTextEdit, QComboBox, QCheckBox,
     QPushButton, QGroupBox, QTabWidget, QWidget,
     QFileDialog, QProgressDialog, QMessageBox,
-    QSpinBox, QButtonGroup, QRadioButton, QFrame,
-    QScrollArea, QSizePolicy
+    QSpinBox, QButtonGroup, QRadioButton
 )
-from PySide6.QtCore import Qt, Signal, QThread, QSize
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt, Signal, QThread
 
 from data_graph_studio.core.report import (
     ReportFormat,
     ReportTheme,
     PageSize,
     PageOrientation,
-    ReportMetadata,
     ReportOptions,
     ReportData,
 )

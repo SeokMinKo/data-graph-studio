@@ -268,8 +268,8 @@ class ExportWorker(QThread):
 
         self.progress.emit(20)
 
-        from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QSizeF, QRectF
-        from PySide6.QtGui import QPageSize, QPageLayout, QPdfWriter, QFont
+        from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QRectF
+        from PySide6.QtGui import QPageSize, QPdfWriter, QFont
 
         qba = QByteArray()
         qbuf = QBuffer(qba)
@@ -385,7 +385,6 @@ class ExportWorker(QThread):
         atomic_write(self.path, data)
 
     def _export_parquet(self) -> None:
-        import tempfile
 
         # Polars write_parquet writes to path; use temp file + rename
         tmp_path = self.path + ".tmp"

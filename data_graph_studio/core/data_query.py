@@ -239,7 +239,7 @@ class DataQuery:
             numeric_cols = sum(1 for dtype in schema.values()
                                if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
                                             pl.Float32, pl.Float64])
-            temporal_cols = sum(1 for dtype in schema.values()
+            sum(1 for dtype in schema.values()
                                 if dtype in [pl.Date, pl.Datetime, pl.Time])
 
             null_exprs = [pl.col(c).null_count().alias(c) for c in schema.keys()]

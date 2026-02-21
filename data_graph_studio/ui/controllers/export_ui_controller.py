@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QFileDialog, QApplication, QMessageBox
 
@@ -285,7 +285,8 @@ class ExportUIController:
             if hasattr(self.w.graph_panel, 'main_graph') and self.w.graph_panel.main_graph:
                 from pyqtgraph.exporters import ImageExporter
                 from PySide6.QtGui import QImage
-                import tempfile, os
+                import tempfile
+                import os
                 exporter = ImageExporter(self.w.graph_panel.main_graph.plotItem)
                 exporter.parameters()['width'] = 1920
                 temp_path = os.path.join(tempfile.gettempdir(), 'dgs_export_temp.png')

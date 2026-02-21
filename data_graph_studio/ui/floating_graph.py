@@ -3,10 +3,10 @@ Floating Graph Window - 독립된 그래프 창
 """
 
 import uuid
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QPushButton, QToolButton, QCheckBox, QWidget, QApplication
+    QToolButton, QCheckBox, QWidget, QApplication
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent

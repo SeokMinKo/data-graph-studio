@@ -5,7 +5,7 @@ Trellis Visualization - Spotfire 스타일 트렐리스 시각화
 """
 
 from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 import polars as pl
 import math

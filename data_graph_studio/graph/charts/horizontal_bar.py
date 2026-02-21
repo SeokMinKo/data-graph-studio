@@ -4,7 +4,6 @@ Horizontal Bar Chart - 수평 막대 차트
 
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-import numpy as np
 
 
 @dataclass

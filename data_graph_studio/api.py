@@ -460,7 +460,7 @@ class DataGraphStudio:
                 # 간단한 필터 파싱
                 # 예: "Value > 100", "Category == 'A'"
                 df = df.filter(pl.sql_expr(expr))
-            except:
+            except Exception:
                 pass
         
         return df

@@ -4,7 +4,7 @@ Tooltip Configuration - Spotfire 스타일 툴팁 설정
 시각화 툴팁의 내용과 형식을 설정합니다.
 """
 
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
 

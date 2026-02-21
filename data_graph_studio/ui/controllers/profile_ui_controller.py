@@ -10,7 +10,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QInputDialog, QDialog,

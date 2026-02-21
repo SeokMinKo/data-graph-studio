@@ -2,7 +2,7 @@
 Profile Manager Dialog - 프로파일 관리 다이얼로그
 """
 
-from typing import Optional, List
+from typing import Optional
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QPushButton, QListWidget, QListWidgetItem, QSplitter,
@@ -362,7 +362,7 @@ class ProfileManagerDialog(QDialog):
                 QMessageBox.information(
                     self,
                     "Export Successful",
-                    f"Profile exported successfully."
+                    "Profile exported successfully."
                 )
             except Exception as e:
                 QMessageBox.critical(

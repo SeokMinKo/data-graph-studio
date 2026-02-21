@@ -11,7 +11,7 @@ PRD Section 5.4, Feature 5 (3.5.x)
 
 from __future__ import annotations
 
-from typing import Optional, List
+from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget,

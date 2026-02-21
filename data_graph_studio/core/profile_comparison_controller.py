@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
@@ -86,7 +86,6 @@ class ProfileComparisonController(QObject):
 
         # Mode-specific validation
         if mode in (ComparisonMode.OVERLAY, ComparisonMode.DIFFERENCE):
-            from .profile import GraphSetting as _GS  # noqa: F811
             from ..ui.panels.profile_overlay import ProfileOverlayRenderer
 
             if not ProfileOverlayRenderer.can_overlay(settings):

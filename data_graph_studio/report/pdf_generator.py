@@ -6,19 +6,12 @@ Uses WeasyPrint (preferred) or FPDF2 as fallback.
 Supports page headers/footers, table of contents, and Korean fonts.
 """
 
-from typing import Optional, List, Dict, Any, Union
-from pathlib import Path
-from datetime import datetime
-import io
-import base64
 import logging
 
 from data_graph_studio.core.report import (
     ReportGenerator,
     ReportData,
     ReportOptions,
-    ReportTemplate,
-    ReportTheme,
     PageSize,
     PageOrientation,
 )

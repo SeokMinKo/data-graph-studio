@@ -17,9 +17,9 @@ from typing import Dict
 
 from PySide6.QtWidgets import (
     QToolBar, QToolButton, QPushButton, QWidget, QLabel,
-    QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox,
+    QHBoxLayout, QVBoxLayout, QCheckBox,
 )
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Signal, QSize
 from PySide6.QtGui import QAction, QActionGroup
 
 

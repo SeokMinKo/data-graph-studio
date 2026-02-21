@@ -4,7 +4,7 @@ Filtering System - Spotfire 스타일 필터링 스킴
 필터링 스킴(Filtering Scheme)은 시각화별로 독립적인 필터를 적용할 수 있는 메커니즘입니다.
 """
 
-from typing import Dict, List, Optional, Any, Set, Tuple, Union
+from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
 from PySide6.QtCore import QObject, Signal
@@ -152,10 +152,10 @@ class Filter:
             return col.is_not_null()
 
         elif self.operator == FilterOperator.IS_TRUE:
-            return col == True
+            return col
 
         elif self.operator == FilterOperator.IS_FALSE:
-            return col == False
+            return not col
 
         return None
 

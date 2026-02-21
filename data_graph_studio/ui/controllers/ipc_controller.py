@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 from ...core.state import ChartType, AggregationType, ComparisonMode
 

@@ -4,23 +4,22 @@ Dataset Manager Panel - 멀티 데이터셋 관리 패널
 데이터셋 추가, 제거, 전환, 비교 설정 UI
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Dict
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QFrame, QComboBox,
+    QFrame, QComboBox,
     QCheckBox, QMenu, QColorDialog, QInputDialog,
-    QMessageBox, QSizePolicy, QScrollArea, QGroupBox,
-    QSplitter, QToolButton, QFileDialog, QTreeWidget, QTreeWidgetItem
+    QMessageBox, QSizePolicy, QGroupBox,
+    QToolButton, QFileDialog, QTreeWidget, QTreeWidgetItem
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QBrush, QAction
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPixmap, QAction
 
 from ...core.data_engine import DataEngine, DatasetInfo
 from ...core.state import (
-    AppState, ComparisonMode, DatasetMetadata,
-    DEFAULT_DATASET_COLORS
+    AppState, ComparisonMode, DatasetMetadata
 )
-from ...core.profile import Profile, GraphSetting
+from ...core.profile import Profile
 
 
 class DatasetItemWidget(QFrame):
@@ -612,7 +611,7 @@ class DatasetManagerPanel(QWidget):
         """위젯 제거 요청"""
         reply = QMessageBox.question(
             self, "데이터셋 제거",
-            f"데이터셋을 제거하시겠습니까?",
+            "데이터셋을 제거하시겠습니까?",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:

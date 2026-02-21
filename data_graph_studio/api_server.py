@@ -19,7 +19,7 @@ import polars as pl
 
 try:
     from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-    from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+    from fastapi.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: F401
     from pydantic import BaseModel
     import uvicorn
     FASTAPI_AVAILABLE = True

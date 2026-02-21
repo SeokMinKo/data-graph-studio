@@ -14,7 +14,6 @@ import sys
 import os
 import json
 from pathlib import Path
-from typing import Optional, List
 
 
 def create_parser():
@@ -336,7 +335,6 @@ def cmd_convert(args):
 
 def cmd_batch(args):
     """batch 명령 실행"""
-    import polars as pl
     from pathlib import Path
     
     input_dir = Path(args.input_dir)
