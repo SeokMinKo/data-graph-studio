@@ -232,7 +232,7 @@ class PerfettoTraceController(QObject):
         self._serial: str = ""
         self._process: subprocess.Popen | None = None
         self._tracing: bool = False
-        self._trace_device_path = "/data/local/tmp/dgs_trace.perfetto-trace"
+        self._trace_device_path = "/data/misc/perfetto-traces/dgs_trace.perfetto-trace"
         self._tp_shell: str = ""
 
     @staticmethod
@@ -406,36 +406,36 @@ class PerfettoTraceController(QObject):
             config_path = f.name
 
         adb = ["adb", "-s", serial]
-        device_config = "/data/local/tmp/dgs_perfetto.pbtxt"
-        try:
-            push_result = subprocess.run(
-                adb + ["push", config_path, device_config],
-                capture_output=True, text=True, timeout=10, check=True,
-            )
-            logger.debug("[Perfetto] config pushed: %s", push_result.stdout.strip())
-        except subprocess.CalledProcessError as e:
-            logger.error("[Perfetto] config push failed: rc=%d, stderr=%s", e.returncode, e.stderr)
-            raise
-        finally:
-            Path(config_path).unlink(missing_ok=True)
 
-        # Start perfetto (--txt for text-format config)
+        # Read config content for stdin pipe (avoids permission issues on device)
+        perfetto_config_content = Path(config_path).read_text(encoding="utf-8")
+        Path(config_path).unlink(missing_ok=True)
+
+        # Start perfetto with config via stdin (-c -)
+        # Output to /data/misc/perfetto-traces/ which perfetto has write access
         self.progress.emit("Starting perfetto...")
         perfetto_cmd = adb + [
             "shell", "perfetto",
             "--txt",
-            "-c", device_config,
+            "-c", "-",
             "-o", self._trace_device_path,
         ]
         self.log_message.emit(
-            f"$ adb -s {serial} shell perfetto --txt -c {device_config} "
+            f"$ adb -s {serial} shell perfetto --txt -c - "
             f"-o {self._trace_device_path}"
         )
         self._process = subprocess.Popen(
             perfetto_cmd,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+        # Feed config via stdin
+        try:
+            self._process.stdin.write(perfetto_config_content.encode("utf-8"))
+            self._process.stdin.close()
+        except BrokenPipeError:
+            pass  # perfetto may have exited already — handled below
 
         # Give perfetto a moment to start (or fail)
         import time
