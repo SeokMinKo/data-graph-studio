@@ -93,16 +93,36 @@ class CaptureService(ICaptureService):
         return file_path
 
     def _collect_state(self, name: str, widget: Any) -> Dict[str, Any]:
-        """Collect basic widget state for the JSON output."""
+        """Collect extended widget state for the JSON output."""
         if widget is None:
             return {}
-        return {
+        state: Dict[str, Any] = {
             "visible": widget.isVisible() if hasattr(widget, "isVisible") else True,
             "size": [widget.width(), widget.height()] if hasattr(widget, "width") else [0, 0],
         }
+        # Collect optional domain-specific state from panels that expose it.
+        # Use vars() + type dict to avoid triggering MagicMock auto-creation;
+        # real Qt widgets store domain attrs in __dict__ or as class properties.
+        instance_attrs = vars(widget) if hasattr(widget, "__dict__") else {}
+        class_attrs = {k for c in type(widget).__mro__ for k in vars(c)}
+        for attr in ("data_loaded", "row_count", "active_filters", "chart_type"):
+            if attr in instance_attrs or attr in class_attrs:
+                state[attr] = getattr(widget, attr)
+        return state
 
     def _build_summary(self, name: str, state: Dict[str, Any]) -> str:
-        """Build human-readable summary string for AI consumption."""
-        visible = state.get("visible", True)
-        size = state.get("size", [0, 0])
-        return f"{name}: {'visible' if visible else 'hidden'}, size={size[0]}x{size[1]}"
+        """Build AI-readable summary string."""
+        parts = [name]
+        if not state.get("visible", True):
+            parts.append("hidden")
+        else:
+            w, h = state.get("size", [0, 0])
+            parts.append(f"{w}x{h}")
+        if state.get("data_loaded"):
+            row_count = state.get("row_count", "?")
+            parts.append(f"{row_count} rows")
+        if state.get("active_filters"):
+            parts.append(f"{state['active_filters']} filters")
+        if state.get("chart_type"):
+            parts.append(f"chart={state['chart_type']}")
+        return ", ".join(parts)

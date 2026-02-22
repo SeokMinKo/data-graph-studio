@@ -41,3 +41,24 @@ def test_capture_service_generates_summary():
     assert len(results) == 1
     assert "stat_panel" in results[0].summary
     assert results[0].error is None
+
+
+def test_state_includes_data_loaded():
+    """If widget has a data_loaded property, include it in state."""
+    from data_graph_studio.ui.capture_service import CaptureService
+    from data_graph_studio.core.capture_protocol import CaptureRequest
+    from pathlib import Path
+    from unittest.mock import MagicMock, patch
+
+    svc = CaptureService()
+    mock_widget = MagicMock()
+    mock_widget.isVisible.return_value = True
+    mock_widget.width.return_value = 800
+    mock_widget.height.return_value = 600
+    mock_widget.data_loaded = True
+    svc.register_panel("graph_panel", mock_widget)
+
+    with patch.object(svc, "_grab_widget", return_value=Path("/tmp/graph.png")):
+        results = svc.capture(CaptureRequest(target="graph_panel", output_dir=Path("/tmp")))
+
+    assert results[0].state.get("data_loaded") is True
