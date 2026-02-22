@@ -142,7 +142,7 @@ class TestFilteringManager:
     """FilteringManager 클래스 테스트"""
 
     @pytest.fixture
-    def manager(self, qtbot):
+    def manager(self):
         """FilteringManager 인스턴스"""
         return FilteringManager()
 
@@ -187,47 +187,54 @@ class TestFilteringManager:
         with pytest.raises(ValueError):
             manager.remove_scheme("Page")
 
-    def test_add_filter(self, manager, qtbot):
+    def test_add_filter(self, manager):
         """필터 추가"""
-        with qtbot.waitSignal(manager.filter_changed):
-            manager.add_filter(
-                scheme_name="Page",
-                column="sales",
-                operator=FilterOperator.GREATER_THAN,
-                value=100
-            )
-
+        received = []
+        manager.subscribe("filter_changed", lambda s: received.append(s))
+        manager.add_filter(
+            scheme_name="Page",
+            column="sales",
+            operator=FilterOperator.GREATER_THAN,
+            value=100
+        )
         assert len(manager.schemes["Page"].filters) == 1
+        assert received == ["Page"]
 
-    def test_remove_filter(self, manager, qtbot):
+    def test_remove_filter(self, manager):
         """필터 제거"""
         manager.add_filter("Page", "sales", FilterOperator.GREATER_THAN, 100)
         manager.add_filter("Page", "region", FilterOperator.EQUALS, "Asia")
 
-        with qtbot.waitSignal(manager.filter_changed):
-            manager.remove_filter("Page", 0)
+        received = []
+        manager.subscribe("filter_changed", lambda s: received.append(s))
+        manager.remove_filter("Page", 0)
 
         assert len(manager.schemes["Page"].filters) == 1
         assert manager.schemes["Page"].filters[0].column == "region"
+        assert received == ["Page"]
 
-    def test_toggle_filter(self, manager, qtbot):
+    def test_toggle_filter(self, manager):
         """필터 토글"""
         manager.add_filter("Page", "sales", FilterOperator.GREATER_THAN, 100)
 
-        with qtbot.waitSignal(manager.filter_changed):
-            manager.toggle_filter("Page", 0)
+        received = []
+        manager.subscribe("filter_changed", lambda s: received.append(s))
+        manager.toggle_filter("Page", 0)
 
         assert manager.schemes["Page"].filters[0].enabled is False
+        assert received == ["Page"]
 
-    def test_clear_filters(self, manager, qtbot):
+    def test_clear_filters(self, manager):
         """필터 클리어"""
         manager.add_filter("Page", "a", FilterOperator.EQUALS, 1)
         manager.add_filter("Page", "b", FilterOperator.EQUALS, 2)
 
-        with qtbot.waitSignal(manager.filter_changed):
-            manager.clear_filters("Page")
+        received = []
+        manager.subscribe("filter_changed", lambda s: received.append(s))
+        manager.clear_filters("Page")
 
         assert len(manager.schemes["Page"].filters) == 0
+        assert received == ["Page"]
 
     def test_apply_filters_greater_than(self, manager, sample_data):
         """필터 적용 - GREATER_THAN"""
@@ -387,7 +394,7 @@ class TestRangeFilter:
     """범위 필터 테스트 (슬라이더 등)"""
 
     @pytest.fixture
-    def manager(self, qtbot):
+    def manager(self):
         return FilteringManager()
 
     def test_range_filter(self, manager):
@@ -403,7 +410,7 @@ class TestCheckboxFilter:
     """체크박스 필터 테스트"""
 
     @pytest.fixture
-    def manager(self, qtbot):
+    def manager(self):
         return FilteringManager()
 
     def test_checkbox_filter(self, manager):
@@ -415,23 +422,25 @@ class TestCheckboxFilter:
         assert filters[0].operator == FilterOperator.IN_LIST
         assert filters[0].value == ["Asia", "Europe"]
 
-    def test_update_checkbox_filter(self, manager, qtbot):
+    def test_update_checkbox_filter(self, manager):
         """체크박스 필터 업데이트"""
         manager.add_checkbox_filter("Page", "region", ["Asia"])
 
-        with qtbot.waitSignal(manager.filter_changed):
-            manager.update_checkbox_filter("Page", "region", ["Asia", "Europe", "America"])
+        received = []
+        manager.subscribe("filter_changed", lambda s: received.append(s))
+        manager.update_checkbox_filter("Page", "region", ["Asia", "Europe", "America"])
 
         filters = [f for f in manager.schemes["Page"].filters if f.column == "region"]
         assert len(filters) == 1
         assert filters[0].value == ["Asia", "Europe", "America"]
+        assert received == ["Page"]
 
 
 class TestTextSearchFilter:
     """텍스트 검색 필터 테스트"""
 
     @pytest.fixture
-    def manager(self, qtbot):
+    def manager(self):
         return FilteringManager()
 
     @pytest.fixture

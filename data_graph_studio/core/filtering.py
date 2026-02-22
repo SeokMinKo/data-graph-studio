@@ -7,8 +7,9 @@ Filtering System - Spotfire 스타일 필터링 스킴
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
-from PySide6.QtCore import QObject, Signal
 import polars as pl
+
+from data_graph_studio.core.observable import Observable
 
 
 class FilterType(Enum):
@@ -211,17 +212,17 @@ class FilteringScheme:
         return False
 
 
-class FilteringManager(QObject):
+class FilteringManager(Observable):
     """
     필터링 관리자
 
     여러 필터링 스킴을 관리하고 데이터 필터링을 담당합니다.
-    """
 
-    # 시그널
-    filter_changed = Signal(str)  # scheme_name
-    scheme_created = Signal(str)
-    scheme_removed = Signal(str)
+    Events emitted:
+        filter_changed(scheme_name: str)
+        scheme_created(scheme_name: str)
+        scheme_removed(scheme_name: str)
+    """
 
     def __init__(self):
         super().__init__()
@@ -270,7 +271,7 @@ class FilteringManager(QObject):
         scheme = FilteringScheme(name=name, inherit_from=inherit_from)
         self._schemes[name] = scheme
 
-        self.scheme_created.emit(name)
+        self.emit("scheme_created", name)
 
         return scheme
 
@@ -293,7 +294,7 @@ class FilteringManager(QObject):
             if self._active_scheme == name:
                 self._active_scheme = "Page"
 
-            self.scheme_removed.emit(name)
+            self.emit("scheme_removed", name)
 
     def set_active_scheme(self, name: str) -> None:
         """활성 스킴 변경"""
@@ -335,13 +336,13 @@ class FilteringManager(QObject):
         )
 
         self._schemes[scheme_name].add_filter(filter_obj)
-        self.filter_changed.emit(scheme_name)
+        self.emit("filter_changed", scheme_name)
 
     def remove_filter(self, scheme_name: str, index: int) -> None:
         """필터 제거"""
         if scheme_name in self._schemes:
             self._schemes[scheme_name].remove_filter(index)
-            self.filter_changed.emit(scheme_name)
+            self.emit("filter_changed", scheme_name)
 
     def toggle_filter(self, scheme_name: str, index: int) -> None:
         """필터 토글"""
@@ -349,13 +350,13 @@ class FilteringManager(QObject):
             filters = self._schemes[scheme_name].filters
             if 0 <= index < len(filters):
                 filters[index].enabled = not filters[index].enabled
-                self.filter_changed.emit(scheme_name)
+                self.emit("filter_changed", scheme_name)
 
     def clear_filters(self, scheme_name: str) -> None:
         """스킴의 모든 필터 클리어"""
         if scheme_name in self._schemes:
             self._schemes[scheme_name].clear()
-            self.filter_changed.emit(scheme_name)
+            self.emit("filter_changed", scheme_name)
 
     def add_range_filter(
         self,
@@ -404,7 +405,7 @@ class FilteringManager(QObject):
         for f in scheme.filters:
             if f.column == column and f.filter_type == FilterType.CHECKBOX:
                 f.value = selected_values
-                self.filter_changed.emit(scheme_name)
+                self.emit("filter_changed", scheme_name)
                 return
 
         # 없으면 새로 추가
