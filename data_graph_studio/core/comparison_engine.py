@@ -9,6 +9,7 @@ Pure statistical helpers live in comparison_algorithms.py.
 """
 
 import logging
+from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 
 import polars as pl
@@ -27,7 +28,21 @@ from .comparison_algorithms import select_test_type, interpret_test_result, run_
 logger = logging.getLogger(__name__)
 
 
-class ComparisonEngine:
+class IComparisonEngine(ABC):
+    """Abstract interface for dataset comparison."""
+
+    @abstractmethod
+    def calculate_difference(self, dataset_a_id: str, dataset_b_id: str, value_column: str, key_column=None):
+        """Calculate difference between two datasets."""
+        ...
+
+    @abstractmethod
+    def get_comparison_statistics(self, dataset_ids: list, value_column: str) -> dict:
+        """Calculate comparison statistics for multiple datasets."""
+        ...
+
+
+class ComparisonEngine(IComparisonEngine):
     """데이터셋 비교 분석 클래스.
 
     DatasetManager를 참조하여 데이터셋에 접근하고,

@@ -12,6 +12,14 @@ from typing import Optional, List, Dict, Any, Union
 
 import polars as pl
 
+from data_graph_studio.core.data_query_helpers import (
+    NUMERIC_DTYPES,
+    AGG_MAP,
+    build_filter_ops,
+    compute_eager_column_stats,
+    compute_windowed_profile,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,37 +39,14 @@ class DataQuery:
     ) -> Optional[pl.DataFrame]:
         """조건에 맞는 행을 필터링한다.
 
-        Args:
-            df: 대상 DataFrame.
-            column: 필터 컬럼 이름.
-            operator: 연산자 ('eq', 'ne', 'gt', 'lt', 'ge', 'le',
-                      'contains', 'startswith', 'endswith', 'isnull', 'notnull').
-            value: 비교 값.
-
-        Returns:
-            필터링된 새 DataFrame. df가 None이면 None.
-
-        Raises:
-            ValueError: 알 수 없는 연산자.
+        Supported operators: 'eq', 'ne', 'gt', 'lt', 'ge', 'le',
+        'contains', 'startswith', 'endswith', 'isnull', 'notnull'.
+        Raises ValueError for unknown operators.
         """
         if df is None:
             return None
 
-        col = pl.col(column)
-        ops = {
-            'eq': col == value,
-            'ne': col != value,
-            'gt': col > value,
-            'lt': col < value,
-            'ge': col >= value,
-            'le': col <= value,
-            'contains': col.str.contains(str(value)),
-            'startswith': col.str.starts_with(str(value)),
-            'endswith': col.str.ends_with(str(value)),
-            'isnull': col.is_null(),
-            'notnull': col.is_not_null(),
-        }
-
+        ops = build_filter_ops(column, value)
         if operator not in ops:
             raise ValueError(f"Unknown operator: {operator}")
 
@@ -76,16 +61,7 @@ class DataQuery:
         columns: List[str],
         descending: Union[bool, List[bool]] = False,
     ) -> Optional[pl.DataFrame]:
-        """DataFrame을 정렬한다.
-
-        Args:
-            df: 대상 DataFrame.
-            columns: 정렬 컬럼 목록.
-            descending: 내림차순 여부 (단일 값 또는 컬럼별 리스트).
-
-        Returns:
-            정렬된 새 DataFrame.
-        """
+        """DataFrame을 정렬한다."""
         if df is None:
             return None
         try:
@@ -102,36 +78,17 @@ class DataQuery:
     ) -> Optional[pl.DataFrame]:
         """그룹별 집계를 수행한다.
 
-        Args:
-            df: 대상 DataFrame.
-            group_columns: 그룹 컬럼 목록.
-            value_columns: 집계 대상 값 컬럼 목록.
-            agg_funcs: 집계 함수 목록
-                ('sum', 'mean', 'median', 'min', 'max', 'count', 'std', 'var', 'first', 'last').
-
-        Returns:
-            집계 결과 DataFrame.
+        agg_funcs: 'sum', 'mean', 'median', 'min', 'max', 'count', 'std', 'var',
+        'first', 'last'.
         """
         if df is None:
             return None
 
-        agg_map = {
-            'sum': lambda c: pl.col(c).sum(),
-            'mean': lambda c: pl.col(c).mean(),
-            'median': lambda c: pl.col(c).median(),
-            'min': lambda c: pl.col(c).min(),
-            'max': lambda c: pl.col(c).max(),
-            'count': lambda c: pl.col(c).count(),
-            'std': lambda c: pl.col(c).std(),
-            'var': lambda c: pl.col(c).var(),
-            'first': lambda c: pl.col(c).first(),
-            'last': lambda c: pl.col(c).last(),
-        }
-
-        agg_exprs = []
-        for val_col, agg_func in zip(value_columns, agg_funcs):
-            if agg_func in agg_map:
-                agg_exprs.append(agg_map[agg_func](val_col).alias(f"{val_col}_{agg_func}"))
+        agg_exprs = [
+            AGG_MAP[func](col).alias(f"{col}_{func}")
+            for col, func in zip(value_columns, agg_funcs)
+            if func in AGG_MAP
+        ]
 
         try:
             return self._collect_streaming(df.lazy().group_by(group_columns).agg(agg_exprs))
@@ -154,9 +111,6 @@ class DataQuery:
             lazy_df: windowed 모드에서 전체 통계용 LazyFrame.
             windowed: windowed 모드 여부.
             cache: 결과 캐시 딕셔너리 (있으면 캐시에서 조회/저장).
-
-        Returns:
-            통계 딕셔너리.
         """
         # Include windowed context so full-dataset stats aren't returned in windowed mode.
         cache_key = f"stats_{column}_windowed" if windowed else f"stats_{column}"
@@ -178,26 +132,14 @@ class DataQuery:
         windowed: bool = False,
         cache: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Dict[str, Any]]:
-        """모든 (또는 지정된) 컬럼의 통계를 반환한다.
-
-        Args:
-            df: 대상 DataFrame.
-            value_columns: 대상 컬럼 목록 (None이면 숫자형 컬럼만).
-            lazy_df: windowed 모드용 LazyFrame.
-            windowed: windowed 모드 여부.
-            cache: 결과 캐시 딕셔너리.
-
-        Returns:
-            {컬럼명: 통계 딕셔너리} 매핑.
-        """
+        """모든 (또는 지정된) 컬럼의 통계를 반환한다."""
         if df is None:
             return {}
 
         if value_columns is None:
             value_columns = [
                 col for col in df.columns
-                if df[col].dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                                     pl.Float32, pl.Float64]
+                if df[col].dtype in NUMERIC_DTYPES
             ]
 
         return {
@@ -212,17 +154,7 @@ class DataQuery:
         lazy_df: Optional[pl.LazyFrame] = None,
         windowed: bool = False,
     ) -> Optional[Dict[str, Any]]:
-        """전체 데이터 기준 요약 통계를 반환한다.
-
-        Args:
-            df: 대상 DataFrame.
-            profile: DataProfile 인스턴스 (windowed가 아닐 때 사용).
-            lazy_df: windowed 모드용 LazyFrame.
-            windowed: windowed 모드 여부.
-
-        Returns:
-            요약 통계 딕셔너리 또는 None.
-        """
+        """전체 데이터 기준 요약 통계를 반환한다."""
         if not windowed or lazy_df is None:
             if profile is None:
                 return None
@@ -234,41 +166,7 @@ class DataQuery:
                 'load_time_seconds': profile.load_time_seconds,
             }
 
-        try:
-            schema = lazy_df.schema
-            total_columns = len(schema)
-            numeric_cols = sum(1 for dtype in schema.values()
-                               if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                                            pl.Float32, pl.Float64])
-            sum(1 for dtype in schema.values()
-                                if dtype in [pl.Date, pl.Datetime, pl.Time])
-
-            null_exprs = [pl.col(c).null_count().alias(c) for c in schema.keys()]
-            stats_df = self._collect_streaming(
-                lazy_df.select([pl.len().alias('total_rows')] + null_exprs)
-            )
-            if stats_df is None or stats_df.height == 0:
-                return None
-
-            total_rows = int(stats_df[0, 'total_rows'])
-            total_nulls = sum(
-                int(stats_df[0, c]) for c in schema.keys()
-                if c in stats_df.columns
-            )
-            total_cells = total_rows * total_columns if total_rows > 0 else 0
-            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0.0
-
-            return {
-                'total_rows': total_rows,
-                'total_columns': total_columns,
-                'numeric_columns': numeric_cols,
-                'text_columns': total_columns - numeric_cols,
-                'missing_percent': missing_percent,
-                'memory_bytes': 0,
-                'load_time_seconds': 0,
-            }
-        except Exception:
-            return None
+        return compute_windowed_profile(lazy_df, self._collect_streaming)
 
     def is_column_categorical(
         self,
@@ -277,17 +175,7 @@ class DataQuery:
         max_unique_ratio: float = 0.05,
         max_unique_count: int = 100,
     ) -> bool:
-        """컬럼이 categorical인지 판단한다.
-
-        Args:
-            df: 대상 DataFrame.
-            column: 컬럼 이름.
-            max_unique_ratio: 유니크 값 비율 임계값.
-            max_unique_count: 유니크 값 개수 임계값.
-
-        Returns:
-            categorical이면 True.
-        """
+        """컬럼이 categorical인지 판단한다."""
         if df is None or column not in df.columns:
             return False
 
@@ -297,7 +185,7 @@ class DataQuery:
         if dtype == pl.Categorical:
             return True
 
-        if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
+        if dtype in NUMERIC_DTYPES:
             unique_count = series.n_unique()
             return unique_count <= min(20, max_unique_count) and unique_count / len(series) < max_unique_ratio
 
@@ -320,16 +208,7 @@ class DataQuery:
         column: str,
         limit: int = 1000,
     ) -> List[Any]:
-        """컬럼의 유니크 값 목록을 반환한다.
-
-        Args:
-            df: 대상 DataFrame.
-            column: 컬럼 이름.
-            limit: 최대 반환 개수.
-
-        Returns:
-            유니크 값 리스트.
-        """
+        """컬럼의 유니크 값 목록을 반환한다."""
         if df is None or column not in df.columns:
             return []
         # sort() is intentional: results are shown in dropdowns/axis labels where
@@ -342,16 +221,7 @@ class DataQuery:
         n: int = 10000,
         seed: int = 42,
     ) -> Optional[pl.DataFrame]:
-        """DataFrame에서 샘플링한다.
-
-        Args:
-            df: 대상 DataFrame.
-            n: 샘플 수.
-            seed: 랜덤 시드.
-
-        Returns:
-            샘플링된 DataFrame.
-        """
+        """DataFrame에서 샘플링한다."""
         if df is None:
             return None
         if len(df) <= n:
@@ -364,16 +234,7 @@ class DataQuery:
         start: int,
         end: int,
     ) -> Optional[pl.DataFrame]:
-        """DataFrame 슬라이스를 반환한다.
-
-        Args:
-            df: 대상 DataFrame.
-            start: 시작 인덱스.
-            end: 끝 인덱스 (exclusive).
-
-        Returns:
-            슬라이스된 DataFrame.
-        """
+        """DataFrame 슬라이스를 반환한다."""
         if df is None:
             return None
         return df.slice(start, end - start)
@@ -394,9 +255,6 @@ class DataQuery:
             columns: 검색할 컬럼 목록 (None이면 전체).
             case_sensitive: 대소문자 구분 여부.
             max_columns: 검색할 최대 컬럼 수.
-
-        Returns:
-            매칭된 행의 DataFrame.
         """
         if df is None:
             return None
@@ -445,11 +303,6 @@ class DataQuery:
         Args:
             df: 대상 DataFrame.  None이면 None을 반환한다.
             filter_map: ``{컬럼명: 허용 값 리스트}`` 딕셔너리.
-                빈 딕셔너리이거나 모든 값 리스트가 비어 있으면 df를 그대로 반환한다.
-                컬럼이 df에 없는 항목은 조용히 무시한다.
-
-        Returns:
-            필터링된 DataFrame.  df가 None이면 None.
         """
         if df is None:
             return None
@@ -477,15 +330,7 @@ class DataQuery:
             return lf.collect()
 
     def create_index(self, df: pl.DataFrame, column: str) -> Dict[Any, List[int]]:
-        """인덱스를 생성한다 (deprecated).
-
-        Args:
-            df: 대상 DataFrame.
-            column: 인덱스 컬럼.
-
-        Returns:
-            값 → 행 인덱스 매핑.
-        """
+        """인덱스를 생성한다 (deprecated)."""
         warnings.warn(
             "create_index is deprecated. Use Polars native filtering instead.",
             DeprecationWarning,
@@ -524,7 +369,7 @@ class DataQuery:
                     pl.col(column).null_count().alias('null_count'),
                     pl.col(column).n_unique().alias('unique_count'),
                 ]
-                if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
+                if dtype in NUMERIC_DTYPES:
                     exprs.extend([
                         pl.col(column).sum().alias('sum'),
                         pl.col(column).mean().alias('mean'),
@@ -544,26 +389,7 @@ class DataQuery:
         if df is None or column not in df.columns:
             return {}
 
-        series = df[column]
-        stats: Dict[str, Any] = {
-            'count': len(series),
-            'null_count': series.null_count(),
-            'unique_count': series.n_unique(),
-        }
-
-        if series.dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
-            stats.update({
-                'sum': series.sum(),
-                'mean': series.mean(),
-                'median': series.median(),
-                'std': series.std(),
-                'min': series.min(),
-                'max': series.max(),
-                'q1': series.quantile(0.25),
-                'q3': series.quantile(0.75),
-            })
-
-        return stats
+        return compute_eager_column_stats(df[column])
 
     @staticmethod
     def _collect_streaming(lazy_df: pl.LazyFrame) -> pl.DataFrame:

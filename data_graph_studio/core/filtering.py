@@ -5,6 +5,7 @@ Filtering System - Spotfire 스타일 필터링 스킴
 """
 
 import logging
+from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -15,6 +16,20 @@ logger = logging.getLogger(__name__)
 from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
+
+
+class IFilterApplier(ABC):
+    """Abstract interface for filter application strategies."""
+
+    @abstractmethod
+    def apply_filters(self, df: pl.DataFrame, filters: List) -> pl.DataFrame:
+        """Apply a list of filters to a DataFrame."""
+        ...
+
+    @abstractmethod
+    def get_filter_indices(self, df: pl.DataFrame, filters: List) -> pl.Series:
+        """Return boolean mask for rows matching filters."""
+        ...
 
 
 class FilterType(Enum):
@@ -147,7 +162,7 @@ class FilteringScheme:
                 setattr(f, key, value)
 
 
-class FilteringManager(Observable):
+class FilteringManager(Observable, IFilterApplier):
     """
     필터링 관리자
 

@@ -13,6 +13,19 @@ if TYPE_CHECKING:
     from .profile import GraphSetting
 
 
+def _can_overlay(profiles: List["GraphSetting"]) -> bool:
+    """Check if all profiles share the same x_column (UT-6).
+
+    Mirrors ProfileOverlayRenderer.can_overlay but lives in core to avoid
+    a UI-layer dependency.  Returns True only when there is at least one
+    profile and every profile has the same non-None x_column.
+    """
+    if not profiles:
+        return False
+    x_cols = {p.x_column for p in profiles}
+    return len(x_cols) == 1 and None not in x_cols
+
+
 class ProfileComparisonController(Observable):
     """Orchestrates profile comparison lifecycle.
 
@@ -79,9 +92,7 @@ class ProfileComparisonController(Observable):
 
         # Mode-specific validation
         if mode in (ComparisonMode.OVERLAY, ComparisonMode.DIFFERENCE):
-            from ..ui.panels.profile_overlay import ProfileOverlayRenderer
-
-            if not ProfileOverlayRenderer.can_overlay(settings):
+            if not _can_overlay(settings):
                 self.emit(
                     "error_occurred",
                     "All profiles must share the same X column for this mode",
@@ -142,9 +153,7 @@ class ProfileComparisonController(Observable):
         settings = [s for s in settings if s is not None]
 
         if mode in (ComparisonMode.OVERLAY, ComparisonMode.DIFFERENCE):
-            from ..ui.panels.profile_overlay import ProfileOverlayRenderer
-
-            if not ProfileOverlayRenderer.can_overlay(settings):
+            if not _can_overlay(settings):
                 self.emit(
                     "error_occurred",
                     "All profiles must share the same X column for this mode",
