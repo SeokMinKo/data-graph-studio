@@ -264,12 +264,13 @@ class TestBooleanOperators:
         assert len(result) == 3
         assert all(v is True for v in result["col"].to_list())
 
-    def test_is_false_raises_typeerror(self):
-        # IS_FALSE uses `not col` which raises TypeError in current Polars (not a valid expression).
-        # The dispatch table refactor must preserve this existing behaviour.
-        f = make_filter(FilterOperator.IS_FALSE, None)
-        with pytest.raises(TypeError):
-            f.to_expression()
+    def test_is_false_filter(self):
+        """is_false filter returns rows where column is False."""
+        df = pl.DataFrame({"active": [True, False, True, False]})
+        f = make_filter(FilterOperator.IS_FALSE, None, column="active")
+        result = apply_expr(f, df)
+        assert result.shape[0] == 2
+        assert result["active"].to_list() == [False, False]
 
 
 # ---------------------------------------------------------------------------

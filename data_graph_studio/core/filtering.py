@@ -82,8 +82,8 @@ _FILTER_DISPATCH = {
     "regex":       lambda col, f: col.cast(pl.Utf8).str.contains(str(f.value)),
     "is_null":     lambda col, f: col.is_null(),
     "is_not_null": lambda col, f: col.is_not_null(),
-    "is_true":     lambda col, f: col,
-    "is_false":    lambda col, f: not col,  # preserves existing TypeError behaviour
+    "is_true":     lambda col, f: col.eq(True),
+    "is_false":    lambda col, f: col.eq(False),
 }
 
 
