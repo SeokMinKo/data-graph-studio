@@ -181,6 +181,11 @@ class _SearchableColumnPicker(QWidget):
             if self._combo.lineEdit():
                 self._combo.lineEdit().clear()
 
+    def setToolTip(self, tip: str) -> None:  # type: ignore[override]
+        """Forward tooltip to both the outer widget and the inner combo."""
+        super().setToolTip(tip)
+        self._combo.setToolTip(tip)
+
     def clear_text(self) -> None:
         self._combo.setCurrentIndex(-1)
         if self._combo.lineEdit():
@@ -332,17 +337,28 @@ class _YAxisListItem(QWidget):
 
         layout.addLayout(row1)
 
-        # Row 2 – formula input (hidden by default)
+        # Row 2 – formula input + error label (hidden by default)
         self.formula_widget = QWidget()
-        formula_layout = QHBoxLayout(self.formula_widget)
-        formula_layout.setContentsMargins(20, 0, 0, 0)
-        formula_layout.setSpacing(4)
+        formula_vbox = QVBoxLayout(self.formula_widget)
+        formula_vbox.setContentsMargins(20, 0, 0, 0)
+        formula_vbox.setSpacing(2)
 
+        formula_input_row = QHBoxLayout()
+        formula_input_row.setSpacing(4)
         self.formula_edit = QLineEdit()
         self.formula_edit.setPlaceholderText("f(y)=...  e.g. y*2, LOG(y)")
         self.formula_edit.setMinimumHeight(24)
         self.formula_edit.editingFinished.connect(self._on_formula_finished)
-        formula_layout.addWidget(self.formula_edit)
+        formula_input_row.addWidget(self.formula_edit)
+        formula_vbox.addLayout(formula_input_row)
+
+        self._formula_error_label = QLabel()
+        self._formula_error_label.setObjectName("formulaErrorLabel")
+        self._formula_error_label.setStyleSheet("color: #EF4444; font-size: 11px;")
+        self._formula_error_label.setWordWrap(True)
+        self._formula_error_label.setVisible(False)
+        formula_vbox.addWidget(self._formula_error_label)
+
         layout.addWidget(self.formula_widget)
         self.formula_widget.setVisible(False)
 
@@ -351,10 +367,42 @@ class _YAxisListItem(QWidget):
         self.formula_toggle.setText("▼ f(y)" if checked else "▶ f(y)")
 
     def _on_formula_finished(self) -> None:
-        self.formula_changed.emit(self.column_name, self.formula_edit.text().strip())
+        formula = self.formula_edit.text().strip()
+        if formula:
+            error = self._validate_formula_syntax(formula)
+            if error:
+                self.formula_edit.setStyleSheet("border: 1px solid #EF4444;")
+                self._formula_error_label.setText(f"\u26a0 {error}")
+                self._formula_error_label.setVisible(True)
+                return
+        # Valid (or empty) — clear any previous error state
+        self.formula_edit.setStyleSheet("")
+        self._formula_error_label.setVisible(False)
+        self.formula_changed.emit(self.column_name, formula)
+
+    @staticmethod
+    def _validate_formula_syntax(formula: str) -> str:
+        """Return an error message string if *formula* has a syntax problem, else ''."""
+        import ast as _ast
+        import re as _re
+        # Replace {col} references with placeholder identifiers so ast.parse works
+        normalised = _re.sub(r"\{[^}]+\}", "_col_", formula)
+        # Replace common math functions with identifiers
+        normalised = _re.sub(r"\b(LOG|SQRT|ABS|EXP|SIN|COS|TAN|ROUND|CEIL|FLOOR)\b",
+                             "func", normalised, flags=_re.IGNORECASE)
+        # Treat bare 'y' as the column placeholder
+        normalised = normalised.replace("y", "_col_").replace("Y", "_col_")
+        try:
+            _ast.parse(normalised, mode="eval")
+        except SyntaxError as exc:
+            return f"Syntax error: {exc.msg}"
+        return ""
 
     def set_formula(self, formula: str) -> None:
         self.formula_edit.setText(formula)
+        # Clear any previous error state when formula is set programmatically
+        self.formula_edit.setStyleSheet("")
+        self._formula_error_label.setVisible(False)
         if formula:
             self.formula_toggle.setChecked(True)
             self.formula_widget.setVisible(True)
@@ -495,11 +543,13 @@ class DataTab(QWidget):
         self._filter_select_all_btn = QPushButton("All")
         self._filter_select_all_btn.setObjectName("smallButton")
         self._filter_select_all_btn.setFixedHeight(20)
+        self._filter_select_all_btn.setToolTip("Select all values for the current filter column")
         self._filter_select_all_btn.clicked.connect(self._filter_select_all)
         filter_btn_row.addWidget(self._filter_select_all_btn)
         self._filter_deselect_all_btn = QPushButton("None")
         self._filter_deselect_all_btn.setObjectName("smallButton")
         self._filter_deselect_all_btn.setFixedHeight(20)
+        self._filter_deselect_all_btn.setToolTip("Deselect all values for the current filter column")
         self._filter_deselect_all_btn.clicked.connect(self._filter_deselect_all)
         filter_btn_row.addWidget(self._filter_deselect_all_btn)
         filter_btn_row.addStretch()
@@ -525,6 +575,7 @@ class DataTab(QWidget):
         self._main_layout.addLayout(g_row)
 
         self._group_picker = _SearchableColumnPicker("🔍 Search columns...")
+        self._group_picker.setToolTip("Type to search for columns to group by. Press Enter to add.")
         self._group_picker.column_selected.connect(self._on_group_column_selected)
         self._main_layout.addWidget(self._group_picker)
 
@@ -563,6 +614,7 @@ class DataTab(QWidget):
         self._main_layout.addLayout(y_row)
 
         self._y_picker = _SearchableColumnPicker("🔍 Search numeric columns...")
+        self._y_picker.setToolTip("Type to search for numeric columns for Y-axis. Press Enter to add.")
         self._y_picker.column_selected.connect(self._on_y_column_selected)
         self._main_layout.addWidget(self._y_picker)
 
@@ -595,6 +647,7 @@ class DataTab(QWidget):
         self._main_layout.addLayout(h_row)
 
         self._hover_picker = _SearchableColumnPicker("🔍 Search columns...")
+        self._hover_picker.setToolTip("Type to search for columns to show on hover. Press Enter to add.")
         self._hover_picker.column_selected.connect(self._on_hover_column_selected)
         self._main_layout.addWidget(self._hover_picker)
 
