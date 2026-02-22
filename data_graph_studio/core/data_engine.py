@@ -310,6 +310,14 @@ class DataEngine:
 
     # -- DataQuery delegation -------------------------------------------------
 
+    def get_filtered_df(self, filter_map: Dict[str, list]) -> Optional[pl.DataFrame]:
+        """``{column: [values]}`` 필터 맵을 Polars lazy 레이어에서 처리 후 반환한다.
+
+        graph_panel의 ``_active_filter`` 를 그대로 받아서 사용할 수 있다.
+        필터가 없거나 데이터가 없으면 현재 ``df`` 를 그대로 반환한다.
+        """
+        return self._query.filter_by_map(self.df, filter_map)
+
     def filter(self, column, operator, value): return self._query.filter(self.df, column, operator, value)
     def sort(self, columns, descending=False): return self._query.sort(self.df, columns, descending)
     def group_aggregate(self, group_columns, value_columns, agg_funcs): return self._query.group_aggregate(self.df, group_columns, value_columns, agg_funcs)

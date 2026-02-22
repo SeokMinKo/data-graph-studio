@@ -562,24 +562,16 @@ class GraphPanel(QWidget):
         max_points = options.get('max_points', 10000)
         sampling_algorithm = options.get('sampling_algorithm', 'auto')
 
-        # Apply filter (Item 15) — work on a filtered view of the DataFrame
-        working_df = self.engine.df
-        if self._active_filter and working_df is not None:
-            for f_col, f_vals in self._active_filter.items():
-                if f_col in working_df.columns and f_vals:
-                    # Cast filter values to match column dtype for robust comparison
-                    try:
-                        working_df = working_df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
-                    except Exception:
-                        pass
-            if len(working_df) == 0:
-                # Fix 3: show a clear message when active filters exclude all rows
-                self.main_graph.clear_plot()
-                self.main_graph.setTitle(
-                    "No data matches current filters",
-                    color='#94A3B8', size='12pt'
-                )
-                return
+        # Apply filter (Item 15) — push predicates to Polars lazy layer before collect
+        working_df = self.engine.get_filtered_df(self._active_filter)
+        if working_df is not None and self._active_filter and len(working_df) == 0:
+            # Fix 3: show a clear message when active filters exclude all rows
+            self.main_graph.clear_plot()
+            self.main_graph.setTitle(
+                "No data matches current filters",
+                color='#94A3B8', size='12pt'
+            )
+            return
 
         # X column (from state, set by X Zone)
         x_col = self.state.x_column
@@ -1352,25 +1344,18 @@ class GraphPanel(QWidget):
         # Clear any leftover title/axis labels from previous chart types
         self.main_graph.setTitle("")
 
-        df = self.engine.df
+        df = self.engine.get_filtered_df(self._active_filter)
         if df is None:
             return
 
-        # Apply filter (Item 15)
-        if self._active_filter:
-            for f_col, f_vals in self._active_filter.items():
-                if f_col in df.columns and f_vals:
-                    try:
-                        df = df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
-                    except Exception:
-                        pass
-            if len(df) == 0:
-                # Fix 3: show message when filters exclude all rows in statistical charts
-                self.main_graph.setTitle(
-                    "No data matches current filters",
-                    color='#94A3B8', size='12pt'
-                )
-                return
+        # Apply filter (Item 15) — lazy push-down already applied in get_filtered_df
+        if self._active_filter and len(df) == 0:
+            # Fix 3: show message when filters exclude all rows in statistical charts
+            self.main_graph.setTitle(
+                "No data matches current filters",
+                color='#94A3B8', size='12pt'
+            )
+            return
 
         # Determine category (X/Group) and value (Y) columns
         x_col = self.state.x_column
@@ -2264,15 +2249,8 @@ class GraphPanel(QWidget):
         direction = options.get('direction', GridDirection.WRAP)
         max_columns = options.get('max_columns', 4)
 
-        # Get the working DataFrame (with filters applied)
-        working_df = self.engine.df
-        if self._active_filter and working_df is not None:
-            for f_col, f_vals in self._active_filter.items():
-                if f_col in working_df.columns and f_vals:
-                    try:
-                        working_df = working_df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
-                    except Exception:
-                        pass
+        # Get the working DataFrame (filters pushed to Polars lazy layer)
+        working_df = self.engine.get_filtered_df(self._active_filter)
 
         if working_df is None or len(working_df) == 0:
             self._clear_grid_cells()

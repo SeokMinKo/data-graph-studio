@@ -431,6 +431,51 @@ class DataQuery:
 
         return df.filter(combined)
 
+    def filter_by_map(
+        self,
+        df: pl.DataFrame,
+        filter_map: Dict[str, List[Any]],
+    ) -> Optional[pl.DataFrame]:
+        """여러 컬럼의 값 목록 필터를 Polars LazyFrame에 한 번에 적용한다.
+
+        graph_panel의 ``_active_filter`` (``{column: [val, ...]}`` 형태) 에
+        맞춰 설계된 편의 메서드.  필터는 lazy 평가 레이어에서 결합된 후
+        ``collect()`` 한 번만 호출되므로, eager 루프 방식보다 메모리 효율이 높다.
+
+        Args:
+            df: 대상 DataFrame.  None이면 None을 반환한다.
+            filter_map: ``{컬럼명: 허용 값 리스트}`` 딕셔너리.
+                빈 딕셔너리이거나 모든 값 리스트가 비어 있으면 df를 그대로 반환한다.
+                컬럼이 df에 없는 항목은 조용히 무시한다.
+
+        Returns:
+            필터링된 DataFrame.  df가 None이면 None.
+        """
+        if df is None:
+            return None
+        if not filter_map:
+            return df
+
+        # Build a single lazy query with all filter predicates combined.
+        lf: pl.LazyFrame = df.lazy()
+        applied_any = False
+        for col_name, values in filter_map.items():
+            if not values:
+                continue
+            if col_name not in df.columns:
+                continue
+            # Cast to Utf8 for robust cross-dtype comparison (matches graph_panel behaviour).
+            lf = lf.filter(pl.col(col_name).cast(pl.Utf8).is_in([str(v) for v in values]))
+            applied_any = True
+
+        if not applied_any:
+            return df
+
+        try:
+            return self._collect_streaming(lf)
+        except Exception:
+            return lf.collect()
+
     def create_index(self, df: pl.DataFrame, column: str) -> Dict[Any, List[int]]:
         """인덱스를 생성한다 (deprecated).
 
