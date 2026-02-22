@@ -421,223 +421,163 @@ class ExpressionEngine:
         
         raise ExpressionError(f"Unknown node type: {node_type}")
     
+    @staticmethod
+    def _get_scalar(arg: Any, default: Any = None) -> Any:
+        """Extract a scalar value from a Series or return the value as-is."""
+        if isinstance(arg, pl.Series):
+            return arg[0] if len(arg) > 0 else default
+        return arg
+
     def _evaluate_function(self, node: Dict, df: pl.DataFrame) -> pl.Series:
-        """함수 평가"""
+        """함수 평가 — dispatches to typed handler groups."""
         func_name = node['name']
         args = [self._evaluate_ast(arg, df) for arg in node['args']]
-        
-        # Helper to get scalar value from Series
-        def get_scalar(arg, default=None):
-            if isinstance(arg, pl.Series):
-                return arg[0] if len(arg) > 0 else default
-            return arg
-        
-        # 수학 함수
+
+        result = self._eval_math_function(func_name, args)
+        if result is not None:
+            return result
+
+        result = self._eval_string_function(func_name, args)
+        if result is not None:
+            return result
+
+        result = self._eval_conditional_function(func_name, args, df)
+        if result is not None:
+            return result
+
+        result = self._eval_datetime_function(func_name, args)
+        if result is not None:
+            return result
+
+        raise ExpressionError(f"Unknown function: {func_name}")
+
+    def _eval_math_function(self, func_name: str, args: list) -> Optional[pl.Series]:
+        """Evaluate math/numeric functions. Returns None if func_name not handled."""
+        gs = self._get_scalar
         if func_name == 'ROUND':
-            decimals = int(get_scalar(args[1], 0)) if len(args) > 1 else 0
+            decimals = int(gs(args[1], 0)) if len(args) > 1 else 0
             return args[0].round(decimals)
-        
         if func_name == 'FLOOR':
             return args[0].floor()
-        
         if func_name == 'CEIL':
             return args[0].ceil()
-        
         if func_name == 'ABS':
             return args[0].abs()
-        
         if func_name == 'SQRT':
             return args[0].sqrt()
-        
         if func_name == 'POWER':
             base = args[0]
-            exp_val = get_scalar(args[1])
-            
-            # If base is a constant series (all same values)
+            exp_val = gs(args[1])
             if isinstance(base, pl.Series) and base.n_unique() == 1:
-                base_val = base[0]
-                result_val = base_val ** exp_val
-                return pl.Series([result_val] * len(base))
-            
+                return pl.Series([base[0] ** exp_val] * len(base))
             return base.pow(exp_val)
-        
         if func_name == 'LOG':
             return args[0].log()
-        
         if func_name == 'LOG10':
             return args[0].log() / math.log(10)
-        
         if func_name == 'EXP':
             return args[0].exp()
-        
-        if func_name == 'SIN':
-            # Convert to numpy for trig, then back to Series
+        if func_name in ('SIN', 'COS', 'TAN'):
             import numpy as np
-            arr = args[0].to_numpy()
-            return pl.Series(np.sin(arr))
-        
-        if func_name == 'COS':
-            import numpy as np
-            arr = args[0].to_numpy()
-            return pl.Series(np.cos(arr))
-        
-        if func_name == 'TAN':
-            import numpy as np
-            arr = args[0].to_numpy()
-            return pl.Series(np.tan(arr))
-        
+            trig = {'SIN': np.sin, 'COS': np.cos, 'TAN': np.tan}[func_name]
+            return pl.Series(trig(args[0].to_numpy()))
         if func_name == 'MIN':
-            # MIN with multiple arguments - element-wise minimum
             if len(args) == 1:
-                # Single column - return scalar repeated
-                min_val = args[0].min()
-                return pl.Series([min_val] * len(args[0]))
-            else:
-                # Multiple columns - element-wise min
-                result = args[0]
-                for arg in args[1:]:
-                    # Use zip_with for element-wise comparison
-                    combined = pl.DataFrame({"a": result, "b": arg})
-                    result = combined.select(pl.min_horizontal("a", "b"))["a"]
-                return result
-        
+                return pl.Series([args[0].min()] * len(args[0]))
+            result = args[0]
+            for arg in args[1:]:
+                result = pl.DataFrame({"a": result, "b": arg}).select(pl.min_horizontal("a", "b"))["a"]
+            return result
         if func_name == 'MAX':
-            # MAX with multiple arguments - element-wise maximum
             if len(args) == 1:
-                # Single column - return scalar repeated
-                max_val = args[0].max()
-                return pl.Series([max_val] * len(args[0]))
-            else:
-                # Multiple columns - element-wise max
-                result = args[0]
-                for arg in args[1:]:
-                    combined = pl.DataFrame({"a": result, "b": arg})
-                    result = combined.select(pl.max_horizontal("a", "b"))["a"]
-                return result
-        
-        # 문자열 함수
+                return pl.Series([args[0].max()] * len(args[0]))
+            result = args[0]
+            for arg in args[1:]:
+                result = pl.DataFrame({"a": result, "b": arg}).select(pl.max_horizontal("a", "b"))["a"]
+            return result
+        return None
+
+    def _eval_string_function(self, func_name: str, args: list) -> Optional[pl.Series]:
+        """Evaluate string functions. Returns None if func_name not handled."""
+        gs = self._get_scalar
         if func_name == 'CONCAT':
             result = args[0].cast(pl.Utf8)
             for arg in args[1:]:
-                if isinstance(arg, pl.Series):
-                    # Check if it's a constant string series
-                    if arg.dtype == pl.Utf8 or arg.n_unique() == 1:
-                        result = result + arg.cast(pl.Utf8)
-                    else:
-                        result = result + arg.cast(pl.Utf8)
-                else:
-                    result = result + str(arg)
+                result = result + (arg.cast(pl.Utf8) if isinstance(arg, pl.Series) else str(arg))
             return result
-        
         if func_name == 'UPPER':
             return args[0].str.to_uppercase()
-        
         if func_name == 'LOWER':
             return args[0].str.to_lowercase()
-        
         if func_name == 'LEN':
             return args[0].str.len_chars()
-        
         if func_name == 'LEFT':
-            n = int(get_scalar(args[1]))
-            return args[0].str.head(n)
-        
+            return args[0].str.head(int(gs(args[1])))
         if func_name == 'RIGHT':
-            n = int(get_scalar(args[1]))
-            return args[0].str.tail(n)
-        
+            return args[0].str.tail(int(gs(args[1])))
         if func_name == 'TRIM':
             return args[0].str.strip_chars()
-        
         if func_name == 'REPLACE':
-            old = str(get_scalar(args[1]))
-            new = str(get_scalar(args[2]))
-            return args[0].str.replace_all(old, new)
-        
+            return args[0].str.replace_all(str(gs(args[1])), str(gs(args[2])))
         if func_name == 'CONTAINS':
-            # Check if string contains substring, returns boolean series
-            substring = str(get_scalar(args[1]))
-            return args[0].cast(pl.Utf8).str.contains(substring)
-        
+            return args[0].cast(pl.Utf8).str.contains(str(gs(args[1])))
         if func_name == 'SUBSTRING':
-            # SUBSTRING(str, start, length) - 1-based indexing like SQL
-            start = int(get_scalar(args[1])) - 1  # Convert to 0-based
-            length = int(get_scalar(args[2])) if len(args) > 2 else None
-            if length is not None:
-                return args[0].str.slice(start, length)
-            else:
-                return args[0].str.slice(start)
-        
-        # 조건 함수
+            start = int(gs(args[1])) - 1  # Convert 1-based to 0-based
+            length = int(gs(args[2])) if len(args) > 2 else None
+            return args[0].str.slice(start, length) if length is not None else args[0].str.slice(start)
+        return None
+
+    def _eval_conditional_function(
+        self, func_name: str, args: list, df: pl.DataFrame
+    ) -> Optional[pl.Series]:
+        """Evaluate conditional/null-handling functions. Returns None if not handled."""
         if func_name == 'IF':
             condition = args[0]
             then_value = args[1]
             else_value = args[2] if len(args) > 2 else pl.Series([None] * len(df))
-            
-            # Build result using numpy-style conditional
-            result = []
-            for i in range(len(condition)):
-                if condition[i]:
-                    result.append(then_value[i] if isinstance(then_value, pl.Series) else then_value)
-                else:
-                    result.append(else_value[i] if isinstance(else_value, pl.Series) else else_value)
-            return pl.Series(result)
-        
+            return pl.Series([
+                (then_value[i] if isinstance(then_value, pl.Series) else then_value)
+                if condition[i] else
+                (else_value[i] if isinstance(else_value, pl.Series) else else_value)
+                for i in range(len(condition))
+            ])
         if func_name == 'COALESCE':
             result = args[0]
             for arg in args[1:]:
-                if isinstance(arg, pl.Series):
-                    fill_val = arg[0] if arg.n_unique() == 1 else arg
-                else:
-                    fill_val = arg
+                fill_val = (arg[0] if arg.n_unique() == 1 else arg) if isinstance(arg, pl.Series) else arg
                 result = result.fill_null(fill_val)
             return result
-        
         if func_name == 'ISNULL':
             return args[0].is_null()
-        
         if func_name == 'IFNULL':
             return args[0].fill_null(args[1])
-        
-        # 날짜 함수
+        return None
+
+    def _eval_datetime_function(self, func_name: str, args: list) -> Optional[pl.Series]:
+        """Evaluate date/time functions. Returns None if func_name not handled."""
+        gs = self._get_scalar
         if func_name == 'DATE_DIFF':
-            end_date = args[0]
-            start_date = args[1]
-            unit = str(get_scalar(args[2]))
-            
-            diff = end_date - start_date
-            if unit.lower() == 'days':
-                return diff.dt.total_days()
-            elif unit.lower() == 'hours':
-                return diff.dt.total_hours()
-            elif unit.lower() == 'minutes':
-                return diff.dt.total_minutes()
-            elif unit.lower() == 'seconds':
-                return diff.dt.total_seconds()
-            return diff.dt.total_days()
-        
-        if func_name == 'YEAR':
-            return args[0].dt.year()
-        
-        if func_name == 'MONTH':
-            return args[0].dt.month()
-        
-        if func_name == 'DAY':
-            return args[0].dt.day()
-        
-        if func_name == 'WEEKDAY':
-            return args[0].dt.weekday()
-        
-        if func_name == 'HOUR':
-            return args[0].dt.hour()
-        
-        if func_name == 'MINUTE':
-            return args[0].dt.minute()
-        
-        if func_name == 'SECOND':
-            return args[0].dt.second()
-        
-        raise ExpressionError(f"Unknown function: {func_name}")
+            diff = args[0] - args[1]
+            unit = str(gs(args[2])).lower()
+            unit_map = {
+                'days': diff.dt.total_days,
+                'hours': diff.dt.total_hours,
+                'minutes': diff.dt.total_minutes,
+                'seconds': diff.dt.total_seconds,
+            }
+            return unit_map.get(unit, diff.dt.total_days)()
+        simple_dt = {
+            'YEAR': lambda s: s.dt.year(),
+            'MONTH': lambda s: s.dt.month(),
+            'DAY': lambda s: s.dt.day(),
+            'WEEKDAY': lambda s: s.dt.weekday(),
+            'HOUR': lambda s: s.dt.hour(),
+            'MINUTE': lambda s: s.dt.minute(),
+            'SECOND': lambda s: s.dt.second(),
+        }
+        if func_name in simple_dt:
+            return simple_dt[func_name](args[0])
+        return None
     
     def add_column(
         self, 
