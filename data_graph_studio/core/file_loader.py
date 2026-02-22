@@ -28,6 +28,7 @@ from .types import (
 )
 
 from .etl_helpers import HAS_ETL_PARSER
+from .metrics import get_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -513,29 +514,30 @@ class FileLoader:
         self._warning_message = None
 
         try:
-            encoding = self._normalize_encoding(encoding)
-            file_size = os.path.getsize(path)
-            self._windowed = False
-            self._total_rows = 0
-            self._window_start = 0
-            self._lazy_df = None
+            with get_metrics().timer("file.load_duration"):
+                encoding = self._normalize_encoding(encoding)
+                file_size = os.path.getsize(path)
+                self._windowed = False
+                self._total_rows = 0
+                self._window_start = 0
+                self._lazy_df = None
 
-            if file_type in (FileType.CSV, FileType.TSV, FileType.PARQUET) and self._should_use_windowed_loading(file_size):
-                self._load_windowed(path, file_type, encoding, delimiter, has_header, skip_rows, comment_char, excluded_columns)
-            else:
-                self._load_eager(path, file_type, encoding, delimiter, delimiter_type,
-                                 regex_pattern, has_header, skip_rows, comment_char, sheet_name)
+                if file_type in (FileType.CSV, FileType.TSV, FileType.PARQUET) and self._should_use_windowed_loading(file_size):
+                    self._load_windowed(path, file_type, encoding, delimiter, has_header, skip_rows, comment_char, excluded_columns)
+                else:
+                    self._load_eager(path, file_type, encoding, delimiter, delimiter_type,
+                                     regex_pattern, has_header, skip_rows, comment_char, sheet_name)
 
-            if self._cancel_loading:
-                self._df = None
-                self._update_progress(status="cancelled")
-                return False
+                if self._cancel_loading:
+                    self._df = None
+                    self._update_progress(status="cancelled")
+                    return False
 
-            if self._df is None and not self._windowed:
-                self._update_progress(status="cancelled")
-                return False
+                if self._df is None and not self._windowed:
+                    self._update_progress(status="cancelled")
+                    return False
 
-            self._apply_post_load_transforms(excluded_columns, process_filter, sample_n, optimize_memory, start_time)
+                self._apply_post_load_transforms(excluded_columns, process_filter, sample_n, optimize_memory, start_time)
 
             total_rows = self._total_rows if self._windowed and self._total_rows else (len(self._df) if self._df is not None else 0)
             loaded_rows = len(self._df) if self._df is not None else 0
@@ -549,6 +551,7 @@ class FileLoader:
             gc.collect()
             if self._df is not None:
                 logger.info("file_loader.file_loaded", extra={"row_count": loaded_rows, "column_count": len(self._df.columns)})
+            get_metrics().increment("file.loaded")
             return True
         except Exception as e:
             logger.error("file_loader.file_load_failed", extra={"error": e}, exc_info=True)
