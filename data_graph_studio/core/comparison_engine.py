@@ -24,6 +24,7 @@ except ImportError:
 
 from .dataset_manager import DatasetManager
 from .comparison_algorithms import select_test_type, interpret_test_result, run_normality_test
+from data_graph_studio.core.metrics import get_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,7 @@ class ComparisonEngine(IComparisonEngine):
              pl.col(value_b_col).abs() * 100).alias("diff_pct"),
         ]).rename({value_a_col: "value_a", value_b_col: "value_b"})
 
+        get_metrics().increment("comparison.calculated")
         return result
 
     def get_comparison_statistics(

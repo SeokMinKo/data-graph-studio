@@ -5,10 +5,13 @@ Statistical Analysis - Spotfire 스타일 통계 분석 도구
 """
 
 import logging
+from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import numpy as np
 from scipy import stats
+
+from data_graph_studio.core.metrics import get_metrics
 
 from data_graph_studio.core.statistics_correlation import (
     CorrelationMethod,
@@ -40,9 +43,19 @@ __all__ = [
     "HypothesisTester",
     "StatisticalSummary",
     "DescriptiveStatistics",
+    "IStatisticsAnalyzer",
 ]
 
 logger = logging.getLogger(__name__)
+
+
+class IStatisticsAnalyzer(ABC):
+    """Abstract interface for statistical analysis operations."""
+
+    @abstractmethod
+    def calculate(self, data) -> dict:
+        """Calculate descriptive statistics for given data."""
+        ...
 
 
 @dataclass
@@ -62,7 +75,7 @@ class StatisticalSummary:
     n: int
 
 
-class DescriptiveStatistics:
+class DescriptiveStatistics(IStatisticsAnalyzer):
     """
     기술 통계
 
@@ -88,6 +101,7 @@ class DescriptiveStatistics:
             logger.warning("statistics.calculate.empty_values")
             return {}
 
+        get_metrics().increment("statistics.calculated")
         logger.debug("statistics.calculate", extra={"n": len(values)})
         q1, median, q3 = np.percentile(values, [25, 50, 75])
 
