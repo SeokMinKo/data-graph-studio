@@ -131,7 +131,9 @@ def download_asset(url: str, filename: str) -> str:
     """Download asset to temp dir and return full path."""
     tmp_dir = tempfile.mkdtemp(prefix="dgs-update-")
     out_path = os.path.join(tmp_dir, filename)
-    urllib.request.urlretrieve(url, out_path)
+    with urllib.request.urlopen(url, timeout=60) as resp:
+        with open(out_path, "wb") as f:
+            f.write(resp.read())
     return out_path
 
 

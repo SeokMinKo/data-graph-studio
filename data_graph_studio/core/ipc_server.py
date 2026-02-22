@@ -204,8 +204,8 @@ class IPCClient:
 
         try:
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._socket.connect((self.host, self.port))
             self._socket.settimeout(5.0)
+            self._socket.connect((self.host, self.port))
             return True
         except Exception as e:
             logger.debug("[IPC Client] Connection failed: %s", e)
