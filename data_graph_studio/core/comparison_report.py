@@ -148,7 +148,19 @@ class ComparisonReport:
 
     def _generate_html_report(self, data: Dict[str, Any]) -> str:
         """HTML 리포트 생성"""
-        html = f"""<!DOCTYPE html>
+        parts = [
+            self._render_html_head(data),
+            self._render_html_datasets_section(data),
+            self._render_html_stats_section(data),
+            self._render_html_tests_section(data),
+            self._render_html_correlations_section(data),
+            self._render_html_footer(),
+        ]
+        return "".join(parts)
+
+    def _render_html_head(self, data: Dict[str, Any]) -> str:
+        """Render DOCTYPE, head with inline CSS, and opening body/container tags."""
+        return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -170,37 +182,13 @@ class ComparisonReport:
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             padding: 30px;
         }}
-        h1 {{
-            color: #1976d2;
-            border-bottom: 2px solid #1976d2;
-            padding-bottom: 10px;
-        }}
-        h2 {{
-            color: #424242;
-            margin-top: 30px;
-        }}
-        .meta-info {{
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 20px;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-        }}
-        th, td {{
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }}
-        th {{
-            background: #f8f9fa;
-            font-weight: 600;
-        }}
-        tr:hover {{
-            background: #f5f5f5;
-        }}
+        h1 {{ color: #1976d2; border-bottom: 2px solid #1976d2; padding-bottom: 10px; }}
+        h2 {{ color: #424242; margin-top: 30px; }}
+        .meta-info {{ color: #666; font-size: 14px; margin-bottom: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 15px 0; }}
+        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+        th {{ background: #f8f9fa; font-weight: 600; }}
+        tr:hover {{ background: #f5f5f5; }}
         .dataset-badge {{
             display: inline-block;
             padding: 4px 12px;
@@ -209,15 +197,8 @@ class ComparisonReport:
             font-weight: 500;
             margin-right: 8px;
         }}
-        .stat-card {{
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-        }}
-        .significance {{
-            font-weight: bold;
-        }}
+        .stat-card {{ background: #f8f9fa; border-radius: 8px; padding: 15px; margin: 10px 0; }}
+        .significance {{ font-weight: bold; }}
         .sig-high {{ color: #d32f2f; }}
         .sig-medium {{ color: #f57c00; }}
         .sig-low {{ color: #388e3c; }}
@@ -233,69 +214,45 @@ class ComparisonReport:
             Generated: {data['generated_at']}<br>
             Comparison Mode: {data['comparison_mode'].replace('_', ' ').title()}
         </p>
-
-        <h2>Datasets</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Rows</th>
-                    <th>Columns</th>
-                </tr>
-            </thead>
-            <tbody>
 """
 
+    def _render_html_datasets_section(self, data: Dict[str, Any]) -> str:
+        """Render the Datasets summary table."""
+        rows = ""
         for ds in data['datasets']:
             color = ds.get('color', '#1f77b4')
-            html += f"""
+            rows += f"""
                 <tr>
                     <td><span class="dataset-badge" style="background-color: {color}">{ds.get('name', ds['id'])}</span></td>
                     <td>{ds.get('row_count', 'N/A'):,}</td>
                     <td>{ds.get('column_count', 'N/A')}</td>
                 </tr>
 """
-
-        html += """
-            </tbody>
+        return f"""
+        <h2>Datasets</h2>
+        <table>
+            <thead><tr><th>Name</th><th>Rows</th><th>Columns</th></tr></thead>
+            <tbody>{rows}            </tbody>
         </table>
-
-        <h2>Descriptive Statistics</h2>
 """
 
-        for col, stats in data.get('statistics', {}).items():
-            html += f"""
-        <div class="stat-card">
-            <h3 style="margin-top: 0;">{col}</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Dataset</th>
-                        <th>Mean</th>
-                        <th>Std</th>
-                        <th>Min</th>
-                        <th>Max</th>
-                        <th>Count</th>
-                    </tr>
-                </thead>
-                <tbody>
-"""
+    def _render_html_stats_section(self, data: Dict[str, Any]) -> str:
+        """Render the Descriptive Statistics section."""
+        if not data.get('statistics'):
+            return ""
+        ds_name_map = {ds['id']: ds.get('name', ds['id']) for ds in data['datasets']}
+        parts = ["\n        <h2>Descriptive Statistics</h2>\n"]
+        for col, stats in data['statistics'].items():
+            rows = ""
             for did, ds_stats in stats.items():
-                ds_name = did
-                for ds in data['datasets']:
-                    if ds['id'] == did:
-                        ds_name = ds.get('name', did)
-                        break
-
                 mean = ds_stats.get('mean', 'N/A')
                 std = ds_stats.get('std', 'N/A')
                 min_val = ds_stats.get('min', 'N/A')
                 max_val = ds_stats.get('max', 'N/A')
                 count = ds_stats.get('count', 'N/A')
-
-                html += f"""
+                rows += f"""
                     <tr>
-                        <td>{ds_name}</td>
+                        <td>{ds_name_map.get(did, did)}</td>
                         <td>{mean:,.2f if isinstance(mean, (int, float)) else mean}</td>
                         <td>{std:,.2f if isinstance(std, (int, float)) else std}</td>
                         <td>{min_val:,.2f if isinstance(min_val, (int, float)) else min_val}</td>
@@ -303,59 +260,41 @@ class ComparisonReport:
                         <td>{count:,} if isinstance(count, int) else count</td>
                     </tr>
 """
-
-            html += """
-                </tbody>
+            parts.append(f"""
+        <div class="stat-card">
+            <h3 style="margin-top: 0;">{col}</h3>
+            <table>
+                <thead>
+                    <tr><th>Dataset</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th><th>Count</th></tr>
+                </thead>
+                <tbody>{rows}                </tbody>
             </table>
         </div>
-"""
+""")
+        return "".join(parts)
 
-        # Statistical tests
-        if data.get('statistical_tests'):
-            html += """
-        <h2>Statistical Tests</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Column</th>
-                    <th>Comparison</th>
-                    <th>Test</th>
-                    <th>Statistic</th>
-                    <th>p-value</th>
-                    <th>Significance</th>
-                    <th>Effect Size</th>
-                </tr>
-            </thead>
-            <tbody>
-"""
-            for test in data['statistical_tests']:
-                p_val = test.get('p_value', 0)
-                if p_val < 0.001:
-                    sig_class = 'sig-high'
-                    sig_text = '*** p < 0.001'
-                elif p_val < 0.01:
-                    sig_class = 'sig-medium'
-                    sig_text = '** p < 0.01'
-                elif p_val < 0.05:
-                    sig_class = 'sig-low'
-                    sig_text = '* p < 0.05'
-                else:
-                    sig_class = 'sig-none'
-                    sig_text = 'NS'
-
-                # Get names
-                ds_a_name = test['dataset_a']
-                ds_b_name = test['dataset_b']
-                for ds in data['datasets']:
-                    if ds['id'] == test['dataset_a']:
-                        ds_a_name = ds.get('name', test['dataset_a'])
-                    if ds['id'] == test['dataset_b']:
-                        ds_b_name = ds.get('name', test['dataset_b'])
-
-                html += f"""
+    def _render_html_tests_section(self, data: Dict[str, Any]) -> str:
+        """Render the Statistical Tests section (empty string if no tests)."""
+        if not data.get('statistical_tests'):
+            return ""
+        ds_name_map = {ds['id']: ds.get('name', ds['id']) for ds in data['datasets']}
+        rows = ""
+        for test in data['statistical_tests']:
+            p_val = test.get('p_value', 0)
+            if p_val < 0.001:
+                sig_class, sig_text = 'sig-high', '*** p < 0.001'
+            elif p_val < 0.01:
+                sig_class, sig_text = 'sig-medium', '** p < 0.01'
+            elif p_val < 0.05:
+                sig_class, sig_text = 'sig-low', '* p < 0.05'
+            else:
+                sig_class, sig_text = 'sig-none', 'NS'
+            ds_a = ds_name_map.get(test['dataset_a'], test['dataset_a'])
+            ds_b = ds_name_map.get(test['dataset_b'], test['dataset_b'])
+            rows += f"""
                 <tr>
                     <td>{test.get('column', 'N/A')}</td>
-                    <td>{ds_a_name} vs {ds_b_name}</td>
+                    <td>{ds_a} vs {ds_b}</td>
                     <td>{test.get('test_name', 'N/A')}</td>
                     <td>{test.get('statistic', 'N/A'):.4f if test.get('statistic') else 'N/A'}</td>
                     <td>{test.get('p_value', 'N/A'):.6f if test.get('p_value') else 'N/A'}</td>
@@ -363,57 +302,56 @@ class ComparisonReport:
                     <td>{test.get('effect_size', 'N/A'):.3f if test.get('effect_size') else 'N/A'}</td>
                 </tr>
 """
-
-            html += """
-            </tbody>
-        </table>
-"""
-
-        # Correlations
-        if data.get('correlations'):
-            html += """
-        <h2>Correlations</h2>
+        return f"""
+        <h2>Statistical Tests</h2>
         <table>
             <thead>
                 <tr>
-                    <th>Column</th>
-                    <th>Comparison</th>
-                    <th>Correlation (r)</th>
-                    <th>p-value</th>
-                    <th>Strength</th>
+                    <th>Column</th><th>Comparison</th><th>Test</th>
+                    <th>Statistic</th><th>p-value</th><th>Significance</th><th>Effect Size</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody>{rows}            </tbody>
+        </table>
 """
-            for corr in data['correlations']:
-                r = corr.get('correlation', 0)
-                color_class = 'positive' if r > 0 else 'negative'
 
-                # Get names
-                ds_a_name = corr['dataset_a']
-                ds_b_name = corr['dataset_b']
-                for ds in data['datasets']:
-                    if ds['id'] == corr['dataset_a']:
-                        ds_a_name = ds.get('name', corr['dataset_a'])
-                    if ds['id'] == corr['dataset_b']:
-                        ds_b_name = ds.get('name', corr['dataset_b'])
-
-                html += f"""
+    def _render_html_correlations_section(self, data: Dict[str, Any]) -> str:
+        """Render the Correlations section (empty string if no correlations)."""
+        if not data.get('correlations'):
+            return ""
+        ds_name_map = {ds['id']: ds.get('name', ds['id']) for ds in data['datasets']}
+        rows = ""
+        for corr in data['correlations']:
+            r = corr.get('correlation', 0)
+            color_class = 'positive' if r > 0 else 'negative'
+            ds_a = ds_name_map.get(corr['dataset_a'], corr['dataset_a'])
+            ds_b = ds_name_map.get(corr['dataset_b'], corr['dataset_b'])
+            rows += f"""
                 <tr>
                     <td>{corr.get('column', 'N/A')}</td>
-                    <td>{ds_a_name} vs {ds_b_name}</td>
+                    <td>{ds_a} vs {ds_b}</td>
                     <td class="{color_class}">{r:.4f if r else 'N/A'}</td>
                     <td>{corr.get('p_value', 'N/A'):.6f if corr.get('p_value') else 'N/A'}</td>
                     <td>{corr.get('strength', 'N/A').title() if corr.get('strength') else 'N/A'}</td>
                 </tr>
 """
-
-            html += """
-            </tbody>
+        return f"""
+        <h2>Correlations</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Column</th><th>Comparison</th><th>Correlation (r)</th>
+                    <th>p-value</th><th>Strength</th>
+                </tr>
+            </thead>
+            <tbody>{rows}            </tbody>
         </table>
 """
 
-        html += """
+    @staticmethod
+    def _render_html_footer() -> str:
+        """Render the closing footer, container div, and HTML tags."""
+        return """
         <hr style="margin-top: 40px; border: none; border-top: 1px solid #ddd;">
         <p style="color: #999; font-size: 12px; text-align: center;">
             Generated by Data Graph Studio
@@ -422,7 +360,6 @@ class ComparisonReport:
 </body>
 </html>
 """
-        return html
 
     def export_json(self, file_path: str, dataset_ids: List[str] = None) -> bool:
         """JSON 형식으로 내보내기"""
