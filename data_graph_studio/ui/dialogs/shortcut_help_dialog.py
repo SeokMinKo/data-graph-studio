@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QKeySequence, QFont
 
-from ...core.shortcut_controller import ShortcutController
+from ..controllers.shortcut_controller import ShortcutController
 
 
 class ShortcutHelpDialog(QDialog):

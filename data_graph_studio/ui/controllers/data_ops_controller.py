@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox
 from PySide6.QtCore import Qt
 
 from ..dialogs.computed_column_dialog import ComputedColumnDialog
-from ...core.clipboard_manager import ClipboardManager
+from ..clipboard_manager import ClipboardManager
 
 logger = logging.getLogger(__name__)
 

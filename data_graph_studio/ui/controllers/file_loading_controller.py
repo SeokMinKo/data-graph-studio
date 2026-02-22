@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 
 from ...core.data_engine import DataEngine, LoadingProgress
-from ...core.clipboard_manager import ClipboardManager
+from ..clipboard_manager import ClipboardManager
 from ...core.parsing import ParsingSettings
 from ...utils.memory import MemoryMonitor
 

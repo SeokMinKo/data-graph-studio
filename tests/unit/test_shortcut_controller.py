@@ -30,7 +30,7 @@ if project_path not in sys.path:
     sys.path.insert(0, project_path)
 
 from data_graph_studio.ui.shortcuts import ShortcutManager, Shortcut, ShortcutCategory
-from data_graph_studio.core.shortcut_controller import ShortcutController
+from data_graph_studio.ui.controllers.shortcut_controller import ShortcutController
 
 
 class TestShortcutConfigLoadSave:

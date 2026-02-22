@@ -19,7 +19,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 
 from ..core.data_engine import DataEngine
 from ..core.state import AppState, ChartType
-from ..core.clipboard_manager import ClipboardManager, DragDropHandler
+from .clipboard_manager import ClipboardManager, DragDropHandler
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
 from .adapters.streaming_adapter import StreamingControllerAdapter
@@ -28,7 +28,7 @@ from ..core.undo_manager import UndoStack
 from .panels.history_panel import HistoryPanel
 from ..core.dashboard_controller import DashboardController
 from ..core.annotation_controller import AnnotationController
-from ..core.shortcut_controller import ShortcutController
+from .controllers.shortcut_controller import ShortcutController
 from ..core.export_controller import ExportController
 from ..utils.memory import MemoryMonitor
 from .panels.summary_panel import SummaryPanel

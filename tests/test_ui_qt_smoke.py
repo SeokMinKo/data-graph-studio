@@ -54,7 +54,7 @@ def test_qt_can_construct_core_panels(qtbot) -> None:
 def test_qt_can_open_basic_dialogs(qtbot) -> None:
     # Dialog constructors sometimes touch shortcuts/theme resources.
     from data_graph_studio.ui.main_window import MainWindow
-    from data_graph_studio.core.shortcut_controller import ShortcutController
+    from data_graph_studio.ui.controllers.shortcut_controller import ShortcutController
     from data_graph_studio.ui.dialogs.shortcut_help_dialog import ShortcutHelpDialog
     from data_graph_studio.ui.dialogs.command_palette_dialog import CommandPaletteDialog
 

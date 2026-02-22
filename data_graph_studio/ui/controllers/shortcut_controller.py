@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Callable, Union
 
 from PySide6.QtGui import QKeySequence
 
-from ..ui.shortcuts import ShortcutManager, Shortcut, ShortcutCategory
+from ..shortcuts import ShortcutManager, Shortcut, ShortcutCategory
 
 logger = logging.getLogger(__name__)
 
