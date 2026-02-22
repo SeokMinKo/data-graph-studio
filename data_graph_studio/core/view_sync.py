@@ -8,14 +8,14 @@ No UI-specific panel classes are imported.
 
 from __future__ import annotations
 
+import threading
 import weakref
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
-from PySide6.QtCore import QObject, QTimer, Signal
-from PySide6.QtWidgets import QWidget
+from data_graph_studio.core.observable import Observable
 
 
-class ViewSyncManager(QObject):
+class ViewSyncManager(Observable):
     """
     View synchronization manager.
 
@@ -26,17 +26,17 @@ class ViewSyncManager(QObject):
     Panels must implement:
         set_view_range(x_range, y_range, sync_x: bool, sync_y: bool)
         set_selection(indices: list)
-    """
 
-    # Signals emitted after a sync is dispatched
-    view_range_synced = Signal(str, list, list)   # source_id, x_range, y_range
-    selection_synced = Signal(str, list)           # source_id, selected_indices
+    Events emitted:
+        view_range_synced(source_id: str, x_range: list, y_range: list)
+        selection_synced(source_id: str, selected_indices: list)
+    """
 
     # Throttle interval in milliseconds
     THROTTLE_MS = 50
 
-    def __init__(self, parent: QObject | None = None) -> None:
-        super().__init__(parent)
+    def __init__(self) -> None:
+        super().__init__()
 
         # --- public sync toggles ---
         self._sync_x: bool = True
@@ -44,28 +44,25 @@ class ViewSyncManager(QObject):
         self._sync_selection: bool = True
 
         # --- panel registry (weak refs) ---
-        self._panels: weakref.WeakValueDictionary[str, QWidget] = (
+        self._panels: weakref.WeakValueDictionary[str, Any] = (
             weakref.WeakValueDictionary()
         )
 
         # --- infinite-loop guard ---
         self._is_syncing: bool = False
 
+        # --- threading lock for timer state ---
+        self._lock = threading.Lock()
+
         # --- range throttle (leading edge) ---
-        self._range_throttle_timer = QTimer(self)
-        self._range_throttle_timer.setSingleShot(True)
-        self._range_throttle_timer.setInterval(self.THROTTLE_MS)
-        self._range_throttle_timer.timeout.connect(self._flush_pending_range)
         self._range_throttle_active: bool = False
         self._pending_range: Optional[Tuple[str, list, list]] = None
+        self._range_timer: Optional[threading.Timer] = None
 
         # --- selection throttle (leading edge) ---
-        self._sel_throttle_timer = QTimer(self)
-        self._sel_throttle_timer.setSingleShot(True)
-        self._sel_throttle_timer.setInterval(self.THROTTLE_MS)
-        self._sel_throttle_timer.timeout.connect(self._flush_pending_selection)
         self._sel_throttle_active: bool = False
         self._pending_selection: Optional[Tuple[str, list]] = None
+        self._sel_timer: Optional[threading.Timer] = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -104,7 +101,7 @@ class ViewSyncManager(QObject):
     # Panel registration
     # ------------------------------------------------------------------
 
-    def register_panel(self, panel_id: str, panel: QWidget) -> None:
+    def register_panel(self, panel_id: str, panel: Any) -> None:
         """Register a panel for sync.  Replaces existing panel with same id."""
         self._panels[panel_id] = panel
 
@@ -141,22 +138,34 @@ class ViewSyncManager(QObject):
         if not self._range_throttle_active:
             # Leading edge — fire immediately
             self._range_throttle_active = True
-            self._range_throttle_timer.start()
+            self._schedule_range_flush()
             self._dispatch_range(source_id, x_range, y_range)
         else:
             # Within throttle window — store as pending (last-write-wins)
             self._pending_range = (source_id, x_range, y_range)
 
+    def _schedule_range_flush(self) -> None:
+        """Start (or restart) the range throttle timer."""
+        with self._lock:
+            if self._range_timer is not None:
+                self._range_timer.cancel()
+            self._range_timer = threading.Timer(
+                self.THROTTLE_MS / 1000.0, self._flush_pending_range
+            )
+            self._range_timer.daemon = True
+            self._range_timer.start()
+
     def _flush_pending_range(self) -> None:
         """Timer callback: fire the pending range event if any."""
+        with self._lock:
+            self._range_timer = None
         self._range_throttle_active = False
         if self._pending_range is not None:
             source_id, x_range, y_range = self._pending_range
             self._pending_range = None
-            # This may re-arm the throttle via on_source_range_changed path,
-            # but we call _dispatch_range directly to avoid double-guard issues.
+            # Re-arm for the queued event
             self._range_throttle_active = True
-            self._range_throttle_timer.start()
+            self._schedule_range_flush()
             self._dispatch_range(source_id, x_range, y_range)
 
     def _dispatch_range(
@@ -176,7 +185,7 @@ class ViewSyncManager(QObject):
                     )
                 except Exception:
                     pass  # panel may have been partially destroyed
-            self.view_range_synced.emit(source_id, list(x_range), list(y_range))
+            self.emit("view_range_synced", source_id, list(x_range), list(y_range))
         finally:
             self._is_syncing = False
 
@@ -198,19 +207,32 @@ class ViewSyncManager(QObject):
 
         if not self._sel_throttle_active:
             self._sel_throttle_active = True
-            self._sel_throttle_timer.start()
+            self._schedule_sel_flush()
             self._dispatch_selection(source_id, indices)
         else:
             self._pending_selection = (source_id, indices)
 
+    def _schedule_sel_flush(self) -> None:
+        """Start (or restart) the selection throttle timer."""
+        with self._lock:
+            if self._sel_timer is not None:
+                self._sel_timer.cancel()
+            self._sel_timer = threading.Timer(
+                self.THROTTLE_MS / 1000.0, self._flush_pending_selection
+            )
+            self._sel_timer.daemon = True
+            self._sel_timer.start()
+
     def _flush_pending_selection(self) -> None:
         """Timer callback: fire the pending selection event if any."""
+        with self._lock:
+            self._sel_timer = None
         self._sel_throttle_active = False
         if self._pending_selection is not None:
             source_id, indices = self._pending_selection
             self._pending_selection = None
             self._sel_throttle_active = True
-            self._sel_throttle_timer.start()
+            self._schedule_sel_flush()
             self._dispatch_selection(source_id, indices)
 
     def _dispatch_selection(self, source_id: str, indices: list) -> None:
@@ -224,7 +246,7 @@ class ViewSyncManager(QObject):
                     panel.set_selection(indices)
                 except Exception:
                     pass
-            self.selection_synced.emit(source_id, list(indices))
+            self.emit("selection_synced", source_id, list(indices))
         finally:
             self._is_syncing = False
 
@@ -281,7 +303,10 @@ class ViewSyncManager(QObject):
         self._pending_selection = None
         self._range_throttle_active = False
         self._sel_throttle_active = False
-        if self._range_throttle_timer.isActive():
-            self._range_throttle_timer.stop()
-        if self._sel_throttle_timer.isActive():
-            self._sel_throttle_timer.stop()
+        with self._lock:
+            if self._range_timer is not None:
+                self._range_timer.cancel()
+                self._range_timer = None
+            if self._sel_timer is not None:
+                self._sel_timer.cancel()
+                self._sel_timer = None

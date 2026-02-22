@@ -53,7 +53,7 @@ class ProfileSideBySideLayout(QWidget):
         self._profile_ids: List[str] = []
 
         # ViewSyncManager with defaults: X=on, Y=off, Selection=on
-        self._view_sync_manager = ViewSyncManager(parent=self)
+        self._view_sync_manager = ViewSyncManager()
         self._view_sync_manager.sync_x = True
         self._view_sync_manager.sync_y = False
         self._view_sync_manager.sync_selection = True

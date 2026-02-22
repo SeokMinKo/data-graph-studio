@@ -417,15 +417,21 @@ class TestSignals:
         mgr, p1, p2 = two_panels
         mgr.sync_x = True
 
-        with qtbot.waitSignal(mgr.view_range_synced, timeout=100):
-            mgr.on_source_range_changed("A", [0, 10], [0, 5])
+        received = []
+        mgr.subscribe("view_range_synced", lambda *a: received.append(a))
+        mgr.on_source_range_changed("A", [0, 10], [0, 5])
+        assert len(received) == 1
+        assert received[0][0] == "A"
 
     def test_selection_synced_signal_emitted(self, two_panels, qtbot):
         mgr, p1, p2 = two_panels
         mgr.sync_selection = True
 
-        with qtbot.waitSignal(mgr.selection_synced, timeout=100):
-            mgr.on_source_selection_changed("A", [1, 2, 3])
+        received = []
+        mgr.subscribe("selection_synced", lambda *a: received.append(a))
+        mgr.on_source_selection_changed("A", [1, 2, 3])
+        assert len(received) == 1
+        assert received[0][0] == "A"
 
 
 # ---------------------------------------------------------------------------

@@ -905,7 +905,7 @@ class SideBySideLayout(QWidget):
         self._panels: Dict[str, MiniGraphWidget] = {}
 
         # ViewSyncManager replaces internal sync logic (Module H)
-        self._view_sync_manager = ViewSyncManager(parent=self)
+        self._view_sync_manager = ViewSyncManager()
 
         self._setup_ui()
         self._connect_signals()
