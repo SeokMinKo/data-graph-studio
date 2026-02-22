@@ -14,7 +14,18 @@ import time
 from PySide6.QtCore import QObject, Signal
 
 from .undo_manager import UndoStack, UndoCommand, UndoActionType
-# ComparisonManager is imported lazily in AppState.__init__ to avoid circular imports.
+# comparison_manager defines the comparison types and ComparisonManager class.
+# We import the types here so existing code using
+#   from data_graph_studio.core.state import ComparisonMode, ...
+# continues to work unchanged (backward compatibility).
+from .comparison_manager import (
+    ComparisonManager,
+    ComparisonMode,
+    ComparisonSettings,
+    DatasetMetadata,
+    DatasetState,
+    DEFAULT_DATASET_COLORS,
+)
 
 if TYPE_CHECKING:
     from .profile import Profile, GraphSetting
@@ -28,46 +39,7 @@ class ThemeState:
     current: str = "system"    # "light" | "dark" | "system"
 
 
-# ==================== Multi-Dataset Comparison ====================
-
-class ComparisonMode(Enum):
-    """데이터셋 비교 모드"""
-    SINGLE = "single"           # 단일 데이터셋 (기존 모드)
-    OVERLAY = "overlay"         # 오버레이 비교 (하나의 차트에 여러 데이터셋)
-    SIDE_BY_SIDE = "side_by_side"  # 병렬 비교 (각각 독립 패널)
-    DIFFERENCE = "difference"   # 차이 분석 (두 데이터셋 간 차이)
-
-
-@dataclass
-class DatasetMetadata:
-    """데이터셋 메타데이터"""
-    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    name: str = ""
-    file_path: Optional[str] = None
-    color: str = "#1f77b4"
-    created_at: datetime = field(default_factory=datetime.now)
-    row_count: int = 0
-    column_count: int = 0
-    memory_bytes: int = 0
-    is_active: bool = False
-    compare_enabled: bool = True  # 비교에 포함할지 여부
-
-
-# 기본 데이터셋 색상 팔레트
-DEFAULT_DATASET_COLORS = [
-    "#1f77b4",  # 파랑
-    "#ff7f0e",  # 주황
-    "#2ca02c",  # 초록
-    "#d62728",  # 빨강
-    "#9467bd",  # 보라
-    "#8c564b",  # 갈색
-    "#e377c2",  # 분홍
-    "#7f7f7f",  # 회색
-    "#bcbd22",  # 올리브
-    "#17becf",  # 청록
-]
-
-# 차이 모드 색상
+# 차이 모드 색상 (비교 색상 팔레트는 comparison_manager.py 참조)
 DIFF_POSITIVE_COLOR = "#2ca02c"  # 초록 (증가)
 DIFF_NEGATIVE_COLOR = "#d62728"  # 빨강 (감소)
 DIFF_NEUTRAL_COLOR = "#7f7f7f"   # 회색 (변화없음)
@@ -255,61 +227,6 @@ class SelectionState:
             self.selected_rows.add(row)
 
 
-@dataclass
-class DatasetState:
-    """
-    개별 데이터셋의 상태
-
-    각 데이터셋은 독립적인 그래프 설정, 필터, 정렬 등을 가질 수 있음
-    """
-    dataset_id: str
-    x_column: Optional[str] = None
-    group_columns: List[GroupColumn] = field(default_factory=list)
-    value_columns: List[ValueColumn] = field(default_factory=list)
-    hover_columns: List[str] = field(default_factory=list)
-    filters: List[FilterCondition] = field(default_factory=list)
-    sorts: List[SortCondition] = field(default_factory=list)
-    selection: SelectionState = field(default_factory=SelectionState)
-    chart_settings: ChartSettings = field(default_factory=ChartSettings)
-    profiles: List['GraphSetting'] = field(default_factory=list)
-
-    def clone(self) -> 'DatasetState':
-        """상태 복제"""
-        import copy
-        return copy.deepcopy(self)
-
-    def reset(self):
-        """상태 초기화"""
-        self.x_column = None
-        self.group_columns.clear()
-        self.value_columns.clear()
-        self.hover_columns.clear()
-        self.filters.clear()
-        self.sorts.clear()
-        self.selection.clear()
-        self.chart_settings = ChartSettings()
-        self.profiles.clear()
-
-
-@dataclass
-class ComparisonSettings:
-    """비교 모드 설정"""
-    mode: ComparisonMode = ComparisonMode.SINGLE
-    comparison_datasets: List[str] = field(default_factory=list)  # 비교 대상 데이터셋 ID들
-    key_column: Optional[str] = None  # 정렬/조인 기준 컬럼
-    sync_scroll: bool = True
-    sync_zoom: bool = True
-    sync_pan_x: bool = True
-    sync_pan_y: bool = True
-    sync_selection: bool = False
-    auto_align: bool = True  # 키 컬럼 기준 자동 정렬
-
-    # Profile comparison fields (PRD §6.1)
-    comparison_target: str = "dataset"  # "dataset" | "profile"
-    comparison_profile_ids: List[str] = field(default_factory=list)  # 프로파일 비교 시 대상 ID
-    comparison_dataset_id: str = ""  # 프로파일 비교 시 대상 데이터셋 ID
-
-
 class AppState(QObject):
     """
     앱 전역 상태 관리
@@ -464,7 +381,43 @@ class AppState(QObject):
 
     # ==================== Multi-Dataset Comparison (delegates to ComparisonManager) ====================
 
-    # --- Properties ---
+    # --- Internal proxy properties (backward-compat for tests/internal code that accesses _xx) ---
+    # These return the underlying mutable dicts from ComparisonManager so direct item
+    # assignment (state._dataset_states["x"] = ...) still works as before.
+
+    @property
+    def _dataset_states(self) -> Dict[str, DatasetState]:
+        return self.comparison_manager._dataset_states
+
+    @_dataset_states.setter
+    def _dataset_states(self, value):
+        self.comparison_manager._dataset_states = value
+
+    @property
+    def _dataset_metadata(self) -> Dict[str, DatasetMetadata]:
+        return self.comparison_manager._dataset_metadata
+
+    @_dataset_metadata.setter
+    def _dataset_metadata(self, value):
+        self.comparison_manager._dataset_metadata = value
+
+    @property
+    def _active_dataset_id(self) -> Optional[str]:
+        return self.comparison_manager._active_dataset_id
+
+    @_active_dataset_id.setter
+    def _active_dataset_id(self, value: Optional[str]):
+        self.comparison_manager._active_dataset_id = value
+
+    @property
+    def _comparison_settings(self) -> ComparisonSettings:
+        return self.comparison_manager._comparison_settings
+
+    @_comparison_settings.setter
+    def _comparison_settings(self, value: ComparisonSettings):
+        self.comparison_manager._comparison_settings = value
+
+    # --- Public properties ---
 
     @property
     def dataset_states(self) -> Dict[str, DatasetState]:
