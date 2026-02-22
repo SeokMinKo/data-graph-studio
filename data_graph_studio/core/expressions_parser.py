@@ -2,6 +2,8 @@
 Expression Parser - Spotfire 스타일 수식 파서
 
 수식 파싱, 평가 및 유효성 검사를 위한 핵심 클래스들을 포함합니다.
+
+Conditional/helper evaluation methods live in expressions_ast_evaluator.py.
 """
 
 from typing import List, Dict, Any, Optional, Union, Set
@@ -11,6 +13,8 @@ import ast
 import re
 import polars as pl
 import numpy as np
+
+from data_graph_studio.core.expressions_ast_evaluator import ExpressionEvaluatorHelpers
 
 
 class SecurityError(Exception):
@@ -74,6 +78,9 @@ class ExpressionParser:
         # 문자열 연결 패턴
         self._concat_pattern = re.compile(r"'([^']*)'|\"([^\"]*)\"")
 
+        # Delegate helpers
+        self._helpers = ExpressionEvaluatorHelpers(self._column_pattern)
+
     def evaluate(
         self,
         expression: str,
@@ -105,7 +112,7 @@ class ExpressionParser:
 
         # 조건문 확인 (If, Case)
         if self._is_conditional_expression(expression):
-            return self._evaluate_conditional(expression, data)
+            return self._helpers.evaluate_conditional(expression, data)
 
         # 일반 표현식
         return self._evaluate_simple(expression, data, context)
@@ -132,20 +139,19 @@ class ExpressionParser:
         context: Dict[str, Any]
     ) -> pl.Series:
         """단순 수식 평가"""
-        # 컬럼 참조를 Polars 표현식으로 변환
         expr = expression
 
         # 문자열 함수 처리
-        expr = self._handle_string_functions(expr, data)
+        expr = self._helpers.handle_string_functions(expr, data)
 
         # 수학 함수 처리
-        expr = self._handle_math_functions(expr, data)
+        expr = self._helpers.handle_math_functions(expr, data)
 
         # 날짜 함수 처리
-        expr = self._handle_date_functions(expr, data)
+        expr = self._helpers.handle_date_functions(expr, data)
 
         # NULL 처리 함수
-        expr = self._handle_null_functions(expr, data)
+        expr = self._helpers.handle_null_functions(expr, data)
 
         # 컬럼 참조 변환
         columns_used = self._column_pattern.findall(expr)
@@ -162,27 +168,24 @@ class ExpressionParser:
         columns_used: List[str]
     ) -> pl.Series:
         """수식 계산"""
-        # 간단한 산술 연산 처리
         expr = expression
 
         # 컬럼 참조를 numpy 배열로 변환
         local_vars = {}
         for col in columns_used:
             if col in data.columns:
-                # 언더스코어로 컬럼명 변환 (특수문자 처리)
                 safe_name = f"_col_{col.replace(' ', '_').replace('-', '_')}"
                 local_vars[safe_name] = data[col].to_numpy()
                 expr = expr.replace(f'[{col}]', safe_name)
 
         # 문자열 연결 연산자 (&) 처리
         if '&' in expr:
-            return self._evaluate_string_concat(expression, data)
+            return self._helpers.evaluate_string_concat(expression, data)
 
         # numpy 함수 추가
         local_vars['np'] = np
 
         try:
-            # 안전한 평가
             result = eval(expr, {"__builtins__": {}, "np": np}, local_vars)
 
             if isinstance(result, np.ndarray):
@@ -192,7 +195,6 @@ class ExpressionParser:
             return pl.Series(result)
 
         except Exception:
-            # 평가 실패 시 None 반환
             return pl.Series([None] * len(data))
 
     def _evaluate_aggregate(
@@ -203,7 +205,6 @@ class ExpressionParser:
         """집계 표현식 평가"""
         expr_lower = expression.lower()
 
-        # 컬럼 추출
         col_match = self._column_pattern.search(expression)
         if not col_match:
             return None
@@ -214,7 +215,6 @@ class ExpressionParser:
 
         values = data[col_name]
 
-        # 함수 적용
         if 'sum(' in expr_lower:
             return values.sum()
         elif 'avg(' in expr_lower or 'mean(' in expr_lower:
@@ -308,7 +308,6 @@ class ExpressionParser:
                 pl.col(value_col).cum_sum().over(partition_col).alias('result')
             )['result']
         elif func_name in ('avg', 'mean'):
-            # 누적 평균
             cum_sum = data.select(
                 pl.col(value_col).cum_sum().over(partition_col).alias('sum')
             )['sum']
@@ -319,286 +318,39 @@ class ExpressionParser:
 
         return pl.Series([None] * len(data))
 
-    def _evaluate_conditional(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
-        """조건문 평가"""
-        expr_lower = expression.lower().strip()
+    # -- Conditional evaluation (delegates to helpers) -------------------------
 
-        if expr_lower.startswith('if('):
-            return self._evaluate_if(expression, data)
-        elif expr_lower.startswith('case '):
-            return self._evaluate_case(expression, data)
+    def _evaluate_conditional(self, expression: str, data: pl.DataFrame) -> pl.Series:
+        return self._helpers.evaluate_conditional(expression, data)
 
-        return pl.Series([None] * len(data))
+    def _evaluate_if(self, expression: str, data: pl.DataFrame) -> pl.Series:
+        return self._helpers.evaluate_if(expression, data)
 
-    def _evaluate_if(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
-        """IF 표현식 평가: If(condition, true_value, false_value)"""
-        # 간단한 파싱
-        match = re.match(
-            r"If\s*\(\s*(.+?)\s*,\s*(.+?)\s*,\s*(.+?)\s*\)",
-            expression,
-            re.IGNORECASE
-        )
+    def _evaluate_case(self, expression: str, data: pl.DataFrame) -> pl.Series:
+        return self._helpers.evaluate_case(expression, data)
 
-        if not match:
-            return pl.Series([None] * len(data))
+    def _evaluate_condition(self, condition: str, data: pl.DataFrame) -> List[bool]:
+        return self._helpers.evaluate_condition(condition, data)
 
-        condition_expr = match.group(1)
-        true_expr = match.group(2)
-        false_expr = match.group(3)
+    def _parse_value(self, value_str: str, data: pl.DataFrame) -> Any:
+        return self._helpers.parse_value(value_str, data)
 
-        # 조건 평가
-        condition = self._evaluate_condition(condition_expr, data)
+    # -- Expression transformations (delegates to helpers) ---------------------
 
-        # true/false 값 평가
-        true_val = self._parse_value(true_expr, data)
-        false_val = self._parse_value(false_expr, data)
+    def _handle_string_functions(self, expression: str, data: pl.DataFrame) -> str:
+        return self._helpers.handle_string_functions(expression, data)
 
-        # 결과 생성
-        result = []
-        for i, cond in enumerate(condition):
-            if cond:
-                if isinstance(true_val, (list, pl.Series, np.ndarray)):
-                    result.append(true_val[i])
-                else:
-                    result.append(true_val)
-            else:
-                if isinstance(false_val, (list, pl.Series, np.ndarray)):
-                    result.append(false_val[i])
-                else:
-                    result.append(false_val)
+    def _handle_math_functions(self, expression: str, data: pl.DataFrame) -> str:
+        return self._helpers.handle_math_functions(expression, data)
 
-        return pl.Series(result)
+    def _handle_date_functions(self, expression: str, data: pl.DataFrame) -> str:
+        return self._helpers.handle_date_functions(expression, data)
 
-    def _evaluate_case(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
-        """CASE 표현식 평가"""
-        # Case When ... Then ... Else ... End
-        when_pattern = re.compile(
-            r'When\s+(.+?)\s+Then\s+(.+?)(?=\s+When|\s+Else|\s+End)',
-            re.IGNORECASE
-        )
-        else_pattern = re.compile(r'Else\s+(.+?)\s+End', re.IGNORECASE)
+    def _handle_null_functions(self, expression: str, data: pl.DataFrame) -> str:
+        return self._helpers.handle_null_functions(expression, data)
 
-        when_matches = when_pattern.findall(expression)
-        else_match = else_pattern.search(expression)
-
-        default_val = else_match.group(1).strip() if else_match else None
-
-        result = [None] * len(data)
-
-        # 각 행에 대해 조건 평가
-        for i in range(len(data)):
-            row_data = data.slice(i, 1)
-            matched = False
-
-            for condition, value in when_matches:
-                cond_result = self._evaluate_condition(condition, row_data)
-                if cond_result[0]:
-                    result[i] = self._parse_value(value.strip(), row_data)
-                    if isinstance(result[i], (list, pl.Series)):
-                        result[i] = result[i][0]
-                    matched = True
-                    break
-
-            if not matched and default_val is not None:
-                result[i] = self._parse_value(default_val, row_data)
-                if isinstance(result[i], (list, pl.Series)):
-                    result[i] = result[i][0]
-
-        return pl.Series(result)
-
-    def _evaluate_condition(
-        self,
-        condition: str,
-        data: pl.DataFrame
-    ) -> List[bool]:
-        """조건식 평가"""
-        # 비교 연산자 추출
-        operators = ['>=', '<=', '!=', '<>', '=', '>', '<']
-        op = None
-        for o in operators:
-            if o in condition:
-                op = o
-                break
-
-        if op is None:
-            return [False] * len(data)
-
-        parts = condition.split(op)
-        if len(parts) != 2:
-            return [False] * len(data)
-
-        left = parts[0].strip()
-        right = parts[1].strip()
-
-        # 컬럼 값 추출
-        left_val = self._parse_value(left, data)
-        right_val = self._parse_value(right, data)
-
-        # 비교
-        result = []
-        for i in range(len(data)):
-            lv = left_val[i] if isinstance(left_val, (list, pl.Series, np.ndarray)) else left_val
-            rv = right_val[i] if isinstance(right_val, (list, pl.Series, np.ndarray)) else right_val
-
-            try:
-                if op == '=' or op == '==':
-                    result.append(lv == rv)
-                elif op == '!=' or op == '<>':
-                    result.append(lv != rv)
-                elif op == '>':
-                    result.append(lv > rv)
-                elif op == '<':
-                    result.append(lv < rv)
-                elif op == '>=':
-                    result.append(lv >= rv)
-                elif op == '<=':
-                    result.append(lv <= rv)
-                else:
-                    result.append(False)
-            except Exception:
-                result.append(False)
-
-        return result
-
-    def _parse_value(
-        self,
-        value_str: str,
-        data: pl.DataFrame
-    ) -> Any:
-        """값 문자열 파싱"""
-        value_str = value_str.strip()
-
-        # 문자열 리터럴
-        if (value_str.startswith("'") and value_str.endswith("'")) or \
-           (value_str.startswith('"') and value_str.endswith('"')):
-            return value_str[1:-1]
-
-        # 컬럼 참조
-        col_match = self._column_pattern.match(value_str)
-        if col_match:
-            col_name = col_match.group(1)
-            if col_name in data.columns:
-                return data[col_name].to_list()
-            return None
-
-        # 숫자
-        try:
-            if '.' in value_str:
-                return float(value_str)
-            return int(value_str)
-        except ValueError:
-            pass
-
-        return value_str
-
-    def _handle_string_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
-        """문자열 함수 처리"""
-        expr = expression
-
-        # Upper([col])
-        for match in re.finditer(r'Upper\s*\(\s*\[([^\]]+)\]\s*\)', expr, re.IGNORECASE):
-            col = match.group(1)
-            if col in data.columns:
-                # 직접 결과 반환을 위해 플래그 설정
-                pass
-
-        # Lower([col])
-        for match in re.finditer(r'Lower\s*\(\s*\[([^\]]+)\]\s*\)', expr, re.IGNORECASE):
-            col = match.group(1)
-            if col in data.columns:
-                pass
-
-        return expr
-
-    def _handle_math_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
-        """수학 함수 처리"""
-        expr = expression
-
-        # Abs
-        expr = re.sub(r'Abs\s*\(', 'np.abs(', expr, flags=re.IGNORECASE)
-
-        # Sqrt
-        expr = re.sub(r'Sqrt\s*\(', 'np.sqrt(', expr, flags=re.IGNORECASE)
-
-        # Round
-        expr = re.sub(r'Round\s*\(', 'np.round(', expr, flags=re.IGNORECASE)
-
-        # Log
-        expr = re.sub(r'Log\s*\(', 'np.log(', expr, flags=re.IGNORECASE)
-
-        # Exp
-        expr = re.sub(r'Exp\s*\(', 'np.exp(', expr, flags=re.IGNORECASE)
-
-        # Power
-        expr = re.sub(r'Power\s*\(', 'np.power(', expr, flags=re.IGNORECASE)
-
-        return expr
-
-    def _handle_date_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
-        """날짜 함수 처리"""
-        # Year, Month, Day 등
-        # 이 함수들은 별도 처리 필요
-        return expression
-
-    def _handle_null_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
-        """NULL 처리 함수"""
-        return expression
-
-    def _evaluate_string_concat(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
-        """문자열 연결 평가"""
-        parts = expression.split('&')
-        result = [''] * len(data)
-
-        for part in parts:
-            part = part.strip()
-
-            # 컬럼 참조
-            col_match = self._column_pattern.match(part)
-            if col_match:
-                col_name = col_match.group(1)
-                if col_name in data.columns:
-                    values = data[col_name].cast(pl.Utf8).to_list()
-                    result = [r + str(v) for r, v in zip(result, values)]
-
-            # 문자열 리터럴
-            elif (part.startswith("'") and part.endswith("'")) or \
-                 (part.startswith('"') and part.endswith('"')):
-                literal = part[1:-1]
-                result = [r + literal for r in result]
-
-        return pl.Series(result)
+    def _evaluate_string_concat(self, expression: str, data: pl.DataFrame) -> pl.Series:
+        return self._helpers.evaluate_string_concat(expression, data)
 
     def get_referenced_columns(self, expression: str) -> Set[str]:
         """수식에서 참조하는 컬럼 목록"""

@@ -312,7 +312,7 @@ class TestAtomicExport:
             return original_rename(src, dst)
 
         ctrl = ExportController()
-        with patch("data_graph_studio.core.export_controller.os.rename", tracking_rename):
+        with patch("data_graph_studio.core.export_workers.os.rename", tracking_rename):
             ctrl.export_chart_sync(
                 image=sample_qimage,
                 path=out_path,
