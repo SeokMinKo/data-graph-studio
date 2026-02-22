@@ -414,52 +414,54 @@ class FileLoadingController:
         w = self._w
         self._cleanup_loader_thread()
 
-        w._progress_dialog = QProgressDialog(
+        self._progress_dialog = QProgressDialog(
             f"Loading {Path(file_path).name}...",
             "Cancel",
             0, 100,
             w
         )
-        w._progress_dialog.setWindowModality(Qt.WindowModal)
-        w._progress_dialog.setAutoClose(True)
-        w._progress_dialog.setMinimumWidth(400)
-        w._progress_dialog.canceled.connect(self._cancel_loading)
+        self._progress_dialog.setWindowModality(Qt.WindowModal)
+        self._progress_dialog.setAutoClose(True)
+        self._progress_dialog.setMinimumDuration(500)
+        self._progress_dialog.setMinimumWidth(400)
+        self._progress_dialog.canceled.connect(self._cancel_loading)
+        # Keep w._progress_dialog in sync for any code that checks it
+        w._progress_dialog = self._progress_dialog
 
         w._loader_thread = DataLoaderThread(w.engine, file_path)
         w._loader_thread.progress_updated.connect(self._on_loading_progress)
         w._loader_thread.finished_loading.connect(self._on_loading_finished)
         w._loader_thread.start()
 
-        w._progress_dialog.show()
-
     def _load_file_with_settings(self, file_path: str, settings: ParsingSettings):
         """파일 로드 (파싱 설정 적용)"""
         w = self._w
         self._cleanup_loader_thread()
 
-        w._progress_dialog = QProgressDialog(
+        self._progress_dialog = QProgressDialog(
             f"Loading {Path(file_path).name}...",
             "Cancel",
             0, 100,
             w
         )
-        w._progress_dialog.setWindowModality(Qt.WindowModal)
-        w._progress_dialog.setAutoClose(True)
-        w._progress_dialog.setMinimumWidth(400)
-        w._progress_dialog.canceled.connect(self._cancel_loading)
+        self._progress_dialog.setWindowModality(Qt.WindowModal)
+        self._progress_dialog.setAutoClose(True)
+        self._progress_dialog.setMinimumDuration(500)
+        self._progress_dialog.setMinimumWidth(400)
+        self._progress_dialog.canceled.connect(self._cancel_loading)
+        # Keep w._progress_dialog in sync for any code that checks it
+        w._progress_dialog = self._progress_dialog
 
         w._loader_thread = DataLoaderThreadWithSettings(w.engine, file_path, settings)
         w._loader_thread.progress_updated.connect(self._on_loading_progress)
         w._loader_thread.finished_loading.connect(self._on_loading_finished)
         w._loader_thread.start()
 
-        w._progress_dialog.show()
-
     def _on_loading_progress(self, progress: LoadingProgress):
         """로딩 진행률 업데이트"""
-        w = self._w
-        if w._progress_dialog:
-            w._progress_dialog.setValue(int(progress.progress_percent))
+        dlg = getattr(self, '_progress_dialog', None) or self._w._progress_dialog
+        if dlg:
+            dlg.setValue(int(progress.progress_percent))
 
             try:
                 proc_mem = MemoryMonitor.get_process_memory()
@@ -471,7 +473,7 @@ class FileLoadingController:
             if progress.eta_seconds > 0:
                 eta_str = f"\nETA: {progress.eta_seconds:.0f}s"
 
-            w._progress_dialog.setLabelText(
+            dlg.setLabelText(
                 f"Loading... {progress.status}\n"
                 f"{progress.loaded_rows:,} rows loaded\n"
                 f"Memory: {mem_str}{eta_str}"
@@ -480,8 +482,11 @@ class FileLoadingController:
     def _on_loading_finished(self, success: bool):
         """로딩 완료"""
         w = self._w
-        if w._progress_dialog:
-            w._progress_dialog.close()
+        dlg = getattr(self, '_progress_dialog', None) or w._progress_dialog
+        if dlg:
+            dlg.close()
+        self._progress_dialog = None
+        w._progress_dialog = None
 
         if success:
             w.state.set_data_loaded(True, w.engine.row_count)
