@@ -158,7 +158,8 @@ class DataQuery:
         Returns:
             통계 딕셔너리.
         """
-        cache_key = f"stats_{column}"
+        # Include windowed context so full-dataset stats aren't returned in windowed mode.
+        cache_key = f"stats_{column}_windowed" if windowed else f"stats_{column}"
         if cache is not None and cache_key in cache:
             return cache[cache_key]
 
@@ -331,6 +332,8 @@ class DataQuery:
         """
         if df is None or column not in df.columns:
             return []
+        # sort() is intentional: results are shown in dropdowns/axis labels where
+        # alphabetical order matters to users. O(n log n) cost is acceptable here.
         return df[column].unique().sort().head(limit).to_list()
 
     def sample(
