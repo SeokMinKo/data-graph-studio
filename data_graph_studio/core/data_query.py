@@ -19,6 +19,7 @@ from data_graph_studio.core.data_query_helpers import (
     compute_eager_column_stats,
     compute_windowed_profile,
 )
+from data_graph_studio.core.metrics import get_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ class DataQuery:
             if func in AGG_MAP
         ]
 
+        get_metrics().increment("query.executed")
         try:
             return self._collect_streaming(df.lazy().group_by(group_columns).agg(agg_exprs))
         except Exception:
