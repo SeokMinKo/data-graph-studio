@@ -169,6 +169,8 @@ class FileLoader:
 
     def add_precision_column(self, column: str) -> None:
         """정밀도 유지가 필요한 컬럼을 추가한다."""
+        if not isinstance(column, str) or not column.strip():
+            raise ValueError(f"column must be a non-empty string, got {column!r}")
         self._precision_columns.add(column)
 
     def cancel_loading(self) -> None:

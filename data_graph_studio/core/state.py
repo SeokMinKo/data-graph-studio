@@ -225,6 +225,9 @@ class SelectionState:
             rows: Row indices to select. Must be non-negative.
             add: If True, add to existing selection. If False, replace it.
         """
+        invalid = [r for r in rows if not isinstance(r, int) or r < 0]
+        if invalid:
+            raise ValueError(f"row index must be a non-negative integer, got: {invalid[:3]}")
         if not add:
             self.selected_rows.clear()
         self.selected_rows.update(rows)
@@ -236,6 +239,9 @@ class SelectionState:
         Args:
             rows: Row indices to deselect.
         """
+        invalid = [r for r in rows if not isinstance(r, int) or r < 0]
+        if invalid:
+            raise ValueError(f"row index must be a non-negative integer, got: {invalid[:3]}")
         self.selected_rows.difference_update(rows)
 
     def toggle(self, row: int):

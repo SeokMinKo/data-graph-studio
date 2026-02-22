@@ -140,6 +140,8 @@ class DataEngine:
 
     def drop_column(self, col_name: str) -> None:
         """컬럼 삭제 (dataset sync + cache clear)."""
+        if not isinstance(col_name, str) or not col_name.strip():
+            raise ValueError(f"column name must be a non-empty string, got {col_name!r}")
         if self.df is None or col_name not in self.df.columns:
             return
         new_df = self.df.drop(col_name)
