@@ -25,18 +25,17 @@ from typing import Any, Dict, Optional
 from PySide6.QtCore import QObject, Signal
 
 from data_graph_studio.core.io_abstract import IFileSystem, ITimerFactory
+from data_graph_studio.core.constants import (
+    MIN_POLL_INTERVAL_MS,
+    MAX_POLL_INTERVAL_MS,
+    DEFAULT_POLL_INTERVAL_MS,
+    DEBOUNCE_MS,
+    MAX_WATCHED_FILES,
+    LARGE_FILE_THRESHOLD,
+    MAX_BACKOFF_MS,
+)
 
 logger = logging.getLogger(__name__)
-
-# ─── Constants ──────────────────────────────────────────────────────
-
-MIN_POLL_INTERVAL_MS = 500      # 0.5 seconds
-MAX_POLL_INTERVAL_MS = 60000    # 60 seconds
-DEFAULT_POLL_INTERVAL_MS = 1000 # 1 second
-DEBOUNCE_MS = 300               # 300ms debounce
-MAX_WATCHED_FILES = 10          # Section 10.2
-LARGE_FILE_THRESHOLD = 2 * 1024 * 1024 * 1024  # 2GB
-MAX_BACKOFF_MS = 30000          # 30 seconds max backoff
 
 
 def _clamp_interval(ms: int) -> int:

@@ -9,8 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
-
-MAX_ANNOTATION_TEXT_LENGTH = 200
+from data_graph_studio.core.constants import MAX_ANNOTATION_TEXT_LENGTH
 
 
 @dataclass

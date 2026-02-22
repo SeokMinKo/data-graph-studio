@@ -20,9 +20,11 @@ logger = logging.getLogger(__name__)
 # Port-file helpers (shared by server & client)
 # ---------------------------------------------------------------------------
 
+from data_graph_studio.core.constants import IPC_DEFAULT_PORT, IPC_MAX_PORT_ATTEMPTS
+
 _PORT_FILE = Path.home() / ".dgs" / "ipc_port"
-DEFAULT_PORT = 52849
-MAX_PORT_ATTEMPTS = 100
+DEFAULT_PORT = IPC_DEFAULT_PORT
+MAX_PORT_ATTEMPTS = IPC_MAX_PORT_ATTEMPTS
 
 
 def _pid_is_alive(pid: int) -> bool:

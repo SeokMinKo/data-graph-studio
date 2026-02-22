@@ -40,9 +40,11 @@ class ThemeState:
 
 
 # 차이 모드 색상 (비교 색상 팔레트는 comparison_manager.py 참조)
-DIFF_POSITIVE_COLOR = "#2ca02c"  # 초록 (증가)
-DIFF_NEGATIVE_COLOR = "#d62728"  # 빨강 (감소)
-DIFF_NEUTRAL_COLOR = "#7f7f7f"   # 회색 (변화없음)
+from data_graph_studio.core.constants import (
+    DIFF_POSITIVE_COLOR,
+    DIFF_NEGATIVE_COLOR,
+    DIFF_NEUTRAL_COLOR,
+)
 
 
 class AggregationType(Enum):

@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, List, Optional
 
+from data_graph_studio.core.constants import UNDO_MAX_DEPTH
+
 
 class UndoActionType(Enum):
     """Categorization for history UI / analytics (not required for execution)."""
@@ -71,7 +73,7 @@ class UndoStack:
     pause() is used to prevent recursion when replaying commands.
     """
 
-    def __init__(self, max_depth: int = 50, on_changed: Optional[Callable[[], None]] = None):
+    def __init__(self, max_depth: int = UNDO_MAX_DEPTH, on_changed: Optional[Callable[[], None]] = None):
         self.max_depth = max_depth
         self._commands: List[UndoCommand] = []
         self._index: int = 0
