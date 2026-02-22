@@ -4,10 +4,13 @@ Filtering System - Spotfire 스타일 필터링 스킴
 필터링 스킴(Filtering Scheme)은 시각화별로 독립적인 필터를 적용할 수 있는 메커니즘입니다.
 """
 
+import logging
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from data_graph_studio.core.observable import Observable
 
@@ -459,9 +462,9 @@ class FilteringManager(Observable):
                 if expr is not None:
                     try:
                         result = result.filter(expr)
-                    except Exception:
+                    except Exception as e:
                         # 필터 적용 실패 시 무시
-                        pass
+                        logger.warning("filtering.apply_filter.skipped", extra={"column": str(f.column), "error": str(e)})
 
         return result
 

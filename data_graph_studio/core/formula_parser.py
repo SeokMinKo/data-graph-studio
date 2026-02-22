@@ -16,10 +16,13 @@ Supports:
 from __future__ import annotations
 
 import ast
+import logging
 import re
 from typing import Any, Dict, Optional, Set, Tuple
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -127,6 +130,7 @@ class FormulaParser:
         Division by zero produces null (ERR-3.2).
         Type mismatches raise FormulaTypeError (ERR-3.3).
         """
+        logger.debug("formula_parser.evaluate", extra={"formula": str(formula)[:80]})
         self.validate(formula, df)
         prepared = self._prepare_formula(formula, df)
         return self._eval_prepared(prepared, df)
@@ -452,6 +456,7 @@ class FormulaParser:
         try:
             tree = ast.parse(expr, mode='eval')
         except SyntaxError as e:
+            logger.warning("formula_parser.eval_general.syntax_error", extra={"error": str(e), "formula": str(formula)[:50]})
             raise FormulaError(f"Syntax error in formula: {e}")
 
         # Evaluate AST with Polars series

@@ -2,12 +2,15 @@
 Expression Engine - 계산 필드를 위한 수식 엔진
 """
 
+import logging
 import math
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 class ExpressionError(Exception):
@@ -334,14 +337,15 @@ class ExpressionEngine:
     def evaluate(self, expression: str, df: pl.DataFrame) -> pl.Series:
         """
         수식 평가
-        
+
         Args:
             expression: 수식 문자열
             df: 데이터프레임
-        
+
         Returns:
             계산된 Series
         """
+        logger.debug("expression_engine.evaluate", extra={"expr": str(expression)[:80]})
         # 토큰화
         lexer = Lexer(expression)
         tokens = lexer.tokenize()
@@ -681,8 +685,10 @@ class ExpressionEngine:
             return True, None
             
         except ExpressionError as e:
+            logger.warning("expression_engine.validate.failed", extra={"error": str(e), "expr": str(expression)[:80]})
             return False, str(e)
         except Exception as e:
+            logger.warning("expression_engine.validate.failed", extra={"error": str(e), "expr": str(expression)[:80]})
             return False, str(e)
     
     def _validate_ast(self, node: Dict, df: pl.DataFrame):

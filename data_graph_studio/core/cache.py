@@ -2,6 +2,7 @@
 Caching Layer - Multi-level cache for performance optimization
 """
 
+import logging
 import time
 import hashlib
 import json
@@ -10,6 +11,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class CacheLevel(Enum):
@@ -143,6 +146,7 @@ class CacheManager:
                 return entry.data
         
         self._misses += 1
+        logger.debug("cache.miss", extra={"key": str(key)[:80]})
         return None
     
     def delete(self, key: str, level: Optional[CacheLevel] = None):
@@ -258,11 +262,15 @@ class CacheManager:
         candidates.sort(key=lambda c: c[0])
 
         # Evict entries in LRU order until there is enough space
+        evicted = 0
         for _, level, key, size in candidates:
             if current + needed <= self.max_size_bytes:
                 break
             del self._caches[level][key]
             current -= size
+            evicted += 1
+        if evicted:
+            logger.debug("cache.evict", extra={"count": evicted})
     
     # ==================== 통계 ====================
     
