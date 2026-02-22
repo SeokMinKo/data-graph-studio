@@ -328,7 +328,8 @@ class DataEngine:
             **kw: Additional keyword arguments forwarded to the underlying loader.
 
         Returns:
-            A Polars LazyFrame for the file, or None on failure.
+            True if the LazyFrame was loaded successfully, False on failure.
+            Access the loaded data via the .has_lazy property and .query_lazy() method.
         """
         return self._loader.load_lazy(path, **kw)
 
@@ -340,7 +341,7 @@ class DataEngine:
             optimize_memory: If True, applies memory-reduction passes after collection.
 
         Returns:
-            A Polars DataFrame, or None if no LazyFrame is available.
+            True if collection succeeded and .df is now populated, False on failure.
         """
         return self._loader.collect_lazy(limit, optimize_memory)
 
@@ -348,7 +349,7 @@ class DataEngine:
         """Apply a Polars expression to the current LazyFrame and return the filtered LazyFrame.
 
         Args:
-            expr: A Polars expression to apply as a filter or transformation.
+            expr: A Polars filter expression to apply to the LazyFrame.
 
         Returns:
             A new LazyFrame with the expression applied, or None if no LazyFrame exists.
@@ -403,6 +404,9 @@ class DataEngine:
 
         Args:
             path: Path to the file to inspect.
+
+        Returns:
+            True if the file is binary ETL format, False otherwise.
         """
         from .file_loader import FileLoader as FL
         return FL.is_binary_etl(path)
@@ -652,6 +656,9 @@ class DataEngine:
 
         Args:
             did: Dataset ID string to look up.
+
+        Returns:
+            The DatasetInfo for the given ID, or None if it does not exist.
         """
         return self._datasets_mgr.get_dataset(did)
 
@@ -660,6 +667,9 @@ class DataEngine:
 
         Args:
             did: Dataset ID string to look up.
+
+        Returns:
+            The Polars DataFrame for the given dataset ID, or None if unavailable.
         """
         return self._datasets_mgr.get_dataset_df(did)
 
@@ -897,17 +907,17 @@ class DataEngine:
         return self._comparison.calculate_descriptive_comparison(dataset_ids, value_column)
 
     def get_normality_test(self, dataset_id, value_column):
-        """Test whether a column's distribution is approximately normal using the Shapiro-Wilk test.
+        """Test whether a column's distribution is approximately normal.
+
+        Uses Shapiro-Wilk for n <= 5000, D'Agostino-Pearson for larger datasets.
 
         Args:
-            dataset_id: ID string of the dataset containing the column.
-            value_column: Name of the numeric column to test.
+            dataset_id: ID of the dataset to test.
+            column: Column name to test for normality.
 
         Returns:
-            A dict with the test statistic, p-value, and a boolean indicating normality.
-
-        Raises:
-            ImportError: If scipy is not installed.
+            Dict with 'test', 'statistic', 'p_value', and 'is_normal' keys,
+            or {'error': reason} if scipy is not installed or column is non-numeric.
         """
         return self._comparison.get_normality_test(dataset_id, value_column)
 
