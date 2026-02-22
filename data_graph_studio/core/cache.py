@@ -245,25 +245,24 @@ class CacheManager:
     def _ensure_space(self, needed: int):
         """필요한 공간 확보"""
         current = self.get_total_size()
-        
-        while current + needed > self.max_size_bytes:
-            # LRU 제거
-            oldest_entry = None
-            oldest_level = None
-            oldest_key = None
-            
-            for level in [CacheLevel.L1, CacheLevel.L2, CacheLevel.L3]:
-                for key, entry in self._caches[level].items():
-                    if oldest_entry is None or entry.last_accessed < oldest_entry.last_accessed:
-                        oldest_entry = entry
-                        oldest_level = level
-                        oldest_key = key
-            
-            if oldest_key is None:
+
+        if current + needed <= self.max_size_bytes:
+            return
+
+        # Collect all entries in a single pass, sorted by last_accessed (LRU first)
+        candidates = []
+        for level in [CacheLevel.L1, CacheLevel.L2, CacheLevel.L3]:
+            for key, entry in self._caches[level].items():
+                candidates.append((entry.last_accessed, level, key, entry.estimated_size))
+
+        candidates.sort(key=lambda c: c[0])
+
+        # Evict entries in LRU order until there is enough space
+        for _, level, key, size in candidates:
+            if current + needed <= self.max_size_bytes:
                 break
-            
-            del self._caches[oldest_level][oldest_key]
-            current = self.get_total_size()
+            del self._caches[level][key]
+            current -= size
     
     # ==================== 통계 ====================
     
@@ -272,13 +271,14 @@ class CacheManager:
         entry_count = sum(len(cache) for cache in self._caches.values())
         total = self._hits + self._misses
         
+        total_size = self.get_total_size()
         return {
             'hits': self._hits,
             'misses': self._misses,
             'hit_ratio': self._hits / total if total > 0 else 0.0,
             'entry_count': entry_count,
-            'size_bytes': self.get_total_size(),
-            'size_mb': self.get_total_size() / (1024 * 1024),
+            'size_bytes': total_size,
+            'size_mb': total_size / (1024 * 1024),
             'l1_count': len(self._caches[CacheLevel.L1]),
             'l2_count': len(self._caches[CacheLevel.L2]),
             'l3_count': len(self._caches[CacheLevel.L3]),
