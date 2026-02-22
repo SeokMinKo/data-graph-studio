@@ -388,6 +388,17 @@ class FileLoadingController:
         """기존 로더 스레드 정리"""
         w = self._w
         if w._loader_thread is not None:
+            # Disconnect all signals before stopping to prevent stale signal
+            # delivery after a new load has already started.
+            try:
+                w._loader_thread.finished_loading.disconnect()
+            except (RuntimeError, TypeError):
+                pass  # Already disconnected or no connections
+            try:
+                w._loader_thread.progress_updated.disconnect()
+            except (RuntimeError, TypeError):
+                pass  # Already disconnected or no connections
+
             if w._loader_thread.isRunning():
                 logger.debug("Waiting for previous loader thread to finish...")
                 w.engine.cancel_loading()
