@@ -211,90 +211,29 @@ class ExportWorker:
         atomic_write(self.path, data)
 
     def _export_pdf(self) -> None:
-        """Render chart + optional stats to PDF using Qt PDF writer."""
+        """Render chart + optional stats to PDF via the renderer."""
         opts = self.options
         img = self.image
 
         self._on_progress(20)
 
-        from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QRectF
-        from PySide6.QtGui import QPageSize, QPdfWriter, QPainter, QFont
-
-        qba = QByteArray()
-        qbuf = QBuffer(qba)
-        qbuf.open(QIODevice.WriteOnly)
-
-        writer = QPdfWriter(qbuf)
-
-        # Page size
-        if opts.page_size.upper() == "LETTER":
-            writer.setPageSize(QPageSize(QPageSize.Letter))
-        else:
-            writer.setPageSize(QPageSize(QPageSize.A4))
-
-        writer.setPageMargins(QMarginsF(20, 20, 20, 20))
-        writer.setResolution(opts.dpi)
-
-        painter = QPainter()
-        painter.begin(writer)
-
         if self._cancelled:
-            painter.end()
-            qbuf.close()
             self._cleanup()
             return
 
         self._on_progress(40)
 
-        # --- Draw chart image centered on page ---
-        page_rect = painter.viewport()
-        margin = 40
-        chart_rect = QRectF(
-            margin,
-            margin,
-            page_rect.width() - 2 * margin,
-            page_rect.height() * 0.6 - margin,
-        )
-        painter.drawImage(chart_rect.toRect(), img)
-
-        self._on_progress(60)
-
-        # --- Optional stats summary table ---
-        if opts.include_stats and opts.stats_data:
-            stats = opts.stats_data
-            y_offset = int(chart_rect.bottom()) + 40
-
-            # Title
-            font = QFont("Helvetica", 12)
-            font.setBold(True)
-            painter.setFont(font)
-            painter.drawText(margin, y_offset, "Statistics Summary")
-            y_offset += 30
-
-            font.setBold(False)
-            font.setPointSize(10)
-            painter.setFont(font)
-
-            for key, value in stats.items():
-                if isinstance(value, float):
-                    text = f"{key}: {value:.4f}"
-                else:
-                    text = f"{key}: {value}"
-                painter.drawText(margin + 10, y_offset, text)
-                y_offset += 22
+        renderer = self._get_renderer()
+        width = opts.width or (img.width() if img is not None else 0)
+        height = opts.height or (img.height() if img is not None else 0)
+        data = renderer.render_to_pdf(img, width, height, opts)
 
         self._on_progress(80)
 
         if self._cancelled:
-            painter.end()
-            qbuf.close()
             self._cleanup()
             return
 
-        painter.end()
-        qbuf.close()
-
-        data = bytes(qba.data())
         atomic_write(self.path, data)
 
     # -- data export -----------------------------------------------------------

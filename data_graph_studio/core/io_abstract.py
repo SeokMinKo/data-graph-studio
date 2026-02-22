@@ -160,6 +160,20 @@ class IExportRenderer(ABC):
             SVG XML as bytes.
         """
 
+    @abstractmethod
+    def render_to_pdf(self, widget, width: int, height: int, options=None) -> bytes:
+        """Render a Qt widget/scene to PDF bytes.
+
+        Args:
+            widget: The Qt widget or scene to render.
+            width: Output width in pixels.
+            height: Output height in pixels.
+            options: ExportOptions instance (dpi, page_size, include_stats, stats_data).
+
+        Returns:
+            PDF document as bytes.
+        """
+
 
 def atomic_write(path: str, data: bytes) -> None:
     """
