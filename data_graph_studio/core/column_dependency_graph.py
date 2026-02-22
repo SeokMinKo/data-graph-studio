@@ -165,6 +165,7 @@ class ColumnDependencyGraph:
         path: List[str] = []
 
         def dfs(node: str) -> Optional[List[str]]:
+            """Perform depth-first search to detect cycles starting from node."""
             if node in visited:
                 return None
             if node in set(path):

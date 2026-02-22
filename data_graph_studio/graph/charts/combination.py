@@ -130,12 +130,14 @@ class CombinationChart:
 
         # Y 스케일 함수
         def scale_primary(v):
+            """Map a primary-axis value to a pixel y-coordinate."""
             y_min, y_max = result["primary_y_range"]
             if y_max == y_min:
                 return height / 2
             return height - m * height - ((v - y_min) / (y_max - y_min)) * usable_height
 
         def scale_secondary(v):
+            """Map a secondary-axis value to a pixel y-coordinate."""
             y_min, y_max = result["secondary_y_range"]
             if y_max == y_min:
                 return height / 2

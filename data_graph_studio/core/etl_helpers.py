@@ -126,6 +126,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
             self._error_count = 0
 
         def on_system_trace(self, event):
+            """Handle a system-level ETW trace event and append a record to events."""
             try:
                 system = System(event)
                 mof = system.get_mof()
@@ -149,6 +150,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 self._error_count += 1
 
         def on_event_record(self, event):
+            """Handle a generic ETW event record and append it to etw_events."""
             try:
                 try:
                     msg = event.parse_etw()
@@ -176,9 +178,14 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
             except Exception:
                 self._error_count += 1
 
-        def on_perfinfo_trace(self, event): pass
-        def on_trace_record(self, event): pass
-        def on_win_trace(self, event): pass
+        def on_perfinfo_trace(self, event):
+            """Handle a performance-info trace event (no-op)."""
+
+        def on_trace_record(self, event):
+            """Handle a generic trace record event (no-op)."""
+
+        def on_win_trace(self, event):
+            """Handle a Windows-specific trace event (no-op)."""
 
     try:
         with open(path, 'rb') as f:

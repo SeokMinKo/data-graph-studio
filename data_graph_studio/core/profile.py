@@ -65,6 +65,7 @@ class GraphSetting:
         )
 
     def with_name(self, name: str) -> 'GraphSetting':
+        """Return a new GraphSetting with the given name and an updated modified timestamp."""
         return dataclasses.replace(self, name=name, modified_at=time.time())
 
     def update_modified(self) -> 'GraphSetting':
@@ -72,6 +73,7 @@ class GraphSetting:
         return dataclasses.replace(self, modified_at=time.time())
 
     def to_dict(self) -> Dict:
+        """Serialize this graph setting to a JSON-compatible dictionary."""
         return {
             "id": self.id,
             "name": self.name,
@@ -96,6 +98,7 @@ class GraphSetting:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'GraphSetting':
+        """Deserialize a GraphSetting from a dictionary produced by to_dict."""
         return cls(
             id=data["id"],
             name=data["name"],

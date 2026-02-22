@@ -151,6 +151,7 @@ class TransformChain:
 
     @property
     def steps(self) -> List[TransformStep]:
+        """Return a copy of the ordered list of transform steps."""
         return list(self._steps)
 
     def __len__(self) -> int:

@@ -165,40 +165,49 @@ class ComparisonManager(Observable):
 
     @property
     def dataset_states(self) -> Dict[str, DatasetState]:
+        """Return the mapping of dataset ID to DatasetState."""
         return self._dataset_states
 
     @property
     def dataset_metadata(self) -> Dict[str, DatasetMetadata]:
+        """Return the mapping of dataset ID to DatasetMetadata."""
         return self._dataset_metadata
 
     @property
     def active_dataset_id(self) -> Optional[str]:
+        """Return the ID of the currently active dataset."""
         return self._active_dataset_id
 
     @property
     def active_dataset_state(self) -> Optional[DatasetState]:
+        """Return the DatasetState of the currently active dataset, or None."""
         if self._active_dataset_id:
             return self._dataset_states.get(self._active_dataset_id)
         return None
 
     @property
     def comparison_settings(self) -> ComparisonSettings:
+        """Return the current comparison settings."""
         return self._comparison_settings
 
     @property
     def comparison_mode(self) -> ComparisonMode:
+        """Return the active comparison mode."""
         return self._comparison_settings.mode
 
     @property
     def dataset_count(self) -> int:
+        """Return the number of loaded datasets."""
         return len(self._dataset_states)
 
     @property
     def comparison_dataset_ids(self) -> List[str]:
+        """Return the list of dataset IDs included in comparison."""
         return self._comparison_settings.comparison_datasets
 
     @property
     def is_profile_comparison_active(self) -> bool:
+        """Return True when profile comparison mode is active with at least two profiles."""
         return (
             self._comparison_settings.comparison_target == "profile"
             and len(self._comparison_settings.comparison_profile_ids) >= 2
@@ -208,9 +217,11 @@ class ComparisonManager(Observable):
     # ==================== Dataset CRUD ====================
 
     def get_dataset_state(self, dataset_id: str) -> Optional[DatasetState]:
+        """Return the DatasetState for the given ID, or None if not found."""
         return self._dataset_states.get(dataset_id)
 
     def get_dataset_metadata(self, dataset_id: str) -> Optional[DatasetMetadata]:
+        """Return the DatasetMetadata for the given ID, or None if not found."""
         return self._dataset_metadata.get(dataset_id)
 
     def add_dataset(
@@ -412,6 +423,7 @@ class ComparisonManager(Observable):
     # ==================== Dataset Profiles ====================
 
     def add_graph_setting_to_dataset(self, dataset_id: str, setting: 'GraphSetting') -> bool:
+        """Add a graph setting (profile) to the specified dataset."""
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
@@ -420,6 +432,7 @@ class ComparisonManager(Observable):
         return True
 
     def remove_graph_setting(self, dataset_id: str, setting_id: str) -> bool:
+        """Remove a graph setting from a dataset by setting ID."""
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
@@ -431,6 +444,7 @@ class ComparisonManager(Observable):
         return False
 
     def rename_graph_setting(self, dataset_id: str, setting_id: str, name: str) -> bool:
+        """Rename a graph setting within a dataset."""
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
@@ -442,5 +456,6 @@ class ComparisonManager(Observable):
         return False
 
     def get_dataset_profiles(self, dataset_id: str) -> List['GraphSetting']:
+        """Return all graph settings (profiles) for the given dataset."""
         state = self._dataset_states.get(dataset_id)
         return state.profiles if state else []

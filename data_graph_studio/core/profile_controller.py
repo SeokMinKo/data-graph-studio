@@ -25,6 +25,7 @@ class ProfileController(Observable):
         self._undo_stack: List[Dict[str, Any]] = []
 
     def create_profile(self, dataset_id: str, name: str) -> Optional[str]:
+        """Create a new graph setting profile for a dataset and return its ID."""
         try:
             # 새 프로파일 생성 전에 현재 활성 프로파일의 변경사항 자동 저장
             if self._active_profile_id:
@@ -68,6 +69,7 @@ class ProfileController(Observable):
         return True
 
     def apply_profile(self, profile_id: str) -> bool:
+        """Load a profile by ID and apply it to the current AppState."""
         setting = self._store.get(profile_id)
         if setting is None:
             self.emit("error_occurred", f"Profile not found: {profile_id}")
@@ -83,6 +85,7 @@ class ProfileController(Observable):
         return True
 
     def rename_profile(self, profile_id: str, new_name: str) -> bool:
+        """Rename an existing profile and push the change onto the undo stack."""
         setting = self._store.get(profile_id)
         if setting is None:
             self.emit("error_occurred", f"Profile not found: {profile_id}")
@@ -99,6 +102,7 @@ class ProfileController(Observable):
         return True
 
     def delete_profile(self, profile_id: str) -> bool:
+        """Delete a profile from the store and record it for undo."""
         setting = self._store.get(profile_id)
         if setting is None:
             self.emit("error_occurred", f"Profile not found: {profile_id}")
@@ -115,6 +119,7 @@ class ProfileController(Observable):
         return True
 
     def duplicate_profile(self, profile_id: str) -> Optional[str]:
+        """Duplicate a profile and return the new profile's ID."""
         # 복제 전에 현재 활성 프로파일의 변경사항 자동 저장
         if self._active_profile_id:
             self.save_active_profile()
@@ -128,6 +133,7 @@ class ProfileController(Observable):
         return setting.id
 
     def export_profile(self, profile_id: str, path: str) -> bool:
+        """Export a profile to a JSON file at the given path."""
         setting = self._store.get(profile_id)
         if setting is None:
             self.emit("error_occurred", f"Profile not found: {profile_id}")
@@ -141,6 +147,7 @@ class ProfileController(Observable):
             return False
 
     def import_profile(self, dataset_id: str, path: str) -> Optional[str]:
+        """Import a profile from a JSON file and associate it with the given dataset."""
         try:
             imported = self._store.import_async(path)
             setting = imported.result() if hasattr(imported, "result") else imported
@@ -158,6 +165,7 @@ class ProfileController(Observable):
             return None
 
     def has_unsaved_changes(self) -> bool:
+        """Return True if the current AppState differs from the active saved profile."""
         if not self._active_profile_id:
             return False
 
@@ -173,6 +181,7 @@ class ProfileController(Observable):
         return not self._settings_equal(setting, current)
 
     def undo(self) -> bool:
+        """Undo the last profile rename or delete operation."""
         self._prune_undo_stack()
         while self._undo_stack:
             entry = self._undo_stack.pop()

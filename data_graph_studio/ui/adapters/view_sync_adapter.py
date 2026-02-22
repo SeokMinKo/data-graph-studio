@@ -23,4 +23,5 @@ class ViewSyncManagerAdapter(QObject):
 
     @property
     def manager(self) -> ViewSyncManager:
+        """Return the underlying ViewSyncManager instance."""
         return self._manager

@@ -24,4 +24,5 @@ class ComparisonManagerAdapter(QObject):
 
     @property
     def manager(self) -> ComparisonManager:
+        """Return the underlying ComparisonManager instance."""
         return self._manager

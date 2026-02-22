@@ -175,6 +175,7 @@ class IPCServer(IpcServer):
         return result is not None
 
     def stop(self) -> None:
+        """Stop the IPC server and remove the port file."""
         super().stop()
         remove_port_file()
         logger.info("[IPC] Server stopped")
@@ -200,6 +201,7 @@ class IPCClient:
         return discovered if discovered is not None else DEFAULT_PORT
 
     def connect(self) -> bool:
+        """Open a TCP connection to the IPC server. Returns True on success."""
         import socket
 
         try:
@@ -212,11 +214,13 @@ class IPCClient:
             return False
 
     def disconnect(self):
+        """Close the TCP connection to the IPC server."""
         if self._socket:
             self._socket.close()
             self._socket = None
 
     def send_command(self, command: str, **args) -> dict:
+        """Send a JSON command to the server and return the parsed response dict."""
         if not self._socket:
             return {"status": "error", "error": "Not connected"}
 

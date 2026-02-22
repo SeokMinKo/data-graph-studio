@@ -35,4 +35,5 @@ class FilteringManagerAdapter(QObject):
 
     @property
     def manager(self) -> FilteringManager:
+        """Return the underlying FilteringManager instance."""
         return self._manager

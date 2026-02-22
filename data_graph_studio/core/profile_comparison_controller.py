@@ -193,16 +193,20 @@ class ProfileComparisonController(Observable):
 
     @property
     def is_active(self) -> bool:
+        """Return True when profile comparison is active."""
         return self._active
 
     @property
     def current_profiles(self) -> List[str]:
+        """Return a copy of the currently compared profile ID list."""
         return list(self._profile_ids)
 
     @property
     def current_mode(self) -> ComparisonMode:
+        """Return the active comparison mode."""
         return self._current_mode
 
     @property
     def dataset_id(self) -> str:
+        """Return the dataset ID used for the current comparison."""
         return self._dataset_id

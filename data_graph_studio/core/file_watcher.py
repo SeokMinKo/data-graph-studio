@@ -103,10 +103,12 @@ class FileWatcher(Observable):
 
     @property
     def poll_interval_ms(self) -> int:
+        """Return the current polling interval in milliseconds."""
         return self._poll_interval_ms
 
     @property
     def watched_count(self) -> int:
+        """Return the number of files currently being watched."""
         return len(self._entries)
 
     # ── Public API ────────────────────────────────────────────

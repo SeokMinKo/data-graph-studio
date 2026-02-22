@@ -92,27 +92,33 @@ class UndoStack:
 
     @property
     def index(self) -> int:
+        """Return the current position in the undo stack."""
         return self._index
 
     @property
     def commands(self) -> List[UndoCommand]:
+        """Return a copy of the recorded command list."""
         return list(self._commands)
 
     def can_undo(self) -> bool:
+        """Return True if there is a command available to undo."""
         return self._index > 0
 
     def can_redo(self) -> bool:
+        """Return True if there is a command available to redo."""
         return self._index < len(self._commands)
 
     # ── Mutation ──────────────────────────────────────────────
 
     def clear(self) -> None:
+        """Clear all recorded commands and reset the index."""
         self._commands.clear()
         self._index = 0
         self._emit_changed()
 
     @contextmanager
     def pause(self):
+        """Context manager that temporarily suspends recording new commands."""
         self._paused += 1
         try:
             yield
@@ -164,6 +170,7 @@ class UndoStack:
         self._emit_changed()
 
     def undo(self) -> Optional[UndoCommand]:
+        """Undo the most recent command and return it, or None if nothing to undo."""
         if not self.can_undo():
             logger.debug("undo_manager.undo.nothing_to_undo")
             return None
@@ -176,6 +183,7 @@ class UndoStack:
         return cmd
 
     def redo(self) -> Optional[UndoCommand]:
+        """Re-apply the next command in the timeline and return it, or None if nothing to redo."""
         if not self.can_redo():
             logger.debug("undo_manager.redo.nothing_to_redo")
             return None
@@ -190,6 +198,7 @@ class UndoStack:
     # ── Internal ──────────────────────────────────────────────
 
     def begin_compound(self, description: str) -> None:
+        """Start accumulating multiple commands into a single compound undo entry."""
         if self._compound_active:
             return
         self._compound_active = True
@@ -197,6 +206,7 @@ class UndoStack:
         self._compound_buffer.clear()
 
     def end_compound(self) -> None:
+        """Finish the compound group and record it as one undoable command."""
         if not self._compound_active:
             return
         self._compound_active = False

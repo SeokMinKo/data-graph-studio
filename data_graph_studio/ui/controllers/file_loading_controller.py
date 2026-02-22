@@ -40,6 +40,7 @@ class DataLoaderThread(QThread):
         self.file_path = file_path
 
     def run(self):
+        """Load the file in the background and emit finished_loading when done."""
         self.engine.set_progress_callback(self._on_progress)
         success = self.engine.load_file(self.file_path, optimize_memory=True)
         self.finished_loading.emit(success)
@@ -60,6 +61,7 @@ class DataLoaderThreadWithSettings(QThread):
         self.settings = settings
 
     def run(self):
+        """Load the file with parsing settings in the background and emit finished_loading."""
         self.engine.set_progress_callback(self._on_progress)
 
         # Get process filter for ETL files

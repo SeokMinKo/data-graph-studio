@@ -26,10 +26,12 @@ class ParserProfile:
         self.settings: Dict[str, Any] = settings or {}
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this parser profile to a dictionary."""
         return {"name": self.name, "settings": self.settings}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ParserProfile":
+        """Deserialize a ParserProfile from a dictionary produced by to_dict."""
         return cls(name=data["name"], settings=data.get("settings", {}))
 
 

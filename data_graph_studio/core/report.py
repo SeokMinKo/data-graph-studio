@@ -128,14 +128,16 @@ class ChartStatisticsConfig:
     decimal_places: int = 2
     
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this statistics config to a JSON-compatible dictionary."""
         return {
             "enabled_statistics": [s.value for s in self.enabled_statistics],
             "show_in_report": self.show_in_report,
             "decimal_places": self.decimal_places,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ChartStatisticsConfig":
+        """Deserialize a ChartStatisticsConfig from a dictionary produced by to_dict."""
         return cls(
             enabled_statistics=[StatisticType(s) for s in data.get("enabled_statistics", [])],
             show_in_report=data.get("show_in_report", True),
@@ -150,15 +152,18 @@ class ChartStatistics:
     statistics: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize these chart statistics to a JSON-compatible dictionary."""
         return {
             "chart_type": self.chart_type,
             "statistics": self.statistics,
         }
-    
+
     def get(self, key: str, default: Any = None) -> Any:
+        """Return the statistic value for key, or default if not present."""
         return self.statistics.get(key, default)
-    
+
     def set(self, key: str, value: Any):
+        """Set a statistic value by key."""
         self.statistics[key] = value
 
 

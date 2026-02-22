@@ -243,10 +243,12 @@ class TreeMapCalculator:
 
         # 색상 파싱
         def hex_to_rgb(hex_color):
+            """Convert a hex color string to an (R, G, B) tuple."""
             hex_color = hex_color.lstrip('#')
             return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
         def rgb_to_hex(rgb):
+            """Convert an (R, G, B) tuple to a lowercase hex color string."""
             return '#{:02x}{:02x}{:02x}'.format(*rgb)
 
         min_rgb = hex_to_rgb(color_min)

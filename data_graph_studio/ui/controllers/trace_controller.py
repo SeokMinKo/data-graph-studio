@@ -212,6 +212,7 @@ class TraceController:
             error = QtSignal(str)
 
             def run(self_w):
+                """Read the CSV file and emit finished or error signal."""
                 try:
                     df = pl.read_csv(csv_path)
                     # ts is in nanoseconds, convert to seconds
@@ -228,6 +229,7 @@ class TraceController:
         worker = _CsvWorker(self.w)
 
         def on_finished(df):
+            """Handle successful CSV load and create a dataset from the result."""
             logger.info("[Logger] CSV loaded: %d rows, %d cols, columns=%s",
                         len(df), len(df.columns), list(df.columns)[:10])
             name = Path(csv_path).stem
@@ -247,6 +249,7 @@ class TraceController:
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
+            """Handle CSV load failure by showing an error dialog."""
             logger.error("[Logger] CSV load failed: %s", msg)
             QMessageBox.critical(self.w, "Logger", f"CSV load failed:\n{msg}")
             self.w.statusBar().clearMessage()
@@ -280,6 +283,7 @@ class TraceController:
             error = QtSignal(str)
 
             def run(self_w):
+                """Parse the ftrace file and emit finished or error signal."""
                 try:
                     df = parser.parse_raw(file_path, settings)
                     self_w.finished.emit(df)
@@ -291,6 +295,7 @@ class TraceController:
         worker = _ParseWorker(self.w)
 
         def on_finished(df):
+            """Handle successful ftrace parse and create a dataset from the result."""
             logger.info("[Logger] ftrace parsed: %d rows, %d cols, columns=%s",
                         len(df), len(df.columns), list(df.columns)[:10])
             dataset_name = Path(file_path).stem
@@ -311,6 +316,7 @@ class TraceController:
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
+            """Handle ftrace parse failure by showing an error dialog."""
             logger.error("[Logger] ftrace parse failed: %s", msg)
             QMessageBox.critical(self.w, "Ftrace Parser", f"Parse failed:\n{msg}")
             self.w.statusBar().clearMessage()
@@ -354,6 +360,7 @@ class TraceController:
             progress = QtSignal(str)
 
             def run(self_w):
+                """Parse both trace files and emit finished or error signal."""
                 try:
                     self_w.progress.emit("Parsing Trace A...")
                     df_a = parser.parse(path_a, settings)
@@ -371,13 +378,16 @@ class TraceController:
         worker = _CompareWorker(self.w)
 
         def on_progress(msg):
+            """Update the progress dialog label with the current status message."""
             progress_dlg.setLabelText(msg)
 
         def on_finished(df_a, df_b):
+            """Close the progress dialog and trigger the comparison view."""
             progress_dlg.close()
             self._finish_compare(df_a, df_b, path_a, path_b, converter, compare_mode)
 
         def on_error(msg):
+            """Close the progress dialog and display a parse-failure error."""
             progress_dlg.close()
             QMessageBox.critical(self.w, "Compare Traces", f"Parse failed:\n{msg}")
 

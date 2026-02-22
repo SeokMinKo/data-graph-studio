@@ -70,26 +70,32 @@ class ViewSyncManager(Observable):
 
     @property
     def sync_x(self) -> bool:
+        """Return True when X-axis range synchronisation is enabled."""
         return self._sync_x
 
     @sync_x.setter
     def sync_x(self, value: bool) -> None:
+        """Enable or disable X-axis range synchronisation."""
         self._sync_x = value
 
     @property
     def sync_y(self) -> bool:
+        """Return True when Y-axis range synchronisation is enabled."""
         return self._sync_y
 
     @sync_y.setter
     def sync_y(self, value: bool) -> None:
+        """Enable or disable Y-axis range synchronisation."""
         self._sync_y = value
 
     @property
     def sync_selection(self) -> bool:
+        """Return True when selection synchronisation is enabled."""
         return self._sync_selection
 
     @sync_selection.setter
     def sync_selection(self, value: bool) -> None:
+        """Enable or disable selection synchronisation across panels."""
         self._sync_selection = value
 
     @property

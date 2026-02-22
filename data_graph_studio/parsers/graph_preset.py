@@ -47,6 +47,7 @@ class GraphPreset:
     description: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this graph preset to a JSON-compatible dictionary."""
         return {
             "name": self.name,
             "chart_type": self.chart_type,
@@ -58,6 +59,7 @@ class GraphPreset:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> GraphPreset:
+        """Deserialize a GraphPreset from a dictionary produced by to_dict."""
         return cls(
             name=d["name"],
             chart_type=d["chart_type"],

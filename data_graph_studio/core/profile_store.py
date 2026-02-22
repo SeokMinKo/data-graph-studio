@@ -23,19 +23,24 @@ class ProfileStore:
         self._settings: Dict[str, GraphSetting] = {}
 
     def add(self, setting: GraphSetting) -> None:
+        """Add a new graph setting to the store."""
         logger.debug("profile_store.add", extra={"setting_id": setting.id, "name": setting.name})
         self._settings[setting.id] = setting
 
     def get(self, setting_id: str) -> Optional[GraphSetting]:
+        """Return the graph setting with the given ID, or None."""
         return self._settings.get(setting_id)
 
     def get_by_dataset(self, dataset_id: str) -> List[GraphSetting]:
+        """Return all graph settings that belong to the specified dataset."""
         return [s for s in self._settings.values() if s.dataset_id == dataset_id]
 
     def update(self, setting: GraphSetting) -> None:
+        """Replace an existing graph setting with an updated version."""
         self._settings[setting.id] = setting
 
     def remove(self, setting_id: str) -> bool:
+        """Remove a graph setting by ID. Returns True if removed, False if not found."""
         if setting_id in self._settings:
             del self._settings[setting_id]
             logger.debug("profile_store.remove", extra={"setting_id": setting_id})
@@ -44,6 +49,7 @@ class ProfileStore:
         return False
 
     def duplicate(self, setting_id: str) -> Optional[GraphSetting]:
+        """Create and store a copy of a graph setting with a unique name."""
         setting = self.get(setting_id)
         if setting is None:
             return None
@@ -60,6 +66,7 @@ class ProfileStore:
         return new_setting
 
     def export_async(self, setting: GraphSetting, path: str) -> Future:
+        """Serialize a graph setting to JSON at the given path in a background thread."""
         logger.debug("profile_store.export_async", extra={"setting_id": setting.id, "path": path})
 
         def _export():
@@ -72,6 +79,7 @@ class ProfileStore:
         return future
 
     def import_async(self, path: str) -> Future:
+        """Load and deserialize a graph setting from a JSON file in a background thread."""
         logger.debug("profile_store.import_async", extra={"path": path})
 
         def _import() -> GraphSetting:

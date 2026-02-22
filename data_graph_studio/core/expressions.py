@@ -935,6 +935,7 @@ class ExpressionValidator:
         visited = set()
 
         def has_cycle(col: str) -> bool:
+            """Return True if following col's dependencies eventually reaches column_name."""
             if col == column_name:
                 return True
             if col in visited:

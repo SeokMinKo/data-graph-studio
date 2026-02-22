@@ -120,6 +120,7 @@ def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -
 
 
 def is_update_available(current_version: str, latest_version: str) -> bool:
+    """Return True if latest_version is newer than current_version."""
     cur = _parse_version(current_version)
     lat = _parse_version(latest_version)
     if not cur or not lat:
@@ -148,6 +149,7 @@ def read_sha256_file(path: str) -> str:
 
 
 def sha256sum(path: str) -> str:
+    """Compute and return the lowercase hex SHA-256 digest of the file at path."""
     import hashlib
 
     h = hashlib.sha256()

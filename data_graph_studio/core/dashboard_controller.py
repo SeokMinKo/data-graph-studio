@@ -47,10 +47,12 @@ class DashboardController:
 
     @property
     def current_layout(self) -> Optional[DashboardLayout]:
+        """Return the currently active DashboardLayout, or None."""
         return self._layout
 
     @property
     def is_active(self) -> bool:
+        """Return True when dashboard mode is active."""
         return self._active
 
     # -- layout lifecycle ---------------------------------------------------
@@ -138,6 +140,7 @@ class DashboardController:
         return removed
 
     def get_cell(self, row: int, col: int) -> Optional[DashboardCell]:
+        """Return the cell at (row, col) in the current layout, or None."""
         if self._layout is None:
             return None
         return self._layout.get_cell(row, col)

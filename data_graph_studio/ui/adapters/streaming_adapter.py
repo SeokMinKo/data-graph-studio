@@ -38,4 +38,5 @@ class StreamingControllerAdapter(QObject):
 
     @property
     def controller(self) -> StreamingController:
+        """Return the underlying StreamingController instance."""
         return self._controller

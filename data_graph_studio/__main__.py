@@ -39,6 +39,7 @@ def setup_logging():
 
 
 def main():
+    """Application entry point: initialise logging and launch the Qt main window."""
     import faulthandler
     faulthandler.enable()  # segfault 시 traceback 출력
     

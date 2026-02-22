@@ -21,4 +21,5 @@ class ProfileComparisonControllerAdapter(QObject):
 
     @property
     def controller(self) -> ProfileComparisonController:
+        """Return the underlying ProfileComparisonController instance."""
         return self._controller

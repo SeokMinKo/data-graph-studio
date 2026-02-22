@@ -43,6 +43,7 @@ class DataSourceRef:
         return os.path.join(base_dir, self.path)
 
     def to_dict(self) -> Dict:
+        """Serialize this data source reference to a dictionary."""
         return {
             'path': self.path,
             'file_type': self.file_type,
@@ -58,6 +59,7 @@ class DataSourceRef:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'DataSourceRef':
+        """Deserialize a DataSourceRef from a dictionary produced by to_dict."""
         return cls(
             path=data['path'],
             file_type=data['file_type'],
@@ -82,6 +84,7 @@ class ComparisonState:
     sync_zoom: bool = True
 
     def to_dict(self) -> Dict:
+        """Serialize this comparison state to a dictionary."""
         return {
             'mode': self.mode,
             'comparison_datasets': self.comparison_datasets,
@@ -92,6 +95,7 @@ class ComparisonState:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'ComparisonState':
+        """Deserialize a ComparisonState from a dictionary produced by to_dict."""
         return cls(
             mode=data.get('mode', 'single'),
             comparison_datasets=data.get('comparison_datasets', []),

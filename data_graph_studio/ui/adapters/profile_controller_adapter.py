@@ -21,4 +21,5 @@ class ProfileControllerAdapter(QObject):
 
     @property
     def controller(self) -> ProfileController:
+        """Return the underlying ProfileController instance."""
         return self._controller

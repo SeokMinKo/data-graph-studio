@@ -20,4 +20,5 @@ class MarkingManagerAdapter(QObject):
 
     @property
     def manager(self) -> MarkingManager:
+        """Return the underlying MarkingManager instance."""
         return self._manager

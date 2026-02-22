@@ -32,6 +32,7 @@ class DashboardCell:
     # -- serialization --
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this cell to a compact JSON-compatible dictionary."""
         d: Dict[str, Any] = {
             "row": self.row,
             "col": self.col,
@@ -46,6 +47,7 @@ class DashboardCell:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> DashboardCell:
+        """Deserialize a DashboardCell from a dictionary produced by to_dict."""
         return cls(
             row=int(data["row"]),
             col=int(data["col"]),
@@ -87,6 +89,7 @@ class DashboardLayout:
     # -- serialization --
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize this layout to a JSON-compatible dictionary."""
         return {
             "name": self.name,
             "rows": self.rows,
@@ -98,6 +101,7 @@ class DashboardLayout:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> DashboardLayout:
+        """Deserialize a DashboardLayout from a dictionary produced by to_dict."""
         cells = [DashboardCell.from_dict(cd) for cd in data.get("cells", [])]
         return cls(
             name=data.get("name", "Untitled"),

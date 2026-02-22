@@ -54,10 +54,12 @@ class ParsingEngine:
 
     @staticmethod
     def parse_preview(settings: ParsingSettings, max_rows: int = 100) -> pd.DataFrame:
+        """Parse up to max_rows rows from the file described by settings."""
         return ParsingEngine._parse_file(settings, max_rows=max_rows)
 
     @staticmethod
     def parse_full(settings: ParsingSettings) -> pd.DataFrame:
+        """Parse the entire file described by settings and return a DataFrame."""
         return ParsingEngine._parse_file(settings, max_rows=None)
 
     @staticmethod

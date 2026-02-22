@@ -63,12 +63,14 @@ class _ThreadingTimerHandle:
         self._lock = threading.Lock()
 
     def start(self) -> None:
+        """Start the recurring timer."""
         if self._running:
             return
         self._running = True
         self._schedule()
 
     def stop(self) -> None:
+        """Stop the recurring timer and cancel any pending callback."""
         with self._lock:
             self._running = False
             if self._current is not None:
@@ -110,10 +112,12 @@ class RealFileSystem(IFileSystem):
     """실제 OS 파일 시스템 구현"""
 
     def read_file(self, path: str) -> bytes:
+        """Read and return the raw bytes of the file at path."""
         with open(path, "rb") as f:
             return f.read()
 
     def write_file(self, path: str, data: bytes) -> None:
+        """Write bytes to path, creating parent directories as needed."""
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -121,9 +125,11 @@ class RealFileSystem(IFileSystem):
             f.write(data)
 
     def stat(self, path: str) -> os.stat_result:
+        """Return os.stat_result for the file at path."""
         return os.stat(path)
 
     def exists(self, path: str) -> bool:
+        """Return True if the path exists on the filesystem."""
         return os.path.exists(path)
 
 

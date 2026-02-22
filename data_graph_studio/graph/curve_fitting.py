@@ -196,6 +196,7 @@ class CurveFitter:
 
         # 예측 함수
         def predict_func(x_new):
+            """Return the predicted y value using the fitted linear model."""
             return slope * x_new + intercept
 
         # Adjusted R²
@@ -278,6 +279,7 @@ class CurveFitter:
 
         # 예측 함수
         def predict_func(x_new):
+            """Return the predicted y value using the fitted exponential model."""
             return a * np.exp(b * x_new)
 
         # R² (원본 스케일에서)
@@ -320,6 +322,7 @@ class CurveFitter:
         coefficients = np.array([a, b])
 
         def predict_func(x_new):
+            """Return the predicted y value using the fitted power model."""
             return a * np.power(x_new, b)
 
         # R² 계산
@@ -357,6 +360,7 @@ class CurveFitter:
         r_squared = r_value ** 2
 
         def predict_func(x_new):
+            """Return the predicted y value using the fitted logarithmic model."""
             return slope * np.log(x_new) + intercept
 
         residuals = y_valid - predict_func(x_valid)
@@ -373,6 +377,7 @@ class CurveFitter:
     def _fit_logistic(self, x: np.ndarray, y: np.ndarray) -> CurveFitResult:
         """로지스틱 회귀 (y = L / (1 + e^(-k(x-x0))))"""
         def logistic(x, L, k, x0):
+            """Evaluate the logistic function L / (1 + e^(-k*(x-x0)))."""
             return L / (1 + np.exp(-k * (x - x0)))
 
         # 초기 추정값
@@ -391,6 +396,7 @@ class CurveFitter:
             coefficients = np.array([L, k, x0])
 
             def predict_func(x_new):
+                """Return the predicted y value using the fitted logistic model."""
                 return logistic(x_new, L, k, x0)
 
             y_pred = predict_func(x)
@@ -419,6 +425,7 @@ class CurveFitter:
     def _fit_gaussian(self, x: np.ndarray, y: np.ndarray) -> CurveFitResult:
         """가우시안 피팅 (y = a * exp(-((x-mu)^2)/(2*sigma^2)))"""
         def gaussian(x, a, mu, sigma):
+            """Evaluate the Gaussian function a * exp(-((x-mu)^2) / (2*sigma^2))."""
             return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
         # 초기 추정값
@@ -437,6 +444,7 @@ class CurveFitter:
             coefficients = np.array([a, mu, sigma])
 
             def predict_func(x_new):
+                """Return the predicted y value using the fitted Gaussian model."""
                 return gaussian(x_new, a, mu, sigma)
 
             y_pred = predict_func(x)

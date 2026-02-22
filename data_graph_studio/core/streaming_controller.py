@@ -61,18 +61,22 @@ class StreamingController(Observable):
 
     @property
     def state(self) -> str:
+        """Return the current streaming state string (e.g. 'idle', 'running')."""
         return self._state
 
     @property
     def poll_interval_ms(self) -> int:
+        """Return the file polling interval in milliseconds."""
         return self._poll_interval_ms
 
     @property
     def follow_tail(self) -> bool:
+        """Return True when the controller is set to follow the file tail."""
         return self._follow_tail
 
     @property
     def current_path(self) -> Optional[str]:
+        """Return the file path currently being streamed, or None."""
         return self._current_path
 
     # ── Public API ────────────────────────────────────────────

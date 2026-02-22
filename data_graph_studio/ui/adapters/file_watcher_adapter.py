@@ -13,9 +13,11 @@ class _QtTimerHandle:
         self._timer.timeout.connect(callback)
 
     def start(self) -> None:
+        """Start the underlying QTimer."""
         self._timer.start()
 
     def stop(self) -> None:
+        """Stop the underlying QTimer."""
         self._timer.stop()
 
 
@@ -23,6 +25,7 @@ class QTimerFactory(ITimerFactory):
     """Qt-based timer factory. Use in Qt applications for event-loop integration."""
 
     def create_timer(self, interval_ms: int, callback) -> _QtTimerHandle:
+        """Create a QTimer-backed handle that fires callback every interval_ms."""
         return _QtTimerHandle(interval_ms, callback)
 
 
@@ -41,4 +44,5 @@ class FileWatcherAdapter(QObject):
 
     @property
     def watcher(self) -> FileWatcher:
+        """Return the underlying FileWatcher instance."""
         return self._watcher

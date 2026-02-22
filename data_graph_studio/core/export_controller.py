@@ -121,13 +121,16 @@ class ExportWorker:
 
     # -- cancel support --
     def cancel(self) -> None:
+        """Signal that the export operation should be cancelled."""
         self._cancelled = True
 
     def is_cancelled(self) -> bool:
+        """Return True if cancellation has been requested."""
         return self._cancelled
 
     # -- entry point --
     def run(self) -> None:
+        """Execute the export task (chart or data) on the current thread."""
         try:
             if self.task == "chart":
                 self._export_chart()

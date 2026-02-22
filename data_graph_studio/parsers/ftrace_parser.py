@@ -53,6 +53,7 @@ class FtraceParser(BaseParser):
     file_filter = "Ftrace Files (*.txt *.dat *.log);;All Files (*)"
 
     def default_settings(self) -> Dict[str, Any]:
+        """Return the default parsing and conversion settings for ftrace files."""
         return {
             # --- Step 1: parsing ---
             "skip_comments": True,       # skip lines starting with #
