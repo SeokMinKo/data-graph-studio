@@ -4,17 +4,17 @@ Export Controller — PRD Feature 4 (Export Enhancement)
 Provides:
 - ExportFormat enum — PNG, SVG, PDF, CSV, Parquet, Excel
 - ExportOptions — resolution, DPI, background, legend, stats
-- ExportWorker — QThread-based background worker
+- ExportWorker — threading.Thread-based background worker
 - ExportController — orchestrates export with progress, cancel, atomic write
 
-Signals:
+Events (Observable):
     progress_changed(int)    — 0..100 progress percentage
     export_completed(str)    — output file path on success
     export_failed(str)       — error message on failure
 
 Architecture notes (PRD §9.2, §10.3, §10.5):
     • All file writes go through atomic_write (temp → rename)
-    • Heavy exports run in QThread (no UI blocking)
+    • Heavy exports run in a daemon threading.Thread (no UI blocking)
     • Single concurrent worker per controller (duplicate → cancel previous)
     • Cancel sets _cancelled flag → worker checks periodically
 """
@@ -23,14 +23,13 @@ from __future__ import annotations
 
 import os
 import logging
+import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, TYPE_CHECKING
-
-from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
-from PySide6.QtGui import QImage
+from typing import Any, Callable, Dict, Optional, TYPE_CHECKING
 
 from data_graph_studio.core.io_abstract import atomic_write, IExportRenderer
+from data_graph_studio.core.observable import Observable
 
 if TYPE_CHECKING:
     import polars as pl
@@ -83,33 +82,31 @@ class ExportOptions:
 
 
 # ---------------------------------------------------------------------------
-# ExportWorker  (QThread)
+# ExportWorker  (plain class, runs in threading.Thread)
 # ---------------------------------------------------------------------------
 
-class ExportWorker(QThread):
+class ExportWorker:
     """
     Background worker — PRD §10.5.
 
     Runs the actual rendering / file-writing off the main thread.
-    The controller connects to its signals and forwards them.
+    Callbacks (on_progress, on_completed, on_failed) are invoked from the
+    worker thread; callers are responsible for thread-safe dispatch if needed.
     """
-
-    progress = Signal(int)          # 0..100
-    completed = Signal(str)         # output path
-    failed = Signal(str)            # error message
 
     def __init__(
         self,
         task: str,          # "chart" | "data"
-        image: Optional[QImage] = None,
+        image=None,
         df: Optional["pl.DataFrame"] = None,
         path: str = "",
         fmt: ExportFormat = ExportFormat.PNG,
         options: Optional[ExportOptions] = None,
         renderer: Optional[IExportRenderer] = None,
-        parent: Optional[QObject] = None,
+        on_progress: Optional[Callable[[int], None]] = None,
+        on_completed: Optional[Callable[[str], None]] = None,
+        on_failed: Optional[Callable[[str], None]] = None,
     ):
-        super().__init__(parent)
         self.task = task
         self.image = image
         self.df = df
@@ -118,6 +115,9 @@ class ExportWorker(QThread):
         self.options = options or ExportOptions()
         self._renderer = renderer
         self._cancelled = False
+        self._on_progress = on_progress or (lambda _: None)
+        self._on_completed = on_completed or (lambda _: None)
+        self._on_failed = on_failed or (lambda _: None)
 
     # -- cancel support --
     def cancel(self) -> None:
@@ -136,7 +136,7 @@ class ExportWorker(QThread):
             else:
                 raise ValueError(f"Unknown export task: {self.task}")
         except Exception as exc:
-            self.failed.emit(str(exc))
+            self._on_failed(str(exc))
 
     # -- chart export ----------------------------------------------------------
 
@@ -146,10 +146,10 @@ class ExportWorker(QThread):
             return
 
         if self.image is None or self.image.isNull():
-            self.failed.emit("Cannot export: image is null or empty.")
+            self._on_failed("Cannot export: image is null or empty.")
             return
 
-        self.progress.emit(10)  # Rendering chart...
+        self._on_progress(10)  # Rendering chart...
 
         if self.fmt == ExportFormat.PNG:
             self._export_png()
@@ -158,15 +158,15 @@ class ExportWorker(QThread):
         elif self.fmt == ExportFormat.PDF:
             self._export_pdf()
         else:
-            self.failed.emit(f"Unsupported chart format: {self.fmt.value}")
+            self._on_failed(f"Unsupported chart format: {self.fmt.value}")
             return
 
         if not self._cancelled:
-            self.progress.emit(100)
-            self.completed.emit(self.path)
+            self._on_progress(100)
+            self._on_completed(self.path)
 
     def _export_png(self) -> None:
-        """Render QImage to PNG and write atomically."""
+        """Render image to PNG and write atomically."""
         opts = self.options
         img = self.image
 
@@ -174,7 +174,7 @@ class ExportWorker(QThread):
             self._cleanup()
             return
 
-        self.progress.emit(50)  # Writing file...
+        self._on_progress(50)  # Writing file...
 
         renderer = self._get_renderer()
         data = renderer.render_to_png_with_background(
@@ -192,13 +192,13 @@ class ExportWorker(QThread):
         atomic_write(self.path, data)
 
     def _export_svg(self) -> None:
-        """Render QImage to SVG."""
+        """Render image to SVG."""
         opts = self.options
         img = self.image
         width = opts.width or img.width()
         height = opts.height or img.height()
 
-        self.progress.emit(30)
+        self._on_progress(30)
 
         renderer = self._get_renderer()
         data = renderer.render_to_svg(img, width, height)
@@ -207,7 +207,7 @@ class ExportWorker(QThread):
             self._cleanup()
             return
 
-        self.progress.emit(70)
+        self._on_progress(70)
         atomic_write(self.path, data)
 
     def _export_pdf(self) -> None:
@@ -215,7 +215,7 @@ class ExportWorker(QThread):
         opts = self.options
         img = self.image
 
-        self.progress.emit(20)
+        self._on_progress(20)
 
         from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QRectF
         from PySide6.QtGui import QPageSize, QPdfWriter, QPainter, QFont
@@ -244,7 +244,7 @@ class ExportWorker(QThread):
             self._cleanup()
             return
 
-        self.progress.emit(40)
+        self._on_progress(40)
 
         # --- Draw chart image centered on page ---
         page_rect = painter.viewport()
@@ -257,7 +257,7 @@ class ExportWorker(QThread):
         )
         painter.drawImage(chart_rect.toRect(), img)
 
-        self.progress.emit(60)
+        self._on_progress(60)
 
         # --- Optional stats summary table ---
         if opts.include_stats and opts.stats_data:
@@ -283,7 +283,7 @@ class ExportWorker(QThread):
                 painter.drawText(margin + 10, y_offset, text)
                 y_offset += 22
 
-        self.progress.emit(80)
+        self._on_progress(80)
 
         if self._cancelled:
             painter.end()
@@ -306,10 +306,10 @@ class ExportWorker(QThread):
             return
 
         if self.df is None:
-            self.failed.emit("Cannot export: no DataFrame provided.")
+            self._on_failed("Cannot export: no DataFrame provided.")
             return
 
-        self.progress.emit(10)
+        self._on_progress(10)
 
         if self.fmt == ExportFormat.CSV:
             self._export_csv()
@@ -318,19 +318,19 @@ class ExportWorker(QThread):
         elif self.fmt == ExportFormat.EXCEL:
             self._export_excel()
         else:
-            self.failed.emit(f"Unsupported data format: {self.fmt.value}")
+            self._on_failed(f"Unsupported data format: {self.fmt.value}")
             return
 
         if not self._cancelled:
-            self.progress.emit(100)
-            self.completed.emit(self.path)
+            self._on_progress(100)
+            self._on_completed(self.path)
 
     def _export_csv(self) -> None:
         data = self.df.write_csv().encode("utf-8")  # type: ignore[union-attr]
         if self._cancelled:
             self._cleanup()
             return
-        self.progress.emit(50)
+        self._on_progress(50)
         atomic_write(self.path, data)
 
     def _export_parquet(self) -> None:
@@ -345,7 +345,7 @@ class ExportWorker(QThread):
             if self._cancelled:
                 self._cleanup()
                 return
-            self.progress.emit(50)
+            self._on_progress(50)
             os.rename(tmp_path, self.path)
         except Exception:
             if os.path.exists(tmp_path):
@@ -365,7 +365,7 @@ class ExportWorker(QThread):
             if self._cancelled:
                 self._cleanup()
                 return
-            self.progress.emit(50)
+            self._on_progress(50)
             os.rename(tmp_path, self.path)
         except Exception:
             if os.path.exists(tmp_path):
@@ -395,30 +395,26 @@ class ExportWorker(QThread):
 
 
 # ---------------------------------------------------------------------------
-# ExportController  (QObject, lives on main thread)
+# ExportController  (Observable, lives on main thread)
 # ---------------------------------------------------------------------------
 
-class ExportController(QObject):
+class ExportController(Observable):
     """
     High-level export orchestrator — PRD §9.2.
 
-    Signals:
+    Events:
         progress_changed(int)   — forwarded from worker
         export_completed(str)   — output file path
         export_failed(str)      — error description
     """
 
-    progress_changed = Signal(int)
-    export_completed = Signal(str)
-    export_failed = Signal(str)
-
     def __init__(
         self,
-        parent: Optional[QObject] = None,
         renderer: Optional[IExportRenderer] = None,
     ):
-        super().__init__(parent)
+        super().__init__()
         self._worker: Optional[ExportWorker] = None
+        self._thread: Optional[threading.Thread] = None
         self._cancelled = False
         self._renderer = renderer
 
@@ -438,7 +434,7 @@ class ExportController(QObject):
 
     def export_chart_sync(
         self,
-        image: QImage,
+        image,
         path: str,
         fmt: ExportFormat,
         options: Optional[ExportOptions] = None,
@@ -455,13 +451,11 @@ class ExportController(QObject):
             fmt=fmt,
             options=options,
             renderer=self._renderer,
+            on_progress=lambda n: self.emit("progress_changed", n),
+            on_completed=lambda p: self.emit("export_completed", p),
+            on_failed=lambda e: self.emit("export_failed", e),
         )
         worker._cancelled = self._cancelled
-
-        # Connect signals for forwarding
-        worker.progress.connect(self.progress_changed.emit)
-        worker.completed.connect(self.export_completed.emit)
-        worker.failed.connect(self.export_failed.emit)
 
         # Run directly (synchronous)
         worker.run()
@@ -482,12 +476,11 @@ class ExportController(QObject):
             path=path,
             fmt=fmt,
             options=options,
+            on_progress=lambda n: self.emit("progress_changed", n),
+            on_completed=lambda p: self.emit("export_completed", p),
+            on_failed=lambda e: self.emit("export_failed", e),
         )
         worker._cancelled = self._cancelled
-
-        worker.progress.connect(self.progress_changed.emit)
-        worker.completed.connect(self.export_completed.emit)
-        worker.failed.connect(self.export_failed.emit)
 
         worker.run()
 
@@ -495,7 +488,7 @@ class ExportController(QObject):
 
     def export_chart_async(
         self,
-        image: QImage,
+        image,
         path: str,
         fmt: ExportFormat,
         options: Optional[ExportOptions] = None,
@@ -515,9 +508,12 @@ class ExportController(QObject):
             fmt=fmt,
             options=options,
             renderer=self._renderer,
+            on_progress=lambda n: self.emit("progress_changed", n),
+            on_completed=self._on_worker_completed,
+            on_failed=self._on_worker_failed,
         )
-        self._connect_worker(self._worker)
-        self._worker.start()
+        self._thread = threading.Thread(target=self._run_worker, daemon=True)
+        self._thread.start()
 
     def export_data_async(
         self,
@@ -538,9 +534,12 @@ class ExportController(QObject):
             path=path,
             fmt=fmt,
             options=options,
+            on_progress=lambda n: self.emit("progress_changed", n),
+            on_completed=self._on_worker_completed,
+            on_failed=self._on_worker_failed,
         )
-        self._connect_worker(self._worker)
-        self._worker.start()
+        self._thread = threading.Thread(target=self._run_worker, daemon=True)
+        self._thread.start()
 
     # -- IPC commands (FR-4.8) -------------------------------------------------
 
@@ -548,7 +547,7 @@ class ExportController(QObject):
         """IPC: export_chart {path, format, width?, height?, dpi?}
 
         Requires ``set_image_provider(callable)`` to be called first so
-        the controller can obtain the current chart QImage.
+        the controller can obtain the current chart image.
         """
         path = params.get("path")
         fmt_str = params.get("format", "png").lower()
@@ -620,7 +619,7 @@ class ExportController(QObject):
         )
 
     def set_image_provider(self, provider) -> None:
-        """Set a callable that returns the current chart QImage."""
+        """Set a callable that returns the current chart image."""
         self._image_provider = provider
 
     def set_dataframe_provider(self, provider) -> None:
@@ -629,35 +628,27 @@ class ExportController(QObject):
 
     # -- internals -------------------------------------------------------------
 
-    def _connect_worker(self, worker: ExportWorker) -> None:
-        worker.progress.connect(self.progress_changed.emit)
-        worker.completed.connect(self._on_worker_completed)
-        worker.failed.connect(self._on_worker_failed)
-        worker.finished.connect(self._on_worker_finished)
-
-    @Slot(str)
-    def _on_worker_completed(self, path: str) -> None:
-        self.export_completed.emit(path)
-
-    @Slot(str)
-    def _on_worker_failed(self, error: str) -> None:
-        self.export_failed.emit(error)
-
-    @Slot()
-    def _on_worker_finished(self) -> None:
+    def _run_worker(self) -> None:
+        """Thread target: run worker then clear references."""
         if self._worker is not None:
-            self._worker.deleteLater()
-            self._worker = None
+            self._worker.run()
+        self._worker = None
+        self._thread = None
+
+    def _on_worker_completed(self, path: str) -> None:
+        self.emit("export_completed", path)
+
+    def _on_worker_failed(self, error: str) -> None:
+        self.emit("export_failed", error)
 
     def _stop_current_worker(self) -> None:
         """Cancel and wait for the current worker (PRD §10.5)."""
-        if self._worker is not None and self._worker.isRunning():
+        if self._worker is not None:
             self._worker.cancel()
-            self._worker.wait(3000)
-            if self._worker.isRunning():
-                self._worker.terminate()
-            self._worker.deleteLater()
             self._worker = None
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=3.0)
+            self._thread = None
 
     def shutdown(self) -> None:
         """Called during app close — PRD §10.6."""

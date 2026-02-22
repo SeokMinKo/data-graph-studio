@@ -31,6 +31,7 @@ from ..core.dashboard_controller import DashboardController
 from ..core.annotation_controller import AnnotationController
 from .controllers.shortcut_controller import ShortcutController
 from ..core.export_controller import ExportController
+from .adapters.export_controller_adapter import ExportControllerAdapter
 from ..utils.memory import MemoryMonitor
 from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
@@ -171,7 +172,8 @@ class MainWindow(QMainWindow):
         self._shortcut_controller.load_config()
 
         # Feature 4: Export
-        self._export_controller = ExportController(parent=self)
+        self._export_controller = ExportController()
+        self._export_controller_adapter = ExportControllerAdapter(self._export_controller, parent=self)
 
         # Loading thread
         self._loader_thread: Optional[DataLoaderThread] = None

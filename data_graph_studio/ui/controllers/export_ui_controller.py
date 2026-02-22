@@ -44,22 +44,24 @@ class ExportUIController:
             return
 
         # One-shot signal connections via lambda + disconnect
+        adapter = self.w._export_controller_adapter
+
         def _on_completed(p):
             self.w.statusbar.showMessage(f"✓ Exported to {p}", 3000)
             try:
-                self.w._export_controller.export_completed.disconnect(_on_completed)
+                adapter.export_completed.disconnect(_on_completed)
             except RuntimeError:
                 pass
 
         def _on_failed(e):
             self.w.statusbar.showMessage(f"⚠ Export failed: {e}", 5000)
             try:
-                self.w._export_controller.export_failed.disconnect(_on_failed)
+                adapter.export_failed.disconnect(_on_failed)
             except RuntimeError:
                 pass
 
-        self.w._export_controller.export_completed.connect(_on_completed)
-        self.w._export_controller.export_failed.connect(_on_failed)
+        adapter.export_completed.connect(_on_completed)
+        adapter.export_failed.connect(_on_failed)
         self.w._export_controller.export_chart_async(image, path, fmt)
 
     # ============================================================
@@ -80,22 +82,24 @@ class ExportUIController:
             return
 
         # One-shot signal connections
+        adapter = self.w._export_controller_adapter
+
         def _on_completed(p):
             self.w.statusbar.showMessage(f"✓ Exported to {p}", 3000)
             try:
-                self.w._export_controller.export_completed.disconnect(_on_completed)
+                adapter.export_completed.disconnect(_on_completed)
             except RuntimeError:
                 pass
 
         def _on_failed(e):
             self.w.statusbar.showMessage(f"⚠ Export failed: {e}", 5000)
             try:
-                self.w._export_controller.export_failed.disconnect(_on_failed)
+                adapter.export_failed.disconnect(_on_failed)
             except RuntimeError:
                 pass
 
-        self.w._export_controller.export_completed.connect(_on_completed)
-        self.w._export_controller.export_failed.connect(_on_failed)
+        adapter.export_completed.connect(_on_completed)
+        adapter.export_failed.connect(_on_failed)
         self.w._export_controller.export_data_async(self.w.engine.df, path, fmt)
 
     # ============================================================
@@ -128,9 +132,10 @@ class ExportUIController:
                     dlg.on_export_failed("No data available")
 
         dlg.export_requested.connect(_handle_export)
-        self.w._export_controller.progress_changed.connect(dlg.update_progress)
-        self.w._export_controller.export_completed.connect(dlg.on_export_completed)
-        self.w._export_controller.export_failed.connect(dlg.on_export_failed)
+        adapter = self.w._export_controller_adapter
+        adapter.progress_changed.connect(dlg.update_progress)
+        adapter.export_completed.connect(dlg.on_export_completed)
+        adapter.export_failed.connect(dlg.on_export_failed)
 
         dlg.exec()
 

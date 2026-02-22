@@ -473,18 +473,17 @@ class TestExportSignals:
     """Test that ExportController emits proper signals."""
 
     def test_progress_signal(self, tmp_dir, sample_qimage, qapp):
-        """progress_changed signal should fire during export."""
+        """progress_changed event should fire during export."""
         out_path = str(tmp_dir / "signal_test.png")
         ctrl = ExportController()
         progress_values = []
 
-        ctrl.progress_changed.connect(lambda v: progress_values.append(v))
+        ctrl.subscribe("progress_changed", lambda v: progress_values.append(v))
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
             fmt=ExportFormat.PNG,
         )
-        qapp.processEvents()
         # Should have received at least start (0) and end (100)
         assert len(progress_values) >= 1
         assert max(progress_values) == 100
@@ -495,13 +494,12 @@ class TestExportSignals:
         ctrl = ExportController()
         completed_paths = []
 
-        ctrl.export_completed.connect(lambda p: completed_paths.append(p))
+        ctrl.subscribe("export_completed", lambda p: completed_paths.append(p))
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
             fmt=ExportFormat.PNG,
         )
-        qapp.processEvents()
         assert out_path in completed_paths
 
     def test_failed_signal_on_error(self, tmp_dir, qapp):
@@ -509,7 +507,7 @@ class TestExportSignals:
         # Export with invalid image to trigger error
         ctrl = ExportController()
         errors = []
-        ctrl.export_failed.connect(lambda e: errors.append(e))
+        ctrl.subscribe("export_failed", lambda e: errors.append(e))
 
         # Null image should fail
         ctrl.export_chart_sync(
@@ -517,7 +515,6 @@ class TestExportSignals:
             path=str(tmp_dir / "fail.png"),
             fmt=ExportFormat.PNG,
         )
-        qapp.processEvents()
         assert len(errors) >= 1
 
 
