@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QSizePolicy, QToolButton, QCompleter,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QStringListModel
+from PySide6.QtGui import QKeyEvent
 
 from ...core.state import AppState, AggregationType
 
@@ -191,6 +192,14 @@ class _SearchableColumnPicker(QWidget):
         if self._combo.lineEdit():
             self._combo.lineEdit().clear()
 
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # type: ignore[override]
+        """Escape clears the search box; other keys pass through normally."""
+        if event.key() == Qt.Key_Escape:
+            self.clear_text()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
 
 class _ListBoxItem(QWidget):
     """Single item in a _ColumnListBox with a label and [×] remove button."""
@@ -212,6 +221,7 @@ class _ListBoxItem(QWidget):
         self._remove_btn.setObjectName("smallButton")
         self._remove_btn.setFixedSize(20, 20)
         self._remove_btn.setToolTip("Remove this item")
+        self._remove_btn.setAccessibleName(f"Remove {text}")
         self._remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.item_text))
         layout.addWidget(self._remove_btn)
 
@@ -332,6 +342,7 @@ class _YAxisListItem(QWidget):
         self._remove_btn.setObjectName("smallButton")
         self._remove_btn.setFixedSize(20, 20)
         self._remove_btn.setToolTip("Remove this column")
+        self._remove_btn.setAccessibleName(f"Remove {self.column_name} from Y-Axis")
         self._remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.column_name))
         row1.addWidget(self._remove_btn)
 
@@ -657,6 +668,22 @@ class DataTab(QWidget):
 
         # Bottom stretch
         self._main_layout.addStretch()
+
+        # ------------------------------------------------------------------
+        # Explicit tab order (top → bottom through the panel)
+        # Filter section
+        QWidget.setTabOrder(self._filter_col_combo, self._filter_val_combo)
+        QWidget.setTabOrder(self._filter_val_combo, self._filter_select_all_btn)
+        QWidget.setTabOrder(self._filter_select_all_btn, self._filter_deselect_all_btn)
+        # Group By section
+        QWidget.setTabOrder(self._filter_deselect_all_btn, self._group_picker._combo)
+        # X-Axis
+        QWidget.setTabOrder(self._group_picker._combo, self._x_combo)
+        # Y-Axis
+        QWidget.setTabOrder(self._x_combo, self._y_picker._combo)
+        # Hover
+        QWidget.setTabOrder(self._y_picker._combo, self._hover_picker._combo)
+        # ------------------------------------------------------------------
 
         scroll.setWidget(container)
         outer.addWidget(scroll)
