@@ -250,7 +250,40 @@ class MainWindow(QMainWindow):
 
         # Auto-update (Windows)
         QTimer.singleShot(2000, self._auto_check_updates)
+
+        # Headless capture mode
+        import sys as _sys
+        if "--capture-mode" in _sys.argv:
+            QTimer.singleShot(2000, self._run_capture_and_exit)
     
+    def _run_capture_and_exit(self) -> None:
+        """Headless capture mode: capture panels then exit. Called 2s after startup."""
+        import argparse
+        import dataclasses
+        import json
+        from pathlib import Path
+        from PySide6.QtWidgets import QApplication
+        from data_graph_studio.core.capture_protocol import CaptureRequest
+
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("--capture-target", default="all")
+        parser.add_argument("--capture-output", default="/tmp/dgs_captures")
+        parser.add_argument("--capture-result-file", default=None)
+        args, _ = parser.parse_known_args()
+
+        req = CaptureRequest(target=args.capture_target, output_dir=Path(args.capture_output))
+        results = self._ipc_controller._capture_service.capture(req)
+
+        output = {
+            "status": "ok",
+            "captures": [{**dataclasses.asdict(r), "file": str(r.file)} for r in results],
+        }
+
+        if args.capture_result_file:
+            Path(args.capture_result_file).write_text(json.dumps(output, indent=2))
+
+        QApplication.quit()
+
     def _setup_window(self):
         """윈도우 기본 설정"""
         self.setWindowTitle("Data Graph Studio")
