@@ -44,8 +44,8 @@ class ProfileComparisonController(QObject):
         self._dataset_id: str = ""
 
         # FR-10: react to profile lifecycle events
-        controller.profile_deleted.connect(self._on_profile_deleted)
-        controller.profile_renamed.connect(self._on_profile_renamed)
+        controller.subscribe("profile_deleted", self._on_profile_deleted)
+        controller.subscribe("profile_renamed", self._on_profile_renamed)
 
     # ------------------------------------------------------------------
     # Public API

@@ -701,7 +701,7 @@ class DatasetController:
             view.exit_requested.connect(w.profile_comparison_controller.stop_comparison)
             view.set_profiles(profile_ids)
             w.profile_comparison_controller.panel_removed.connect(view.on_profile_deleted)
-            w.profile_controller.profile_renamed.connect(view.on_profile_renamed)
+            w.profile_controller.subscribe("profile_renamed", view.on_profile_renamed)
 
             w._compare_toolbar.grid_layout_changed.connect(view.set_grid_layout)
             w._compare_toolbar.sync_changed.connect(view.set_sync_option)

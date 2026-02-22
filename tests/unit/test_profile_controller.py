@@ -40,7 +40,7 @@ def test_create_profile_adds_and_emits():
     controller = ProfileController(store, state)
     created = []
 
-    controller.profile_created.connect(lambda pid: created.append(pid))
+    controller.subscribe("profile_created", lambda pid: created.append(pid))
 
     state._chart_settings.chart_type = ChartType.BAR
     state._x_column = "x"
@@ -67,7 +67,7 @@ def test_apply_profile_updates_state():
     store.add(setting)
 
     applied = []
-    controller.profile_applied.connect(lambda pid: applied.append(pid))
+    controller.subscribe("profile_applied", lambda pid: applied.append(pid))
 
     assert controller.apply_profile("setting-1") is True
     assert state._chart_settings.chart_type == ChartType.SCATTER
@@ -134,7 +134,7 @@ def test_rename_profile_and_undo():
     store.add(setting)
 
     renamed = []
-    controller.profile_renamed.connect(lambda pid, name: renamed.append((pid, name)))
+    controller.subscribe("profile_renamed", lambda pid, name: renamed.append((pid, name)))
 
     assert controller.rename_profile("setting-1", "Updated") is True
     assert store.get("setting-1").name == "Updated"
@@ -153,7 +153,7 @@ def test_delete_profile_and_undo():
     store.add(setting)
 
     deleted = []
-    controller.profile_deleted.connect(lambda pid: deleted.append(pid))
+    controller.subscribe("profile_deleted", lambda pid: deleted.append(pid))
 
     assert controller.delete_profile("setting-1") is True
     assert store.get("setting-1") is None
