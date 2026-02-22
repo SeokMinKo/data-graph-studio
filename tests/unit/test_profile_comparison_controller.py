@@ -75,7 +75,7 @@ def test_controller_creation():
 def test_start_comparison_valid_emits_signal():
     store, controller, state, cc, profiles = make_env(2)
     started = []
-    cc.comparison_started.connect(lambda mode, ids: started.append((mode, ids)))
+    cc.subscribe("comparison_started", lambda mode, ids: started.append((mode, ids)))
 
     ok = cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
     assert ok is True
@@ -110,7 +110,7 @@ def test_start_comparison_difference_valid():
 def test_start_comparison_less_than_2_profiles_error():
     store, controller, state, cc, profiles = make_env(1)
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     ok = cc.start_comparison("ds-1", ["p0"], ComparisonMode.SIDE_BY_SIDE)
     assert ok is False
@@ -121,7 +121,7 @@ def test_start_comparison_less_than_2_profiles_error():
 def test_start_comparison_nonexistent_profile_error():
     store, controller, state, cc, profiles = make_env(2)
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     ok = cc.start_comparison("ds-1", ["p0", "missing"], ComparisonMode.SIDE_BY_SIDE)
     assert ok is False
@@ -140,7 +140,7 @@ def test_start_comparison_different_datasets_error():
     store.add(s1)
 
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     ok = cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
     assert ok is False
@@ -150,7 +150,7 @@ def test_start_comparison_different_datasets_error():
 def test_start_comparison_overlay_different_x_error():
     store, controller, state, cc, profiles = make_env(2, same_x=False)
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     ok = cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.OVERLAY)
     assert ok is False
@@ -160,7 +160,7 @@ def test_start_comparison_overlay_different_x_error():
 def test_start_comparison_difference_3_profiles_error():
     store, controller, state, cc, profiles = make_env(3, same_x=True)
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     ok = cc.start_comparison("ds-1", ["p0", "p1", "p2"], ComparisonMode.DIFFERENCE)
     assert ok is False
@@ -170,7 +170,7 @@ def test_start_comparison_difference_3_profiles_error():
 def test_start_comparison_difference_different_x_error():
     store, controller, state, cc, profiles = make_env(2, same_x=False)
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     ok = cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.DIFFERENCE)
     assert ok is False
@@ -185,7 +185,7 @@ def test_start_comparison_difference_different_x_error():
 def test_stop_comparison_emits_signal_and_clears():
     store, controller, state, cc, profiles = make_env(2)
     ended = []
-    cc.comparison_ended.connect(lambda: ended.append(True))
+    cc.subscribe("comparison_ended", lambda: ended.append(True))
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
     assert cc.is_active is True
@@ -201,7 +201,7 @@ def test_stop_comparison_emits_signal_and_clears():
 def test_stop_comparison_idempotent():
     store, controller, state, cc, profiles = make_env(2)
     ended = []
-    cc.comparison_ended.connect(lambda: ended.append(True))
+    cc.subscribe("comparison_ended", lambda: ended.append(True))
 
     cc.stop_comparison()
     # Should not emit when not active
@@ -237,7 +237,7 @@ def test_fr8_start_clears_dataset_comparison():
 def test_fr10_profile_deleted_panel_removed():
     store, controller, state, cc, profiles = make_env(3, same_x=True)
     removed = []
-    cc.panel_removed.connect(removed.append)
+    cc.subscribe("panel_removed", removed.append)
 
     cc.start_comparison("ds-1", ["p0", "p1", "p2"], ComparisonMode.SIDE_BY_SIDE)
     assert cc.is_active is True
@@ -253,7 +253,7 @@ def test_fr10_profile_deleted_panel_removed():
 def test_fr10_profile_deleted_auto_stop_when_less_than_2():
     store, controller, state, cc, profiles = make_env(2)
     ended = []
-    cc.comparison_ended.connect(lambda: ended.append(True))
+    cc.subscribe("comparison_ended", lambda: ended.append(True))
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
     controller.delete_profile("p0")
@@ -265,7 +265,7 @@ def test_fr10_profile_deleted_auto_stop_when_less_than_2():
 def test_fr10_profile_deleted_not_in_comparison_ignored():
     store, controller, state, cc, profiles = make_env(3, same_x=True)
     removed = []
-    cc.panel_removed.connect(removed.append)
+    cc.subscribe("panel_removed", removed.append)
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
 
@@ -285,12 +285,9 @@ def test_fr10_profile_renamed_signal_forwarded():
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
 
-    renamed = []
-    cc.comparison_mode_changed.connect(lambda m: None)  # avoid unconnected warnings
-
     # We track panel_removed to ensure rename does NOT remove
     removed = []
-    cc.panel_removed.connect(removed.append)
+    cc.subscribe("panel_removed", removed.append)
 
     controller.rename_profile("p0", "Renamed Profile")
     assert len(removed) == 0  # rename should NOT remove
@@ -304,7 +301,7 @@ def test_fr10_profile_renamed_signal_forwarded():
 def test_change_mode_side_by_side_to_overlay_valid():
     store, controller, state, cc, profiles = make_env(2, same_x=True)
     mode_changed = []
-    cc.comparison_mode_changed.connect(mode_changed.append)
+    cc.subscribe("comparison_mode_changed", mode_changed.append)
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
 
@@ -317,7 +314,7 @@ def test_change_mode_side_by_side_to_overlay_valid():
 def test_change_mode_to_overlay_incompatible_x_error():
     store, controller, state, cc, profiles = make_env(2, same_x=False)
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
 
@@ -330,7 +327,7 @@ def test_change_mode_to_overlay_incompatible_x_error():
 def test_change_mode_to_difference_with_3_profiles_error():
     store, controller, state, cc, profiles = make_env(3, same_x=True)
     errors = []
-    cc.error_occurred.connect(errors.append)
+    cc.subscribe("error_occurred", errors.append)
 
     cc.start_comparison("ds-1", ["p0", "p1", "p2"], ComparisonMode.SIDE_BY_SIDE)
 
@@ -348,7 +345,7 @@ def test_change_mode_not_active_returns_false():
 def test_change_mode_to_single_stops_comparison():
     store, controller, state, cc, profiles = make_env(2)
     ended = []
-    cc.comparison_ended.connect(lambda: ended.append(True))
+    cc.subscribe("comparison_ended", lambda: ended.append(True))
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
 

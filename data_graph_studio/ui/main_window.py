@@ -23,6 +23,7 @@ from ..core.clipboard_manager import ClipboardManager, DragDropHandler
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
 from .adapters.streaming_adapter import StreamingControllerAdapter
+from .adapters.profile_comparison_adapter import ProfileComparisonControllerAdapter
 from ..core.undo_manager import UndoStack
 from .panels.history_panel import HistoryPanel
 from ..core.dashboard_controller import DashboardController
@@ -127,6 +128,10 @@ class MainWindow(QMainWindow):
         self.profile_controller = ProfileController(self.profile_store, self.state)
         self.profile_comparison_controller = ProfileComparisonController(
             self.profile_store, self.profile_controller, self.state,
+        )
+        # Adapter translates Observable events to Qt Signals for UI connections
+        self._comparison_adapter = ProfileComparisonControllerAdapter(
+            self.profile_comparison_controller, parent=self
         )
 
         # Streaming controller (pure Observable — no Qt dependency)
@@ -747,11 +752,11 @@ class MainWindow(QMainWindow):
         self.table_panel.file_dropped.connect(self._show_parsing_preview)
         self.table_panel.window_changed.connect(self._on_window_changed)
 
-        # Profile comparison controller signals
-        self.profile_comparison_controller.comparison_started.connect(
+        # Profile comparison controller signals (via adapter)
+        self._comparison_adapter.comparison_started.connect(
             self._on_profile_comparison_started
         )
-        self.profile_comparison_controller.comparison_ended.connect(
+        self._comparison_adapter.comparison_ended.connect(
             self._on_profile_comparison_ended
         )
 

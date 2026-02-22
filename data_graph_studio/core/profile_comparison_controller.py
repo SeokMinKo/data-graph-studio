@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import List, TYPE_CHECKING
 
-from PySide6.QtCore import QObject, Signal
-
+from .observable import Observable
 from .profile_store import ProfileStore
 from .profile_controller import ProfileController
 from .state import AppState, ComparisonMode
@@ -14,18 +13,12 @@ if TYPE_CHECKING:
     from .profile import GraphSetting
 
 
-class ProfileComparisonController(QObject):
+class ProfileComparisonController(Observable):
     """Orchestrates profile comparison lifecycle.
 
     Validates profile sets, manages comparison state, and responds to
     profile changes (delete / rename) during an active comparison.
     """
-
-    comparison_started = Signal(str, list)   # mode_value, profile_ids
-    comparison_ended = Signal()
-    comparison_mode_changed = Signal(str)    # mode value
-    panel_removed = Signal(str)              # profile_id
-    error_occurred = Signal(str)
 
     def __init__(
         self,
@@ -67,21 +60,21 @@ class ProfileComparisonController(QObject):
 
         # --- validation ---
         if len(profile_ids) < 2:
-            self.error_occurred.emit("At least 2 profiles required for comparison")
+            self.emit("error_occurred", "At least 2 profiles required for comparison")
             return False
 
         settings: List["GraphSetting"] = []
         for pid in profile_ids:
             s = self._store.get(pid)
             if s is None:
-                self.error_occurred.emit(f"Profile not found: {pid}")
+                self.emit("error_occurred", f"Profile not found: {pid}")
                 return False
             settings.append(s)
 
         # All must belong to the same dataset
         ds_ids = {s.dataset_id for s in settings}
         if len(ds_ids) > 1:
-            self.error_occurred.emit("All profiles must belong to the same dataset")
+            self.emit("error_occurred", "All profiles must belong to the same dataset")
             return False
 
         # Mode-specific validation
@@ -89,13 +82,14 @@ class ProfileComparisonController(QObject):
             from ..ui.panels.profile_overlay import ProfileOverlayRenderer
 
             if not ProfileOverlayRenderer.can_overlay(settings):
-                self.error_occurred.emit(
-                    "All profiles must share the same X column for this mode"
+                self.emit(
+                    "error_occurred",
+                    "All profiles must share the same X column for this mode",
                 )
                 return False
 
         if mode == ComparisonMode.DIFFERENCE and len(profile_ids) != 2:
-            self.error_occurred.emit("Difference mode requires exactly 2 profiles")
+            self.emit("error_occurred", "Difference mode requires exactly 2 profiles")
             return False
 
         # --- activate ---
@@ -114,7 +108,7 @@ class ProfileComparisonController(QObject):
             self._state.comparison_mode_changed.emit(mode.value)
             self._state.comparison_settings_changed.emit()
 
-        self.comparison_started.emit(mode.value, list(profile_ids))
+        self.emit("comparison_started", mode.value, list(profile_ids))
         return True
 
     def stop_comparison(self) -> None:
@@ -128,7 +122,7 @@ class ProfileComparisonController(QObject):
         self._dataset_id = ""
 
         self._state.clear_profile_comparison()
-        self.comparison_ended.emit()
+        self.emit("comparison_ended")
 
     def change_mode(self, mode: ComparisonMode) -> bool:
         """Change comparison mode while active.
@@ -151,13 +145,14 @@ class ProfileComparisonController(QObject):
             from ..ui.panels.profile_overlay import ProfileOverlayRenderer
 
             if not ProfileOverlayRenderer.can_overlay(settings):
-                self.error_occurred.emit(
-                    "All profiles must share the same X column for this mode"
+                self.emit(
+                    "error_occurred",
+                    "All profiles must share the same X column for this mode",
                 )
                 return False
 
         if mode == ComparisonMode.DIFFERENCE and len(self._profile_ids) != 2:
-            self.error_occurred.emit("Difference mode requires exactly 2 profiles")
+            self.emit("error_occurred", "Difference mode requires exactly 2 profiles")
             return False
 
         self._current_mode = mode
@@ -165,7 +160,7 @@ class ProfileComparisonController(QObject):
         self._state.comparison_mode_changed.emit(mode.value)
         self._state.comparison_settings_changed.emit()
 
-        self.comparison_mode_changed.emit(mode.value)
+        self.emit("comparison_mode_changed", mode.value)
         return True
 
     # ------------------------------------------------------------------
@@ -180,7 +175,7 @@ class ProfileComparisonController(QObject):
             return
 
         self._profile_ids.remove(profile_id)
-        self.panel_removed.emit(profile_id)
+        self.emit("panel_removed", profile_id)
 
         if len(self._profile_ids) < 2:
             self.stop_comparison()
