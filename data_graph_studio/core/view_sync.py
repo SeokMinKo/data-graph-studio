@@ -135,14 +135,20 @@ class ViewSyncManager(Observable):
         if not self._sync_x and not self._sync_y:
             return  # nothing to sync
 
-        if not self._range_throttle_active:
-            # Leading edge — fire immediately
-            self._range_throttle_active = True
-            self._schedule_range_flush()
-            self._dispatch_range(source_id, x_range, y_range)
-        else:
-            # Within throttle window — store as pending (last-write-wins)
+        with self._lock:
             self._pending_range = (source_id, x_range, y_range)
+            throttle_active = self._range_throttle_active
+            if not throttle_active:
+                self._range_throttle_active = True
+        if not throttle_active:
+            # Leading edge — fire immediately
+            self._schedule_range_flush()
+            with self._lock:
+                pending = self._pending_range
+                self._pending_range = None
+            if pending is not None:
+                src, xr, yr = pending
+                self._dispatch_range(src, xr, yr)
 
     def _schedule_range_flush(self) -> None:
         """Start (or restart) the range throttle timer."""
@@ -159,12 +165,14 @@ class ViewSyncManager(Observable):
         """Timer callback: fire the pending range event if any."""
         with self._lock:
             self._range_timer = None
-        self._range_throttle_active = False
-        if self._pending_range is not None:
-            source_id, x_range, y_range = self._pending_range
+            self._range_throttle_active = False
+            pending = self._pending_range
             self._pending_range = None
-            # Re-arm for the queued event
-            self._range_throttle_active = True
+            if pending is not None:
+                # Re-arm for the queued event before releasing the lock
+                self._range_throttle_active = True
+        if pending is not None:
+            source_id, x_range, y_range = pending
             self._schedule_range_flush()
             self._dispatch_range(source_id, x_range, y_range)
 
@@ -205,12 +213,19 @@ class ViewSyncManager(Observable):
         if not self._sync_selection:
             return
 
-        if not self._sel_throttle_active:
-            self._sel_throttle_active = True
-            self._schedule_sel_flush()
-            self._dispatch_selection(source_id, indices)
-        else:
+        with self._lock:
             self._pending_selection = (source_id, indices)
+            throttle_active = self._sel_throttle_active
+            if not throttle_active:
+                self._sel_throttle_active = True
+        if not throttle_active:
+            self._schedule_sel_flush()
+            with self._lock:
+                pending = self._pending_selection
+                self._pending_selection = None
+            if pending is not None:
+                src, idx = pending
+                self._dispatch_selection(src, idx)
 
     def _schedule_sel_flush(self) -> None:
         """Start (or restart) the selection throttle timer."""
@@ -227,11 +242,14 @@ class ViewSyncManager(Observable):
         """Timer callback: fire the pending selection event if any."""
         with self._lock:
             self._sel_timer = None
-        self._sel_throttle_active = False
-        if self._pending_selection is not None:
-            source_id, indices = self._pending_selection
+            self._sel_throttle_active = False
+            pending = self._pending_selection
             self._pending_selection = None
-            self._sel_throttle_active = True
+            if pending is not None:
+                # Re-arm for the queued event before releasing the lock
+                self._sel_throttle_active = True
+        if pending is not None:
+            source_id, indices = pending
             self._schedule_sel_flush()
             self._dispatch_selection(source_id, indices)
 
@@ -299,11 +317,11 @@ class ViewSyncManager(Observable):
     def clear(self) -> None:
         """Remove all panels and cancel pending timers."""
         self._panels.clear()
-        self._pending_range = None
-        self._pending_selection = None
-        self._range_throttle_active = False
-        self._sel_throttle_active = False
         with self._lock:
+            self._pending_range = None
+            self._pending_selection = None
+            self._range_throttle_active = False
+            self._sel_throttle_active = False
             if self._range_timer is not None:
                 self._range_timer.cancel()
                 self._range_timer = None

@@ -11,8 +11,15 @@ class ViewSyncManagerAdapter(QObject):
     def __init__(self, manager: ViewSyncManager, parent=None):
         super().__init__(parent)
         self._manager = manager
-        manager.subscribe("view_range_synced", self.view_range_synced.emit)
-        manager.subscribe("selection_synced", self.selection_synced.emit)
+        self._range_handler = self.view_range_synced.emit
+        self._sel_handler = self.selection_synced.emit
+        manager.subscribe("view_range_synced", self._range_handler)
+        manager.subscribe("selection_synced", self._sel_handler)
+        self.destroyed.connect(self._cleanup)
+
+    def _cleanup(self):
+        self._manager.unsubscribe("view_range_synced", self._range_handler)
+        self._manager.unsubscribe("selection_synced", self._sel_handler)
 
     @property
     def manager(self) -> ViewSyncManager:
