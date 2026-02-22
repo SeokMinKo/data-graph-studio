@@ -46,6 +46,63 @@ def is_binary_etl(path: str) -> bool:
     return not is_text
 
 
+_ETL_BASE_COLUMNS = [
+    'Timestamp', 'EventType', 'ProcessID', 'ThreadID',
+    'DiskNumber', 'TransferSize', 'ByteOffset',
+    'IrpFlags', 'HighResResponseTime', 'IssuingThreadId', 'Source',
+]
+
+_ETL_NUMERIC_COLUMNS = [
+    'ProcessID', 'ThreadID', 'DiskNumber', 'TransferSize',
+    'ByteOffset', 'IrpFlags', 'HighResResponseTime', 'IssuingThreadId',
+]
+
+_FILETIME_EPOCH = datetime(1601, 1, 1)
+
+
+def _filetime_to_datetime(filetime_val) -> Optional[datetime]:
+    """Convert a Windows FILETIME integer to a Python datetime."""
+    try:
+        if filetime_val is None or filetime_val <= 0:
+            return None
+        return _FILETIME_EPOCH + timedelta(microseconds=filetime_val // 10)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _build_etl_dataframe(all_events: List[Dict[str, Any]]) -> pl.DataFrame:
+    """Convert a list of ETL event dicts into a typed, pruned Polars DataFrame."""
+    extra_columns: set = set()
+    for evt in all_events:
+        for key in evt:
+            if key not in _ETL_BASE_COLUMNS:
+                extra_columns.add(key)
+
+    all_columns = _ETL_BASE_COLUMNS + sorted(extra_columns)
+    df_dict: Dict[str, list] = {col: [] for col in all_columns}
+    for evt in all_events:
+        for col in all_columns:
+            df_dict[col].append(evt.get(col, None))
+
+    df = pl.DataFrame(df_dict)
+
+    if 'Timestamp' in df.columns:
+        try:
+            df = df.with_columns(pl.col('Timestamp').cast(pl.Datetime('us')))
+        except Exception:
+            pass
+
+    for col in _ETL_NUMERIC_COLUMNS:
+        if col in df.columns:
+            try:
+                df = df.with_columns(pl.col(col).cast(pl.Int64))
+            except Exception:
+                pass
+
+    non_null_cols = [col for col in df.columns if df[col].null_count() < len(df)]
+    return df.select(non_null_cols) if non_null_cols else df
+
+
 def parse_etl_binary(path: str) -> pl.DataFrame:
     """etl-parser로 바이너리 ETL 파일을 파싱한다.
 
@@ -62,21 +119,11 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
     if not HAS_ETL_PARSER:
         raise ImportError("etl-parser 라이브러리가 설치되지 않았습니다.")
 
-    FILETIME_EPOCH = datetime(1601, 1, 1)
-
     class _EtlEventCollector(IEtlFileObserver):
         def __init__(self):
             self.events: List[Dict[str, Any]] = []
             self.etw_events: List[Dict[str, Any]] = []
             self._error_count = 0
-
-        def _filetime_to_datetime(self, filetime_val) -> Optional[datetime]:
-            try:
-                if filetime_val is None or filetime_val <= 0:
-                    return None
-                return FILETIME_EPOCH + timedelta(microseconds=filetime_val // 10)
-            except (OverflowError, OSError, ValueError):
-                return None
 
         def on_system_trace(self, event):
             try:
@@ -84,7 +131,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 mof = system.get_mof()
                 event_def = mof.get_event_definition()
                 record = {
-                    'Timestamp': self._filetime_to_datetime(getattr(event, 'timestamp', None)),
+                    'Timestamp': _filetime_to_datetime(getattr(event, 'timestamp', None)),
                     'EventType': str(event_def) if event_def else 'Unknown',
                     'ProcessID': getattr(event, 'process_id', None),
                     'ThreadID': getattr(event, 'thread_id', None),
@@ -113,7 +160,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 if msg is None:
                     return
                 record = {
-                    'Timestamp': self._filetime_to_datetime(getattr(event, 'timestamp', None)),
+                    'Timestamp': _filetime_to_datetime(getattr(event, 'timestamp', None)),
                     'EventType': str(getattr(msg, 'name', getattr(msg, 'opcode_name', 'ETW'))),
                     'ProcessID': getattr(event, 'process_id', None),
                     'ThreadID': getattr(event, 'thread_id', None),
@@ -153,42 +200,4 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
     if not all_events:
         raise ValueError("ETL 파일에서 파싱 가능한 이벤트를 찾지 못했습니다.")
 
-    base_columns = [
-        'Timestamp', 'EventType', 'ProcessID', 'ThreadID',
-        'DiskNumber', 'TransferSize', 'ByteOffset',
-        'IrpFlags', 'HighResResponseTime', 'IssuingThreadId', 'Source',
-    ]
-    extra_columns: set = set()
-    for evt in all_events:
-        for key in evt:
-            if key not in base_columns:
-                extra_columns.add(key)
-
-    all_columns = base_columns + sorted(extra_columns)
-    df_dict: Dict[str, list] = {col: [] for col in all_columns}
-    for evt in all_events:
-        for col in all_columns:
-            df_dict[col].append(evt.get(col, None))
-
-    df = pl.DataFrame(df_dict)
-
-    if 'Timestamp' in df.columns:
-        try:
-            df = df.with_columns(pl.col('Timestamp').cast(pl.Datetime('us')))
-        except Exception:
-            pass
-
-    numeric_cols = ['ProcessID', 'ThreadID', 'DiskNumber', 'TransferSize',
-                    'ByteOffset', 'IrpFlags', 'HighResResponseTime', 'IssuingThreadId']
-    for col in numeric_cols:
-        if col in df.columns:
-            try:
-                df = df.with_columns(pl.col(col).cast(pl.Int64))
-            except Exception:
-                pass
-
-    non_null_cols = [col for col in df.columns if df[col].null_count() < len(df)]
-    if non_null_cols:
-        df = df.select(non_null_cols)
-
-    return df
+    return _build_etl_dataframe(all_events)
