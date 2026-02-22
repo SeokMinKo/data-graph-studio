@@ -312,10 +312,17 @@ class ExportWorker:
     # -- helpers ---------------------------------------------------------------
 
     def _get_renderer(self) -> "IExportRenderer":
-        """Return the injected renderer or a default QtExportRenderer."""
+        """Return the injected renderer or fall back to QtExportRenderer.
+
+        Callers in the UI layer should inject a renderer via the constructor
+        to avoid the runtime UI import below.  The lazy import is an
+        intentional documented fallback for production use — it must never
+        be imported at module load time to keep this module UI-free.
+        """
         if self._renderer is not None:
             return self._renderer
-        from data_graph_studio.ui.renderers.qt_export_renderer import QtExportRenderer
+        # Fallback for production use — UI layer should inject this via __init__
+        from data_graph_studio.ui.renderers.qt_export_renderer import QtExportRenderer  # noqa: PLC0415
         return QtExportRenderer()
 
     def _cleanup(self) -> None:

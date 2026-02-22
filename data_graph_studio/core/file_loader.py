@@ -294,8 +294,8 @@ class FileLoader:
         self._update_progress(status="loading", total_bytes=file_size, loaded_bytes=0)
 
         if self._should_convert_to_parquet(file_type, file_size):
-            parquet_path = self._prepare_parquet_from_csv(
-                path, encoding=encoding, delimiter=delimiter,
+            parquet_path = prepare_parquet_from_csv(
+                self, path, encoding=encoding, delimiter=delimiter,
                 has_header=has_header, skip_rows=skip_rows, comment_char=comment_char,
             )
             if parquet_path:
@@ -331,7 +331,7 @@ class FileLoader:
 
         self._window_start = start
         self._window_size = size
-        self._df = self._load_window_from_lazy(self._lazy_df, start, size)
+        self._df = load_window_from_lazy(self._lazy_df, start, size)
         self._windowed = True
         return True
 
@@ -380,10 +380,10 @@ class FileLoader:
 
             if optimize_memory:
                 self._update_progress(status="optimizing")
-                self._df = self._optimize_memory(self._df)
+                self._df = optimize_memory_df(self, self._df)
 
             self._update_progress(status="profiling")
-            self._profile = self._create_profile(self._df, 0)
+            self._profile = create_profile(self._df, 0)
 
             gc.collect()
             logger.info("file_loader.lazy_frame_collected", extra={"row_count": len(self._df)})
@@ -464,26 +464,6 @@ class FileLoader:
         """windowed loading 적용 여부를 결정한다."""
         return file_size >= 300 * 1024 * 1024
 
-    def _prepare_parquet_from_csv(
-        self, path: str, encoding: str, delimiter: str,
-        has_header: bool, skip_rows: int, comment_char: Optional[str],
-    ) -> Optional[str]:
-        """CSV를 Parquet으로 변환한다."""
-        return prepare_parquet_from_csv(
-            self, path, encoding=encoding, delimiter=delimiter,
-            has_header=has_header, skip_rows=skip_rows, comment_char=comment_char,
-        )
-
-    def _load_window_from_lazy(
-        self, lazy_df: pl.LazyFrame, window_start: int, window_size: int,
-    ) -> pl.DataFrame:
-        """LazyFrame에서 window 구간만 로드한다."""
-        return load_window_from_lazy(lazy_df, window_start, window_size)
-
-    def _collect_streaming(self, lazy_df: pl.LazyFrame) -> pl.DataFrame:
-        """LazyFrame을 streaming 모드로 수집한다."""
-        return collect_streaming(lazy_df)
-
     def _load_file_internal(
         self, path: str, file_type: FileType, encoding: str,
         delimiter: str, delimiter_type: DelimiterType,
@@ -511,12 +491,3 @@ class FileLoader:
                 return True
         return False
 
-    def _optimize_memory(self, df: pl.DataFrame) -> pl.DataFrame:
-        """메모리를 최적화한다 (with_columns 패턴으로 피크 메모리 절감).
-            df: 최적화할 DataFrame."""
-        return optimize_memory_df(self, df)
-
-    def _create_profile(self, df: pl.DataFrame, load_time: float) -> DataProfile:
-        """데이터 프로파일을 생성한다.
-            df: 프로파일 대상 DataFrame."""
-        return create_profile(df, load_time)

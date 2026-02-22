@@ -313,11 +313,6 @@ class DataEngine(DatasetMixin, AnalysisMixin):
         return self._loader.query_lazy(expr)
 
     def _update_progress(self, **kw): self._loader._update_progress(**kw)
-    def _prepare_parquet_from_csv(self, *a, **kw): return self._loader._prepare_parquet_from_csv(*a, **kw)
-    def _load_window_from_lazy(self, *a, **kw): return self._loader._load_window_from_lazy(*a, **kw)
-    def _collect_streaming(self, lf): return self._loader._collect_streaming(lf)
-    def _create_profile(self, df, t): return self._loader._create_profile(df, t)
-    def _optimize_memory(self, df): return self._loader._optimize_memory(df)
     def _is_precision_sensitive_column(self, c): return self._loader._is_precision_sensitive_column(c)
 
     def load_file(self, path: str, **kwargs) -> bool:
@@ -457,37 +452,6 @@ class DataEngine(DatasetMixin, AnalysisMixin):
                 params={'column': col_name, 'dtype': str(target_dtype)},
                 timestamp=time.time(),
             ))
-            return True
-        except Exception:
-            return False
-
-    # -- Data quality report (F4) ---------------------------------------------
-
-    def data_quality_report(self) -> Dict[str, Any]:
-        """null 비율, 중복 행, 타입별 통계."""
-        if self.df is None:
-            return {}
-        df = self.df
-        row_count = len(df)
-        return {
-            'row_count': row_count,
-            'col_count': len(df.columns),
-            'null_counts': {col: df[col].null_count() for col in df.columns},
-            'null_pct': {col: df[col].null_count() / max(row_count, 1) * 100 for col in df.columns},
-            'duplicate_rows': row_count - len(df.unique()),
-            'dtypes': dict(zip(df.columns, [str(d) for d in df.dtypes])),
-        }
-
-    # -- Virtual columns (F6) -------------------------------------------------
-
-    def add_virtual_column(self, name: str, expr: pl.Expr) -> bool:
-        """가상 컬럼 추가."""
-        if self.df is None:
-            return False
-        try:
-            new_df = self.df.with_columns(expr.alias(name))
-            self.update_dataframe(new_df)
-            self._virtual_columns.add(name)
             return True
         except Exception:
             return False

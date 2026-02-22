@@ -6,16 +6,20 @@ All methods delegate to self._comparison and self._query / self.df,
 which are initialised by DataEngine.__init__.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+
+import polars as pl
 
 
 class AnalysisMixin(object):
     """Mixin for statistical analysis and comparison methods.
 
     Requires the host class to provide:
-        self._comparison — ComparisonEngine instance
-        self.df          — active Polars DataFrame (or None)
-        self.dtypes      — dict mapping column name to dtype string
+        self._comparison        — ComparisonEngine instance
+        self.df                 — active Polars DataFrame (or None)
+        self.dtypes             — dict mapping column name to dtype string
+        self.update_dataframe() — DataFrame updater with cache-clear
+        self._virtual_columns  — set of virtual column names
         self.is_column_categorical() — cardinality helper
     """
 
@@ -197,3 +201,34 @@ class AnalysisMixin(object):
                 recommendations.append((ChartType.BAR, "단일 Y 컬럼 → 바 차트"))
 
         return recommendations[:3]
+
+    # -- Data quality report (F4) ---------------------------------------------
+
+    def data_quality_report(self) -> Dict[str, Any]:
+        """null 비율, 중복 행, 타입별 통계."""
+        if self.df is None:
+            return {}
+        df = self.df
+        row_count = len(df)
+        return {
+            'row_count': row_count,
+            'col_count': len(df.columns),
+            'null_counts': {col: df[col].null_count() for col in df.columns},
+            'null_pct': {col: df[col].null_count() / max(row_count, 1) * 100 for col in df.columns},
+            'duplicate_rows': row_count - len(df.unique()),
+            'dtypes': dict(zip(df.columns, [str(d) for d in df.dtypes])),
+        }
+
+    # -- Virtual columns (F6) -------------------------------------------------
+
+    def add_virtual_column(self, name: str, expr: pl.Expr) -> bool:
+        """가상 컬럼 추가."""
+        if self.df is None:
+            return False
+        try:
+            new_df = self.df.with_columns(expr.alias(name))
+            self.update_dataframe(new_df)
+            self._virtual_columns.add(name)
+            return True
+        except Exception:
+            return False
