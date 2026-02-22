@@ -60,6 +60,7 @@ class _ThreadingTimerHandle:
         self._callback = callback
         self._current: threading.Timer | None = None
         self._running = False
+        self._lock = threading.Lock()
 
     def start(self) -> None:
         if self._running:
@@ -68,24 +69,27 @@ class _ThreadingTimerHandle:
         self._schedule()
 
     def stop(self) -> None:
-        self._running = False
-        if self._current is not None:
-            self._current.cancel()
-            self._current = None
+        with self._lock:
+            self._running = False
+            if self._current is not None:
+                self._current.cancel()
+                self._current = None
 
     def _schedule(self) -> None:
-        if not self._running:
-            return
         t = threading.Timer(self._interval_s, self._fire)
         t.daemon = True
+        with self._lock:
+            self._current = t
         t.start()
-        self._current = t
 
     def _fire(self) -> None:
-        if not self._running:
-            return
+        with self._lock:
+            if not self._running:
+                return
         self._callback()
-        self._schedule()
+        with self._lock:
+            if self._running:
+                self._schedule()
 
 
 class ThreadingTimerFactory(ITimerFactory):
