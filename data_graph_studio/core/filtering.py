@@ -12,6 +12,81 @@ import polars as pl
 from data_graph_studio.core.observable import Observable
 
 
+# ---------------------------------------------------------------------------
+# Dispatch table helpers for Filter.to_expression()
+# ---------------------------------------------------------------------------
+
+def _filter_between(col, f):
+    if isinstance(f.value, (list, tuple)) and len(f.value) == 2:
+        return (col >= f.value[0]) & (col <= f.value[1])
+    return None
+
+
+def _filter_not_between(col, f):
+    if isinstance(f.value, (list, tuple)) and len(f.value) == 2:
+        return (col < f.value[0]) | (col > f.value[1])
+    return None
+
+
+def _filter_in_list(col, f):
+    if isinstance(f.value, (list, tuple, set)):
+        return col.is_in(list(f.value))
+    return None
+
+
+def _filter_not_in_list(col, f):
+    if isinstance(f.value, (list, tuple, set)):
+        return ~col.is_in(list(f.value))
+    return None
+
+
+def _filter_contains(col, f):
+    if f.case_sensitive:
+        return col.cast(pl.Utf8).str.contains(str(f.value))
+    return col.cast(pl.Utf8).str.to_lowercase().str.contains(str(f.value).lower())
+
+
+def _filter_not_contains(col, f):
+    if f.case_sensitive:
+        return ~col.cast(pl.Utf8).str.contains(str(f.value))
+    return ~col.cast(pl.Utf8).str.to_lowercase().str.contains(str(f.value).lower())
+
+
+def _filter_starts_with(col, f):
+    if f.case_sensitive:
+        return col.cast(pl.Utf8).str.starts_with(str(f.value))
+    return col.cast(pl.Utf8).str.to_lowercase().str.starts_with(str(f.value).lower())
+
+
+def _filter_ends_with(col, f):
+    if f.case_sensitive:
+        return col.cast(pl.Utf8).str.ends_with(str(f.value))
+    return col.cast(pl.Utf8).str.to_lowercase().str.ends_with(str(f.value).lower())
+
+
+_FILTER_DISPATCH = {
+    "eq":          lambda col, f: col == f.value,
+    "ne":          lambda col, f: col != f.value,
+    "gt":          lambda col, f: col > f.value,
+    "ge":          lambda col, f: col >= f.value,
+    "lt":          lambda col, f: col < f.value,
+    "le":          lambda col, f: col <= f.value,
+    "between":     _filter_between,
+    "not_between": _filter_not_between,
+    "in":          _filter_in_list,
+    "not_in":      _filter_not_in_list,
+    "contains":    _filter_contains,
+    "not_contains": _filter_not_contains,
+    "starts_with": _filter_starts_with,
+    "ends_with":   _filter_ends_with,
+    "regex":       lambda col, f: col.cast(pl.Utf8).str.contains(str(f.value)),
+    "is_null":     lambda col, f: col.is_null(),
+    "is_not_null": lambda col, f: col.is_not_null(),
+    "is_true":     lambda col, f: col,
+    "is_false":    lambda col, f: not col,  # preserves existing TypeError behaviour
+}
+
+
 class FilterType(Enum):
     """필터 타입"""
     NUMERIC = "numeric"        # 숫자 필터
@@ -71,94 +146,20 @@ class Filter:
 
     def to_expression(self) -> Optional[pl.Expr]:
         """
-        Polars 표현식으로 변환
+        Convert this filter to a Polars boolean expression.
 
         Returns:
-            Polars 필터 표현식
+            Polars filter expression, or None when the filter is disabled
+            or the operator requires a value of an unsupported type.
         """
         if not self.enabled:
             return None
 
-        col = pl.col(self.column)
-
-        if self.operator == FilterOperator.EQUALS:
-            return col == self.value
-
-        elif self.operator == FilterOperator.NOT_EQUALS:
-            return col != self.value
-
-        elif self.operator == FilterOperator.GREATER_THAN:
-            return col > self.value
-
-        elif self.operator == FilterOperator.GREATER_THAN_OR_EQUALS:
-            return col >= self.value
-
-        elif self.operator == FilterOperator.LESS_THAN:
-            return col < self.value
-
-        elif self.operator == FilterOperator.LESS_THAN_OR_EQUALS:
-            return col <= self.value
-
-        elif self.operator == FilterOperator.BETWEEN:
-            if isinstance(self.value, (list, tuple)) and len(self.value) == 2:
-                return (col >= self.value[0]) & (col <= self.value[1])
+        handler = _FILTER_DISPATCH.get(self.operator.value)
+        if handler is None:
             return None
 
-        elif self.operator == FilterOperator.NOT_BETWEEN:
-            if isinstance(self.value, (list, tuple)) and len(self.value) == 2:
-                return (col < self.value[0]) | (col > self.value[1])
-            return None
-
-        elif self.operator == FilterOperator.IN_LIST:
-            if isinstance(self.value, (list, tuple, set)):
-                return col.is_in(list(self.value))
-            return None
-
-        elif self.operator == FilterOperator.NOT_IN_LIST:
-            if isinstance(self.value, (list, tuple, set)):
-                return ~col.is_in(list(self.value))
-            return None
-
-        elif self.operator == FilterOperator.CONTAINS:
-            if self.case_sensitive:
-                return col.cast(pl.Utf8).str.contains(str(self.value))
-            else:
-                return col.cast(pl.Utf8).str.to_lowercase().str.contains(str(self.value).lower())
-
-        elif self.operator == FilterOperator.NOT_CONTAINS:
-            if self.case_sensitive:
-                return ~col.cast(pl.Utf8).str.contains(str(self.value))
-            else:
-                return ~col.cast(pl.Utf8).str.to_lowercase().str.contains(str(self.value).lower())
-
-        elif self.operator == FilterOperator.STARTS_WITH:
-            if self.case_sensitive:
-                return col.cast(pl.Utf8).str.starts_with(str(self.value))
-            else:
-                return col.cast(pl.Utf8).str.to_lowercase().str.starts_with(str(self.value).lower())
-
-        elif self.operator == FilterOperator.ENDS_WITH:
-            if self.case_sensitive:
-                return col.cast(pl.Utf8).str.ends_with(str(self.value))
-            else:
-                return col.cast(pl.Utf8).str.to_lowercase().str.ends_with(str(self.value).lower())
-
-        elif self.operator == FilterOperator.MATCHES_REGEX:
-            return col.cast(pl.Utf8).str.contains(str(self.value))
-
-        elif self.operator == FilterOperator.IS_NULL:
-            return col.is_null()
-
-        elif self.operator == FilterOperator.IS_NOT_NULL:
-            return col.is_not_null()
-
-        elif self.operator == FilterOperator.IS_TRUE:
-            return col
-
-        elif self.operator == FilterOperator.IS_FALSE:
-            return not col
-
-        return None
+        return handler(pl.col(self.column), self)
 
 
 @dataclass
