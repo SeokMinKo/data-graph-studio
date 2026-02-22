@@ -204,25 +204,47 @@ class SelectionState:
 
     @property
     def has_selection(self) -> bool:
+        """True if at least one row is selected."""
         return len(self.selected_rows) > 0
 
     @property
     def selection_count(self) -> int:
+        """Number of currently selected rows."""
         return len(self.selected_rows)
 
     def clear(self):
+        """Clear all selected and highlighted rows."""
         self.selected_rows.clear()
         self.highlighted_rows.clear()
 
     def select(self, rows: List[int], add: bool = False):
+        """
+        Add rows to the selection set.
+
+        Args:
+            rows: Row indices to select. Must be non-negative.
+            add: If True, add to existing selection. If False, replace it.
+        """
         if not add:
             self.selected_rows.clear()
         self.selected_rows.update(rows)
 
     def deselect(self, rows: List[int]):
+        """
+        Remove rows from the selection set.
+
+        Args:
+            rows: Row indices to deselect.
+        """
         self.selected_rows.difference_update(rows)
 
     def toggle(self, row: int):
+        """
+        Toggle selection state of a single row.
+
+        Args:
+            row: Row index to toggle.
+        """
         if row in self.selected_rows:
             self.selected_rows.remove(row)
         else:
@@ -353,6 +375,12 @@ class AppState(QObject):
     # ==================== Batch Update ====================
 
     def set_undo_stack(self, stack: Optional[UndoStack]) -> None:
+        """
+        Attach an undo stack for recording undoable state mutations.
+
+        Args:
+            stack: UndoStack instance to use, or None to disable undo recording.
+        """
         self._undo_stack = stack
 
     def _push_undo(self, cmd: UndoCommand) -> None:
@@ -548,18 +576,68 @@ class AppState(QObject):
     # ==================== Dataset Profiles ====================
 
     def add_graph_setting_to_dataset(self, dataset_id: str, setting: 'GraphSetting') -> bool:
+        """
+        Add a GraphSetting to a dataset's profile list.
+
+        Args:
+            dataset_id: Target dataset identifier.
+            setting: GraphSetting to add.
+
+        Returns:
+            True if the setting was added successfully, False otherwise.
+        """
         return self.comparison_manager.add_graph_setting_to_dataset(dataset_id, setting)
 
     def remove_graph_setting(self, dataset_id: str, setting_id: str) -> bool:
+        """
+        Remove a GraphSetting from a dataset's profile list.
+
+        Args:
+            dataset_id: Target dataset identifier.
+            setting_id: ID of the setting to remove.
+
+        Returns:
+            True if the setting was removed, False if not found.
+        """
         return self.comparison_manager.remove_graph_setting(dataset_id, setting_id)
 
     def rename_graph_setting(self, dataset_id: str, setting_id: str, name: str) -> bool:
+        """
+        Rename a GraphSetting within a dataset's profile list.
+
+        Args:
+            dataset_id: Target dataset identifier.
+            setting_id: ID of the setting to rename.
+            name: New display name for the setting.
+
+        Returns:
+            True if the rename succeeded, False if the setting was not found.
+        """
         return self.comparison_manager.rename_graph_setting(dataset_id, setting_id, name)
 
     def get_dataset_profiles(self, dataset_id: str) -> List['GraphSetting']:
+        """
+        Return all saved GraphSettings for a dataset.
+
+        Args:
+            dataset_id: Target dataset identifier.
+
+        Returns:
+            List of GraphSetting objects associated with the dataset.
+        """
         return self.comparison_manager.get_dataset_profiles(dataset_id)
 
     def build_graph_setting_from_state(self, name: str, dataset_id: str = "") -> 'GraphSetting':
+        """
+        Create a GraphSetting snapshot from the current AppState.
+
+        Args:
+            name: Display name for the new setting.
+            dataset_id: Optional dataset ID to associate the setting with.
+
+        Returns:
+            A new GraphSetting populated with the current chart, zone, filter, and sort state.
+        """
         from .profile import GraphSetting
         current = self.get_current_graph_state()
         gs = GraphSetting(
@@ -634,9 +712,24 @@ class AppState(QObject):
 
     @property
     def is_data_loaded(self) -> bool:
+        """True if a dataset has been loaded into the application."""
         return self._data_loaded
 
     def set_data_loaded(self, loaded: bool, total_rows: int = 0):
+        """
+        Update the data-loaded state and row count.
+
+        Sets _data_loaded and _total_rows/_visible_rows, then emits
+        data_loaded if loaded is True, or data_cleared otherwise.
+
+        Args:
+            loaded: True when data has been loaded, False when cleared.
+            total_rows: Total number of rows in the loaded dataset.
+
+        Emits:
+            data_loaded signal when loaded is True.
+            data_cleared signal when loaded is False.
+        """
         self._data_loaded = loaded
         self._total_rows = total_rows
         self._visible_rows = total_rows
@@ -647,22 +740,41 @@ class AppState(QObject):
 
     @property
     def total_rows(self) -> int:
+        """Total number of rows in the loaded dataset, unaffected by filters."""
         return self._total_rows
 
     @property
     def visible_rows(self) -> int:
+        """Number of rows currently visible after applying active filters."""
         return self._visible_rows
 
     def set_visible_rows(self, count: int):
+        """
+        Update the visible row count after filter application.
+
+        Args:
+            count: Number of rows remaining after filters are applied.
+        """
         self._visible_rows = count
 
     # ==================== Group Zone ====================
 
     @property
     def group_columns(self) -> List[GroupColumn]:
+        """Ordered list of columns currently in the Group Zone."""
         return self._group_columns
 
     def add_group_column(self, name: str, index: int = -1):
+        """
+        Add a column to the Group Zone, ignoring duplicates.
+
+        Args:
+            name: Column name to add.
+            index: Position to insert at. -1 appends to the end.
+
+        Emits:
+            group_zone_changed signal.
+        """
         # 중복 방지
         if any(g.name == name for g in self._group_columns):
             return
@@ -677,11 +789,30 @@ class AppState(QObject):
         self.group_zone_changed.emit()
 
     def remove_group_column(self, name: str):
+        """
+        Remove a column from the Group Zone by name.
+
+        Args:
+            name: Column name to remove. No-op if not present.
+
+        Emits:
+            group_zone_changed signal.
+        """
         self._group_columns = [g for g in self._group_columns if g.name != name]
         self._reorder_groups()
         self.group_zone_changed.emit()
 
     def reorder_group_columns(self, new_order: List[str]):
+        """
+        Reorder Group Zone columns to match the given name sequence.
+
+        Args:
+            new_order: Column names in the desired order. Names not present in
+                the current group columns are silently ignored.
+
+        Emits:
+            group_zone_changed signal.
+        """
         name_to_col = {g.name: g for g in self._group_columns}
         self._group_columns = [name_to_col[name] for name in new_order if name in name_to_col]
         self._reorder_groups()
@@ -692,6 +823,12 @@ class AppState(QObject):
             g.order = i
 
     def clear_group_zone(self):
+        """
+        Remove all columns from the Group Zone.
+
+        Emits:
+            group_zone_changed signal.
+        """
         self._group_columns.clear()
         self.group_zone_changed.emit()
 
@@ -699,6 +836,7 @@ class AppState(QObject):
 
     @property
     def value_columns(self) -> List[ValueColumn]:
+        """Ordered list of columns currently in the Value Zone."""
         return self._value_columns
 
     def add_value_column(
@@ -707,6 +845,19 @@ class AppState(QObject):
         aggregation: AggregationType = AggregationType.SUM,
         index: int = -1
     ):
+        """
+        Add a column to the Value Zone with automatic color assignment.
+
+        Duplicate column names are allowed when combined with different aggregations.
+
+        Args:
+            name: Column name to add.
+            aggregation: Aggregation function to apply. Defaults to SUM.
+            index: Position to insert at. -1 appends to the end.
+
+        Emits:
+            value_zone_changed signal.
+        """
         # 중복 허용 (같은 컬럼 다른 집계)
         col = ValueColumn(
             name=name,
@@ -728,6 +879,15 @@ class AppState(QObject):
         self.value_zone_changed.emit()
 
     def remove_value_column(self, index: int):
+        """
+        Remove a Value Zone column by list index.
+
+        Args:
+            index: Zero-based index of the column to remove. No-op if out of range.
+
+        Emits:
+            value_zone_changed signal.
+        """
         if 0 <= index < len(self._value_columns):
             self._value_columns.pop(index)
             self._reorder_values()
@@ -741,6 +901,21 @@ class AppState(QObject):
         use_secondary_axis: Optional[bool] = None,
         formula: Optional[str] = None
     ):
+        """
+        Update properties of an existing Value Zone column.
+
+        Only non-None arguments are applied. No-op if the index is out of range.
+
+        Args:
+            index: Zero-based index of the column to update.
+            aggregation: New aggregation function, or None to leave unchanged.
+            color: New hex color string, or None to leave unchanged.
+            use_secondary_axis: Assign to secondary Y axis if True, or None to leave unchanged.
+            formula: Y-value formula expression (e.g. "y*2"), or None to leave unchanged.
+
+        Emits:
+            value_zone_changed signal if any property was updated.
+        """
         if 0 <= index < len(self._value_columns):
             if aggregation is not None:
                 self._value_columns[index].aggregation = aggregation
@@ -757,6 +932,12 @@ class AppState(QObject):
             v.order = i
 
     def clear_value_zone(self):
+        """
+        Remove all columns from the Value Zone.
+
+        Emits:
+            value_zone_changed signal.
+        """
         self._value_columns.clear()
         self.value_zone_changed.emit()
 
@@ -782,6 +963,7 @@ class AppState(QObject):
 
     @property
     def hover_columns(self) -> List[str]:
+        """Ordered list of column names shown in the chart hover tooltip."""
         return self._hover_columns
 
     def add_hover_column(self, name: str):
@@ -805,9 +987,19 @@ class AppState(QObject):
 
     @property
     def x_column(self) -> Optional[str]:
+        """Column name used as the X axis, or None if not set."""
         return self._x_column
 
     def set_x_column(self, name: Optional[str]):
+        """
+        Set the X axis column.
+
+        Args:
+            name: Column name to use for the X axis, or None to clear.
+
+        Emits:
+            chart_settings_changed signal.
+        """
         self._x_column = name
         self.chart_settings_changed.emit()
 
@@ -815,9 +1007,21 @@ class AppState(QObject):
 
     @property
     def filters(self) -> List[FilterCondition]:
+        """List of active filter conditions applied to the dataset."""
         return self._filters
 
     def add_filter(self, column: str, operator: str, value: Any):
+        """
+        Append a new filter condition and record an undo entry.
+
+        Args:
+            column: Column name to filter on.
+            operator: Comparison operator (e.g. "eq", "ne", "gt", "lt", "contains").
+            value: Value to compare against.
+
+        Emits:
+            filter_changed signal.
+        """
         before = copy.deepcopy(self._filters)
         self._filters.append(FilterCondition(column, operator, value))
         self.filter_changed.emit()
@@ -842,6 +1046,15 @@ class AppState(QObject):
         )
 
     def remove_filter(self, index: int):
+        """
+        Remove a filter condition by index and record an undo entry.
+
+        Args:
+            index: Zero-based index of the filter to remove. No-op if out of range.
+
+        Emits:
+            filter_changed signal.
+        """
         if not (0 <= index < len(self._filters)):
             return
         before = copy.deepcopy(self._filters)
@@ -869,6 +1082,14 @@ class AppState(QObject):
         )
 
     def clear_filters(self):
+        """
+        Remove all filter conditions and record an undo entry.
+
+        No-op if there are no active filters.
+
+        Emits:
+            filter_changed signal.
+        """
         if not self._filters:
             return
         before = copy.deepcopy(self._filters)
@@ -895,6 +1116,15 @@ class AppState(QObject):
         )
 
     def toggle_filter(self, index: int):
+        """
+        Toggle the enabled state of a filter condition and record an undo entry.
+
+        Args:
+            index: Zero-based index of the filter to toggle. No-op if out of range.
+
+        Emits:
+            filter_changed signal.
+        """
         if not (0 <= index < len(self._filters)):
             return
         before = copy.deepcopy(self._filters)
@@ -924,9 +1154,23 @@ class AppState(QObject):
 
     @property
     def sorts(self) -> List[SortCondition]:
+        """List of active sort conditions applied to the dataset."""
         return self._sorts
 
     def set_sort(self, column: str, descending: bool = False, add: bool = False):
+        """
+        Set a sort condition on a column and record an undo entry.
+
+        Any existing sort on the same column is removed before adding the new one.
+
+        Args:
+            column: Column name to sort by.
+            descending: Sort in descending order if True, ascending if False.
+            add: If True, add to existing sorts. If False, replace all sorts.
+
+        Emits:
+            sort_changed signal.
+        """
         before = copy.deepcopy(self._sorts)
 
         if not add:
@@ -958,6 +1202,14 @@ class AppState(QObject):
             )
 
     def clear_sorts(self):
+        """
+        Remove all sort conditions and record an undo entry.
+
+        No-op if there are no active sorts.
+
+        Emits:
+            sort_changed signal.
+        """
         before = copy.deepcopy(self._sorts)
         if not self._sorts:
             return
@@ -988,25 +1240,66 @@ class AppState(QObject):
 
     @property
     def selection(self) -> SelectionState:
+        """Current row selection state."""
         return self._selection
 
     def select_rows(self, rows: List[int], add: bool = False):
+        """
+        Select the given rows, optionally adding to the existing selection.
+
+        Args:
+            rows: Row indices to select.
+            add: If True, add to existing selection. If False, replace it.
+
+        Emits:
+            selection_changed signal.
+        """
         self._selection.select(rows, add)
         self.selection_changed.emit()
 
     def deselect_rows(self, rows: List[int]):
+        """
+        Remove the given rows from the selection.
+
+        Args:
+            rows: Row indices to deselect.
+
+        Emits:
+            selection_changed signal.
+        """
         self._selection.deselect(rows)
         self.selection_changed.emit()
 
     def toggle_row(self, row: int):
+        """
+        Toggle the selection state of a single row.
+
+        Args:
+            row: Row index to toggle.
+
+        Emits:
+            selection_changed signal.
+        """
         self._selection.toggle(row)
         self.selection_changed.emit()
 
     def clear_selection(self):
+        """
+        Clear all selected and highlighted rows.
+
+        Emits:
+            selection_changed signal.
+        """
         self._selection.clear()
         self.selection_changed.emit()
 
     def select_all(self):
+        """
+        Select all visible rows.
+
+        Emits:
+            selection_changed signal.
+        """
         self._selection.select(list(range(self._visible_rows)))
         self.selection_changed.emit()
 
@@ -1027,9 +1320,19 @@ class AppState(QObject):
 
     @property
     def chart_settings(self) -> ChartSettings:
+        """Current chart configuration including type, axes, and style options."""
         return self._chart_settings
 
     def set_chart_type(self, chart_type: ChartType):
+        """
+        Change the active chart type and record an undo entry.
+
+        Args:
+            chart_type: ChartType enum value to apply.
+
+        Emits:
+            chart_settings_changed signal.
+        """
         before = copy.deepcopy(self._chart_settings)
         self._chart_settings.chart_type = chart_type
         self.chart_settings_changed.emit()
@@ -1055,6 +1358,19 @@ class AppState(QObject):
             )
 
     def update_chart_settings(self, **kwargs):
+        """
+        Update one or more chart settings fields and record an undo entry.
+
+        Only fields that exist on ChartSettings and whose values differ from the
+        current state are applied. No-op if nothing changed.
+
+        Args:
+            **kwargs: ChartSettings attribute names and their new values
+                (e.g. line_width=3, y_log_scale=True).
+
+        Emits:
+            chart_settings_changed signal if any field changed.
+        """
         before = copy.deepcopy(self._chart_settings)
         changed = False
         for key, value in kwargs.items():
@@ -1090,9 +1406,19 @@ class AppState(QObject):
 
     @property
     def tool_mode(self) -> ToolMode:
+        """Currently active chart interaction tool mode."""
         return self._tool_mode
 
     def set_tool_mode(self, mode: ToolMode):
+        """
+        Set the active chart tool mode.
+
+        Args:
+            mode: ToolMode enum value to activate.
+
+        Emits:
+            tool_mode_changed signal.
+        """
         self._tool_mode = mode
         self.tool_mode_changed.emit()
 
@@ -1137,9 +1463,20 @@ class AppState(QObject):
 
     @property
     def layout_ratios(self) -> Dict[str, float]:
+        """Height ratios for 'summary', 'graph', and 'table' panels (sum to 1.0)."""
         return self._layout_ratios
 
     def set_layout_ratio(self, section: str, ratio: float):
+        """
+        Set the height ratio for a layout section, redistributing the remainder.
+
+        The difference between the old and new ratio is spread evenly across all
+        other sections to keep the total at 1.0.
+
+        Args:
+            section: Layout section key — one of 'summary', 'graph', or 'table'.
+            ratio: New ratio for the section. Ignored if the section key is unknown.
+        """
         if section in self._layout_ratios:
             # 비율 조정 (합이 1이 되도록)
             old_ratio = self._layout_ratios[section]
@@ -1154,9 +1491,21 @@ class AppState(QObject):
     # ==================== Column Order ====================
 
     def set_column_order(self, order: List[str]):
+        """
+        Set the display order of table columns.
+
+        Args:
+            order: Full list of column names in the desired display order.
+        """
         self._column_order = order
 
     def get_column_order(self) -> List[str]:
+        """
+        Return the current column display order.
+
+        Returns:
+            List of column names in display order.
+        """
         return self._column_order
 
     @property
@@ -1177,12 +1526,24 @@ class AppState(QObject):
         return column in self._hidden_columns
 
     def toggle_column_visibility(self, column: str):
+        """
+        Toggle whether a column is hidden in the table view.
+
+        Args:
+            column: Column name to show if hidden, or hide if visible.
+        """
         if column in self._hidden_columns:
             self._hidden_columns.remove(column)
         else:
             self._hidden_columns.add(column)
 
     def get_visible_columns(self) -> List[str]:
+        """
+        Return the ordered list of columns that are not hidden.
+
+        Returns:
+            Column names from _column_order that are not in _hidden_columns.
+        """
         return [c for c in self._column_order if c not in self._hidden_columns]
 
     # ==================== Summary Update ====================
