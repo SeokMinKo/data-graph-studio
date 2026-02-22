@@ -157,8 +157,8 @@ class FakeMainWindow:
         # so set mode directly on settings after set_profile_comparison
         if self.state._comparison_settings.mode != comp_mode:
             self.state._comparison_settings.mode = comp_mode
-            self.state.comparison_mode_changed.emit(comp_mode.value)
-            self.state.comparison_settings_changed.emit()
+            self.state.emit("comparison_mode_changed", comp_mode.value)
+            self.state.emit("comparison_settings_changed")
 
         return {"ok": True, "mode": mode}
 
@@ -191,7 +191,7 @@ class FakeMainWindow:
             self.state._comparison_settings.sync_pan_y = sync_y
         if sync_selection is not None:
             self.state._comparison_settings.sync_selection = sync_selection
-        self.state.comparison_settings_changed.emit()
+        self.state.emit("comparison_settings_changed")
         return {"ok": True}
 
 

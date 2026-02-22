@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt, Signal, Slot, QStringListModel
 from PySide6.QtGui import QKeyEvent
 
 from ...core.state import AppState, AggregationType
+from ..adapters.app_state_adapter import AppStateAdapter
 
 if TYPE_CHECKING:
     from ...core.data_engine import DataEngine
@@ -461,6 +462,7 @@ class DataTab(QWidget):
     def __init__(self, state: AppState, parent: QWidget | None = None):
         super().__init__(parent)
         self._state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
 
         # Column metadata (populated by set_columns)
         self._all_columns: List[str] = []
@@ -693,19 +695,19 @@ class DataTab(QWidget):
     # ======================================================================
 
     def _connect_state_signals(self) -> None:
-        self._state.chart_settings_changed.connect(self._on_state_x_changed)
-        self._state.value_zone_changed.connect(self._on_state_value_changed)
-        self._state.group_zone_changed.connect(self._on_state_group_changed)
-        self._state.hover_zone_changed.connect(self._on_state_hover_changed)
-        self._state.data_cleared.connect(self.clear)
+        self._state_adapter.chart_settings_changed.connect(self._on_state_x_changed)
+        self._state_adapter.value_zone_changed.connect(self._on_state_value_changed)
+        self._state_adapter.group_zone_changed.connect(self._on_state_group_changed)
+        self._state_adapter.hover_zone_changed.connect(self._on_state_hover_changed)
+        self._state_adapter.data_cleared.connect(self.clear)
 
     def _disconnect_state_signals(self) -> None:
         for sig, slot in [
-            (self._state.chart_settings_changed, self._on_state_x_changed),
-            (self._state.value_zone_changed, self._on_state_value_changed),
-            (self._state.group_zone_changed, self._on_state_group_changed),
-            (self._state.hover_zone_changed, self._on_state_hover_changed),
-            (self._state.data_cleared, self.clear),
+            (self._state_adapter.chart_settings_changed, self._on_state_x_changed),
+            (self._state_adapter.value_zone_changed, self._on_state_value_changed),
+            (self._state_adapter.group_zone_changed, self._on_state_group_changed),
+            (self._state_adapter.hover_zone_changed, self._on_state_hover_changed),
+            (self._state_adapter.data_cleared, self.clear),
         ]:
             try:
                 sig.disconnect(slot)

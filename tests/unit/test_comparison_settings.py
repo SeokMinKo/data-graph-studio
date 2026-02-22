@@ -16,6 +16,7 @@ from data_graph_studio.core.state import (
     ComparisonMode,
     ComparisonSettings,
 )
+from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
 
 # ==================== ComparisonSettings Dataclass Tests ====================
@@ -86,6 +87,10 @@ class TestAppStateProfileComparison:
     def state(self, qtbot):
         return AppState()
 
+    @pytest.fixture
+    def adapter(self, state, qtbot):
+        return AppStateAdapter(state)
+
     # ---------- set_profile_comparison ----------
 
     def test_set_profile_comparison_basic(self, state):
@@ -103,14 +108,14 @@ class TestAppStateProfileComparison:
         state.set_profile_comparison("ds-1", ["p1", "p2"])
         assert state.comparison_mode != ComparisonMode.SINGLE
 
-    def test_set_profile_comparison_emits_signal(self, state, qtbot):
+    def test_set_profile_comparison_emits_signal(self, state, adapter, qtbot):
         """set_profile_comparison emits comparison_settings_changed."""
-        with qtbot.waitSignal(state.comparison_settings_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.comparison_settings_changed, timeout=1000):
             state.set_profile_comparison("ds-1", ["p1", "p2"])
 
-    def test_set_profile_comparison_emits_mode_signal(self, state, qtbot):
+    def test_set_profile_comparison_emits_mode_signal(self, state, adapter, qtbot):
         """set_profile_comparison emits comparison_mode_changed when mode changes."""
-        with qtbot.waitSignal(state.comparison_mode_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.comparison_mode_changed, timeout=1000):
             state.set_profile_comparison("ds-1", ["p1", "p2"])
 
     # ---------- clear_profile_comparison ----------
@@ -126,10 +131,10 @@ class TestAppStateProfileComparison:
         assert cs.comparison_dataset_id == ""
         assert cs.mode == ComparisonMode.SINGLE
 
-    def test_clear_profile_comparison_emits_signal(self, state, qtbot):
+    def test_clear_profile_comparison_emits_signal(self, state, adapter, qtbot):
         """clear_profile_comparison emits comparison_settings_changed."""
         state.set_profile_comparison("ds-1", ["p1", "p2"])
-        with qtbot.waitSignal(state.comparison_settings_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.comparison_settings_changed, timeout=1000):
             state.clear_profile_comparison()
 
     def test_clear_profile_comparison_noop_when_inactive(self, state, qtbot):
@@ -239,15 +244,19 @@ class TestBackwardCompatibility:
         s.add_dataset(dataset_id="ds-2", name="D2", row_count=10, column_count=2, memory_bytes=100)
         return s
 
-    def test_set_comparison_mode_still_works(self, state, qtbot):
+    @pytest.fixture
+    def adapter(self, state, qtbot):
+        return AppStateAdapter(state)
+
+    def test_set_comparison_mode_still_works(self, state, adapter, qtbot):
         """set_comparison_mode still works as before for dataset comparison."""
-        with qtbot.waitSignal(state.comparison_mode_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.comparison_mode_changed, timeout=1000):
             state.set_comparison_mode(ComparisonMode.OVERLAY)
         assert state.comparison_mode == ComparisonMode.OVERLAY
 
-    def test_set_comparison_datasets_still_works(self, state, qtbot):
+    def test_set_comparison_datasets_still_works(self, state, adapter, qtbot):
         """set_comparison_datasets still works as before."""
-        with qtbot.waitSignal(state.comparison_settings_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.comparison_settings_changed, timeout=1000):
             state.set_comparison_datasets(["ds-1", "ds-2"])
         assert state.comparison_dataset_ids == ["ds-1", "ds-2"]
 
@@ -257,9 +266,9 @@ class TestBackwardCompatibility:
         # Should return a bool
         assert isinstance(result, bool)
 
-    def test_update_comparison_settings_still_works(self, state, qtbot):
+    def test_update_comparison_settings_still_works(self, state, adapter, qtbot):
         """update_comparison_settings still works with existing fields."""
-        with qtbot.waitSignal(state.comparison_settings_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.comparison_settings_changed, timeout=1000):
             state.update_comparison_settings(sync_zoom=False, sync_pan_x=False)
 
         assert state.comparison_settings.sync_zoom is False

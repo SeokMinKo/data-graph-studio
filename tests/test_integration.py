@@ -15,19 +15,24 @@ from data_graph_studio.core.state import AppState, ChartType, AggregationType, T
 from data_graph_studio.ui.panels.table_panel import PolarsTableModel, TablePanel
 from data_graph_studio.ui.panels.graph_panel import MainGraph, GraphPanel
 from data_graph_studio.graph.sampling import DataSampler
+from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
 
 class TestBidirectionalSelection:
     """양방향 선택 연동 테스트"""
-    
+
     @pytest.fixture
     def state(self, qtbot):
         return AppState()
-    
+
+    @pytest.fixture
+    def adapter(self, state, qtbot):
+        return AppStateAdapter(state)
+
     @pytest.fixture
     def engine(self):
         return DataEngine()
-    
+
     @pytest.fixture
     def sample_data(self, engine):
         """샘플 데이터 로드"""
@@ -36,62 +41,62 @@ class TestBidirectionalSelection:
             for i in range(100):
                 f.write(f"{i},item_{i},{i * 1.5},{['A', 'B', 'C'][i % 3]}\n")
             path = f.name
-        
+
         engine.load_file(path)
         yield engine
         os.unlink(path)
-    
-    def test_table_selection_updates_state(self, state, sample_data, qtbot):
+
+    def test_table_selection_updates_state(self, state, adapter, sample_data, qtbot):
         """테이블 선택이 상태를 업데이트하는지 테스트"""
         state.set_data_loaded(True, 100)
-        
+
         # 테이블에서 행 선택 시뮬레이션
-        with qtbot.waitSignal(state.selection_changed):
+        with qtbot.waitSignal(adapter.selection_changed):
             state.select_rows([0, 1, 2])
-        
+
         assert state.selection.selection_count == 3
         assert 0 in state.selection.selected_rows
         assert 1 in state.selection.selected_rows
         assert 2 in state.selection.selected_rows
-    
-    def test_state_selection_clears_properly(self, state, qtbot):
+
+    def test_state_selection_clears_properly(self, state, adapter, qtbot):
         """상태 선택 클리어 테스트"""
         state.set_data_loaded(True, 100)
         state.select_rows([0, 1, 2])
-        
-        with qtbot.waitSignal(state.selection_changed):
+
+        with qtbot.waitSignal(adapter.selection_changed):
             state.clear_selection()
-        
+
         assert state.selection.has_selection is False
-    
-    def test_add_selection_mode(self, state, qtbot):
+
+    def test_add_selection_mode(self, state, adapter, qtbot):
         """추가 선택 모드 테스트"""
         state.set_data_loaded(True, 100)
         state.select_rows([0, 1])
-        
-        with qtbot.waitSignal(state.selection_changed):
+
+        with qtbot.waitSignal(adapter.selection_changed):
             state.select_rows([5, 6], add=True)
-        
+
         assert state.selection.selection_count == 4
         assert 0 in state.selection.selected_rows
         assert 5 in state.selection.selected_rows
-    
-    def test_toggle_selection(self, state, qtbot):
+
+    def test_toggle_selection(self, state, adapter, qtbot):
         """토글 선택 테스트"""
         state.set_data_loaded(True, 100)
         state.select_rows([0, 1, 2])
-        
+
         # 이미 선택된 행 토글 -> 선택 해제
-        with qtbot.waitSignal(state.selection_changed):
+        with qtbot.waitSignal(adapter.selection_changed):
             state.toggle_row(1)
-        
+
         assert 1 not in state.selection.selected_rows
         assert state.selection.selection_count == 2
-        
+
         # 선택 안된 행 토글 -> 선택
-        with qtbot.waitSignal(state.selection_changed):
+        with qtbot.waitSignal(adapter.selection_changed):
             state.toggle_row(5)
-        
+
         assert 5 in state.selection.selected_rows
 
 
@@ -195,15 +200,19 @@ class TestGraphRendering:
 
 class TestDataFlowIntegration:
     """데이터 플로우 통합 테스트"""
-    
+
     @pytest.fixture
     def state(self, qtbot):
         return AppState()
-    
+
+    @pytest.fixture
+    def adapter(self, state, qtbot):
+        return AppStateAdapter(state)
+
     @pytest.fixture
     def engine(self):
         return DataEngine()
-    
+
     @pytest.fixture
     def sample_csv(self):
         """샘플 CSV 파일"""
@@ -216,28 +225,28 @@ class TestDataFlowIntegration:
         f.close()  # 먼저 닫기 (Windows 호환)
         yield path
         os.unlink(path)
-    
-    def test_full_data_flow(self, state, engine, sample_csv, qtbot):
+
+    def test_full_data_flow(self, state, adapter, engine, sample_csv, qtbot):
         """전체 데이터 플로우 테스트"""
         # 1. 파일 로드
         assert engine.load_file(sample_csv) is True
         assert engine.is_loaded is True
         assert engine.row_count == 500
-        
+
         # 2. 상태 업데이트
-        with qtbot.waitSignal(state.data_loaded):
+        with qtbot.waitSignal(adapter.data_loaded):
             state.set_data_loaded(True, engine.row_count)
-        
+
         # 3. 그룹 추가
-        with qtbot.waitSignal(state.group_zone_changed):
+        with qtbot.waitSignal(adapter.group_zone_changed):
             state.add_group_column('region')
-        
+
         # 4. 밸류 추가
-        with qtbot.waitSignal(state.value_zone_changed):
+        with qtbot.waitSignal(adapter.value_zone_changed):
             state.add_value_column('sales', AggregationType.SUM)
-        
+
         # 5. 필터 추가
-        with qtbot.waitSignal(state.filter_changed):
+        with qtbot.waitSignal(adapter.filter_changed):
             state.add_filter('profit', 'gt', 500)
         
         # 6. 데이터 필터링
@@ -336,53 +345,57 @@ class TestSamplingIntegration:
 
 class TestStateSignals:
     """상태 시그널 테스트"""
-    
+
     @pytest.fixture
     def state(self, qtbot):
         return AppState()
-    
-    def test_all_signals_emit(self, state, qtbot):
+
+    @pytest.fixture
+    def adapter(self, state, qtbot):
+        return AppStateAdapter(state)
+
+    def test_all_signals_emit(self, state, adapter, qtbot):
         """모든 시그널 발생 테스트"""
         # data_loaded
-        with qtbot.waitSignal(state.data_loaded, timeout=1000):
+        with qtbot.waitSignal(adapter.data_loaded, timeout=1000):
             state.set_data_loaded(True, 100)
-        
+
         # group_zone_changed
-        with qtbot.waitSignal(state.group_zone_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.group_zone_changed, timeout=1000):
             state.add_group_column('test')
-        
+
         # value_zone_changed
-        with qtbot.waitSignal(state.value_zone_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.value_zone_changed, timeout=1000):
             state.add_value_column('test')
-        
+
         # filter_changed
-        with qtbot.waitSignal(state.filter_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.filter_changed, timeout=1000):
             state.add_filter('col', 'eq', 'val')
-        
+
         # sort_changed
-        with qtbot.waitSignal(state.sort_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.sort_changed, timeout=1000):
             state.set_sort('col')
-        
+
         # selection_changed
-        with qtbot.waitSignal(state.selection_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.selection_changed, timeout=1000):
             state.select_rows([1, 2, 3])
-        
+
         # chart_settings_changed
-        with qtbot.waitSignal(state.chart_settings_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.chart_settings_changed, timeout=1000):
             state.set_chart_type(ChartType.BAR)
-        
+
         # tool_mode_changed
-        with qtbot.waitSignal(state.tool_mode_changed, timeout=1000):
+        with qtbot.waitSignal(adapter.tool_mode_changed, timeout=1000):
             state.set_tool_mode(ToolMode.ZOOM)
-    
-    def test_signal_order_on_reset(self, state, qtbot):
+
+    def test_signal_order_on_reset(self, state, adapter, qtbot):
         """리셋 시 시그널 발생 테스트"""
         state.set_data_loaded(True, 100)
         state.add_group_column('test')
-        
-        with qtbot.waitSignal(state.data_cleared, timeout=1000):
+
+        with qtbot.waitSignal(adapter.data_cleared, timeout=1000):
             state.reset()
-        
+
         assert state.is_data_loaded is False
         assert len(state.group_columns) == 0
 

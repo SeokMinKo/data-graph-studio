@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from .graph_widgets import FormattedAxisItem
 from ...core.state import AppState, ChartType, ToolMode
+from ..adapters.app_state_adapter import AppStateAdapter
 from ..drawing import (
     DrawingManager, DrawingStyle, LineDrawing, ArrowDrawing, CircleDrawing, RectDrawing, DrawingStyleDialog, TextInputDialog,
     snap_to_angle
@@ -129,6 +130,7 @@ class MainGraph(pg.PlotWidget):
 
         super().__init__(axisItems={'bottom': self._x_axis, 'left': self._y_axis})
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self._is_light = False  # Default: dark (midnight) theme
 
         # Ensure Y-axis label is not clipped (0 = auto-calculate)
@@ -251,8 +253,8 @@ class MainGraph(pg.PlotWidget):
 
         self._grid_visible = True
 
-        # Connect to tool mode changes
-        self.state.tool_mode_changed.connect(self._on_tool_mode_changed)
+        # Connect to tool mode changes (via adapter)
+        self._state_adapter.tool_mode_changed.connect(self._on_tool_mode_changed)
 
         # Apply initial tool mode
         self._on_tool_mode_changed()

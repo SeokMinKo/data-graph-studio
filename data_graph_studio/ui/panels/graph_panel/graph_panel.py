@@ -22,6 +22,7 @@ from PySide6.QtGui import QColor
 
 from ....core.state import AppState, ChartType, ComparisonMode, AggregationType
 from ....core.data_engine import DataEngine
+from ...adapters.app_state_adapter import AppStateAdapter
 from ....core.expression_engine import ExpressionEngine, ExpressionError
 from ....graph.sampling import DataSampler
 from ...drawing import (
@@ -63,6 +64,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
     def __init__(self, state: AppState, engine: DataEngine):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.engine = engine
 
         # Sliding window state
@@ -196,11 +198,11 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
         self.main_graph.set_drawing_manager(self._drawing_manager)
 
     def _connect_signals(self):
-        self.state.chart_settings_changed.connect(self._on_chart_settings_changed)
-        self.state.group_zone_changed.connect(self._on_group_changed)
-        self.state.value_zone_changed.connect(self._on_value_zone_changed)
-        self.state.hover_zone_changed.connect(self._schedule_refresh)
-        self.state.selection_changed.connect(self._on_selection_changed)
+        self._state_adapter.chart_settings_changed.connect(self._on_chart_settings_changed)
+        self._state_adapter.group_zone_changed.connect(self._on_group_changed)
+        self._state_adapter.value_zone_changed.connect(self._on_value_zone_changed)
+        self._state_adapter.hover_zone_changed.connect(self._schedule_refresh)
+        self._state_adapter.selection_changed.connect(self._on_selection_changed)
         self.options_panel.option_changed.connect(self._on_options_panel_changed)
 
         # Filter signal from DataTab (Item 15)
@@ -221,7 +223,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
         self.main_graph.plotItem.sigRangeChanged.connect(self._on_main_graph_range_for_minimap)
 
         # Grid View signal
-        self.state.grid_view_changed.connect(self._on_grid_view_changed)
+        self._state_adapter.grid_view_changed.connect(self._on_grid_view_changed)
 
         # Update Grid View split columns when filter columns change
         self.options_panel.data_tab.filter_changed.connect(self._update_grid_split_columns)

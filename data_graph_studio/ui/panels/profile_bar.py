@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt, Signal, QMimeData
 from PySide6.QtGui import QDrag, QMouseEvent, QAction
 
 from ...core.state import AppState
+from ..adapters.app_state_adapter import AppStateAdapter
 from ...core.profile import Profile, GraphSetting, ProfileManager
 
 
@@ -246,6 +247,7 @@ class ProfileBar(QFrame):
     def __init__(self, state: AppState, parent=None):
         super().__init__(parent)
         self._state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self._setting_buttons: dict[str, SettingButton] = {}
         self._profile_manager = ProfileManager()
 
@@ -392,12 +394,12 @@ class ProfileBar(QFrame):
         """
 
     def _connect_signals(self):
-        # State signals
-        self._state.profile_loaded.connect(self._on_profile_loaded)
-        self._state.profile_cleared.connect(self._on_profile_cleared)
-        self._state.setting_activated.connect(self._on_setting_activated)
-        self._state.setting_added.connect(self._on_setting_added)
-        self._state.setting_removed.connect(self._on_setting_removed)
+        # State signals (via adapter)
+        self._state_adapter.profile_loaded.connect(self._on_profile_loaded)
+        self._state_adapter.profile_cleared.connect(self._on_profile_cleared)
+        self._state_adapter.setting_activated.connect(self._on_setting_activated)
+        self._state_adapter.setting_added.connect(self._on_setting_added)
+        self._state_adapter.setting_removed.connect(self._on_setting_removed)
 
     def _refresh_profile_list(self):
         """프로파일 목록 새로고침"""

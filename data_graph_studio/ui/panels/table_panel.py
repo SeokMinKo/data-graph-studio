@@ -27,6 +27,7 @@ from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnter
 
 from ...core.state import AppState, AggregationType, ValueColumn
 from ...core.data_engine import DataEngine
+from ..adapters.app_state_adapter import AppStateAdapter
 from .grouped_table_model import GroupedTableModel
 from .conditional_formatting import ConditionalFormat, ConditionalFormatDialog
 
@@ -781,12 +782,13 @@ class ChipListWidget(QListWidget):
 
 class XAxisZone(QFrame):
     """X-Axis Zone - X축 컬럼 선택"""
-    
+
     x_changed = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.setObjectName("XAxisZone")
         self.setMinimumWidth(140)
         self.setMaximumWidth(180)
@@ -859,9 +861,9 @@ class XAxisZone(QFrame):
         layout.addStretch()
     
     def _connect_signals(self):
-        # Listen for x_column changes from state
-        self.state.chart_settings_changed.connect(self._sync_from_state)
-    
+        # Listen for x_column changes from state (via adapter)
+        self._state_adapter.chart_settings_changed.connect(self._sync_from_state)
+
     def _on_chip_dropped(self, column_name: str, payload: Dict[str, Any]):
         self._set_x_column(column_name)
         _remove_from_source(self.state, payload, "x")
@@ -919,12 +921,13 @@ class XAxisZone(QFrame):
 
 class GroupZone(QFrame):
     """Group Zone - Minimal drag & drop zone"""
-    
+
     group_changed = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.setObjectName("GroupZone")
         self.setMinimumWidth(130)
         self.setMaximumWidth(170)
@@ -982,8 +985,8 @@ class GroupZone(QFrame):
         layout.addWidget(remove_btn)
     
     def _connect_signals(self):
-        self.state.group_zone_changed.connect(self._sync_from_state)
-    
+        self._state_adapter.group_zone_changed.connect(self._sync_from_state)
+
     def _on_column_dropped(self, column_name: str, payload: Dict[str, Any]):
         self.state.add_group_column(column_name)
         _remove_from_source(self.state, payload, "group")
@@ -1013,12 +1016,13 @@ class GroupZone(QFrame):
 
 class ValueZone(QFrame):
     """Value Zone - Y-axis values"""
-    
+
     value_changed = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.setObjectName("ValueZone")
         self.setMinimumWidth(160)
         self.setAcceptDrops(True)
@@ -1066,8 +1070,8 @@ class ValueZone(QFrame):
         layout.addWidget(self.list_widget, 1)
     
     def _connect_signals(self):
-        self.state.value_zone_changed.connect(self._sync_from_state)
-    
+        self._state_adapter.value_zone_changed.connect(self._sync_from_state)
+
     def _add_value_chip(self, value_col: ValueColumn, index: int):
         """Add value chip"""
         chip = ValueChipWidget(
@@ -1119,6 +1123,7 @@ class HoverZone(QFrame):
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.setObjectName("HoverZone")
         self.setMinimumWidth(150)
         self.setAcceptDrops(True)
@@ -1174,7 +1179,7 @@ class HoverZone(QFrame):
         layout.addWidget(clear_btn)
 
     def _connect_signals(self):
-        self.state.hover_zone_changed.connect(self._sync_from_state)
+        self._state_adapter.hover_zone_changed.connect(self._sync_from_state)
 
     def _on_column_dropped(self, column_name: str, payload: Dict[str, Any]):
         self.state.add_hover_column(column_name)
@@ -1420,13 +1425,14 @@ class DataTableView(QTableView):
 
 class FilterBar(QFrame):
     """활성 필터 표시 바"""
-    
+
     filter_removed = Signal(int)  # filter index
     clear_all = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.setObjectName("FilterBar")
         self._setup_ui()
         self._connect_signals()
@@ -1458,8 +1464,8 @@ class FilterBar(QFrame):
         self.setVisible(False)  # Hidden by default
     
     def _connect_signals(self):
-        self.state.filter_changed.connect(self._update_filters)
-    
+        self._state_adapter.filter_changed.connect(self._update_filters)
+
     def _update_filters(self):
         """Update filter display"""
         # Clear existing
@@ -1624,6 +1630,7 @@ class TablePanel(QWidget):
     def __init__(self, state: AppState, engine: DataEngine, graph_panel=None):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.engine = engine
         self.graph_panel = graph_panel
 
@@ -1897,12 +1904,12 @@ class TablePanel(QWidget):
         self.table_view.conditional_format_requested.connect(self._on_conditional_format_requested)
         self.table_view.column_freeze.connect(self._on_freeze_column)
         self.table_view.column_unfreeze.connect(self._on_unfreeze_column)
-        self.state.selection_changed.connect(self._on_state_selection_changed)
-        self.state.group_zone_changed.connect(self._on_group_zone_changed)
-        self.state.value_zone_changed.connect(self._on_value_zone_changed)
-        self.state.filter_changed.connect(self._on_filter_changed)
-        self.state.limit_to_marking_changed.connect(self._on_limit_to_marking_changed)
-        self.state.selection_changed.connect(self._on_selection_for_limit_marking)
+        self._state_adapter.selection_changed.connect(self._on_state_selection_changed)
+        self._state_adapter.group_zone_changed.connect(self._on_group_zone_changed)
+        self._state_adapter.value_zone_changed.connect(self._on_value_zone_changed)
+        self._state_adapter.filter_changed.connect(self._on_filter_changed)
+        self._state_adapter.limit_to_marking_changed.connect(self._on_limit_to_marking_changed)
+        self._state_adapter.selection_changed.connect(self._on_selection_for_limit_marking)
 
     def _on_column_order_changed(self, order: List[str]):
         """Update column order in state and refresh model"""

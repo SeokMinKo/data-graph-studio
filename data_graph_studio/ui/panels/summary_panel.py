@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Slot, QPointF
 from PySide6.QtGui import QColor, QPainter, QPen
 
 from ...core.state import AppState
+from ..adapters.app_state_adapter import AppStateAdapter
 from ..floatable import FloatButton
 
 
@@ -134,6 +135,7 @@ class SummaryPanel(QWidget):
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
 
         # File info
         self._file_name: str = ""
@@ -217,11 +219,11 @@ class SummaryPanel(QWidget):
         return card
     
     def _connect_signals(self):
-        """Connect state signals"""
-        self.state.summary_updated.connect(self._on_summary_updated)
-        self.state.selection_changed.connect(self._on_selection_changed)
-        self.state.group_zone_changed.connect(self._on_group_changed)
-        self.state.value_zone_changed.connect(self._on_value_changed)
+        """Connect state signals (via adapter)"""
+        self._state_adapter.summary_updated.connect(self._on_summary_updated)
+        self._state_adapter.selection_changed.connect(self._on_selection_changed)
+        self._state_adapter.group_zone_changed.connect(self._on_group_changed)
+        self._state_adapter.value_zone_changed.connect(self._on_value_changed)
     
     @Slot(dict)
     def _on_summary_updated(self, stats: Dict[str, Any]):

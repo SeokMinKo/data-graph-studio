@@ -20,6 +20,7 @@ from ...core.state import (
     AppState, ComparisonMode, DatasetMetadata
 )
 from ...core.profile import Profile
+from ..adapters.app_state_adapter import AppStateAdapter
 
 
 class DatasetItemWidget(QFrame):
@@ -219,6 +220,7 @@ class DatasetManagerPanel(QWidget):
         super().__init__(parent)
         self.engine = engine
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
 
         self._dataset_widgets: Dict[str, DatasetItemWidget] = {}
         self._dataset_items: Dict[str, QTreeWidgetItem] = {}
@@ -385,13 +387,12 @@ class DatasetManagerPanel(QWidget):
         layout.addWidget(self.memory_label)
 
     def _connect_signals(self):
-        """시그널 연결"""
-        # State 시그널
-        self.state.dataset_added.connect(self._on_dataset_added)
-        self.state.dataset_removed.connect(self._on_dataset_removed)
-        self.state.dataset_activated.connect(self._on_dataset_activated)
-        self.state.dataset_updated.connect(self._on_dataset_updated)
-        self.state.comparison_settings_changed.connect(self._on_comparison_settings_changed)
+        """시그널 연결 (via adapter)"""
+        self._state_adapter.dataset_added.connect(self._on_dataset_added)
+        self._state_adapter.dataset_removed.connect(self._on_dataset_removed)
+        self._state_adapter.dataset_activated.connect(self._on_dataset_activated)
+        self._state_adapter.dataset_updated.connect(self._on_dataset_updated)
+        self._state_adapter.comparison_settings_changed.connect(self._on_comparison_settings_changed)
 
     def _on_add_click(self):
         """데이터셋 추가 버튼 클릭"""

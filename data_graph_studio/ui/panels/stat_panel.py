@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt
 
 from .graph_widgets import ClickablePlotWidget
 from ...core.state import AppState
+from ..adapters.app_state_adapter import AppStateAdapter
 import pyqtgraph as pg
 
 
@@ -40,6 +41,7 @@ class StatPanel(QFrame):
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self.setObjectName("StatPanel")
         self.setMinimumWidth(200)
         self.setMaximumWidth(500)
@@ -57,7 +59,7 @@ class StatPanel(QFrame):
 
         self._setup_ui()
         self._apply_style()
-        self.state.selection_changed.connect(self._on_selection_changed)
+        self._state_adapter.selection_changed.connect(self._on_selection_changed)
     
     def _apply_style(self):
         # Styles now handled by global theme stylesheet

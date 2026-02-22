@@ -24,6 +24,7 @@ from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
 from .adapters.streaming_adapter import StreamingControllerAdapter
 from .adapters.profile_comparison_adapter import ProfileComparisonControllerAdapter
+from .adapters.app_state_adapter import AppStateAdapter
 from ..core.undo_manager import UndoStack
 from .panels.history_panel import HistoryPanel
 from ..core.dashboard_controller import DashboardController
@@ -122,7 +123,9 @@ class MainWindow(QMainWindow):
         # Core components
         self.engine = DataEngine()
         self.state = AppState()
-        
+        # Adapter bridges AppState Observable events to Qt Signals for UI connections
+        self._state_adapter = AppStateAdapter(self.state, parent=self)
+
         # Profile management (Project Explorer)
         self.profile_store = ProfileStore()
         self.profile_controller = ProfileController(self.profile_store, self.state)
@@ -733,20 +736,20 @@ class MainWindow(QMainWindow):
     
     def _connect_signals(self):
         """시그널 연결"""
-        # State signals
-        self.state.data_loaded.connect(self._on_data_loaded)
-        self.state.data_cleared.connect(self._on_data_cleared)
-        self.state.selection_changed.connect(self._update_selection_status)
-        self.state.tool_mode_changed.connect(self._on_tool_mode_changed)
+        # State signals (via adapter)
+        self._state_adapter.data_loaded.connect(self._on_data_loaded)
+        self._state_adapter.data_cleared.connect(self._on_data_cleared)
+        self._state_adapter.selection_changed.connect(self._update_selection_status)
+        self._state_adapter.tool_mode_changed.connect(self._on_tool_mode_changed)
 
         # Auto-save active profile on state changes (debounced)
         self._profile_autosave_timer = QTimer(self)
         self._profile_autosave_timer.setSingleShot(True)
         self._profile_autosave_timer.setInterval(500)  # 500ms debounce
         self._profile_autosave_timer.timeout.connect(self._autosave_active_profile)
-        self.state.chart_settings_changed.connect(self._schedule_profile_autosave)
-        self.state.value_zone_changed.connect(self._schedule_profile_autosave)
-        self.state.group_zone_changed.connect(self._schedule_profile_autosave)
+        self._state_adapter.chart_settings_changed.connect(self._schedule_profile_autosave)
+        self._state_adapter.value_zone_changed.connect(self._schedule_profile_autosave)
+        self._state_adapter.group_zone_changed.connect(self._schedule_profile_autosave)
 
         # Panel signals - route through preview dialog
         self.table_panel.file_dropped.connect(self._show_parsing_preview)

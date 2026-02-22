@@ -141,35 +141,37 @@ class TestSignalConnectionsExist:
     """시그널-슬롯 연결이 올바르게 되어있는지 테스트"""
     
     def test_state_signals_defined(self):
-        """AppState의 시그널들이 정의되어 있는지 확인"""
+        """AppStateAdapter의 시그널들이 정의되어 있는지 확인"""
         from data_graph_studio.core.state import AppState
-        
+        from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
+
         state = AppState()
-        
-        # Essential signals should exist
-        assert hasattr(state, 'data_loaded')
-        assert hasattr(state, 'data_cleared')
-        assert hasattr(state, 'selection_changed')
-        assert hasattr(state, 'chart_settings_changed')
-        assert hasattr(state, 'group_zone_changed')
-        assert hasattr(state, 'value_zone_changed')
-        assert hasattr(state, 'hover_zone_changed')
-        assert hasattr(state, 'filter_changed')
-        assert hasattr(state, 'sort_changed')
-        assert hasattr(state, 'tool_mode_changed')
-        assert hasattr(state, 'limit_to_marking_changed')
-        assert hasattr(state, 'summary_updated')
-        
+        adapter = AppStateAdapter(state)
+
+        # Essential signals should exist on the adapter
+        assert hasattr(adapter, 'data_loaded')
+        assert hasattr(adapter, 'data_cleared')
+        assert hasattr(adapter, 'selection_changed')
+        assert hasattr(adapter, 'chart_settings_changed')
+        assert hasattr(adapter, 'group_zone_changed')
+        assert hasattr(adapter, 'value_zone_changed')
+        assert hasattr(adapter, 'hover_zone_changed')
+        assert hasattr(adapter, 'filter_changed')
+        assert hasattr(adapter, 'sort_changed')
+        assert hasattr(adapter, 'tool_mode_changed')
+        assert hasattr(adapter, 'limit_to_marking_changed')
+        assert hasattr(adapter, 'summary_updated')
+
         # Profile signals
-        assert hasattr(state, 'profile_loaded')
-        assert hasattr(state, 'profile_cleared')
-        assert hasattr(state, 'setting_activated')
-        
+        assert hasattr(adapter, 'profile_loaded')
+        assert hasattr(adapter, 'profile_cleared')
+        assert hasattr(adapter, 'setting_activated')
+
         # Multi-dataset signals
-        assert hasattr(state, 'dataset_added')
-        assert hasattr(state, 'dataset_removed')
-        assert hasattr(state, 'dataset_activated')
-        assert hasattr(state, 'comparison_mode_changed')
+        assert hasattr(adapter, 'dataset_added')
+        assert hasattr(adapter, 'dataset_removed')
+        assert hasattr(adapter, 'dataset_activated')
+        assert hasattr(adapter, 'comparison_mode_changed')
     
     def test_panel_signals_defined(self):
         """주요 패널의 시그널들이 정의되어 있는지 확인"""

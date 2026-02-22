@@ -105,8 +105,8 @@ class ProfileComparisonController(Observable):
         # SIDE_BY_SIDE if currently SINGLE; we may need to correct).
         if self._state._comparison_settings.mode != mode:
             self._state._comparison_settings.mode = mode
-            self._state.comparison_mode_changed.emit(mode.value)
-            self._state.comparison_settings_changed.emit()
+            self._state.emit("comparison_mode_changed", mode.value)
+            self._state.emit("comparison_settings_changed")
 
         self.emit("comparison_started", mode.value, list(profile_ids))
         return True
@@ -157,8 +157,8 @@ class ProfileComparisonController(Observable):
 
         self._current_mode = mode
         self._state._comparison_settings.mode = mode
-        self._state.comparison_mode_changed.emit(mode.value)
-        self._state.comparison_settings_changed.emit()
+        self._state.emit("comparison_mode_changed", mode.value)
+        self._state.emit("comparison_settings_changed")
 
         self.emit("comparison_mode_changed", mode.value)
         return True

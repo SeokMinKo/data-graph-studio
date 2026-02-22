@@ -17,6 +17,7 @@ from PySide6.QtGui import QColor
 from ...core.data_engine import DataEngine
 from ...core.state import AppState
 from ...core.view_sync import ViewSyncManager
+from ..adapters.app_state_adapter import AppStateAdapter
 
 if TYPE_CHECKING:
     from ...core.profile import GraphSetting
@@ -901,6 +902,7 @@ class SideBySideLayout(QWidget):
         super().__init__(parent)
         self.engine = engine
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
 
         self._panels: Dict[str, MiniGraphWidget] = {}
 
@@ -953,10 +955,10 @@ class SideBySideLayout(QWidget):
         layout.addWidget(self.splitter, 1)
 
     def _connect_signals(self):
-        """시그널 연결"""
-        self.state.comparison_settings_changed.connect(self.refresh)
-        self.state.dataset_added.connect(self._on_dataset_added)
-        self.state.dataset_removed.connect(self._on_dataset_removed)
+        """시그널 연결 (via adapter)"""
+        self._state_adapter.comparison_settings_changed.connect(self.refresh)
+        self._state_adapter.dataset_added.connect(self._on_dataset_added)
+        self._state_adapter.dataset_removed.connect(self._on_dataset_removed)
 
     # ------------------------------------------------------------------
     # Sync checkbox handlers → delegate to ViewSyncManager

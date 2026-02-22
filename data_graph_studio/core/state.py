@@ -11,7 +11,7 @@ from datetime import datetime
 import uuid
 import copy
 import time
-from PySide6.QtCore import QObject, Signal
+from .observable import Observable
 
 from .undo_manager import UndoStack, UndoCommand, UndoActionType
 # comparison_manager defines the comparison types and ComparisonManager class.
@@ -257,51 +257,12 @@ class SelectionState:
             self.selected_rows.add(row)
 
 
-class AppState(QObject):
+class AppState(Observable):
     """
     앱 전역 상태 관리
 
-    Signals로 상태 변경을 UI에 알림
+    Observable events로 상태 변경을 알림
     """
-
-    # Signals
-    data_loaded = Signal()
-    data_cleared = Signal()
-
-    group_zone_changed = Signal()
-    value_zone_changed = Signal()
-    hover_zone_changed = Signal()  # New signal for hover columns
-
-    filter_changed = Signal()
-    sort_changed = Signal()
-
-    selection_changed = Signal()
-    limit_to_marking_changed = Signal(bool)  # Limit table to marked rows
-
-    chart_settings_changed = Signal()
-    tool_mode_changed = Signal()
-    grid_view_changed = Signal()  # Grid View 설정 변경
-
-    # Summary 업데이트
-    summary_updated = Signal(dict)  # 통계 데이터
-
-    # Profile signals
-    profile_loaded = Signal(object)       # Profile
-    profile_cleared = Signal()
-    profile_saved = Signal()
-    setting_activated = Signal(str)       # setting_id
-    setting_added = Signal(str)           # setting_id
-    setting_removed = Signal(str)         # setting_id
-    floating_window_opened = Signal(str)  # setting_id
-    floating_window_closed = Signal(str)  # window_id
-
-    # Multi-dataset comparison signals
-    dataset_added = Signal(str)           # dataset_id
-    dataset_removed = Signal(str)         # dataset_id
-    dataset_activated = Signal(str)       # dataset_id
-    dataset_updated = Signal(str)         # dataset_id
-    comparison_mode_changed = Signal(str) # mode
-    comparison_settings_changed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -366,14 +327,14 @@ class AppState(QObject):
         from .comparison_manager import ComparisonManager
         self.comparison_manager = ComparisonManager()
 
-        # Forward ComparisonManager events through AppState's own Qt signals so
-        # all existing external listeners (connected to AppState) still work.
-        self.comparison_manager.subscribe("dataset_added", self.dataset_added.emit)
-        self.comparison_manager.subscribe("dataset_removed", self.dataset_removed.emit)
-        self.comparison_manager.subscribe("dataset_activated", self.dataset_activated.emit)
-        self.comparison_manager.subscribe("dataset_updated", self.dataset_updated.emit)
-        self.comparison_manager.subscribe("comparison_mode_changed", self.comparison_mode_changed.emit)
-        self.comparison_manager.subscribe("comparison_settings_changed", self.comparison_settings_changed.emit)
+        # Forward ComparisonManager events through AppState's own Observable events so
+        # all existing external listeners (subscribed to AppState) still work.
+        self.comparison_manager.subscribe("dataset_added", lambda *a: self.emit("dataset_added", *a))
+        self.comparison_manager.subscribe("dataset_removed", lambda *a: self.emit("dataset_removed", *a))
+        self.comparison_manager.subscribe("dataset_activated", lambda *a: self.emit("dataset_activated", *a))
+        self.comparison_manager.subscribe("dataset_updated", lambda *a: self.emit("dataset_updated", *a))
+        self.comparison_manager.subscribe("comparison_mode_changed", lambda *a: self.emit("comparison_mode_changed", *a))
+        self.comparison_manager.subscribe("comparison_settings_changed", lambda *a: self.emit("comparison_settings_changed", *a))
 
         # Sync AppState legacy props when active dataset changes in SINGLE mode
         self.comparison_manager.subscribe("dataset_activated", self._on_dataset_activated)
@@ -409,9 +370,7 @@ class AppState(QObject):
             emitted = set()
             for sig_name in self._batch_pending_signals:
                 if sig_name not in emitted:
-                    sig = getattr(self, sig_name, None)
-                    if sig is not None:
-                        sig.emit()
+                    self.emit(sig_name)
                     emitted.add(sig_name)
             self._batch_pending_signals.clear()
 
@@ -684,12 +643,12 @@ class AppState(QObject):
         self._chart_settings = copy.deepcopy(state.chart_settings)
 
         # 시그널 발생
-        self.group_zone_changed.emit()
-        self.value_zone_changed.emit()
-        self.hover_zone_changed.emit()
-        self.chart_settings_changed.emit()
-        self.filter_changed.emit()
-        self.sort_changed.emit()
+        self.emit("group_zone_changed")
+        self.emit("value_zone_changed")
+        self.emit("hover_zone_changed")
+        self.emit("chart_settings_changed")
+        self.emit("filter_changed")
+        self.emit("sort_changed")
 
     def _sync_to_dataset_state(self, dataset_id: str = None):
         """
@@ -740,9 +699,9 @@ class AppState(QObject):
         self._total_rows = total_rows
         self._visible_rows = total_rows
         if loaded:
-            self.data_loaded.emit()
+            self.emit("data_loaded")
         else:
-            self.data_cleared.emit()
+            self.emit("data_cleared")
 
     @property
     def total_rows(self) -> int:
@@ -792,7 +751,7 @@ class AppState(QObject):
             self._group_columns.insert(index, col)
             self._reorder_groups()
 
-        self.group_zone_changed.emit()
+        self.emit("group_zone_changed")
 
     def remove_group_column(self, name: str):
         """
@@ -806,7 +765,7 @@ class AppState(QObject):
         """
         self._group_columns = [g for g in self._group_columns if g.name != name]
         self._reorder_groups()
-        self.group_zone_changed.emit()
+        self.emit("group_zone_changed")
 
     def reorder_group_columns(self, new_order: List[str]):
         """
@@ -822,7 +781,7 @@ class AppState(QObject):
         name_to_col = {g.name: g for g in self._group_columns}
         self._group_columns = [name_to_col[name] for name in new_order if name in name_to_col]
         self._reorder_groups()
-        self.group_zone_changed.emit()
+        self.emit("group_zone_changed")
 
     def _reorder_groups(self):
         for i, g in enumerate(self._group_columns):
@@ -836,7 +795,7 @@ class AppState(QObject):
             group_zone_changed signal.
         """
         self._group_columns.clear()
-        self.group_zone_changed.emit()
+        self.emit("group_zone_changed")
 
     # ==================== Value Zone ====================
 
@@ -882,7 +841,7 @@ class AppState(QObject):
             self._value_columns.insert(index, col)
             self._reorder_values()
 
-        self.value_zone_changed.emit()
+        self.emit("value_zone_changed")
 
     def remove_value_column(self, index: int):
         """
@@ -897,7 +856,7 @@ class AppState(QObject):
         if 0 <= index < len(self._value_columns):
             self._value_columns.pop(index)
             self._reorder_values()
-            self.value_zone_changed.emit()
+            self.emit("value_zone_changed")
 
     def update_value_column(
         self,
@@ -931,7 +890,7 @@ class AppState(QObject):
                 self._value_columns[index].use_secondary_axis = use_secondary_axis
             if formula is not None:
                 self._value_columns[index].formula = formula
-            self.value_zone_changed.emit()
+            self.emit("value_zone_changed")
 
     def _reorder_values(self):
         for i, v in enumerate(self._value_columns):
@@ -945,13 +904,13 @@ class AppState(QObject):
             value_zone_changed signal.
         """
         self._value_columns.clear()
-        self.value_zone_changed.emit()
+        self.emit("value_zone_changed")
 
     def remove_value_column_by_name(self, name: str):
         """Remove value column by name."""
         self._value_columns = [v for v in self._value_columns if v.name != name]
         self._reorder_values()
-        self.value_zone_changed.emit()
+        self.emit("value_zone_changed")
 
     def get_primary_values(self) -> List[ValueColumn]:
         """Primary 축에 할당된 값 컬럼 목록"""
@@ -976,18 +935,18 @@ class AppState(QObject):
         """Add column to hover display"""
         if name not in self._hover_columns:
             self._hover_columns.append(name)
-            self.hover_zone_changed.emit()
+            self.emit("hover_zone_changed")
 
     def remove_hover_column(self, name: str):
         """Remove column from hover display"""
         if name in self._hover_columns:
             self._hover_columns.remove(name)
-            self.hover_zone_changed.emit()
+            self.emit("hover_zone_changed")
 
     def clear_hover_columns(self):
         """Clear all hover columns"""
         self._hover_columns.clear()
-        self.hover_zone_changed.emit()
+        self.emit("hover_zone_changed")
 
     # ==================== X Column ====================
 
@@ -1007,7 +966,7 @@ class AppState(QObject):
             chart_settings_changed signal.
         """
         self._x_column = name
-        self.chart_settings_changed.emit()
+        self.emit("chart_settings_changed")
 
     # ==================== Filters ====================
 
@@ -1030,14 +989,14 @@ class AppState(QObject):
         """
         before = copy.deepcopy(self._filters)
         self._filters.append(FilterCondition(column, operator, value))
-        self.filter_changed.emit()
+        self.emit("filter_changed")
         after = copy.deepcopy(self._filters)
 
         def _apply(value_filters):
             self._undo_paused += 1
             try:
                 self._filters = copy.deepcopy(value_filters)
-                self.filter_changed.emit()
+                self.emit("filter_changed")
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1066,14 +1025,14 @@ class AppState(QObject):
         before = copy.deepcopy(self._filters)
         removed = self._filters[index]
         self._filters.pop(index)
-        self.filter_changed.emit()
+        self.emit("filter_changed")
         after = copy.deepcopy(self._filters)
 
         def _apply(value_filters):
             self._undo_paused += 1
             try:
                 self._filters = copy.deepcopy(value_filters)
-                self.filter_changed.emit()
+                self.emit("filter_changed")
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1100,14 +1059,14 @@ class AppState(QObject):
             return
         before = copy.deepcopy(self._filters)
         self._filters.clear()
-        self.filter_changed.emit()
+        self.emit("filter_changed")
         after = copy.deepcopy(self._filters)
 
         def _apply(value_filters):
             self._undo_paused += 1
             try:
                 self._filters = copy.deepcopy(value_filters)
-                self.filter_changed.emit()
+                self.emit("filter_changed")
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1135,14 +1094,14 @@ class AppState(QObject):
             return
         before = copy.deepcopy(self._filters)
         self._filters[index].enabled = not self._filters[index].enabled
-        self.filter_changed.emit()
+        self.emit("filter_changed")
         after = copy.deepcopy(self._filters)
 
         def _apply(value_filters):
             self._undo_paused += 1
             try:
                 self._filters = copy.deepcopy(value_filters)
-                self.filter_changed.emit()
+                self.emit("filter_changed")
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1185,7 +1144,7 @@ class AppState(QObject):
         # 기존 정렬 제거
         self._sorts = [s for s in self._sorts if s.column != column]
         self._sorts.append(SortCondition(column, descending))
-        self.sort_changed.emit()
+        self.emit("sort_changed")
 
         after = copy.deepcopy(self._sorts)
         if before != after:
@@ -1193,7 +1152,7 @@ class AppState(QObject):
                 self._undo_paused += 1
                 try:
                     self._sorts = copy.deepcopy(value)
-                    self.sort_changed.emit()
+                    self.emit("sort_changed")
                 finally:
                     self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1220,7 +1179,7 @@ class AppState(QObject):
         if not self._sorts:
             return
         self._sorts.clear()
-        self.sort_changed.emit()
+        self.emit("sort_changed")
 
         after = copy.deepcopy(self._sorts)
 
@@ -1228,7 +1187,7 @@ class AppState(QObject):
             self._undo_paused += 1
             try:
                 self._sorts = copy.deepcopy(value)
-                self.sort_changed.emit()
+                self.emit("sort_changed")
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1261,7 +1220,7 @@ class AppState(QObject):
             selection_changed signal.
         """
         self._selection.select(rows, add)
-        self.selection_changed.emit()
+        self.emit("selection_changed")
 
     def deselect_rows(self, rows: List[int]):
         """
@@ -1274,7 +1233,7 @@ class AppState(QObject):
             selection_changed signal.
         """
         self._selection.deselect(rows)
-        self.selection_changed.emit()
+        self.emit("selection_changed")
 
     def toggle_row(self, row: int):
         """
@@ -1287,7 +1246,7 @@ class AppState(QObject):
             selection_changed signal.
         """
         self._selection.toggle(row)
-        self.selection_changed.emit()
+        self.emit("selection_changed")
 
     def clear_selection(self):
         """
@@ -1297,7 +1256,7 @@ class AppState(QObject):
             selection_changed signal.
         """
         self._selection.clear()
-        self.selection_changed.emit()
+        self.emit("selection_changed")
 
     def select_all(self):
         """
@@ -1307,7 +1266,7 @@ class AppState(QObject):
             selection_changed signal.
         """
         self._selection.select(list(range(self._visible_rows)))
-        self.selection_changed.emit()
+        self.emit("selection_changed")
 
     # ==================== Limit to Marking ====================
 
@@ -1320,7 +1279,7 @@ class AppState(QObject):
         """Toggle limit to marking mode"""
         if self._limit_to_marking != enabled:
             self._limit_to_marking = enabled
-            self.limit_to_marking_changed.emit(enabled)
+            self.emit("limit_to_marking_changed", enabled)
 
     # ==================== Chart Settings ====================
 
@@ -1341,14 +1300,14 @@ class AppState(QObject):
         """
         before = copy.deepcopy(self._chart_settings)
         self._chart_settings.chart_type = chart_type
-        self.chart_settings_changed.emit()
+        self.emit("chart_settings_changed")
         after = copy.deepcopy(self._chart_settings)
 
         def _apply(settings: ChartSettings):
             self._undo_paused += 1
             try:
                 self._chart_settings = copy.deepcopy(settings)
-                self.chart_settings_changed.emit()
+                self.emit("chart_settings_changed")
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1386,14 +1345,14 @@ class AppState(QObject):
                     changed = True
         if not changed:
             return
-        self.chart_settings_changed.emit()
+        self.emit("chart_settings_changed")
         after = copy.deepcopy(self._chart_settings)
 
         def _apply(settings: ChartSettings):
             self._undo_paused += 1
             try:
                 self._chart_settings = copy.deepcopy(settings)
-                self.chart_settings_changed.emit()
+                self.emit("chart_settings_changed")
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
 
@@ -1426,7 +1385,7 @@ class AppState(QObject):
             tool_mode_changed signal.
         """
         self._tool_mode = mode
-        self.tool_mode_changed.emit()
+        self.emit("tool_mode_changed")
 
     # ==================== Grid View ====================
 
@@ -1439,19 +1398,19 @@ class AppState(QObject):
         """Grid View 활성화/비활성화"""
         if self._chart_settings.grid_view.enabled != enabled:
             self._chart_settings.grid_view.enabled = enabled
-            self.grid_view_changed.emit()
+            self.emit("grid_view_changed")
 
     def set_grid_view_split_by(self, column: Optional[str]):
         """Grid View 분할 기준 열 설정"""
         if self._chart_settings.grid_view.split_by != column:
             self._chart_settings.grid_view.split_by = column
-            self.grid_view_changed.emit()
+            self.emit("grid_view_changed")
 
     def set_grid_view_direction(self, direction: GridDirection):
         """Grid View 방향 설정"""
         if self._chart_settings.grid_view.direction != direction:
             self._chart_settings.grid_view.direction = direction
-            self.grid_view_changed.emit()
+            self.emit("grid_view_changed")
 
     def update_grid_view_settings(self, **kwargs):
         """Grid View 설정 업데이트"""
@@ -1463,7 +1422,7 @@ class AppState(QObject):
                     setattr(self._chart_settings.grid_view, key, value)
                     changed = True
         if changed:
-            self.grid_view_changed.emit()
+            self.emit("grid_view_changed")
 
     # ==================== Layout ====================
 
@@ -1556,7 +1515,7 @@ class AppState(QObject):
 
     def update_summary(self, stats: Dict[str, Any]):
         """Summary 패널 업데이트"""
-        self.summary_updated.emit(stats)
+        self.emit("summary_updated", stats)
 
     # ==================== Reset ====================
 
@@ -1577,7 +1536,7 @@ class AppState(QObject):
         self._column_order.clear()
         self._hidden_columns.clear()
 
-        self.data_cleared.emit()
+        self.emit("data_cleared")
 
     # ==================== Profile ====================
 
@@ -1613,9 +1572,9 @@ class AppState(QObject):
                 self._current_setting_id = profile.default_setting_id
             elif profile.settings:
                 self._current_setting_id = profile.settings[0].id
-            self.profile_loaded.emit(profile)
+            self.emit("profile_loaded", profile)
         else:
-            self.profile_cleared.emit()
+            self.emit("profile_cleared")
 
     def activate_setting(self, setting_id: str):
         """설정 활성화"""
@@ -1623,13 +1582,13 @@ class AppState(QObject):
             setting = self._current_profile.get_setting(setting_id)
             if setting:
                 self._current_setting_id = setting_id
-                self.setting_activated.emit(setting_id)
+                self.emit("setting_activated", setting_id)
 
     def add_setting(self, setting: 'GraphSetting'):
         """현재 프로파일에 설정 추가"""
         if self._current_profile:
             self._current_profile.add_setting(setting)
-            self.setting_added.emit(setting.id)
+            self.emit("setting_added", setting.id)
 
     def remove_setting(self, setting_id: str):
         """현재 프로파일에서 설정 제거"""
@@ -1641,18 +1600,18 @@ class AppState(QObject):
                         self._current_setting_id = self._current_profile.settings[0].id
                     else:
                         self._current_setting_id = None
-                self.setting_removed.emit(setting_id)
+                self.emit("setting_removed", setting_id)
 
     def register_floating_window(self, window_id: str, window: Any):
         """플로팅 윈도우 등록"""
         self._floating_windows[window_id] = window
-        self.floating_window_opened.emit(window_id)
+        self.emit("floating_window_opened", window_id)
 
     def unregister_floating_window(self, window_id: str):
         """플로팅 윈도우 해제"""
         if window_id in self._floating_windows:
             del self._floating_windows[window_id]
-            self.floating_window_closed.emit(window_id)
+            self.emit("floating_window_closed", window_id)
 
     def get_current_graph_state(self) -> Dict[str, Any]:
         """현재 그래프 상태를 딕셔너리로 반환 (설정 저장용)"""
@@ -1794,11 +1753,11 @@ class AppState(QObject):
                 self._sorts.append(s)
 
         # 시그널 발생
-        self.group_zone_changed.emit()
-        self.value_zone_changed.emit()
-        self.hover_zone_changed.emit()
-        self.chart_settings_changed.emit()
+        self.emit("group_zone_changed")
+        self.emit("value_zone_changed")
+        self.emit("hover_zone_changed")
+        self.emit("chart_settings_changed")
         if setting.include_filters:
-            self.filter_changed.emit()
+            self.emit("filter_changed")
         if setting.include_sorts:
-            self.sort_changed.emit()
+            self.emit("sort_changed")

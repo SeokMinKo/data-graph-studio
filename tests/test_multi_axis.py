@@ -11,6 +11,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data_graph_studio.core.state import AppState, ValueColumn, AggregationType
+from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
 
 class TestMultiAxisState:
@@ -71,9 +72,10 @@ class TestMultiAxisState:
     
     def test_signal_emitted_on_axis_change(self, state, qtbot):
         """축 변경 시 시그널 발생"""
+        adapter = AppStateAdapter(state)
         state.add_value_column("Sales", AggregationType.SUM)
-        
-        with qtbot.waitSignal(state.value_zone_changed, timeout=1000):
+
+        with qtbot.waitSignal(adapter.value_zone_changed, timeout=1000):
             state.update_value_column(0, use_secondary_axis=True)
 
 

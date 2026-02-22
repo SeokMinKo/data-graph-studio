@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from data_graph_studio.core.profile import GraphSetting, Profile, ProfileManager
 from data_graph_studio.core.state import AppState, ChartType, AggregationType
+from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
 
 class TestGraphSetting:
@@ -418,49 +419,54 @@ class TestProfileSignals:
     def test_profile_loaded_signal(self, qtbot):
         """profile_loaded 시그널 테스트"""
         state = AppState()
+        adapter = AppStateAdapter(state)
         profile = Profile.create_new("Test")
 
-        with qtbot.waitSignal(state.profile_loaded, timeout=1000):
+        with qtbot.waitSignal(adapter.profile_loaded, timeout=1000):
             state.set_profile(profile)
 
     def test_profile_cleared_signal(self, qtbot):
         """profile_cleared 시그널 테스트"""
         state = AppState()
+        adapter = AppStateAdapter(state)
         profile = Profile.create_new("Test")
         state.set_profile(profile)
 
-        with qtbot.waitSignal(state.profile_cleared, timeout=1000):
+        with qtbot.waitSignal(adapter.profile_cleared, timeout=1000):
             state.set_profile(None)
 
     def test_setting_activated_signal(self, qtbot):
         """setting_activated 시그널 테스트"""
         state = AppState()
+        adapter = AppStateAdapter(state)
         profile = Profile.create_new("Test")
         setting = GraphSetting.create_new("Setting")
         profile.add_setting(setting)
         state.set_profile(profile)
 
-        with qtbot.waitSignal(state.setting_activated, timeout=1000):
+        with qtbot.waitSignal(adapter.setting_activated, timeout=1000):
             state.activate_setting(setting.id)
 
     def test_setting_added_signal(self, qtbot):
         """setting_added 시그널 테스트"""
         state = AppState()
+        adapter = AppStateAdapter(state)
         profile = Profile.create_new("Test")
         state.set_profile(profile)
 
         setting = GraphSetting.create_new("New")
 
-        with qtbot.waitSignal(state.setting_added, timeout=1000):
+        with qtbot.waitSignal(adapter.setting_added, timeout=1000):
             state.add_setting(setting)
 
     def test_setting_removed_signal(self, qtbot):
         """setting_removed 시그널 테스트"""
         state = AppState()
+        adapter = AppStateAdapter(state)
         profile = Profile.create_new("Test")
         setting = GraphSetting.create_new("Setting")
         profile.add_setting(setting)
         state.set_profile(profile)
 
-        with qtbot.waitSignal(state.setting_removed, timeout=1000):
+        with qtbot.waitSignal(adapter.setting_removed, timeout=1000):
             state.remove_setting(setting.id)

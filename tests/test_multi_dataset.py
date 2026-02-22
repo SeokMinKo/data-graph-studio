@@ -13,6 +13,7 @@ from data_graph_studio.core.state import (
     AppState, ComparisonMode, DatasetMetadata, DatasetState, ComparisonSettings
 )
 from data_graph_studio.core.data_engine import DataEngine, DatasetInfo
+from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
 
 class TestComparisonMode:
@@ -97,20 +98,25 @@ class TestAppStateMultiDataset:
         """AppState 인스턴스"""
         return AppState()
 
+    @pytest.fixture
+    def adapter(self, state, qtbot):
+        """AppStateAdapter for Qt signal testing"""
+        return AppStateAdapter(state)
+
     def test_initial_comparison_mode(self, state):
         """초기 비교 모드 테스트"""
         assert state.comparison_mode == ComparisonMode.SINGLE
 
-    def test_set_comparison_mode(self, state, qtbot):
+    def test_set_comparison_mode(self, state, adapter, qtbot):
         """비교 모드 변경 테스트"""
-        with qtbot.waitSignal(state.comparison_mode_changed):
+        with qtbot.waitSignal(adapter.comparison_mode_changed):
             state.set_comparison_mode(ComparisonMode.OVERLAY)
 
         assert state.comparison_mode == ComparisonMode.OVERLAY
 
-    def test_add_dataset(self, state, qtbot):
+    def test_add_dataset(self, state, adapter, qtbot):
         """데이터셋 추가 테스트"""
-        with qtbot.waitSignal(state.dataset_added):
+        with qtbot.waitSignal(adapter.dataset_added):
             state.add_dataset(
                 dataset_id="ds_001",
                 name="Dataset 1",
@@ -144,7 +150,7 @@ class TestAppStateMultiDataset:
         # 첫 번째 데이터셋이 활성 상태 유지
         assert state.active_dataset_id == "ds_001"
 
-    def test_remove_dataset(self, state, qtbot):
+    def test_remove_dataset(self, state, adapter, qtbot):
         """데이터셋 제거 테스트"""
         state.add_dataset(
             dataset_id="ds_001",
@@ -161,7 +167,7 @@ class TestAppStateMultiDataset:
             memory_bytes=204800
         )
 
-        with qtbot.waitSignal(state.dataset_removed):
+        with qtbot.waitSignal(adapter.dataset_removed):
             state.remove_dataset("ds_001")
 
         assert "ds_001" not in state.dataset_metadata
@@ -169,7 +175,7 @@ class TestAppStateMultiDataset:
         # 다른 데이터셋이 활성화됨
         assert state.active_dataset_id == "ds_002"
 
-    def test_activate_dataset(self, state, qtbot):
+    def test_activate_dataset(self, state, adapter, qtbot):
         """데이터셋 활성화 테스트"""
         state.add_dataset(
             dataset_id="ds_001",
@@ -186,17 +192,17 @@ class TestAppStateMultiDataset:
             memory_bytes=204800
         )
 
-        with qtbot.waitSignal(state.dataset_activated):
+        with qtbot.waitSignal(adapter.dataset_activated):
             state.activate_dataset("ds_002")
 
         assert state.active_dataset_id == "ds_002"
 
-    def test_set_comparison_datasets(self, state, qtbot):
+    def test_set_comparison_datasets(self, state, adapter, qtbot):
         """비교 대상 데이터셋 설정 테스트"""
         state.add_dataset(dataset_id="ds_001", name="Dataset 1", row_count=1000, column_count=5, memory_bytes=102400)
         state.add_dataset(dataset_id="ds_002", name="Dataset 2", row_count=2000, column_count=3, memory_bytes=204800)
 
-        with qtbot.waitSignal(state.comparison_settings_changed):
+        with qtbot.waitSignal(adapter.comparison_settings_changed):
             state.set_comparison_datasets(["ds_001", "ds_002"])
 
         assert state.comparison_dataset_ids == ["ds_001", "ds_002"]

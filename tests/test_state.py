@@ -9,6 +9,7 @@ from data_graph_studio.core.state import (
     AppState, SelectionState, GroupColumn, ValueColumn,
     AggregationType, ChartType, ToolMode, FilterCondition, SortCondition
 )
+from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
 
 class TestSelectionState:
@@ -85,7 +86,12 @@ class TestAppState:
     def state(self, qtbot):
         """AppState 인스턴스"""
         return AppState()
-    
+
+    @pytest.fixture
+    def adapter(self, state, qtbot):
+        """AppStateAdapter for Qt signal testing"""
+        return AppStateAdapter(state)
+
     # ==================== Data State ====================
     
     def test_init(self, state):
@@ -94,29 +100,29 @@ class TestAppState:
         assert state.total_rows == 0
         assert state.visible_rows == 0
     
-    def test_set_data_loaded(self, state, qtbot):
+    def test_set_data_loaded(self, state, adapter, qtbot):
         """데이터 로드 상태 테스트"""
-        with qtbot.waitSignal(state.data_loaded):
+        with qtbot.waitSignal(adapter.data_loaded):
             state.set_data_loaded(True, 1000)
         
         assert state.is_data_loaded is True
         assert state.total_rows == 1000
         assert state.visible_rows == 1000
     
-    def test_set_data_cleared(self, state, qtbot):
+    def test_set_data_cleared(self, state, adapter, qtbot):
         """데이터 클리어 테스트"""
         state.set_data_loaded(True, 1000)
-        
-        with qtbot.waitSignal(state.data_cleared):
+
+        with qtbot.waitSignal(adapter.data_cleared):
             state.set_data_loaded(False)
         
         assert state.is_data_loaded is False
     
     # ==================== Group Zone ====================
     
-    def test_add_group_column(self, state, qtbot):
+    def test_add_group_column(self, state, adapter, qtbot):
         """그룹 컬럼 추가 테스트"""
-        with qtbot.waitSignal(state.group_zone_changed):
+        with qtbot.waitSignal(adapter.group_zone_changed):
             state.add_group_column("category")
         
         assert len(state.group_columns) == 1
@@ -129,45 +135,45 @@ class TestAppState:
         
         assert len(state.group_columns) == 1
     
-    def test_remove_group_column(self, state, qtbot):
+    def test_remove_group_column(self, state, adapter, qtbot):
         """그룹 컬럼 제거 테스트"""
         state.add_group_column("category")
         state.add_group_column("region")
-        
-        with qtbot.waitSignal(state.group_zone_changed):
+
+        with qtbot.waitSignal(adapter.group_zone_changed):
             state.remove_group_column("category")
         
         assert len(state.group_columns) == 1
         assert state.group_columns[0].name == "region"
     
-    def test_reorder_group_columns(self, state, qtbot):
+    def test_reorder_group_columns(self, state, adapter, qtbot):
         """그룹 컬럼 순서 변경 테스트"""
         state.add_group_column("a")
         state.add_group_column("b")
         state.add_group_column("c")
-        
-        with qtbot.waitSignal(state.group_zone_changed):
+
+        with qtbot.waitSignal(adapter.group_zone_changed):
             state.reorder_group_columns(["c", "a", "b"])
         
         assert state.group_columns[0].name == "c"
         assert state.group_columns[1].name == "a"
         assert state.group_columns[2].name == "b"
     
-    def test_clear_group_zone(self, state, qtbot):
+    def test_clear_group_zone(self, state, adapter, qtbot):
         """그룹 존 클리어 테스트"""
         state.add_group_column("a")
         state.add_group_column("b")
-        
-        with qtbot.waitSignal(state.group_zone_changed):
+
+        with qtbot.waitSignal(adapter.group_zone_changed):
             state.clear_group_zone()
         
         assert len(state.group_columns) == 0
     
     # ==================== Value Zone ====================
     
-    def test_add_value_column(self, state, qtbot):
+    def test_add_value_column(self, state, adapter, qtbot):
         """밸류 컬럼 추가 테스트"""
-        with qtbot.waitSignal(state.value_zone_changed):
+        with qtbot.waitSignal(adapter.value_zone_changed):
             state.add_value_column("sales", AggregationType.SUM)
         
         assert len(state.value_columns) == 1
@@ -181,51 +187,51 @@ class TestAppState:
         
         assert state.value_columns[0].color != state.value_columns[1].color
     
-    def test_remove_value_column(self, state, qtbot):
+    def test_remove_value_column(self, state, adapter, qtbot):
         """밸류 컬럼 제거 테스트"""
         state.add_value_column("sales")
         state.add_value_column("profit")
-        
-        with qtbot.waitSignal(state.value_zone_changed):
+
+        with qtbot.waitSignal(adapter.value_zone_changed):
             state.remove_value_column(0)
         
         assert len(state.value_columns) == 1
         assert state.value_columns[0].name == "profit"
     
-    def test_update_value_column(self, state, qtbot):
+    def test_update_value_column(self, state, adapter, qtbot):
         """밸류 컬럼 업데이트 테스트"""
         state.add_value_column("sales", AggregationType.SUM)
-        
-        with qtbot.waitSignal(state.value_zone_changed):
+
+        with qtbot.waitSignal(adapter.value_zone_changed):
             state.update_value_column(0, aggregation=AggregationType.MEAN, color="#ff0000")
         
         assert state.value_columns[0].aggregation == AggregationType.MEAN
         assert state.value_columns[0].color == "#ff0000"
     
-    def test_clear_value_zone(self, state, qtbot):
+    def test_clear_value_zone(self, state, adapter, qtbot):
         """밸류 존 클리어 테스트"""
         state.add_value_column("sales")
         state.add_value_column("profit")
-        
-        with qtbot.waitSignal(state.value_zone_changed):
+
+        with qtbot.waitSignal(adapter.value_zone_changed):
             state.clear_value_zone()
         
         assert len(state.value_columns) == 0
     
     # ==================== X Column ====================
     
-    def test_set_x_column(self, state, qtbot):
+    def test_set_x_column(self, state, adapter, qtbot):
         """X 컬럼 설정 테스트"""
-        with qtbot.waitSignal(state.chart_settings_changed):
+        with qtbot.waitSignal(adapter.chart_settings_changed):
             state.set_x_column("date")
         
         assert state.x_column == "date"
     
     # ==================== Filters ====================
     
-    def test_add_filter(self, state, qtbot):
+    def test_add_filter(self, state, adapter, qtbot):
         """필터 추가 테스트"""
-        with qtbot.waitSignal(state.filter_changed):
+        with qtbot.waitSignal(adapter.filter_changed):
             state.add_filter("sales", "gt", 100)
         
         assert len(state.filters) == 1
@@ -233,121 +239,121 @@ class TestAppState:
         assert state.filters[0].operator == "gt"
         assert state.filters[0].value == 100
     
-    def test_remove_filter(self, state, qtbot):
+    def test_remove_filter(self, state, adapter, qtbot):
         """필터 제거 테스트"""
         state.add_filter("sales", "gt", 100)
         state.add_filter("region", "eq", "US")
-        
-        with qtbot.waitSignal(state.filter_changed):
+
+        with qtbot.waitSignal(adapter.filter_changed):
             state.remove_filter(0)
         
         assert len(state.filters) == 1
         assert state.filters[0].column == "region"
     
-    def test_toggle_filter(self, state, qtbot):
+    def test_toggle_filter(self, state, adapter, qtbot):
         """필터 활성화/비활성화 테스트"""
         state.add_filter("sales", "gt", 100)
         assert state.filters[0].enabled is True
-        
-        with qtbot.waitSignal(state.filter_changed):
+
+        with qtbot.waitSignal(adapter.filter_changed):
             state.toggle_filter(0)
         
         assert state.filters[0].enabled is False
     
-    def test_clear_filters(self, state, qtbot):
+    def test_clear_filters(self, state, adapter, qtbot):
         """필터 클리어 테스트"""
         state.add_filter("sales", "gt", 100)
         state.add_filter("region", "eq", "US")
-        
-        with qtbot.waitSignal(state.filter_changed):
+
+        with qtbot.waitSignal(adapter.filter_changed):
             state.clear_filters()
         
         assert len(state.filters) == 0
     
     # ==================== Sorts ====================
     
-    def test_set_sort(self, state, qtbot):
+    def test_set_sort(self, state, adapter, qtbot):
         """정렬 설정 테스트"""
-        with qtbot.waitSignal(state.sort_changed):
+        with qtbot.waitSignal(adapter.sort_changed):
             state.set_sort("sales", descending=True)
         
         assert len(state.sorts) == 1
         assert state.sorts[0].column == "sales"
         assert state.sorts[0].descending is True
     
-    def test_set_sort_multiple(self, state, qtbot):
+    def test_set_sort_multiple(self, state, adapter, qtbot):
         """다중 정렬 테스트"""
         state.set_sort("category")
-        
-        with qtbot.waitSignal(state.sort_changed):
+
+        with qtbot.waitSignal(adapter.sort_changed):
             state.set_sort("sales", descending=True, add=True)
         
         assert len(state.sorts) == 2
     
-    def test_clear_sorts(self, state, qtbot):
+    def test_clear_sorts(self, state, adapter, qtbot):
         """정렬 클리어 테스트"""
         state.set_sort("sales")
-        
-        with qtbot.waitSignal(state.sort_changed):
+
+        with qtbot.waitSignal(adapter.sort_changed):
             state.clear_sorts()
         
         assert len(state.sorts) == 0
     
     # ==================== Selection ====================
     
-    def test_select_rows(self, state, qtbot):
+    def test_select_rows(self, state, adapter, qtbot):
         """행 선택 테스트"""
-        with qtbot.waitSignal(state.selection_changed):
+        with qtbot.waitSignal(adapter.selection_changed):
             state.select_rows([1, 2, 3])
         
         assert state.selection.selection_count == 3
     
-    def test_deselect_rows(self, state, qtbot):
+    def test_deselect_rows(self, state, adapter, qtbot):
         """행 선택 해제 테스트"""
         state.select_rows([1, 2, 3])
-        
-        with qtbot.waitSignal(state.selection_changed):
+
+        with qtbot.waitSignal(adapter.selection_changed):
             state.deselect_rows([2])
         
         assert state.selection.selection_count == 2
     
-    def test_toggle_row(self, state, qtbot):
+    def test_toggle_row(self, state, adapter, qtbot):
         """행 토글 테스트"""
-        with qtbot.waitSignal(state.selection_changed):
+        with qtbot.waitSignal(adapter.selection_changed):
             state.toggle_row(5)
         
         assert 5 in state.selection.selected_rows
     
-    def test_clear_selection(self, state, qtbot):
+    def test_clear_selection(self, state, adapter, qtbot):
         """선택 클리어 테스트"""
         state.select_rows([1, 2, 3])
-        
-        with qtbot.waitSignal(state.selection_changed):
+
+        with qtbot.waitSignal(adapter.selection_changed):
             state.clear_selection()
         
         assert state.selection.has_selection is False
     
-    def test_select_all(self, state, qtbot):
+    def test_select_all(self, state, adapter, qtbot):
         """전체 선택 테스트"""
         state.set_data_loaded(True, 100)
-        
-        with qtbot.waitSignal(state.selection_changed):
+
+        with qtbot.waitSignal(adapter.selection_changed):
             state.select_all()
         
         assert state.selection.selection_count == 100
     
     # ==================== Chart Settings ====================
     
-    def test_set_chart_type(self, state, qtbot):
+    def test_set_chart_type(self, state, adapter, qtbot):
         """차트 타입 설정 테스트"""
-        with qtbot.waitSignal(state.chart_settings_changed):
+        with qtbot.waitSignal(adapter.chart_settings_changed):
             state.set_chart_type(ChartType.BAR)
         
         assert state.chart_settings.chart_type == ChartType.BAR
     
-    def test_update_chart_settings(self, state, qtbot):
+    def test_update_chart_settings(self, state, adapter, qtbot):
         """차트 설정 업데이트 테스트"""
-        with qtbot.waitSignal(state.chart_settings_changed):
+        with qtbot.waitSignal(adapter.chart_settings_changed):
             state.update_chart_settings(
                 line_width=3,
                 marker_size=10,
@@ -360,9 +366,9 @@ class TestAppState:
     
     # ==================== Tool Mode ====================
     
-    def test_set_tool_mode(self, state, qtbot):
+    def test_set_tool_mode(self, state, adapter, qtbot):
         """툴 모드 설정 테스트"""
-        with qtbot.waitSignal(state.tool_mode_changed):
+        with qtbot.waitSignal(adapter.tool_mode_changed):
             state.set_tool_mode(ToolMode.ZOOM)
         
         assert state.tool_mode == ToolMode.ZOOM
@@ -401,7 +407,7 @@ class TestAppState:
     
     # ==================== Reset ====================
     
-    def test_reset(self, state, qtbot):
+    def test_reset(self, state, adapter, qtbot):
         """전체 초기화 테스트"""
         # 데이터 설정
         state.set_data_loaded(True, 1000)
@@ -409,8 +415,8 @@ class TestAppState:
         state.add_value_column("sales")
         state.add_filter("sales", "gt", 100)
         state.select_rows([1, 2, 3])
-        
-        with qtbot.waitSignal(state.data_cleared):
+
+        with qtbot.waitSignal(adapter.data_cleared):
             state.reset()
         
         assert state.is_data_loaded is False

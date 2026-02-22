@@ -16,6 +16,7 @@ from ...core.data_engine import DataEngine
 from ...core.state import (
     AppState, DIFF_POSITIVE_COLOR, DIFF_NEGATIVE_COLOR
 )
+from ..adapters.app_state_adapter import AppStateAdapter
 
 
 class ComparisonStatsPanel(QWidget):
@@ -34,6 +35,7 @@ class ComparisonStatsPanel(QWidget):
         super().__init__(parent)
         self.engine = engine
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self._is_light: bool = False  # Default: dark (midnight) theme
 
         self._setup_ui()
@@ -261,10 +263,10 @@ class ComparisonStatsPanel(QWidget):
         self.tab_widget.addTab(tab, "Difference")
 
     def _connect_signals(self):
-        """시그널 연결"""
-        self.state.comparison_settings_changed.connect(self.refresh)
-        self.state.dataset_added.connect(self._update_dataset_combos)
-        self.state.dataset_removed.connect(self._update_dataset_combos)
+        """시그널 연결 (via adapter)"""
+        self._state_adapter.comparison_settings_changed.connect(self.refresh)
+        self._state_adapter.dataset_added.connect(self._update_dataset_combos)
+        self._state_adapter.dataset_removed.connect(self._update_dataset_combos)
 
         # Apply initial theme
         self._apply_theme_styles()

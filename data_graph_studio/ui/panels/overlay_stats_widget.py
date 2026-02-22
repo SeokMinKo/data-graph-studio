@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Signal, QPropertyAnimation
 
 from ...core.data_engine import DataEngine
 from ...core.state import AppState
+from ..adapters.app_state_adapter import AppStateAdapter
 
 
 class DatasetLegendItem(QFrame):
@@ -98,6 +99,7 @@ class OverlayStatsWidget(QWidget):
         super().__init__(parent)
         self.engine = engine
         self.state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self._is_light: bool = False  # Default: dark (midnight) theme
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -189,9 +191,9 @@ class OverlayStatsWidget(QWidget):
             self._title_label.setStyleSheet(f"font-weight: bold; font-size: 12px; color: {title_fg};")
 
     def _connect_signals(self):
-        self.state.comparison_settings_changed.connect(self.refresh)
-        self.state.dataset_added.connect(self.refresh)
-        self.state.dataset_removed.connect(self.refresh)
+        self._state_adapter.comparison_settings_changed.connect(self.refresh)
+        self._state_adapter.dataset_added.connect(self.refresh)
+        self._state_adapter.dataset_removed.connect(self.refresh)
 
     def refresh(self):
         """통계 정보 새로고침"""

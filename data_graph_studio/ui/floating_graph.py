@@ -14,6 +14,7 @@ from PySide6.QtGui import QCloseEvent
 from ..core.state import AppState
 from ..core.data_engine import DataEngine
 from ..core.profile import GraphSetting
+from .adapters.app_state_adapter import AppStateAdapter
 
 
 class FloatingGraphWindow(QDialog):
@@ -39,6 +40,7 @@ class FloatingGraphWindow(QDialog):
         self._window_id = window_id
         self._setting = setting
         self._state = state
+        self._state_adapter = AppStateAdapter(state, parent=self)
         self._engine = engine
         self._sync_selection = True
         self._graph_panel = None
@@ -151,7 +153,7 @@ class FloatingGraphWindow(QDialog):
         """시그널 연결"""
         # Selection sync
         if self._sync_selection:
-            self._state.selection_changed.connect(self._on_main_selection_changed)
+            self._state_adapter.selection_changed.connect(self._on_main_selection_changed)
 
     def _apply_setting(self):
         """설정 적용"""
