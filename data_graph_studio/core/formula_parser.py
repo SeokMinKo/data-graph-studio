@@ -306,8 +306,18 @@ class FormulaParser:
         2. For general expressions, build a Polars expression via AST.
         """
         stripped = formula.strip()
+        result = self._eval_special_function(stripped, df)
+        if result is not None:
+            return result
+        return self._eval_general_expression(stripped, df)
 
-        # ── Special function forms ────────────────────────────
+    def _eval_special_function(
+        self, stripped: str, df: pl.DataFrame
+    ) -> "Optional[pl.Series]":
+        """Try to match and evaluate a named special-function form.
+
+        Returns the computed Series, or None if no pattern matches.
+        """
         # rolling_mean({col}, window)
         m = re.match(r'^rolling_mean\(\s*\{([^}]+)\}\s*,\s*(\d+)\s*\)$', stripped)
         if m:
@@ -339,7 +349,7 @@ class FormulaParser:
             self._check_numeric(col, df)
             return df[col].shift(n)
 
-        # Aggregate functions on single column
+        # Aggregate functions: sum/mean/std/count/first/last/min/max({col})
         for fn in ('sum', 'mean', 'std', 'count', 'first', 'last', 'min', 'max'):
             m = re.match(rf'^{fn}\(\s*\{{([^}}]+)\}}\s*\)$', stripped)
             if m:
@@ -347,17 +357,23 @@ class FormulaParser:
                 self._check_numeric(col, df)
                 return self._eval_aggregate(fn, col, df)
 
+        return self._eval_math_special_function(stripped, df)
+
+    def _eval_math_special_function(
+        self, stripped: str, df: pl.DataFrame
+    ) -> "Optional[pl.Series]":
+        """Match single-column math special forms (clip, abs, round, sqrt, log, pow, min2, max2).
+
+        Returns the computed Series, or None if no pattern matches.
+        """
         # clip({col}, lo, hi)
         m = re.match(
-            r'^clip\(\s*\{([^}]+)\}\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)$',
-            stripped,
+            r'^clip\(\s*\{([^}]+)\}\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)$', stripped
         )
         if m:
             col = m.group(1)
-            lo = float(m.group(2))
-            hi = float(m.group(3))
             self._check_numeric(col, df)
-            return df[col].clip(lo, hi)
+            return df[col].clip(float(m.group(2)), float(m.group(3)))
 
         # abs({col})
         m = re.match(r'^abs\(\s*\{([^}]+)\}\s*\)$', stripped)
@@ -391,9 +407,8 @@ class FormulaParser:
         m = re.match(r'^pow\(\s*\{([^}]+)\}\s*,\s*([^)]+)\s*\)$', stripped)
         if m:
             col = m.group(1)
-            exp_val = float(m.group(2))
             self._check_numeric(col, df)
-            return df[col].pow(exp_val)
+            return df[col].pow(float(m.group(2)))
 
         # min({col1}, {col2})  — element-wise
         m = re.match(r'^min\(\s*\{([^}]+)\}\s*,\s*\{([^}]+)\}\s*\)$', stripped)
@@ -401,7 +416,8 @@ class FormulaParser:
             c1, c2 = m.group(1), m.group(2)
             self._check_numeric(c1, df)
             self._check_numeric(c2, df)
-            return df.select(pl.min_horizontal(c1, c2))[df.columns[0] if False else df.select(pl.min_horizontal(c1, c2)).columns[0]]
+            out = df.select(pl.min_horizontal(c1, c2))
+            return out[out.columns[0]]
 
         # max({col1}, {col2})  — element-wise
         m = re.match(r'^max\(\s*\{([^}]+)\}\s*,\s*\{([^}]+)\}\s*\)$', stripped)
@@ -409,10 +425,10 @@ class FormulaParser:
             c1, c2 = m.group(1), m.group(2)
             self._check_numeric(c1, df)
             self._check_numeric(c2, df)
-            return df.select(pl.max_horizontal(c1, c2))[df.select(pl.max_horizontal(c1, c2)).columns[0]]
+            out = df.select(pl.max_horizontal(c1, c2))
+            return out[out.columns[0]]
 
-        # ── General expression (arithmetic, comparison, logic) ─
-        return self._eval_general_expression(stripped, df)
+        return None
 
     def _eval_aggregate(self, fn: str, col: str, df: pl.DataFrame) -> pl.Series:
         """Evaluate an aggregate function, returning a scalar broadcast to len(df)."""
