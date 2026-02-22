@@ -7,7 +7,7 @@ Marking System - Spotfire 스타일 마킹 시스템
 from typing import Dict, Set, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
-from PySide6.QtCore import QObject, Signal
+from data_graph_studio.core.observable import Observable
 
 
 class MarkMode(Enum):
@@ -114,23 +114,13 @@ class Marking:
             self._table_selections[table_name].clear()
 
 
-class MarkingManager(QObject):
+class MarkingManager(Observable):
     """
     마킹 관리자
 
     여러 마킹을 관리하고 시각화 간 연동을 담당합니다.
     Spotfire의 Marking 시스템과 유사한 기능을 제공합니다.
     """
-
-    # 시그널: (marking_name, selected_indices)
-    marking_changed = Signal(str, set)
-
-    # 활성 마킹 변경 시그널
-    active_marking_changed = Signal(str)
-
-    # 마킹 생성/삭제 시그널
-    marking_created = Signal(str)
-    marking_removed = Signal(str)
 
     # 기본 마킹 색상
     DEFAULT_COLORS = [
@@ -198,7 +188,7 @@ class MarkingManager(QObject):
         marking = Marking(name=name, color=color)
         self._markings[name] = marking
 
-        self.marking_created.emit(name)
+        self.emit("marking_created", name)
 
         return marking
 
@@ -224,9 +214,9 @@ class MarkingManager(QObject):
         # 활성 마킹이 제거된 경우 Main으로 변경
         if self._active_marking == name:
             self._active_marking = "Main"
-            self.active_marking_changed.emit("Main")
+            self.emit("active_marking_changed", "Main")
 
-        self.marking_removed.emit(name)
+        self.emit("marking_removed", name)
 
     def set_active_marking(self, name: str) -> None:
         """
@@ -243,7 +233,7 @@ class MarkingManager(QObject):
 
         if self._active_marking != name:
             self._active_marking = name
-            self.active_marking_changed.emit(name)
+            self.emit("active_marking_changed", name)
 
     def mark(
         self,
@@ -276,7 +266,17 @@ class MarkingManager(QObject):
 
         # 시그널 발생
         selected = marking.get_for_table(table_name) if table_name else marking.selected_indices
-        self.marking_changed.emit(marking_name, set(selected))
+        self.emit("marking_changed", marking_name, set(selected))
+
+    def update_marking(
+        self,
+        marking_name: str,
+        indices: Set[int],
+        mode: MarkMode = MarkMode.REPLACE,
+        table_name: Optional[str] = None
+    ) -> None:
+        """Alias for mark(). Provided for API compatibility."""
+        self.mark(marking_name, indices, mode, table_name)
 
     def mark_active(
         self,
@@ -346,13 +346,13 @@ class MarkingManager(QObject):
         else:
             marking.clear()
 
-        self.marking_changed.emit(marking_name, set())
+        self.emit("marking_changed", marking_name, set())
 
     def clear_all_markings(self) -> None:
         """모든 마킹 클리어"""
         for name, marking in self._markings.items():
             marking.clear()
-            self.marking_changed.emit(name, set())
+            self.emit("marking_changed", name, set())
 
     def get_all_marked(self) -> Set[int]:
         """

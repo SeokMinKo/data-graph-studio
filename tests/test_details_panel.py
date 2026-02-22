@@ -156,9 +156,9 @@ class TestDetailsIntegration:
         model = DetailsOnDemandModel()
         model.set_data(sample_data)
 
-        # 마킹 시그널 연결
-        marking_manager.marking_changed.connect(
-            lambda name, indices: model.set_marked_indices(indices)
+        # 마킹 이벤트 구독
+        marking_manager.subscribe(
+            "marking_changed", lambda name, indices: model.set_marked_indices(indices)
         )
 
         # 마킹
@@ -171,8 +171,8 @@ class TestDetailsIntegration:
         model = DetailsOnDemandModel()
         model.set_data(sample_data)
 
-        marking_manager.marking_changed.connect(
-            lambda name, indices: model.set_marked_indices(indices)
+        marking_manager.subscribe(
+            "marking_changed", lambda name, indices: model.set_marked_indices(indices)
         )
 
         marking_manager.mark("Main", {0, 1, 2})

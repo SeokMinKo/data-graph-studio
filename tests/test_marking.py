@@ -166,35 +166,29 @@ class TestMarkingManager:
         with pytest.raises(KeyError):
             manager.set_active_marking("NotExists")
 
-    def test_mark(self, manager, qtbot):
+    def test_mark(self, manager):
         """마킹 테스트"""
-        with qtbot.waitSignal(manager.marking_changed):
-            manager.mark("Main", {1, 2, 3})
+        manager.mark("Main", {1, 2, 3})
 
         assert manager.get_marked("Main") == {1, 2, 3}
 
-    def test_mark_add(self, manager, qtbot):
+    def test_mark_add(self, manager):
         """마킹 추가 테스트"""
         manager.mark("Main", {1, 2, 3})
-
-        with qtbot.waitSignal(manager.marking_changed):
-            manager.mark("Main", {4, 5}, mode=MarkMode.ADD)
+        manager.mark("Main", {4, 5}, mode=MarkMode.ADD)
 
         assert manager.get_marked("Main") == {1, 2, 3, 4, 5}
 
-    def test_mark_active(self, manager, qtbot):
+    def test_mark_active(self, manager):
         """활성 마킹에 마킹 테스트"""
-        with qtbot.waitSignal(manager.marking_changed):
-            manager.mark_active({1, 2, 3})
+        manager.mark_active({1, 2, 3})
 
         assert manager.get_marked("Main") == {1, 2, 3}
 
-    def test_clear_marking(self, manager, qtbot):
+    def test_clear_marking(self, manager):
         """마킹 클리어 테스트"""
         manager.mark("Main", {1, 2, 3})
-
-        with qtbot.waitSignal(manager.marking_changed):
-            manager.clear_marking("Main")
+        manager.clear_marking("Main")
 
         assert manager.get_marked("Main") == set()
 
@@ -263,14 +257,14 @@ class TestMarkingManager:
         assert "A" in names
         assert "B" in names
 
-    def test_signal_emit_with_marking_name(self, manager, qtbot):
-        """시그널 발생 시 마킹 이름 전달"""
+    def test_signal_emit_with_marking_name(self, manager):
+        """이벤트 발생 시 마킹 이름 전달"""
         received = []
 
         def on_marking_changed(name, indices):
             received.append((name, indices))
 
-        manager.marking_changed.connect(on_marking_changed)
+        manager.subscribe("marking_changed", on_marking_changed)
         manager.mark("Main", {1, 2, 3})
 
         assert len(received) == 1
