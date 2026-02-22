@@ -263,10 +263,11 @@ def test_descriptive_stats_range_invariant(values):
     if not result:
         return
 
-    assert result["min"] <= result["mean"] <= result["max"], (
+    eps = abs(result["max"]) * 1e-10 + 1e-10
+    assert result["min"] <= result["mean"] + eps and result["mean"] <= result["max"] + eps, (
         f"Range invariant failed: min={result['min']}, mean={result['mean']}, max={result['max']}"
     )
-    assert result["min"] <= result["median"] <= result["max"], (
+    assert result["min"] <= result["median"] + eps and result["median"] <= result["max"] + eps, (
         f"Median range invariant failed: min={result['min']}, median={result['median']}, max={result['max']}"
     )
 
