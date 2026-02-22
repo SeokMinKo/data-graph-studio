@@ -4,6 +4,8 @@ ComparisonEngine — 데이터셋 비교 분석 모듈
 DatasetManager를 참조하여 멀티 데이터셋 간 비교, 통계 검정,
 상관 분석, 기술통계 비교, 정규성 검정을 수행한다.
 비교 연산 시 datasets snapshot을 사용하여 원본 변경에 안전하다.
+
+Pure statistical helpers live in comparison_algorithms.py.
 """
 
 import logging
@@ -13,13 +15,14 @@ import polars as pl
 import numpy as np
 
 try:
-    from scipy import stats as scipy_stats
     from scipy.stats import pearsonr, spearmanr, ttest_ind, mannwhitneyu, ks_2samp
+    from scipy import stats as scipy_stats
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
 
 from .dataset_manager import DatasetManager
+from .comparison_algorithms import select_test_type, interpret_test_result, run_normality_test
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,6 @@ class ComparisonEngine:
         """
         if not dataset_ids:
             return {}
-
         # Snapshot 확보
         snapshots: Dict[str, pl.DataFrame] = {}
         all_keys: set = set()
@@ -241,10 +243,6 @@ class ComparisonEngine:
             result = result.join(df, on=key_column, how=how, suffix=f"_{i}")
         return result
 
-    # ------------------------------------------------------------------
-    # Statistical Testing
-    # ------------------------------------------------------------------
-
     def perform_statistical_test(
         self,
         dataset_a_id: str,
@@ -290,7 +288,7 @@ class ComparisonEngine:
             return {"error": "Not enough data points for statistical testing"}
 
         if test_type == "auto":
-            test_type = self._select_test_type(data_a, data_b)
+            test_type = select_test_type(data_a, data_b)
 
         result: Dict[str, Any] = {
             "test_name": test_type, "statistic": None,
@@ -318,7 +316,7 @@ class ComparisonEngine:
             result["p_value"] = float(p_val)
             result["is_significant"] = p_val < 0.05
             result["effect_size"] = float(effect_size)
-            result["interpretation"] = self._interpret_test_result(
+            result["interpretation"] = interpret_test_result(
                 result["test_name"], p_val, effect_size, ds_a.name, ds_b.name,
             )
 
@@ -327,79 +325,6 @@ class ComparisonEngine:
             logger.error("comparison_engine.statistical_test_failed", extra={"error": e})
 
         return result
-
-    def _select_test_type(self, data_a: np.ndarray, data_b: np.ndarray) -> str:
-        """정규성에 따라 적절한 검정 방법을 선택한다.
-
-        Args:
-            data_a: 첫 번째 데이터.
-            data_b: 두 번째 데이터.
-
-        Returns:
-            검정 유형 문자열.
-        """
-        if not HAS_SCIPY:
-            return "ttest"
-
-        if len(data_a) >= 30 and len(data_b) >= 30:
-            return "ttest"
-
-        try:
-            sample_a = data_a[:5000] if len(data_a) > 5000 else data_a
-            sample_b = data_b[:5000] if len(data_b) > 5000 else data_b
-            _, p_a = scipy_stats.shapiro(sample_a) if len(sample_a) >= 3 else (0, 1)
-            _, p_b = scipy_stats.shapiro(sample_b) if len(sample_b) >= 3 else (0, 1)
-            return "ttest" if p_a >= 0.05 and p_b >= 0.05 else "mannwhitney"
-        except Exception:
-            return "ttest"
-
-    def _interpret_test_result(
-        self,
-        test_name: str,
-        p_value: float,
-        effect_size: float,
-        name_a: str,
-        name_b: str,
-    ) -> str:
-        """검정 결과를 해석한다.
-
-        Args:
-            test_name: 검정 이름.
-            p_value: p-value.
-            effect_size: 효과 크기 (Cohen's d).
-            name_a: 데이터셋 A 이름.
-            name_b: 데이터셋 B 이름.
-
-        Returns:
-            해석 문자열.
-        """
-        if p_value < 0.001:
-            sig_text = "highly significant (p < 0.001)"
-        elif p_value < 0.01:
-            sig_text = "very significant (p < 0.01)"
-        elif p_value < 0.05:
-            sig_text = "significant (p < 0.05)"
-        else:
-            sig_text = "not significant (p ≥ 0.05)"
-
-        abs_effect = abs(effect_size)
-        if abs_effect < 0.2:
-            effect_text = "negligible"
-        elif abs_effect < 0.5:
-            effect_text = "small"
-        elif abs_effect < 0.8:
-            effect_text = "medium"
-        else:
-            effect_text = "large"
-
-        direction = f"{name_a} > {name_b}" if effect_size > 0 else (
-            f"{name_a} < {name_b}" if effect_size < 0 else f"{name_a} ≈ {name_b}")
-
-        return (
-            f"The difference between datasets is {sig_text}. "
-            f"Effect size is {effect_text} (d={effect_size:.3f}). "
-            f"Direction: {direction}"
-        )
 
     def calculate_correlation(
         self,
@@ -541,47 +466,9 @@ class ComparisonEngine:
         dataset_id: str,
         value_column: str,
     ) -> Optional[Dict[str, Any]]:
-        """정규성 검정을 수행한다.
-
-        Args:
-            dataset_id: 데이터셋 ID.
-            value_column: 검정 대상 컬럼.
-
-        Returns:
-            검정 결과 딕셔너리.
-        """
-        if not HAS_SCIPY:
-            return {"error": "scipy is not installed"}
-
+        """정규성 검정을 수행한다 (dataset → run_normality_test)."""
         df = self._get_df_snapshot(dataset_id)
         if df is None or value_column not in df.columns:
             return {"error": "Dataset or column not found"}
-
         data = df[value_column].drop_nulls().to_numpy()
-        if len(data) < 3:
-            return {"error": "Not enough data points"}
-
-        try:
-            if len(data) <= 5000:
-                stat, p_val = scipy_stats.shapiro(data[:5000])
-                test_name = "Shapiro-Wilk"
-            else:
-                stat, p_val = scipy_stats.normaltest(data)
-                test_name = "D'Agostino-Pearson"
-
-            is_normal = p_val >= 0.05
-            interpretation = (
-                f"Data appears to be normally distributed (p = {p_val:.4f})"
-                if is_normal else
-                f"Data is not normally distributed (p = {p_val:.4f})"
-            )
-
-            return {
-                "test_name": test_name,
-                "statistic": float(stat),
-                "p_value": float(p_val),
-                "is_normal": is_normal,
-                "interpretation": interpretation,
-            }
-        except Exception as e:
-            return {"error": str(e)}
+        return run_normality_test(data)

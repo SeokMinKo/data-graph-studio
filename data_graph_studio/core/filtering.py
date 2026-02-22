@@ -14,81 +14,7 @@ logger = logging.getLogger(__name__)
 
 from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.metrics import get_metrics
-
-
-# ---------------------------------------------------------------------------
-# Dispatch table helpers for Filter.to_expression()
-# ---------------------------------------------------------------------------
-
-def _filter_between(col, f):
-    if isinstance(f.value, (list, tuple)) and len(f.value) == 2:
-        return (col >= f.value[0]) & (col <= f.value[1])
-    return None
-
-
-def _filter_not_between(col, f):
-    if isinstance(f.value, (list, tuple)) and len(f.value) == 2:
-        return (col < f.value[0]) | (col > f.value[1])
-    return None
-
-
-def _filter_in_list(col, f):
-    if isinstance(f.value, (list, tuple, set)):
-        return col.is_in(list(f.value))
-    return None
-
-
-def _filter_not_in_list(col, f):
-    if isinstance(f.value, (list, tuple, set)):
-        return ~col.is_in(list(f.value))
-    return None
-
-
-def _filter_contains(col, f):
-    if f.case_sensitive:
-        return col.cast(pl.Utf8).str.contains(str(f.value))
-    return col.cast(pl.Utf8).str.to_lowercase().str.contains(str(f.value).lower())
-
-
-def _filter_not_contains(col, f):
-    if f.case_sensitive:
-        return ~col.cast(pl.Utf8).str.contains(str(f.value))
-    return ~col.cast(pl.Utf8).str.to_lowercase().str.contains(str(f.value).lower())
-
-
-def _filter_starts_with(col, f):
-    if f.case_sensitive:
-        return col.cast(pl.Utf8).str.starts_with(str(f.value))
-    return col.cast(pl.Utf8).str.to_lowercase().str.starts_with(str(f.value).lower())
-
-
-def _filter_ends_with(col, f):
-    if f.case_sensitive:
-        return col.cast(pl.Utf8).str.ends_with(str(f.value))
-    return col.cast(pl.Utf8).str.to_lowercase().str.ends_with(str(f.value).lower())
-
-
-_FILTER_DISPATCH = {
-    "eq":          lambda col, f: col == f.value,
-    "ne":          lambda col, f: col != f.value,
-    "gt":          lambda col, f: col > f.value,
-    "ge":          lambda col, f: col >= f.value,
-    "lt":          lambda col, f: col < f.value,
-    "le":          lambda col, f: col <= f.value,
-    "between":     _filter_between,
-    "not_between": _filter_not_between,
-    "in":          _filter_in_list,
-    "not_in":      _filter_not_in_list,
-    "contains":    _filter_contains,
-    "not_contains": _filter_not_contains,
-    "starts_with": _filter_starts_with,
-    "ends_with":   _filter_ends_with,
-    "regex":       lambda col, f: col.cast(pl.Utf8).str.contains(str(f.value)),
-    "is_null":     lambda col, f: col.is_null(),
-    "is_not_null": lambda col, f: col.is_not_null(),
-    "is_true":     lambda col, f: col.eq(True),
-    "is_false":    lambda col, f: col.eq(False),
-}
+from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
 
 
 class FilterType(Enum):
@@ -497,26 +423,12 @@ class FilteringManager(Observable):
         scheme_name: str,
         data: pl.DataFrame
     ) -> Set[int]:
-        """
-        필터된 행의 인덱스 집합 반환
-
-        Args:
-            scheme_name: 스킴 이름
-            data: 원본 데이터프레임
-
-        Returns:
-            필터링된 행 인덱스 집합
-        """
+        """필터된 행의 인덱스 집합 반환"""
         if scheme_name not in self._schemes:
             return set(range(len(data)))
 
-        # 인덱스 컬럼 추가
         data_with_idx = data.with_row_index("__idx__")
-
-        # 필터 적용
         filtered = self.apply_filters(scheme_name, data_with_idx)
-
-        # 인덱스 추출
         indices = set(filtered["__idx__"].to_list())
 
         return indices
