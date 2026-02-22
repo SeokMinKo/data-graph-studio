@@ -21,7 +21,6 @@ Architecture notes (PRD §9.2, §10.3, §10.5):
 
 from __future__ import annotations
 
-import io
 import os
 import logging
 from dataclasses import dataclass
@@ -29,10 +28,9 @@ from enum import Enum
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
-from PySide6.QtGui import QImage, QPainter, QColor
-from PySide6.QtSvg import QSvgGenerator
+from PySide6.QtGui import QImage
 
-from data_graph_studio.core.io_abstract import atomic_write
+from data_graph_studio.core.io_abstract import atomic_write, IExportRenderer
 
 if TYPE_CHECKING:
     import polars as pl
@@ -108,6 +106,7 @@ class ExportWorker(QThread):
         path: str = "",
         fmt: ExportFormat = ExportFormat.PNG,
         options: Optional[ExportOptions] = None,
+        renderer: Optional[IExportRenderer] = None,
         parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
@@ -117,6 +116,7 @@ class ExportWorker(QThread):
         self.path = path
         self.fmt = fmt
         self.options = options or ExportOptions()
+        self._renderer = renderer
         self._cancelled = False
 
     # -- cancel support --
@@ -170,51 +170,20 @@ class ExportWorker(QThread):
         opts = self.options
         img = self.image
 
-        # Resize if requested
-        if opts.width and opts.height:
-            img = img.scaled(
-                opts.width, opts.height,
-                Qt.IgnoreAspectRatio,
-                Qt.SmoothTransformation,
-            )
-
-        # Apply background if needed
-        if opts.background == "transparent":
-            # Image already has alpha if ARGB32; just save
-            pass
-        elif opts.background == "white":
-            img = self._apply_background(img, QColor(255, 255, 255))
-        elif opts.background == "dark":
-            img = self._apply_background(img, QColor(43, 52, 64))
-        elif opts.background.startswith("#"):
-            img = self._apply_background(img, QColor(opts.background))
-
         if self._cancelled:
             self._cleanup()
             return
 
         self.progress.emit(50)  # Writing file...
 
-        # Encode to bytes
-        _buf = io.BytesIO()  # noqa: F841
-        _ba = img.save(self.path + ".tmp", "PNG")  # noqa: F841
-        # Instead, use QImage.save to a QByteArray → then atomic write
-        from PySide6.QtCore import QByteArray, QBuffer, QIODevice
-
-        qba = QByteArray()
-        qbuf = QBuffer(qba)
-        qbuf.open(QIODevice.WriteOnly)
-        img.save(qbuf, "PNG")
-        qbuf.close()
-        data = bytes(qba.data())
-
-        # Clean up the .tmp we accidentally wrote above
-        tmp_path = self.path + ".tmp"
-        if os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        renderer = self._get_renderer()
+        data = renderer.render_to_png_with_background(
+            img,
+            width=opts.width or 0,
+            height=opts.height or 0,
+            background=opts.background,
+            dpi=opts.dpi,
+        )
 
         if self._cancelled:
             self._cleanup()
@@ -231,34 +200,14 @@ class ExportWorker(QThread):
 
         self.progress.emit(30)
 
-        # Use QSvgGenerator
-        from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, QRect
-
-        qba = QByteArray()
-        qbuf = QBuffer(qba)
-        qbuf.open(QIODevice.WriteOnly)
-
-        gen = QSvgGenerator()
-        gen.setOutputDevice(qbuf)
-        gen.setSize(QSize(width, height))
-        gen.setViewBox(QRect(0, 0, width, height))
-        gen.setTitle("Data Graph Studio Export")
-        gen.setDescription("Chart exported by Data Graph Studio")
-
-        painter = QPainter()
-        painter.begin(gen)
-        # Draw the image scaled into the SVG viewport
-        target = painter.viewport()
-        painter.drawImage(target, img)
-        painter.end()
-        qbuf.close()
+        renderer = self._get_renderer()
+        data = renderer.render_to_svg(img, width, height)
 
         if self._cancelled:
             self._cleanup()
             return
 
         self.progress.emit(70)
-        data = bytes(qba.data())
         atomic_write(self.path, data)
 
     def _export_pdf(self) -> None:
@@ -269,7 +218,7 @@ class ExportWorker(QThread):
         self.progress.emit(20)
 
         from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QRectF
-        from PySide6.QtGui import QPageSize, QPdfWriter, QFont
+        from PySide6.QtGui import QPageSize, QPdfWriter, QPainter, QFont
 
         qba = QByteArray()
         qbuf = QBuffer(qba)
@@ -428,15 +377,12 @@ class ExportWorker(QThread):
 
     # -- helpers ---------------------------------------------------------------
 
-    @staticmethod
-    def _apply_background(img: QImage, color: QColor) -> QImage:
-        """Composite the image over a solid background colour."""
-        result = QImage(img.size(), QImage.Format_ARGB32)
-        result.fill(color)
-        painter = QPainter(result)
-        painter.drawImage(0, 0, img)
-        painter.end()
-        return result
+    def _get_renderer(self) -> "IExportRenderer":
+        """Return the injected renderer or a default QtExportRenderer."""
+        if self._renderer is not None:
+            return self._renderer
+        from data_graph_studio.ui.renderers.qt_export_renderer import QtExportRenderer
+        return QtExportRenderer()
 
     def _cleanup(self) -> None:
         """Remove partial / temp files after cancel — ERR-4.2."""
@@ -466,10 +412,15 @@ class ExportController(QObject):
     export_completed = Signal(str)
     export_failed = Signal(str)
 
-    def __init__(self, parent: Optional[QObject] = None):
+    def __init__(
+        self,
+        parent: Optional[QObject] = None,
+        renderer: Optional[IExportRenderer] = None,
+    ):
         super().__init__(parent)
         self._worker: Optional[ExportWorker] = None
         self._cancelled = False
+        self._renderer = renderer
 
     # -- cancel / reset --------------------------------------------------------
 
@@ -503,6 +454,7 @@ class ExportController(QObject):
             path=path,
             fmt=fmt,
             options=options,
+            renderer=self._renderer,
         )
         worker._cancelled = self._cancelled
 
@@ -562,6 +514,7 @@ class ExportController(QObject):
             path=path,
             fmt=fmt,
             options=options,
+            renderer=self._renderer,
         )
         self._connect_worker(self._worker)
         self._worker.start()

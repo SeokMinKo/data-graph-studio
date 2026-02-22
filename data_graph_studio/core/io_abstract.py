@@ -127,6 +127,40 @@ class RealFileSystem(IFileSystem):
         return os.path.exists(path)
 
 
+class IExportRenderer(ABC):
+    """Abstract interface for chart-to-image rendering.
+
+    Implementations provide Qt, headless, or test rendering backends.
+    """
+
+    @abstractmethod
+    def render_to_png(self, widget, width: int, height: int, dpi: int = 96) -> bytes:
+        """Render a Qt widget/scene to PNG bytes.
+
+        Args:
+            widget: The Qt widget or scene to render.
+            width: Output width in pixels.
+            height: Output height in pixels.
+            dpi: Dots per inch for the output.
+
+        Returns:
+            PNG image as bytes.
+        """
+
+    @abstractmethod
+    def render_to_svg(self, widget, width: int, height: int) -> bytes:
+        """Render a Qt widget/scene to SVG bytes.
+
+        Args:
+            widget: The Qt widget or scene to render.
+            width: Output width in pixels.
+            height: Output height in pixels.
+
+        Returns:
+            SVG XML as bytes.
+        """
+
+
 def atomic_write(path: str, data: bytes) -> None:
     """
     원자적 파일 저장 — PRD Section 10.3
