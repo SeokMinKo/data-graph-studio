@@ -68,8 +68,28 @@ class IPCController:
         server.register_handler('get_profile_comparison_state', self._ipc_get_profile_comparison_state)
         server.register_handler('set_comparison_sync', self._ipc_set_comparison_sync)
 
+        # Panel capture handler
+        self._setup_capture_service()
+        server.register_handler('capture', self._ipc_capture)
+
         # 서버 시작
         server.start()
+
+    def _setup_capture_service(self) -> None:
+        """Initialise CaptureService and register known panel widgets."""
+        from ..capture_service import CaptureService
+
+        w = self._w
+        self._capture_service = CaptureService()
+
+        for panel_name, attr in [
+            ("graph_panel", "graph_panel"),
+            ("table_panel", "table_panel"),
+            ("summary_panel", "summary_panel"),
+        ]:
+            widget = getattr(w, attr, None)
+            if widget is not None:
+                self._capture_service.register_panel(panel_name, widget)
 
     def _ipc_get_state(self) -> dict:
         """현재 앱 상태 반환"""
@@ -492,3 +512,24 @@ class IPCController:
             w.state._comparison_settings.sync_selection = sync_selection
         w.state.comparison_settings_changed.emit()
         return {"ok": True}
+
+    # ==================== IPC Capture Handler ====================
+
+    def _ipc_capture(
+        self,
+        target: str = "all",
+        output_dir: str = "/tmp/dgs_captures",
+        format: str = "png",
+    ) -> dict:
+        """Capture one or more panels and return serialisable results."""
+        import dataclasses
+        from ...core.capture_protocol import CaptureRequest
+
+        req = CaptureRequest(target=target, output_dir=Path(output_dir), format=format)
+        results = self._capture_service.capture(req)
+        serialised = []
+        for r in results:
+            d = dataclasses.asdict(r)
+            d["file"] = str(d["file"])
+            serialised.append(d)
+        return {"status": "ok", "captures": serialised}

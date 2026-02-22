@@ -7,6 +7,7 @@ import sys
 import os
 import traceback
 import logging
+import argparse
 from datetime import datetime
 from data_graph_studio.core.logging_utils import StructuredFormatter
 
@@ -14,6 +15,15 @@ from data_graph_studio.core.logging_utils import StructuredFormatter
 # Qt 초기화 전에 설정해야 함
 if sys.platform == 'win32':
     os.environ.setdefault('QT_QPA_PLATFORM', 'windows:fontengine=freetype')
+
+# Capture-mode: headless screenshot for AI debugging
+_parser = argparse.ArgumentParser(add_help=False)
+_parser.add_argument("--capture-mode", action="store_true")
+_capture_args, _ = _parser.parse_known_args()
+
+if _capture_args.capture_mode:
+    if not os.environ.get("DISPLAY") and sys.platform != "darwin":
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 
 def setup_logging():
