@@ -5,7 +5,10 @@ Table Panel - 테이블 뷰 + X Zone + Group Zone + Value Zone
 from typing import Optional, List, Dict, Any, Set, Tuple
 from collections import OrderedDict
 import json
+import logging
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -418,7 +421,7 @@ class PolarsTableModel(QAbstractTableModel):
 
         except Exception as e:
             # 정렬 실패 시 원본 유지
-            print(f"Sort error: {e}")
+            logger.error("table_panel.sort_error", extra={"error": str(e)})
             self._df = self._original_df
             self._sort_column = None
             self._sort_order = None
@@ -458,7 +461,7 @@ class PolarsTableModel(QAbstractTableModel):
             self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
             self._row_count = self._loaded_rows
         except Exception as e:
-            print(f"Multi-sort error: {e}")
+            logger.error("table_panel.multi_sort_error", extra={"error": str(e)})
             self._df = self._original_df
             self._sort_columns = []
         self.endResetModel()

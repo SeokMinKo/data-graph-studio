@@ -9,6 +9,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -1154,7 +1157,7 @@ class DrawingManager:
             elif drawing_type == 'text':
                 return TextDrawing.from_dict(data)
         except Exception as e:
-            print(f"Error deserializing drawing: {e}")
+            logger.error("drawing.deserialize_error", extra={"error": str(e)})
             return None
 
         return None

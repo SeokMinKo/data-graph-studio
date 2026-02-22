@@ -2,6 +2,7 @@
 Graph Widgets - Helper classes for graph panel
 """
 
+import logging
 import numpy as np
 from PySide6.QtWidgets import (
     QPushButton, QDialog, QVBoxLayout, QDialogButtonBox, QColorDialog
@@ -10,6 +11,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent
 
 import pyqtgraph as pg
+
+logger = logging.getLogger(__name__)
 
 
 class ColorButton(QPushButton):
@@ -124,7 +127,7 @@ class ExpandedChartDialog(QDialog):
                     text_item.setPos(bin_edges[0], max(hist) * 0.9)
                     self.plot_widget.addItem(text_item)
             except Exception as e:
-                print(f"Error plotting histogram: {e}")
+                logger.error("graph_widgets.histogram_error", extra={"error": str(e)})
 
     def plot_pie_chart(self, labels: list, values: list, title: str, colors: list = None):
         """Plot pie chart"""
@@ -179,7 +182,7 @@ class ExpandedChartDialog(QDialog):
                 y0 -= (total * 0.01)
 
         except Exception as e:
-            print(f"Error plotting pie chart: {e}")
+            logger.error("graph_widgets.pie_chart_error", extra={"error": str(e)})
 
     def plot_percentile(self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)):
         """Plot percentile graph"""
@@ -229,7 +232,7 @@ class ExpandedChartDialog(QDialog):
             self.plot_widget.addItem(text_item)
 
         except Exception as e:
-            print(f"Error plotting percentile: {e}")
+            logger.error("graph_widgets.percentile_error", extra={"error": str(e)})
 
 
 class ClickablePlotWidget(pg.PlotWidget):

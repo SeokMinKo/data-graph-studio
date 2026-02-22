@@ -1073,7 +1073,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
             self.stat_panel.update_histograms(selected_x, selected_y)
 
         except Exception as e:
-            print(f"Error updating stats for selection: {e}")
+            _lg.error("graph_panel.update_stats_error", extra={"error": str(e)})
 
     def _build_group_masks(self, df_override=None) -> Dict[str, np.ndarray]:
         if not self.state.group_columns or not self.engine.is_loaded:

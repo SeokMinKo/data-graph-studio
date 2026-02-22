@@ -4,7 +4,10 @@ Grouped Table Model - Hierarchical data display with expand/collapse
 
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
+import logging
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import Qt, QAbstractItemModel, QModelIndex, Signal
 from PySide6.QtGui import QFont, QColor, QBrush
@@ -625,7 +628,7 @@ class GroupedTableModel(QAbstractItemModel):
 
                 node.rows = row_indices
         except Exception as e:
-            print(f"Error loading node rows: {e}")
+            logger.error("grouped_table_model.load_node_rows_error", extra={"error": str(e)})
             node.rows = []
     
     def expand_all(self):

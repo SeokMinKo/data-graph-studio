@@ -4,8 +4,11 @@ MainGraph - 메인 그래프 위젯 with hover tooltip support
 
 from typing import Optional, List, Dict, Any
 
+import logging
 import numpy as np
 import csv
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import QDialog, QMenu, QFileDialog, QInputDialog
 from PySide6.QtCore import Qt, Signal
@@ -261,7 +264,7 @@ class MainGraph(pg.PlotWidget):
                 self.useOpenGL(True)
                 self._opengl_enabled = True
             except Exception as e:
-                print(f"Failed to enable OpenGL: {e}")
+                logger.error("main_graph.opengl_enable_error", extra={"error": str(e)})
         elif not enable and self._opengl_enabled:
             try:
                 self.useOpenGL(False)
