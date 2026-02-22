@@ -13,17 +13,7 @@ from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
-try:
-    from PySide6.QtConcurrent import run as qt_run
-    from PySide6.QtCore import QFuture
-except Exception:  # pragma: no cover - fallback for non-Qt environments
-    qt_run = None
-    QFuture = None
-
-try:  # pragma: no cover - fallback when Qt unavailable
-    from concurrent.futures import ThreadPoolExecutor
-except Exception:  # pragma: no cover
-    ThreadPoolExecutor = None
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from .profile import GraphSetting
 
@@ -69,38 +59,25 @@ class ProfileStore:
         self.add(new_setting)
         return new_setting
 
-    def export_async(self, setting: GraphSetting, path: str) -> None:
+    def export_async(self, setting: GraphSetting, path: str) -> Future:
         logger.debug("profile_store.export_async", extra={"setting_id": setting.id, "path": path})
 
         def _export():
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(setting.to_dict(), f, ensure_ascii=False, indent=2)
 
-        if qt_run is not None:
-            qt_run(_export)
-            return
-
-        if ThreadPoolExecutor is None:
-            _export()
-            return
-
         executor = ThreadPoolExecutor(max_workers=1)
-        executor.submit(_export)
+        future = executor.submit(_export)
         executor.shutdown(wait=False)
+        return future
 
-    def import_async(self, path: str) -> "QFuture":
+    def import_async(self, path: str) -> Future:
         logger.debug("profile_store.import_async", extra={"path": path})
 
         def _import() -> GraphSetting:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return GraphSetting.from_dict(data)
-
-        if qt_run is not None:
-            return qt_run(_import)
-
-        if ThreadPoolExecutor is None:
-            return _import()
 
         executor = ThreadPoolExecutor(max_workers=1)
         future = executor.submit(_import)
