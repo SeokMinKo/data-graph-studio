@@ -80,6 +80,15 @@ class GraphPanel(QWidget):
         self._refresh_timer.setInterval(30)
         self._refresh_timer.timeout.connect(self.refresh)
 
+        # Debounced style-only refresh timer (no data recomputation)
+        self._style_refresh_timer = QTimer(self)
+        self._style_refresh_timer.setSingleShot(True)
+        self._style_refresh_timer.setInterval(30)
+        self._style_refresh_timer.timeout.connect(self._do_style_refresh)
+
+        # Cache of the last options dict — used to detect style-only changes
+        self._last_options_snapshot: Optional[Dict] = None
+
         self._setup_ui()
         self._connect_signals()
 
@@ -182,7 +191,7 @@ class GraphPanel(QWidget):
         self.state.value_zone_changed.connect(self._on_value_zone_changed)
         self.state.hover_zone_changed.connect(self._schedule_refresh)
         self.state.selection_changed.connect(self._on_selection_changed)
-        self.options_panel.option_changed.connect(self._schedule_refresh)
+        self.options_panel.option_changed.connect(self._on_options_panel_changed)
 
         # Filter signal from DataTab (Item 15)
         self.options_panel.data_tab.filter_changed.connect(self._on_filter_changed)
@@ -210,14 +219,114 @@ class GraphPanel(QWidget):
         # Empty state signals (will be connected by MainWindow to handle file open)
         # self._empty_state.open_file_requested is exposed for external connection
 
-    def _schedule_refresh(self, *args):
-        """Debounced refresh - coalesces rapid changes into single refresh.
-        
-        TODO (P1-1): Tag change type (data_changed vs style_changed) and skip
-        data recomputation when only style/color/line-width options change.
-        Currently every change triggers full clear → rebuild in _do_refresh().
+    # Keys whose change never requires data recomputation.
+    _STYLE_ONLY_KEYS = frozenset({
+        'line_width', 'line_style', 'marker_size', 'marker_shape',
+        'marker_border', 'fill_opacity', 'bg_color',
+        'show_labels', 'show_points', 'smooth',
+    })
+
+    def _on_options_panel_changed(self):
+        """Route option_changed to style-only or full refresh based on what changed.
+
+        Compares the current options snapshot against the previous one.  If
+        every differing key is in _STYLE_ONLY_KEYS the fast style path is used;
+        otherwise a full data refresh is triggered.
         """
+        try:
+            current = self.options_panel.get_chart_options()
+            prev = self._last_options_snapshot
+
+            if prev is not None:
+                changed_keys = {k for k in set(current) | set(prev) if current.get(k) != prev.get(k)}
+                if changed_keys and changed_keys.issubset(self._STYLE_ONLY_KEYS):
+                    self._last_options_snapshot = current
+                    self._schedule_style_refresh()
+                    return
+        except Exception:
+            pass
+
+        try:
+            self._last_options_snapshot = self.options_panel.get_chart_options()
+        except Exception:
+            pass
+        self._schedule_refresh()
+
+    def _schedule_refresh(self, *args):
+        """Debounced refresh - coalesces rapid changes into single refresh."""
         self._refresh_timer.start()
+
+    def _schedule_style_refresh(self, *args):
+        """Debounced style-only refresh — updates visual properties of existing
+        plot items (color, line width, marker size) without re-filtering or
+        re-sampling data.  Falls back to a full refresh when no plot items
+        exist yet (first render) or when the chart type cannot be updated
+        in-place (statistical / grid / overlay modes).
+        """
+        self._style_refresh_timer.start()
+
+    def _do_style_refresh(self):
+        """Apply visual-property changes to existing plot items in-place.
+
+        Reads the current options from the options panel and pushes pen / brush
+        updates directly onto live pyqtgraph items, skipping all data
+        recomputation.  Falls back to a full refresh when the fast path cannot
+        be applied.
+        """
+        # Fall back to full refresh when no items have been rendered yet, or
+        # when we're in a mode that re-creates items on every change anyway.
+        plot_items = getattr(self.main_graph, '_plot_items', [])
+        scatter_items = getattr(self.main_graph, '_scatter_items', [])
+        if not plot_items and not scatter_items:
+            self.refresh()
+            return
+
+        # Statistical and grid modes don't benefit from this fast path.
+        options = self.options_panel.get_chart_options()
+        chart_type = options.get('chart_type', ChartType.LINE)
+        if chart_type in (ChartType.BOX, ChartType.VIOLIN, ChartType.HEATMAP):
+            self.refresh()
+            return
+        grid_enabled = options.get('enabled', False)
+        if grid_enabled:
+            self.refresh()
+            return
+
+        line_width = options.get('line_width', 2)
+        marker_size = options.get('marker_size', 6)
+        bg_color = options.get('bg_color', QColor('#323D4A'))
+        fill_opacity = options.get('fill_opacity', 0.3)
+
+        # Update background
+        self.main_graph.setBackground(bg_color.name())
+
+        # Update line/curve items — preserve existing pen color, update width only
+        for item in plot_items:
+            try:
+                existing_pen = item.opts.get('pen') if hasattr(item, 'opts') else None
+                if existing_pen is None and hasattr(item, 'pen'):
+                    existing_pen = item.pen()
+                if existing_pen is not None:
+                    new_pen = pg.mkPen(existing_pen)
+                    new_pen.setWidth(line_width)
+                    if hasattr(item, 'setPen'):
+                        item.setPen(new_pen)
+                # Update fill for area charts
+                if chart_type == ChartType.AREA and hasattr(item, 'opts'):
+                    existing_brush = item.opts.get('brush')
+                    if existing_brush is not None:
+                        c = QColor(existing_brush.color())
+                        c.setAlphaF(fill_opacity)
+                        item.setBrush(pg.mkBrush(c))
+            except Exception:
+                pass
+
+        # Update scatter items — preserve color, update size
+        for item in scatter_items:
+            try:
+                item.setSize(marker_size)
+            except Exception:
+                pass
 
     def _on_grid_view_changed(self):
         """Handle Grid View settings change"""
@@ -464,7 +573,12 @@ class GraphPanel(QWidget):
                     except Exception:
                         pass
             if len(working_df) == 0:
+                # Fix 3: show a clear message when active filters exclude all rows
                 self.main_graph.clear_plot()
+                self.main_graph.setTitle(
+                    "No data matches current filters",
+                    color='#94A3B8', size='12pt'
+                )
                 return
 
         # X column (from state, set by X Zone)
@@ -1027,6 +1141,17 @@ class GraphPanel(QWidget):
             return
 
         value_cols = self.state.value_columns
+
+        # Fix 2: warn when more than 2 Y columns are added — only left and
+        # right axes are supported; additional columns fall back to primary axis.
+        if len(value_cols) > 2:
+            self.main_graph.setTitle(
+                "Only left and right Y-axes supported. Additional columns will be ignored.",
+                color='#F59E0B', size='10pt'
+            )
+        else:
+            self.main_graph.setTitle("")
+
         options.get('chart_type', ChartType.LINE)
         bg_color = options.get('bg_color', QColor('#323D4A'))
         self.main_graph.setBackground(bg_color.name())
@@ -1240,6 +1365,11 @@ class GraphPanel(QWidget):
                     except Exception:
                         pass
             if len(df) == 0:
+                # Fix 3: show message when filters exclude all rows in statistical charts
+                self.main_graph.setTitle(
+                    "No data matches current filters",
+                    color='#94A3B8', size='12pt'
+                )
                 return
 
         # Determine category (X/Group) and value (Y) columns
