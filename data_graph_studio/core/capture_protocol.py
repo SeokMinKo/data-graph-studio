@@ -4,7 +4,7 @@ Capture Protocol — value objects and ABC for panel screenshot capture.
 No Qt dependencies. Used by both core (IPC handler) and ui (CaptureService).
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
