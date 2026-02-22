@@ -7,9 +7,14 @@ Advanced Expressions - Spotfire 스타일 수식 엔진
 from typing import List, Dict, Any, Optional, Union, Set
 from dataclasses import dataclass, field
 from enum import Enum
+import ast
 import re
 import polars as pl
 import numpy as np
+
+
+class SecurityError(Exception):
+    """Raised when a DataFunction body contains disallowed constructs."""
 
 
 class ExpressionType(Enum):
@@ -701,6 +706,34 @@ class DataFunction:
     description: str = ""
     return_type: str = "any"
 
+    _BLOCKED_NAMES: frozenset = frozenset(
+        {'exec', 'eval', 'compile', '__import__', 'open', 'getattr',
+         'setattr', 'delattr', 'globals', 'locals', 'vars', 'dir',
+         'breakpoint', 'input', 'print'}
+    )
+
+    def _validate_body_ast(self, body: str) -> None:
+        """
+        AST-scan the function body before exec().
+
+        Raises SecurityError if dunder attribute access or blocked built-in
+        names are detected.
+        """
+        try:
+            tree = ast.parse(body)
+        except SyntaxError as exc:
+            raise SecurityError(f"Syntax error in DataFunction body: {exc}") from exc
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr.startswith('__'):
+                raise SecurityError(
+                    f"Dunder attribute access not allowed: {node.attr!r}"
+                )
+            if isinstance(node, ast.Name) and node.id in self._BLOCKED_NAMES:
+                raise SecurityError(
+                    f"Blocked identifier in DataFunction body: {node.id!r}"
+                )
+
     def execute(
         self,
         data: pl.DataFrame,
@@ -716,6 +749,9 @@ class DataFunction:
         Returns:
             함수 실행 결과
         """
+        # AST validation before exec — blocks dunder access and dangerous names
+        self._validate_body_ast(self.body)
+
         # 안전한 실행 환경
         local_vars = {
             'data': data,
@@ -727,6 +763,8 @@ class DataFunction:
         try:
             exec(self.body, {"__builtins__": {}}, local_vars)
             return local_vars.get('result')
+        except SecurityError:
+            raise
         except Exception:
             return None
 

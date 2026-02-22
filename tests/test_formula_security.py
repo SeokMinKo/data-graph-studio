@@ -36,6 +36,7 @@ from data_graph_studio.core.expressions import (
     ExpressionParser,
     DataFunction,
     DataFunctionRegistry,
+    SecurityError,
 )
 
 
@@ -470,35 +471,20 @@ class TestExpressionParserSecurity:
         except Exception:
             pass  # NameError for 'open' or ExpressionError — both acceptable
 
-    @pytest.mark.xfail(
-        reason=(
-            "ExpressionParser uses eval() with __builtins__={} for column "
-            "expressions. DataFunction.execute() uses exec() with __builtins__={} "
-            "and exposes 'np' and 'pl' in scope. A sufficiently crafted DataFunction "
-            "body could escape the sandbox via numpy/polars internals. "
-            "This is a documented design gap — DataFunction is an internal construct "
-            "not directly exposed to user formula input, but warrants review."
-        ),
-        strict=False,
-    )
     def test_data_function_exec_sandbox_gap(self):
         """
-        DataFunction.execute() calls exec(body, {"__builtins__": {}}, local_vars)
-        where local_vars contains 'np' and 'pl'. This is a known security gap:
-        numpy and polars objects can be used to reach Python internals.
-        Marked xfail to document the gap without hiding it.
+        DataFunction.execute() now performs an AST scan before exec().
+        Dunder attribute access (e.g. np.__class__.__name__) must be blocked
+        by raising SecurityError — the former sandbox gap is now closed.
         """
-        # Attempt to use numpy to reach __class__.__module__ (non-destructive probe)
         func = DataFunction(
             name="test_escape",
             parameters=[],
             body="result = np.__class__.__name__",
         )
         df = pl.DataFrame({"x": [1.0]})
-        result = func.execute(df)
-        # If we get here, the sandbox did not block attribute access on np
-        # This is the xfail condition — it should raise but doesn't
-        assert result == "module"
+        with pytest.raises(SecurityError):
+            func.execute(df)
 
     def test_data_function_no_builtins_import(self):
         """
@@ -520,15 +506,21 @@ class TestExpressionParserSecurity:
         )
 
     def test_data_function_open_blocked(self):
-        """open() should be unavailable inside DataFunction body."""
+        """
+        open() must be blocked inside DataFunction body.
+
+        Previously the empty __builtins__ dict caused a NameError which was
+        swallowed and resulted in None. With the AST scan in place, the body is
+        rejected before exec() runs, raising SecurityError explicitly.
+        """
         func = DataFunction(
             name="test_open",
             parameters=[],
             body="result = open('/etc/passwd').read()",
         )
         df = pl.DataFrame({"x": [1.0]})
-        result = func.execute(df)
-        assert result is None
+        with pytest.raises(SecurityError):
+            func.execute(df)
 
 
 # ===========================================================================
