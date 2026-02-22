@@ -8,8 +8,11 @@ profile comparison mode (§8.1).
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 from .dashboard_layout import (
     DashboardCell,
@@ -78,12 +81,14 @@ class DashboardController:
         §8.1: mutually exclusive with profile comparison.
         """
         if not self._state.dataset_states:
+            logger.warning("dashboard_controller.activate.no_datasets")
             return False
         if self._layout is None:
             self._layout = default_layout()
         # Mutual exclusion with profile comparison (§8.1)
         if self._state.is_profile_comparison_active:
             self._state.clear_profile_comparison()
+        logger.debug("dashboard_controller.activate")
         self._active = True
         return True
 
@@ -244,12 +249,15 @@ class DashboardController:
     def save_layout(self) -> Optional[Dict]:
         """FR-1.4: serialise current layout to a dict."""
         if self._layout is None:
+            logger.warning("dashboard_controller.save_layout.no_layout")
             return None
+        logger.debug("dashboard_controller.save_layout", extra={"name": self._layout.name})
         return self._layout.to_dict()
 
     def load_layout(self, data: Dict) -> DashboardLayout:
         """FR-1.4 / ERR-1.3: load layout from dict with validation fallback."""
         self._layout = validate_layout_json(data)
+        logger.debug("dashboard_controller.load_layout", extra={"name": self._layout.name})
         return self._layout
 
     # -- undo helpers -------------------------------------------------------

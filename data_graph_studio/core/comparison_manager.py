@@ -9,11 +9,14 @@ DatasetState, DEFAULT_DATASET_COLORS)도 함께 정의하여 state.py와의 순�
 방지한다. state.py는 이 모듈에서 해당 타입들을 re-import한다.
 """
 
+import logging
 import uuid
 from typing import Optional, List, Dict, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 from data_graph_studio.core.observable import Observable
 
@@ -245,6 +248,7 @@ class ComparisonManager(Observable):
         if metadata.compare_enabled:
             self._comparison_settings.comparison_datasets.append(dataset_id)
 
+        logger.debug("comparison_manager.add_dataset", extra={"dataset_id": dataset_id, "name": name})
         self.emit("dataset_added", dataset_id)
         return state
 
@@ -267,6 +271,7 @@ class ComparisonManager(Observable):
             else:
                 self._active_dataset_id = None
 
+        logger.debug("comparison_manager.remove_dataset", extra={"dataset_id": dataset_id})
         self.emit("dataset_removed", dataset_id)
         return True
 

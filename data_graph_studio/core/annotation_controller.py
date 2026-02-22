@@ -13,7 +13,10 @@ PRD Section 9.2, Feature 5 (3.5.x)
 from __future__ import annotations
 
 import copy
+import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+logger = logging.getLogger(__name__)
 
 from .annotation import Annotation, MAX_ANNOTATION_TEXT_LENGTH
 
@@ -78,6 +81,7 @@ class AnnotationController:
         self._annotations[annotation.id] = annotation
         after = self._snapshot_for_undo()
 
+        logger.debug("annotation_controller.add", extra={"annotation_id": annotation.id})
         # Undo 지원
         self._push_undo(
             description=f"Add annotation '{annotation.text[:30]}'",
@@ -125,6 +129,7 @@ class AnnotationController:
 
         after = self._snapshot_for_undo()
 
+        logger.debug("annotation_controller.edit", extra={"annotation_id": annotation_id})
         self._push_undo(
             description=f"Edit annotation '{ann.text[:30]}'",
             before_state=before,
@@ -144,9 +149,11 @@ class AnnotationController:
         before = self._snapshot_for_undo()
         ann = self._annotations.pop(annotation_id, None)
         if ann is None:
+            logger.warning("annotation_controller.delete.not_found", extra={"annotation_id": annotation_id})
             return False
         after = self._snapshot_for_undo()
 
+        logger.debug("annotation_controller.delete", extra={"annotation_id": annotation_id})
         self._push_undo(
             description=f"Delete annotation '{ann.text[:30]}'",
             before_state=before,

@@ -4,10 +4,13 @@ Marking System - Spotfire 스타일 마킹 시스템
 마킹(Marking)은 여러 시각화에서 동일한 데이터 선택을 공유하는 메커니즘입니다.
 """
 
+import logging
 from typing import Dict, Set, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 from data_graph_studio.core.observable import Observable
+
+logger = logging.getLogger(__name__)
 
 
 class MarkMode(Enum):
@@ -188,6 +191,7 @@ class MarkingManager(Observable):
         marking = Marking(name=name, color=color)
         self._markings[name] = marking
 
+        logger.debug("marking_manager.create", extra={"name": name})
         self.emit("marking_created", name)
 
         return marking
@@ -210,6 +214,8 @@ class MarkingManager(Observable):
             raise KeyError(f"Marking '{name}' not found")
 
         del self._markings[name]
+
+        logger.debug("marking_manager.remove", extra={"name": name})
 
         # 활성 마킹이 제거된 경우 Main으로 변경
         if self._active_marking == name:
@@ -266,6 +272,7 @@ class MarkingManager(Observable):
 
         # 시그널 발생
         selected = marking.get_for_table(table_name) if table_name else marking.selected_indices
+        logger.debug("marking_manager.update", extra={"name": marking_name, "count": len(selected)})
         self.emit("marking_changed", marking_name, set(selected))
 
     def update_marking(
