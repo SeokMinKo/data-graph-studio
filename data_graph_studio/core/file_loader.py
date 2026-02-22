@@ -86,6 +86,7 @@ class FileLoader:
         self._progress_callback: Optional[Callable[[LoadingProgress], None]] = None
         self._precision_mode: PrecisionMode = precision_mode
         self._precision_columns: Set[str] = set()
+        self._warning_message: Optional[str] = None
 
         # windowed loading
         self._total_rows: int = 0
@@ -152,6 +153,11 @@ class FileLoader:
     def has_lazy(self) -> bool:
         """LazyFrame 존재 여부."""
         return self._lazy_df is not None
+
+    @property
+    def warning_message(self) -> Optional[str]:
+        """마지막 로딩 중 발생한 사용자 표시 경고 메시지."""
+        return self._warning_message
 
     def set_progress_callback(self, callback: Callable[[LoadingProgress], None]) -> None:
         """진행률 콜백을 설정한다."""
@@ -474,6 +480,7 @@ class FileLoader:
             return parquet_path
         except Exception as e:
             logger.warning(f"Failed to convert to parquet: {e}")
+            self._warning_message = "Memory optimization unavailable. File loaded directly (higher memory usage)."
             return None
 
     def _load_window_from_lazy(
@@ -501,6 +508,7 @@ class FileLoader:
     ) -> bool:
         """실제 파일 로드를 수행한다."""
         start_time = time.time()
+        self._warning_message = None
 
         try:
             encoding = self._normalize_encoding(encoding)
@@ -715,6 +723,7 @@ class FileLoader:
                 return self.parse_etl_binary(path)
             except (ImportError, ValueError, Exception) as e:
                 logger.warning(f"etl-parser failed: {e}")
+                self._warning_message = "ETL file parsing failed, loaded as plain text. Data may be incomplete."
 
         system = platform.system()
         if system == 'Windows':
