@@ -72,6 +72,10 @@ class IPCController:
         self._setup_capture_service()
         server.register_handler('capture', self._ipc_capture)
 
+        # Filter handlers
+        server.register_handler('apply_filter', self._ipc_apply_filter)
+        server.register_handler('clear_filters', self._ipc_clear_filters)
+
         # 서버 시작
         server.start()
 
@@ -512,6 +516,33 @@ class IPCController:
             w.state._comparison_settings.sync_selection = sync_selection
         w.state.comparison_settings_changed.emit()
         return {"ok": True}
+
+    # ==================== IPC Filter Handlers ====================
+
+    def _ipc_apply_filter(self, column: str, op: str, value: Any) -> dict:
+        """
+        Add a filter condition to the active dataset.
+
+        Inputs: column (str), op ("eq","gt","lt","contains","neq"), value (Any)
+        Outputs: {"status": "ok", ...} or {"status": "error", "message": ...}
+        """
+        try:
+            self._w.state.add_filter(column, op, value)
+            return {"status": "ok", "column": column, "op": op, "value": value}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    def _ipc_clear_filters(self) -> dict:
+        """
+        Remove all active filters.
+
+        Outputs: {"status": "ok"} or {"status": "error", "message": ...}
+        """
+        try:
+            self._w.state.clear_filters()
+            return {"status": "ok"}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
 
     # ==================== IPC Capture Handler ====================
 
