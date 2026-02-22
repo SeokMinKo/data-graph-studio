@@ -209,11 +209,15 @@ class FilteringScheme:
         """컬럼으로 필터 업데이트"""
         for f in self.filters:
             if f.column == column:
-                for key, value in kwargs.items():
-                    if hasattr(f, key):
-                        setattr(f, key, value)
+                self._apply_kwargs_to_filter(f, kwargs)
                 return True
         return False
+
+    @staticmethod
+    def _apply_kwargs_to_filter(f: "Filter", kwargs: dict) -> None:
+        for key, value in kwargs.items():
+            if hasattr(f, key):
+                setattr(f, key, value)
 
 
 class FilteringManager(Observable):
@@ -458,15 +462,19 @@ class FilteringManager(Observable):
         result = data
         for f in all_filters:
             if f.enabled:
-                expr = f.to_expression()
-                if expr is not None:
-                    try:
-                        result = result.filter(expr)
-                    except Exception as e:
-                        # 필터 적용 실패 시 무시
-                        logger.warning("filtering.apply_filter.skipped", extra={"column": str(f.column), "error": str(e)})
+                result = self._apply_single_filter(result, f)
 
         return result
+
+    def _apply_single_filter(self, data: pl.DataFrame, f: Filter) -> pl.DataFrame:
+        expr = f.to_expression()
+        if expr is None:
+            return data
+        try:
+            return data.filter(expr)
+        except Exception as e:
+            logger.warning("filtering.apply_filter.skipped", extra={"column": str(f.column), "error": str(e)})
+            return data
 
     def _get_all_filters(self, scheme: FilteringScheme) -> List[Filter]:
         """상속 포함 모든 필터 조회"""
