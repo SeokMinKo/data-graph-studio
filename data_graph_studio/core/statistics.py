@@ -4,6 +4,7 @@ Statistical Analysis - Spotfire 스타일 통계 분석 도구
 상관 분석, 클러스터링, 시계열 분석, 가설 검정 등을 제공합니다.
 """
 
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -12,6 +13,8 @@ import polars as pl
 from scipy import stats
 from scipy.cluster import hierarchy
 from scipy.signal import find_peaks
+
+logger = logging.getLogger(__name__)
 
 
 class CorrelationMethod(Enum):
@@ -70,6 +73,7 @@ class CorrelationAnalyzer:
             상관 분석 결과
         """
         # 데이터 추출
+        logger.debug("statistics.calculate_correlation", extra={"method": method.value, "columns": columns})
         valid_columns = [c for c in columns if c in data.columns]
         subset = data.select(valid_columns).to_numpy()
 
@@ -220,6 +224,7 @@ class ClusterAnalyzer:
             클러스터링 결과
         """
         # 데이터 추출 및 정규화
+        logger.debug("statistics.cluster", extra={"method": method.value, "n_clusters": n_clusters})
         valid_columns = [c for c in columns if c in data.columns]
         X = data.select(valid_columns).to_numpy()
 
@@ -690,7 +695,8 @@ class TimeSeriesAnalyzer:
                 "critical_values": critical_values
             }
 
-        except Exception:
+        except Exception as e:
+            logger.warning("statistics.stationarity_test.failed", extra={"error": str(e)})
             return {
                 "statistic": 0,
                 "p_value": 1.0,
@@ -992,8 +998,10 @@ class DescriptiveStatistics:
         values = values[~np.isnan(values)]
 
         if len(values) == 0:
+            logger.warning("statistics.calculate.empty_values")
             return {}
 
+        logger.debug("statistics.calculate", extra={"n": len(values)})
         q1, median, q3 = np.percentile(values, [25, 50, 75])
 
         return {

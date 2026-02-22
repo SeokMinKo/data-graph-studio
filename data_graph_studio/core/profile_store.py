@@ -5,10 +5,13 @@ ProfileStore - GraphSetting storage layer.
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import replace
 from typing import Dict, List, Optional, Set
+
+logger = logging.getLogger(__name__)
 
 try:
     from PySide6.QtConcurrent import run as qt_run
@@ -30,6 +33,7 @@ class ProfileStore:
         self._settings: Dict[str, GraphSetting] = {}
 
     def add(self, setting: GraphSetting) -> None:
+        logger.debug("profile_store.add", extra={"setting_id": setting.id, "name": setting.name})
         self._settings[setting.id] = setting
 
     def get(self, setting_id: str) -> Optional[GraphSetting]:
@@ -44,7 +48,9 @@ class ProfileStore:
     def remove(self, setting_id: str) -> bool:
         if setting_id in self._settings:
             del self._settings[setting_id]
+            logger.debug("profile_store.remove", extra={"setting_id": setting_id})
             return True
+        logger.warning("profile_store.remove.not_found", extra={"setting_id": setting_id})
         return False
 
     def duplicate(self, setting_id: str) -> Optional[GraphSetting]:
@@ -64,6 +70,8 @@ class ProfileStore:
         return new_setting
 
     def export_async(self, setting: GraphSetting, path: str) -> None:
+        logger.debug("profile_store.export_async", extra={"setting_id": setting.id, "path": path})
+
         def _export():
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(setting.to_dict(), f, ensure_ascii=False, indent=2)
@@ -81,6 +89,8 @@ class ProfileStore:
         executor.shutdown(wait=False)
 
     def import_async(self, path: str) -> "QFuture":
+        logger.debug("profile_store.import_async", extra={"path": path})
+
         def _import() -> GraphSetting:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)

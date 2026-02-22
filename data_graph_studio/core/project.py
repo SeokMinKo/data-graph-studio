@@ -2,11 +2,14 @@
 Project Save/Load - .dgs file format
 """
 
+import logging
 import os
 import json
 import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -234,22 +237,24 @@ class Project:
         # .dgs 확장자 보장
         if not path.endswith('.dgs'):
             path = path + '.dgs'
-        
+
         self.modified_at = time.time()
         self._path = path
-        
+
+        logger.debug("project.save", extra={"path": path, "name": self.name})
         with open(path, 'w', encoding='utf-8') as f:
             f.write(self.to_json())
     
     @classmethod
     def load(cls, path: str) -> 'Project':
         """파일에서 로드"""
+        logger.debug("project.load", extra={"path": path})
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         project = cls.from_json(content)
         project._path = path
-        
+
         return project
     
     def validate(self) -> List[str]:
@@ -314,21 +319,24 @@ class ProjectManager:
     def save(self, path: Optional[str] = None):
         """저장"""
         if not self._current:
+            logger.warning("project_manager.save.no_project")
             return
-        
+
         if path is None:
             path = self._current._path
-        
+
         if path is None:
             raise ValueError("No path specified")
-        
+
+        logger.debug("project_manager.save", extra={"path": path})
         self._current.save(path)
         self._dirty = False
-        
+
         self._add_recent_file(path)
     
     def load(self, path: str) -> Project:
         """로드"""
+        logger.debug("project_manager.load", extra={"path": path})
         self._current = Project.load(path)
         self._dirty = False
         self._add_recent_file(path)
@@ -384,9 +392,10 @@ class ProjectManager:
     def close_project(self) -> bool:
         """프로젝트 닫기"""
         if self._dirty:
-            # 저장되지 않은 변경사항 있음
+            logger.warning("project_manager.close_project.unsaved_changes")
             return False
-        
+
+        logger.debug("project_manager.close_project")
         self._current = None
         self._dirty = False
         return True

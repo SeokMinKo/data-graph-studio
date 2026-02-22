@@ -13,11 +13,14 @@ This is intentionally lightweight (not Qt's QUndoStack) to keep core independent
 
 from __future__ import annotations
 
+import logging
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from data_graph_studio.core.constants import UNDO_MAX_DEPTH
 
@@ -138,6 +141,7 @@ class UndoStack:
         with self.pause():
             cmd.do()
 
+        logger.debug("undo_manager.push", extra={"action_type": cmd.action_type.value, "description": cmd.description})
         self._record(cmd)
 
     def record(self, cmd: UndoCommand) -> None:
@@ -161,9 +165,11 @@ class UndoStack:
 
     def undo(self) -> Optional[UndoCommand]:
         if not self.can_undo():
+            logger.debug("undo_manager.undo.nothing_to_undo")
             return None
         self._index -= 1
         cmd = self._commands[self._index]
+        logger.debug("undo_manager.undo", extra={"action_type": cmd.action_type.value, "description": cmd.description})
         with self.pause():
             cmd.undo()
         self._emit_changed()
@@ -171,8 +177,10 @@ class UndoStack:
 
     def redo(self) -> Optional[UndoCommand]:
         if not self.can_redo():
+            logger.debug("undo_manager.redo.nothing_to_redo")
             return None
         cmd = self._commands[self._index]
+        logger.debug("undo_manager.redo", extra={"action_type": cmd.action_type.value, "description": cmd.description})
         with self.pause():
             cmd.do()
         self._index += 1
@@ -237,5 +245,6 @@ class UndoStack:
 # (removed UndoAction compatibility layer)
     def _enforce_max_depth(self) -> None:
         while len(self._commands) > self.max_depth:
+            logger.warning("undo_manager.max_depth_exceeded", extra={"max_depth": self.max_depth})
             self._commands.pop(0)
             self._index = max(0, self._index - 1)
