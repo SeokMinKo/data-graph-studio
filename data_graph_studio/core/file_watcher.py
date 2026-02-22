@@ -22,9 +22,8 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from PySide6.QtCore import QObject, Signal
-
 from data_graph_studio.core.io_abstract import IFileSystem, ITimerFactory
+from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.constants import (
     MIN_POLL_INTERVAL_MS,
     MAX_POLL_INTERVAL_MS,
@@ -59,32 +58,31 @@ class _WatchEntry:
     registered_at: float = field(default_factory=time.time)
 
 
-class FileWatcher(QObject):
+class FileWatcher(Observable):
     """
     Polled file watcher with DI support.
 
     Usage:
         fs = RealFileSystem()
-        timer_factory = QTimerFactory()
+        timer_factory = ThreadingTimerFactory()
         watcher = FileWatcher(fs=fs, timer_factory=timer_factory)
         watcher.watch("/path/to/file.csv", mode="tail")
-        watcher.file_changed.connect(on_changed)
-        watcher.rows_appended.connect(on_appended)
-    """
+        watcher.subscribe("file_changed", on_changed)
+        watcher.subscribe("rows_appended", on_appended)
 
-    # ── Signals ───────────────────────────────────────────────
-    file_changed = Signal(str)       # file_path
-    file_deleted = Signal(str)       # file_path
-    rows_appended = Signal(str, int) # file_path, new_row_count
+    Events:
+        file_changed(file_path: str)           — reload mode: content changed
+        file_deleted(file_path: str)           — file deleted/inaccessible
+        rows_appended(file_path: str, int)     — tail mode: new rows appended
+    """
 
     def __init__(
         self,
         fs: IFileSystem,
         timer_factory: ITimerFactory,
         poll_interval_ms: int = DEFAULT_POLL_INTERVAL_MS,
-        parent: Optional[QObject] = None,
     ):
-        super().__init__(parent)
+        super().__init__()
 
         self._fs = fs
         self._timer_factory = timer_factory
@@ -256,12 +254,12 @@ class FileWatcher(QObject):
 
         for path, event_type in pending.items():
             if event_type == "changed":
-                self.file_changed.emit(path)
+                self.emit("file_changed", path)
             elif event_type == "appended":
                 count = data.get(path, 0)
-                self.rows_appended.emit(path, count)
+                self.emit("rows_appended", path, count)
             elif event_type == "deleted":
-                self.file_deleted.emit(path)
+                self.emit("file_deleted", path)
 
     def shutdown(self) -> None:
         """Stop all watchers and clean up. PRD Section 10.6."""
@@ -300,7 +298,8 @@ class FileWatcher(QObject):
         self._timer = self._timer_factory.create_timer(
             self._poll_interval_ms, self._on_poll
         )
-        self._timer.start()
+        if callable(getattr(self._timer, "start", None)):
+            self._timer.start()
 
     def _stop_timer(self) -> None:
         if self._timer is not None:
@@ -319,8 +318,14 @@ class FileWatcher(QObject):
                 continue
             self._check_file(entry)
 
-    def _check_file(self, entry: _WatchEntry) -> None:
-        """Check a single file for changes."""
+    def _check_file(self, entry_or_path: "_WatchEntry | str") -> None:
+        """Check a single file for changes. Accepts a _WatchEntry or a file path string."""
+        if isinstance(entry_or_path, str):
+            entry = self._entries.get(entry_or_path)
+            if entry is None:
+                return
+        else:
+            entry = entry_or_path
         path = entry.path
 
         # FR-2.8: Skip if self-modifying
@@ -441,14 +446,19 @@ class FileWatcher(QObject):
         """
         self._debounce_pending[path] = event_type
 
-        # In production, use a QTimer for debounce.
-        # For testability with MockTimerFactory, we use a simple flag approach.
-        # The debounce timer fires after DEBOUNCE_MS and calls flush_debounce.
+        # Schedule debounce flush via timer.
+        # If the timer has no start() method (e.g. NullTimer in unit tests),
+        # flush immediately so the event is not silently dropped.
         if self._debounce_timer is None:
             self._debounce_timer = self._timer_factory.create_timer(
                 DEBOUNCE_MS, self._on_debounce_timeout
             )
-            self._debounce_timer.start()
+            if callable(getattr(self._debounce_timer, "start", None)):
+                self._debounce_timer.start()
+            else:
+                # No async timer available — flush synchronously
+                self._debounce_timer = None
+                self.flush_debounce()
 
     def _on_debounce_timeout(self) -> None:
         """Debounce timer expired → emit pending events."""

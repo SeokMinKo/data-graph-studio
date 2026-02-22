@@ -210,7 +210,7 @@ class TestTailMode:
 
         # Signal 수신을 위한 스파이
         appended_signals = []
-        watcher.rows_appended.connect(lambda path, count: appended_signals.append((path, count)))
+        watcher.subscribe("rows_appended", lambda path, count: appended_signals.append((path, count)))
 
         # 새 행 추가 시뮬레이션
         mock_fs.update_file("/data.csv", csv_data_7rows, mtime=1001.0)
@@ -230,7 +230,7 @@ class TestTailMode:
         watcher.watch("/data.csv", mode="tail")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         mock_fs.update_file("/data.csv", csv_data_7rows, mtime=1001.0)
         timer = mock_timer_factory.timers[0]
@@ -245,7 +245,7 @@ class TestTailMode:
         watcher.watch("/data.csv", mode="tail")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         # 컬럼 구조 변경 데이터
         new_data = b"a,b,c,d\n1,2,3,4\n5,6,7,8\n"
@@ -270,7 +270,7 @@ class TestReloadMode:
         watcher.watch("/data.csv", mode="reload")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         # 파일 내용 변경
         mock_fs.update_file("/data.csv", b"x,y\n1,2\n", mtime=1001.0)
@@ -288,7 +288,7 @@ class TestReloadMode:
         watcher.watch("/data.csv", mode="reload")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         # 변경 없이 폴링
         timer = mock_timer_factory.timers[0]
@@ -303,7 +303,7 @@ class TestReloadMode:
         watcher.watch("/data.csv", mode="reload")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         # mtime만 변경, size는 동일
         mock_fs.stats["/data.csv"] = FakeStat(st_mtime=1002.0, st_size=len(csv_data_5rows))
@@ -326,7 +326,7 @@ class TestSelfChange:
         watcher.watch("/data.csv", mode="reload")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         # 자기 수정 시작
         watcher.begin_self_modify("/data.csv")
@@ -346,7 +346,7 @@ class TestSelfChange:
         watcher.watch("/data.csv", mode="reload")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         # 자기 수정 시작/종료
         watcher.begin_self_modify("/data.csv")
@@ -376,7 +376,7 @@ class TestDebounce:
         watcher.watch("/data.csv", mode="reload")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         timer = mock_timer_factory.last_timer
 
@@ -400,7 +400,7 @@ class TestDebounce:
         watcher.watch("/data.csv", mode="reload")
 
         changed_signals = []
-        watcher.file_changed.connect(lambda path: changed_signals.append(path))
+        watcher.subscribe("file_changed", lambda path: changed_signals.append(path))
 
         timer = mock_timer_factory.last_timer
 
@@ -429,7 +429,7 @@ class TestFileDeletion:
         watcher.watch("/data.csv", mode="reload")
 
         deleted_signals = []
-        watcher.file_deleted.connect(lambda path: deleted_signals.append(path))
+        watcher.subscribe("file_deleted", lambda path: deleted_signals.append(path))
 
         # 파일 삭제
         mock_fs.delete_file("/data.csv")
@@ -447,7 +447,7 @@ class TestFileDeletion:
         watcher.watch("/data.csv", mode="reload")
 
         deleted_signals = []
-        watcher.file_deleted.connect(lambda path: deleted_signals.append(path))
+        watcher.subscribe("file_deleted", lambda path: deleted_signals.append(path))
 
         mock_fs.delete_file("/data.csv")
         timer = mock_timer_factory.timers[0]
@@ -465,7 +465,7 @@ class TestFileDeletion:
         watcher.watch("/data.csv", mode="reload")
 
         deleted_signals = []
-        watcher.file_deleted.connect(lambda path: deleted_signals.append(path))
+        watcher.subscribe("file_deleted", lambda path: deleted_signals.append(path))
 
         mock_fs.set_permission_denied("/data.csv")
         timer = mock_timer_factory.timers[0]

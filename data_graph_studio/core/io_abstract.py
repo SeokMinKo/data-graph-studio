@@ -11,6 +11,7 @@ Provides:
 from __future__ import annotations
 
 import os
+import threading
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
@@ -46,6 +47,59 @@ class ITimerFactory(ABC):
     def create_timer(self, interval_ms: int, callback: Callable) -> Any:
         """주기적 타이머 생성. 반환값은 구현에 따라 다름."""
         ...
+
+
+class _ThreadingTimerHandle:
+    """
+    Recurring timer handle with start()/stop() interface.
+    Wraps threading.Timer to produce Qt-compatible start/stop semantics.
+    """
+
+    def __init__(self, interval_s: float, callback: Callable) -> None:
+        self._interval_s = interval_s
+        self._callback = callback
+        self._current: threading.Timer | None = None
+        self._running = False
+
+    def start(self) -> None:
+        if self._running:
+            return
+        self._running = True
+        self._schedule()
+
+    def stop(self) -> None:
+        self._running = False
+        if self._current is not None:
+            self._current.cancel()
+            self._current = None
+
+    def _schedule(self) -> None:
+        if not self._running:
+            return
+        t = threading.Timer(self._interval_s, self._fire)
+        t.daemon = True
+        t.start()
+        self._current = t
+
+    def _fire(self) -> None:
+        if not self._running:
+            return
+        self._callback()
+        self._schedule()
+
+
+class ThreadingTimerFactory(ITimerFactory):
+    """
+    Production timer using threading.Timer — no Qt dependency.
+
+    Creates recurring timers that expose start()/stop() interface,
+    matching the contract expected by FileWatcher.
+    All timers are daemon threads so they don't block process exit.
+    """
+
+    def create_timer(self, interval_ms: int, callback: Callable) -> _ThreadingTimerHandle:
+        """Create a recurring timer handle. Call .start() to begin firing."""
+        return _ThreadingTimerHandle(interval_ms / 1000.0, callback)
 
 
 class RealFileSystem(IFileSystem):

@@ -97,10 +97,10 @@ class StreamingController(Observable):
             poll_interval_ms=self._poll_interval_ms,
         )
 
-        # Connect signals
-        self._watcher.file_changed.connect(self._on_file_changed)
-        self._watcher.file_deleted.connect(self._on_file_deleted)
-        self._watcher.rows_appended.connect(self._on_rows_appended)
+        # Subscribe to Observable events
+        self._watcher.subscribe("file_changed", self._on_file_changed)
+        self._watcher.subscribe("file_deleted", self._on_file_deleted)
+        self._watcher.subscribe("rows_appended", self._on_rows_appended)
 
         result = self._watcher.watch(file_path, mode=mode)
         if not result:
