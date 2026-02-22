@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from PySide6.QtCore import QObject, Signal
+from data_graph_studio.core.observable import Observable
 
 if TYPE_CHECKING:
     from .profile import GraphSetting
@@ -136,11 +136,11 @@ class DatasetState:
 
 # ==================== ComparisonManager ====================
 
-class ComparisonManager(QObject):
+class ComparisonManager(Observable):
     """
     멀티 데이터셋 비교 상태 및 프로파일 비교 관리.
 
-    Signals:
+    Events:
         dataset_added(str)              — 데이터셋 추가됨
         dataset_removed(str)            — 데이터셋 제거됨
         dataset_activated(str)          — 데이터셋 활성화됨
@@ -148,14 +148,6 @@ class ComparisonManager(QObject):
         comparison_mode_changed(str)    — 비교 모드 변경됨 (mode.value)
         comparison_settings_changed()   — 비교 설정 변경됨
     """
-
-    # Signals
-    dataset_added = Signal(str)            # dataset_id
-    dataset_removed = Signal(str)          # dataset_id
-    dataset_activated = Signal(str)        # dataset_id
-    dataset_updated = Signal(str)          # dataset_id
-    comparison_mode_changed = Signal(str)  # mode value string
-    comparison_settings_changed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -253,7 +245,7 @@ class ComparisonManager(QObject):
         if metadata.compare_enabled:
             self._comparison_settings.comparison_datasets.append(dataset_id)
 
-        self.dataset_added.emit(dataset_id)
+        self.emit("dataset_added", dataset_id)
         return state
 
     def remove_dataset(self, dataset_id: str) -> bool:
@@ -271,11 +263,11 @@ class ComparisonManager(QObject):
             if self._dataset_states:
                 self._active_dataset_id = next(iter(self._dataset_states.keys()))
                 self._dataset_metadata[self._active_dataset_id].is_active = True
-                self.dataset_activated.emit(self._active_dataset_id)
+                self.emit("dataset_activated", self._active_dataset_id)
             else:
                 self._active_dataset_id = None
 
-        self.dataset_removed.emit(dataset_id)
+        self.emit("dataset_removed", dataset_id)
         return True
 
     def activate_dataset(self, dataset_id: str) -> bool:
@@ -288,7 +280,7 @@ class ComparisonManager(QObject):
 
         self._active_dataset_id = dataset_id
         self._dataset_metadata[dataset_id].is_active = True
-        self.dataset_activated.emit(dataset_id)
+        self.emit("dataset_activated", dataset_id)
         return True
 
     def update_dataset_metadata(self, dataset_id: str, **kwargs):
@@ -298,7 +290,7 @@ class ComparisonManager(QObject):
             for key, value in kwargs.items():
                 if hasattr(metadata, key):
                     setattr(metadata, key, value)
-            self.dataset_updated.emit(dataset_id)
+            self.emit("dataset_updated", dataset_id)
 
     def clear_all_datasets(self):
         """모든 데이터셋 제거."""
@@ -319,10 +311,10 @@ class ComparisonManager(QObject):
 
         if self._comparison_settings.mode != mode:
             self._comparison_settings.mode = mode
-            self.comparison_mode_changed.emit(mode.value)
-            self.comparison_settings_changed.emit()
+            self.emit("comparison_mode_changed", mode.value)
+            self.emit("comparison_settings_changed")
         elif was_profile:
-            self.comparison_settings_changed.emit()
+            self.emit("comparison_settings_changed")
 
     def set_comparison_datasets(self, dataset_ids: List[str]):
         """비교 대상 데이터셋 설정. FR-8: 프로파일 비교 자동 해제."""
@@ -333,7 +325,7 @@ class ComparisonManager(QObject):
 
         valid_ids = [did for did in dataset_ids if did in self._dataset_states]
         self._comparison_settings.comparison_datasets = valid_ids
-        self.comparison_settings_changed.emit()
+        self.emit("comparison_settings_changed")
 
     def toggle_dataset_comparison(self, dataset_id: str) -> bool:
         """데이터셋 비교 포함 여부 토글. 변경 후 상태 반환."""
@@ -350,14 +342,14 @@ class ComparisonManager(QObject):
             if dataset_id in self._comparison_settings.comparison_datasets:
                 self._comparison_settings.comparison_datasets.remove(dataset_id)
 
-        self.comparison_settings_changed.emit()
+        self.emit("comparison_settings_changed")
         return metadata.compare_enabled
 
     def set_dataset_color(self, dataset_id: str, color: str):
         """데이터셋 색상 설정."""
         if dataset_id in self._dataset_metadata:
             self._dataset_metadata[dataset_id].color = color
-            self.dataset_updated.emit(dataset_id)
+            self.emit("dataset_updated", dataset_id)
 
     def get_comparison_colors(self) -> Dict[str, str]:
         """비교 대상 데이터셋들의 색상 매핑 반환."""
@@ -372,7 +364,7 @@ class ComparisonManager(QObject):
         for key, value in kwargs.items():
             if hasattr(self._comparison_settings, key):
                 setattr(self._comparison_settings, key, value)
-        self.comparison_settings_changed.emit()
+        self.emit("comparison_settings_changed")
 
     # ==================== Profile Comparison (PRD §6.1) ====================
 
@@ -393,8 +385,8 @@ class ComparisonManager(QObject):
             mode_changed = True
 
         if mode_changed:
-            self.comparison_mode_changed.emit(self._comparison_settings.mode.value)
-        self.comparison_settings_changed.emit()
+            self.emit("comparison_mode_changed", self._comparison_settings.mode.value)
+        self.emit("comparison_settings_changed")
 
     def clear_profile_comparison(self):
         """프로파일 비교 모드 종료 → SINGLE 모드 복귀."""
@@ -409,8 +401,8 @@ class ComparisonManager(QObject):
 
         if was_active or mode_changed:
             if mode_changed:
-                self.comparison_mode_changed.emit(ComparisonMode.SINGLE.value)
-            self.comparison_settings_changed.emit()
+                self.emit("comparison_mode_changed", ComparisonMode.SINGLE.value)
+            self.emit("comparison_settings_changed")
 
     # ==================== Dataset Profiles ====================
 
@@ -419,7 +411,7 @@ class ComparisonManager(QObject):
         if not state:
             return False
         state.profiles.append(setting)
-        self.dataset_updated.emit(dataset_id)
+        self.emit("dataset_updated", dataset_id)
         return True
 
     def remove_graph_setting(self, dataset_id: str, setting_id: str) -> bool:
@@ -429,7 +421,7 @@ class ComparisonManager(QObject):
         before = len(state.profiles)
         state.profiles = [s for s in state.profiles if s.id != setting_id]
         if len(state.profiles) != before:
-            self.dataset_updated.emit(dataset_id)
+            self.emit("dataset_updated", dataset_id)
             return True
         return False
 
@@ -440,7 +432,7 @@ class ComparisonManager(QObject):
         for i, s in enumerate(state.profiles):
             if s.id == setting_id:
                 state.profiles[i] = s.with_name(name)
-                self.dataset_updated.emit(dataset_id)
+                self.emit("dataset_updated", dataset_id)
                 return True
         return False
 

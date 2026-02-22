@@ -366,17 +366,17 @@ class AppState(QObject):
         from .comparison_manager import ComparisonManager
         self.comparison_manager = ComparisonManager()
 
-        # Forward ComparisonManager signals through AppState's own signals so
+        # Forward ComparisonManager events through AppState's own Qt signals so
         # all existing external listeners (connected to AppState) still work.
-        self.comparison_manager.dataset_added.connect(self.dataset_added)
-        self.comparison_manager.dataset_removed.connect(self.dataset_removed)
-        self.comparison_manager.dataset_activated.connect(self.dataset_activated)
-        self.comparison_manager.dataset_updated.connect(self.dataset_updated)
-        self.comparison_manager.comparison_mode_changed.connect(self.comparison_mode_changed)
-        self.comparison_manager.comparison_settings_changed.connect(self.comparison_settings_changed)
+        self.comparison_manager.subscribe("dataset_added", self.dataset_added.emit)
+        self.comparison_manager.subscribe("dataset_removed", self.dataset_removed.emit)
+        self.comparison_manager.subscribe("dataset_activated", self.dataset_activated.emit)
+        self.comparison_manager.subscribe("dataset_updated", self.dataset_updated.emit)
+        self.comparison_manager.subscribe("comparison_mode_changed", self.comparison_mode_changed.emit)
+        self.comparison_manager.subscribe("comparison_settings_changed", self.comparison_settings_changed.emit)
 
         # Sync AppState legacy props when active dataset changes in SINGLE mode
-        self.comparison_manager.dataset_activated.connect(self._on_dataset_activated)
+        self.comparison_manager.subscribe("dataset_activated", self._on_dataset_activated)
 
     # ==================== Batch Update ====================
 
