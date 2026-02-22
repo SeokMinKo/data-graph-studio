@@ -8,6 +8,7 @@ import os
 import traceback
 import logging
 from datetime import datetime
+from data_graph_studio.core.logging_utils import StructuredFormatter
 
 # DirectWrite 폰트 오류 방지 (Windows)
 # Qt 초기화 전에 설정해야 함
@@ -20,15 +21,20 @@ def setup_logging():
     log_dir = os.path.join(os.path.expanduser("~"), '.data_graph_studio', 'logs')
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, f'app_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-    
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
+
+    formatter = StructuredFormatter()
+
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setFormatter(formatter)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(file_handler)
+    root.addHandler(stream_handler)
+
     return logging.getLogger('DataGraphStudio')
 
 
