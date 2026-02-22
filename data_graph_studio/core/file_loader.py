@@ -521,84 +521,24 @@ class FileLoader:
             self._lazy_df = None
 
             if file_type in (FileType.CSV, FileType.TSV, FileType.PARQUET) and self._should_use_windowed_loading(file_size):
-                if file_type in (FileType.CSV, FileType.TSV):
-                    sep = delimiter if file_type == FileType.CSV else "\t"
-                    lazy_df = pl.scan_csv(
-                        path, encoding=encoding, separator=sep,
-                        has_header=has_header, skip_rows=skip_rows,
-                        comment_prefix=comment_char, infer_schema_length=10000,
-                        ignore_errors=True,
-                    )
-                else:
-                    lazy_df = pl.scan_parquet(path)
-
-                if excluded_columns:
-                    lazy_df = lazy_df.drop(excluded_columns)
-
-                self._lazy_df = lazy_df
-                try:
-                    self._total_rows = int(self._lazy_df.select(pl.len()).collect()[0, 0])
-                except Exception:
-                    self._total_rows = 0
-
-                window_size = min(self._window_size, self._total_rows) if self._total_rows > 0 else self._window_size
-                self._df = self._load_window_from_lazy(self._lazy_df, self._window_start, window_size)
-                self._windowed = self._total_rows > window_size if self._total_rows else True
+                self._load_windowed(path, file_type, encoding, delimiter, has_header, skip_rows, comment_char, excluded_columns)
             else:
-                if file_type == FileType.CSV:
-                    self._df = self._load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
-                elif file_type == FileType.TSV:
-                    self._df = self._load_csv(path, encoding, "\t", has_header, skip_rows, comment_char)
-                elif file_type in [FileType.TXT, FileType.CUSTOM]:
-                    self._df = self._load_text(path, encoding, delimiter, delimiter_type,
-                                               regex_pattern, has_header, skip_rows, comment_char)
-                elif file_type == FileType.ETL:
-                    self._df = self._load_etl(path, encoding, delimiter, delimiter_type,
-                                              regex_pattern, has_header, skip_rows, comment_char)
-                elif file_type == FileType.EXCEL:
-                    self._df = self._load_excel(path, sheet_name)
-                elif file_type == FileType.PARQUET:
-                    self._df = self._load_parquet(path)
-                elif file_type == FileType.JSON:
-                    self._df = self._load_json(path)
-                else:
-                    raise ValueError(f"Unsupported file type: {file_type}")
+                self._load_eager(path, file_type, encoding, delimiter, delimiter_type,
+                                 regex_pattern, has_header, skip_rows, comment_char, sheet_name)
 
             if self._cancel_loading:
                 self._df = None
                 self._update_progress(status="cancelled")
                 return False
 
-            # loader returned None (e.g. cancel during _load_text)
             if self._df is None and not self._windowed:
                 self._update_progress(status="cancelled")
                 return False
 
-            if excluded_columns and self._df is not None and not self._windowed:
-                cols_to_drop = [c for c in excluded_columns if c in self._df.columns]
-                if cols_to_drop:
-                    self._df = self._df.drop(cols_to_drop)
-
-            if process_filter and self._df is not None:
-                self._df = self._apply_process_filter(self._df, process_filter)
-
-            if sample_n is not None and self._df is not None and len(self._df) > sample_n:
-                self._update_progress(status="sampling")
-                original_rows = len(self._df)
-                self._df = self._df.sample(n=sample_n, seed=42)
-                logger.info("file_loader.sampled", extra={"sample_n": sample_n, "original_rows": original_rows})
-
-            if optimize_memory and self._df is not None:
-                self._update_progress(status="optimizing")
-                self._df = self._optimize_memory(self._df)
-
-            if self._df is not None:
-                self._update_progress(status="profiling")
-                self._profile = self._create_profile(self._df, time.time() - start_time)
+            self._apply_post_load_transforms(excluded_columns, process_filter, sample_n, optimize_memory, start_time)
 
             total_rows = self._total_rows if self._windowed and self._total_rows else (len(self._df) if self._df is not None else 0)
             loaded_rows = len(self._df) if self._df is not None else 0
-
             self._update_progress(
                 status="complete",
                 loaded_bytes=self._progress.total_bytes,
@@ -606,7 +546,6 @@ class FileLoader:
                 total_rows=total_rows,
                 elapsed_seconds=time.time() - start_time,
             )
-
             gc.collect()
             if self._df is not None:
                 logger.info("file_loader.file_loaded", extra={"row_count": loaded_rows, "column_count": len(self._df.columns)})
@@ -616,6 +555,93 @@ class FileLoader:
             self._update_progress(status="error", error_message=str(e))
             gc.collect()
             return False
+
+    def _load_windowed(
+        self, path: str, file_type: FileType, encoding: str,
+        delimiter: str, has_header: bool, skip_rows: int,
+        comment_char: Optional[str], excluded_columns: Optional[List[str]],
+    ) -> None:
+        """Set up lazy scan and load first window for large CSV/TSV/Parquet files."""
+        if file_type in (FileType.CSV, FileType.TSV):
+            sep = delimiter if file_type == FileType.CSV else "\t"
+            lazy_df = pl.scan_csv(
+                path, encoding=encoding, separator=sep,
+                has_header=has_header, skip_rows=skip_rows,
+                comment_prefix=comment_char, infer_schema_length=10000,
+                ignore_errors=True,
+            )
+        else:
+            lazy_df = pl.scan_parquet(path)
+
+        if excluded_columns:
+            lazy_df = lazy_df.drop(excluded_columns)
+
+        self._lazy_df = lazy_df
+        try:
+            self._total_rows = int(self._lazy_df.select(pl.len()).collect()[0, 0])
+        except Exception:
+            self._total_rows = 0
+
+        window_size = min(self._window_size, self._total_rows) if self._total_rows > 0 else self._window_size
+        self._df = self._load_window_from_lazy(self._lazy_df, self._window_start, window_size)
+        self._windowed = self._total_rows > window_size if self._total_rows else True
+
+    def _load_eager(
+        self, path: str, file_type: FileType, encoding: str,
+        delimiter: str, delimiter_type: DelimiterType,
+        regex_pattern: Optional[str], has_header: bool, skip_rows: int,
+        comment_char: Optional[str], sheet_name: Optional[str],
+    ) -> None:
+        """Load the full file eagerly using the appropriate loader."""
+        if file_type == FileType.CSV:
+            self._df = self._load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
+        elif file_type == FileType.TSV:
+            self._df = self._load_csv(path, encoding, "\t", has_header, skip_rows, comment_char)
+        elif file_type in [FileType.TXT, FileType.CUSTOM]:
+            self._df = self._load_text(path, encoding, delimiter, delimiter_type,
+                                       regex_pattern, has_header, skip_rows, comment_char)
+        elif file_type == FileType.ETL:
+            self._df = self._load_etl(path, encoding, delimiter, delimiter_type,
+                                      regex_pattern, has_header, skip_rows, comment_char)
+        elif file_type == FileType.EXCEL:
+            self._df = self._load_excel(path, sheet_name)
+        elif file_type == FileType.PARQUET:
+            self._df = self._load_parquet(path)
+        elif file_type == FileType.JSON:
+            self._df = self._load_json(path)
+        else:
+            raise ValueError(f"Unsupported file type: {file_type}")
+
+    def _apply_post_load_transforms(
+        self,
+        excluded_columns: Optional[List[str]],
+        process_filter: Optional[List[str]],
+        sample_n: Optional[int],
+        optimize_memory: bool,
+        start_time: float,
+    ) -> None:
+        """Apply column exclusion, process filter, sampling, and memory optimization."""
+        if excluded_columns and self._df is not None and not self._windowed:
+            cols_to_drop = [c for c in excluded_columns if c in self._df.columns]
+            if cols_to_drop:
+                self._df = self._df.drop(cols_to_drop)
+
+        if process_filter and self._df is not None:
+            self._df = self._apply_process_filter(self._df, process_filter)
+
+        if sample_n is not None and self._df is not None and len(self._df) > sample_n:
+            self._update_progress(status="sampling")
+            original_rows = len(self._df)
+            self._df = self._df.sample(n=sample_n, seed=42)
+            logger.info("file_loader.sampled", extra={"sample_n": sample_n, "original_rows": original_rows})
+
+        if optimize_memory and self._df is not None:
+            self._update_progress(status="optimizing")
+            self._df = self._optimize_memory(self._df)
+
+        if self._df is not None:
+            self._update_progress(status="profiling")
+            self._profile = self._create_profile(self._df, time.time() - start_time)
 
     def _load_csv(self, path: str, encoding: str, delimiter: str,
                   has_header: bool, skip_rows: int = 0,

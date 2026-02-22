@@ -71,87 +71,88 @@ class GraphSettingMapper:
         return setting
 
     @staticmethod
-    def to_app_state(setting: GraphSetting, state: AppState) -> None:
-        """Apply GraphSetting to AppState with signal batching"""
-        state.begin_batch_update()
-        # 직접 내부 속성을 변경하고 마지막에 시그널 한 번만 발행
+    def _resolve_chart_type(chart_type: Any, state: AppState) -> ChartType:
+        """Coerce chart_type to ChartType, falling back to current state value."""
+        if isinstance(chart_type, ChartType):
+            return chart_type
         try:
-            chart_type: Any = setting.chart_type
-            if isinstance(chart_type, ChartType):
-                resolved_chart_type = chart_type
+            return ChartType(str(chart_type).lower())
+        except Exception:
+            return state._chart_settings.chart_type
+
+    @staticmethod
+    def _apply_group_columns(setting: GraphSetting, state: AppState) -> None:
+        """Normalize and apply group_columns from setting to state."""
+        state.clear_group_zone()
+        normalized: list[GroupColumn] = []
+        for g in setting.group_columns:
+            if isinstance(g, GroupColumn):
+                normalized.append(g)
+            elif isinstance(g, dict):
+                normalized.append(GroupColumn(
+                    name=g.get('name', ''),
+                    selected_values=set(g.get('selected_values', [])),
+                    order=g.get('order', 0),
+                ))
             else:
+                normalized.append(GroupColumn(name=str(g)))
+        normalized.sort(key=lambda col: col.order)
+        for gc in normalized:
+            state.add_group_column(gc.name)
+            for current in state.group_columns:
+                if current.name == gc.name:
+                    current.selected_values = set(gc.selected_values)
+                    current.order = gc.order
+                    break
+
+    @staticmethod
+    def _apply_value_columns(setting: GraphSetting, state: AppState) -> None:
+        """Normalize and apply value_columns from setting to state."""
+        from .state import AggregationType
+        state.clear_value_zone()
+        normalized: list[ValueColumn] = []
+        for v in setting.value_columns:
+            if isinstance(v, ValueColumn):
+                normalized.append(v)
+            elif isinstance(v, dict):
                 try:
-                    # 대소문자 무시하여 변환 (e.g. "Scatter" → "scatter")
-                    resolved_chart_type = ChartType(str(chart_type).lower())
-                except Exception:
-                    resolved_chart_type = state._chart_settings.chart_type
-            state._chart_settings.chart_type = resolved_chart_type
+                    agg = AggregationType(v.get('aggregation', 'sum'))
+                except ValueError:
+                    agg = AggregationType.SUM
+                normalized.append(ValueColumn(
+                    name=v.get('name', ''),
+                    aggregation=agg,
+                    color=v.get('color', '#1f77b4'),
+                    use_secondary_axis=v.get('use_secondary_axis', False),
+                    order=v.get('order', 0),
+                    formula=v.get('formula', ''),
+                ))
+            else:
+                normalized.append(ValueColumn(name=str(v)))
+        normalized.sort(key=lambda col: col.order)
+        for vc in normalized:
+            state.add_value_column(vc.name, aggregation=vc.aggregation)
+            idx = len(state.value_columns) - 1
+            state.update_value_column(
+                idx, color=vc.color,
+                use_secondary_axis=vc.use_secondary_axis,
+                formula=vc.formula,
+            )
 
+    @staticmethod
+    def to_app_state(setting: GraphSetting, state: AppState) -> None:
+        """Apply GraphSetting to AppState with signal batching."""
+        state.begin_batch_update()
+        try:
+            state._chart_settings.chart_type = GraphSettingMapper._resolve_chart_type(
+                setting.chart_type, state
+            )
             state._x_column = setting.x_column
-
-            # group_columns: dict/str → GroupColumn 변환
-            state.clear_group_zone()
-            normalized_groups: list[GroupColumn] = []
-            for g in setting.group_columns:
-                if isinstance(g, GroupColumn):
-                    normalized_groups.append(g)
-                elif isinstance(g, dict):
-                    normalized_groups.append(GroupColumn(
-                        name=g.get('name', ''),
-                        selected_values=set(g.get('selected_values', [])),
-                        order=g.get('order', 0),
-                    ))
-                else:
-                    normalized_groups.append(GroupColumn(name=str(g)))
-
-            normalized_groups.sort(key=lambda col: col.order)
-            for gc in normalized_groups:
-                state.add_group_column(gc.name)
-                for current in state.group_columns:
-                    if current.name == gc.name:
-                        current.selected_values = set(gc.selected_values)
-                        current.order = gc.order
-                        break
-
-            # value_columns: dict/str → ValueColumn 변환
-            from .state import AggregationType
-            state.clear_value_zone()
-            normalized_values: list[ValueColumn] = []
-            for v in setting.value_columns:
-                if isinstance(v, ValueColumn):
-                    normalized_values.append(v)
-                elif isinstance(v, dict):
-                    try:
-                        agg = AggregationType(v.get('aggregation', 'sum'))
-                    except ValueError:
-                        agg = AggregationType.SUM
-                    normalized_values.append(ValueColumn(
-                        name=v.get('name', ''),
-                        aggregation=agg,
-                        color=v.get('color', '#1f77b4'),
-                        use_secondary_axis=v.get('use_secondary_axis', False),
-                        order=v.get('order', 0),
-                        formula=v.get('formula', ''),
-                    ))
-                else:
-                    normalized_values.append(ValueColumn(name=str(v)))
-
-            normalized_values.sort(key=lambda col: col.order)
-            for vc in normalized_values:
-                state.add_value_column(vc.name, aggregation=vc.aggregation)
-                idx = len(state.value_columns) - 1
-                state.update_value_column(
-                    idx,
-                    color=vc.color,
-                    use_secondary_axis=vc.use_secondary_axis,
-                    formula=vc.formula,
-                )
-
+            GraphSettingMapper._apply_group_columns(setting, state)
+            GraphSettingMapper._apply_value_columns(setting, state)
             state._hover_columns = [str(h) for h in setting.hover_columns]
             state._filters = list(setting.filters)
             state._sorts = list(setting.sorts)
-
-            # Apply chart_settings
             if setting.chart_settings:
                 cs = state._chart_settings
                 for key, value in setting.chart_settings.items():
@@ -159,8 +160,6 @@ class GraphSettingMapper:
                         setattr(cs, key, value)
         except Exception:
             pass
-
-        # 변경 완료 후 시그널 발행 (UI 갱신 트리거)
         try:
             logger.debug("[DEBUG-CRASH] emitting chart_settings_changed")
             state.chart_settings_changed.emit()
