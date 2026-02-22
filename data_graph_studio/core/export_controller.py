@@ -30,6 +30,7 @@ from typing import Any, Callable, Dict, Optional, TYPE_CHECKING
 
 from data_graph_studio.core.io_abstract import atomic_write, IExportRenderer
 from data_graph_studio.core.observable import Observable
+from data_graph_studio.core.metrics import get_metrics
 
 if TYPE_CHECKING:
     import polars as pl
@@ -166,6 +167,7 @@ class ExportWorker:
 
         if not self._cancelled:
             self._on_progress(100)
+            get_metrics().increment("export.completed")
             self._on_completed(self.path)
 
     def _export_png(self) -> None:
@@ -265,6 +267,7 @@ class ExportWorker:
 
         if not self._cancelled:
             self._on_progress(100)
+            get_metrics().increment("export.completed")
             self._on_completed(self.path)
 
     def _export_csv(self) -> None:

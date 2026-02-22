@@ -10,6 +10,8 @@ from enum import Enum
 
 import polars as pl
 
+from .metrics import get_metrics
+
 logger = logging.getLogger(__name__)
 
 
@@ -348,14 +350,15 @@ class ExpressionEngine:
             계산된 Series
         """
         logger.debug("expression_engine.evaluate", extra={"expr": str(expression)[:80]})
+        get_metrics().increment("expression.evaluated")
         # 토큰화
         lexer = Lexer(expression)
         tokens = lexer.tokenize()
-        
+
         # 파싱
         parser = Parser(tokens)
         ast = parser.parse()
-        
+
         # 평가
         return self._evaluate_ast(ast, df)
     

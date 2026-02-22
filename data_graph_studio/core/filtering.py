@@ -13,6 +13,7 @@ import polars as pl
 logger = logging.getLogger(__name__)
 
 from data_graph_studio.core.observable import Observable
+from data_graph_studio.core.metrics import get_metrics
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +465,7 @@ class FilteringManager(Observable):
             if f.enabled:
                 result = self._apply_single_filter(result, f)
 
+        get_metrics().increment("filter.applied")
         return result
 
     def _apply_single_filter(self, data: pl.DataFrame, f: Filter) -> pl.DataFrame:
