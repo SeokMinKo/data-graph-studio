@@ -98,7 +98,7 @@ class TestStreamingControllerSignals:
     def test_state_transitions(self, stub_fs, stub_timer):
         ctrl = StreamingController(fs=stub_fs, timer_factory=stub_timer)
         states = []
-        ctrl.streaming_state_changed.connect(lambda s: states.append(s))
+        ctrl.subscribe("streaming_state_changed", lambda s: states.append(s))
 
         assert ctrl.state == "off"
 

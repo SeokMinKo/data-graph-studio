@@ -22,6 +22,7 @@ from ..core.state import AppState, ChartType
 from ..core.clipboard_manager import ClipboardManager, DragDropHandler
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
+from .adapters.streaming_adapter import StreamingControllerAdapter
 from ..core.undo_manager import UndoStack
 from .panels.history_panel import HistoryPanel
 from ..core.dashboard_controller import DashboardController
@@ -128,11 +129,14 @@ class MainWindow(QMainWindow):
             self.profile_store, self.profile_controller, self.state,
         )
 
-        # Streaming controller
+        # Streaming controller (pure Observable — no Qt dependency)
         self._streaming_controller = StreamingController(
             fs=RealFileSystem(),
             timer_factory=_QtTimerFactory(),
-            parent=self,
+        )
+        # Adapter translates Observable events to Qt Signals for UI connections
+        self._streaming_adapter = StreamingControllerAdapter(
+            self._streaming_controller, parent=self
         )
 
         # ===== v2 Feature Controllers =====
@@ -751,14 +755,14 @@ class MainWindow(QMainWindow):
             self._on_profile_comparison_ended
         )
 
-        # Streaming controller signals
-        self._streaming_controller.streaming_state_changed.connect(
+        # Streaming controller signals (routed through adapter for Qt compatibility)
+        self._streaming_adapter.streaming_state_changed.connect(
             self._on_streaming_state_changed
         )
-        self._streaming_controller.data_updated.connect(
+        self._streaming_adapter.data_updated.connect(
             self._on_streaming_data_updated
         )
-        self._streaming_controller.file_deleted.connect(
+        self._streaming_adapter.file_deleted.connect(
             self._on_streaming_file_deleted
         )
 

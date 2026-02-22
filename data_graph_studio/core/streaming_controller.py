@@ -16,39 +16,37 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PySide6.QtCore import QObject, Signal
-
 from data_graph_studio.core.file_watcher import FileWatcher
 from data_graph_studio.core.io_abstract import IFileSystem, ITimerFactory
+from data_graph_studio.core.observable import Observable
 
 logger = logging.getLogger(__name__)
 
 
-class StreamingController(QObject):
+class StreamingController(Observable):
     """
     Streaming controller — manages FileWatcher and streaming state.
 
+    Events emitted:
+        streaming_state_changed(new_state: str)  — "off" | "live" | "paused"
+        data_updated(file_path: str, new_row_count: int)
+        file_deleted(file_path: str)             — notifies listeners before stop
+
     Usage:
         ctrl = StreamingController(fs=real_fs, timer_factory=qt_timer_factory)
-        ctrl.streaming_state_changed.connect(on_state_changed)
+        ctrl.subscribe("streaming_state_changed", on_state_changed)
         ctrl.start("/path/to/file.csv", mode="tail")
         ctrl.pause()
         ctrl.resume()
         ctrl.stop()
     """
 
-    # ── Signals ───────────────────────────────────────────────
-    streaming_state_changed = Signal(str)  # "off" | "live" | "paused"
-    data_updated = Signal(str, int)        # file_path, new_row_count
-    file_deleted = Signal(str)             # file_path (notifies UI before stop)
-
     def __init__(
         self,
         fs: IFileSystem,
         timer_factory: ITimerFactory,
-        parent: Optional[QObject] = None,
     ):
-        super().__init__(parent)
+        super().__init__()
 
         self._fs = fs
         self._timer_factory = timer_factory
@@ -152,22 +150,22 @@ class StreamingController(QObject):
     def _set_state(self, new_state: str) -> None:
         if self._state != new_state:
             self._state = new_state
-            self.streaming_state_changed.emit(new_state)
+            self.emit("streaming_state_changed", new_state)
 
     def _on_file_changed(self, path: str) -> None:
         """Handle file_changed from FileWatcher."""
         if self._state != "live":
             return
-        self.data_updated.emit(path, 0)
+        self.emit("data_updated", path, 0)
 
     def _on_file_deleted(self, path: str) -> None:
         """Handle file_deleted — ERR-2.1. Notify UI before stopping."""
         logger.warning(f"Streaming: file deleted: {path}")
-        self.file_deleted.emit(path)
+        self.emit("file_deleted", path)
         self.stop()
 
     def _on_rows_appended(self, path: str, count: int) -> None:
         """Handle rows_appended from FileWatcher."""
         if self._state != "live":
             return
-        self.data_updated.emit(path, count)
+        self.emit("data_updated", path, count)

@@ -712,7 +712,7 @@ class TestStreamingController:
         mock_fs.add_file("/data.csv", csv_data_5rows, mtime=1000.0)
 
         states = []
-        ctrl.streaming_state_changed.connect(lambda s: states.append(s))
+        ctrl.subscribe("streaming_state_changed", lambda s: states.append(s))
 
         ctrl.start("/data.csv", mode="tail")
         ctrl.pause()
