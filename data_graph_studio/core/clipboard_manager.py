@@ -3,9 +3,12 @@ Clipboard Manager - 복사/붙여넣기 기능
 Excel, Google Sheets, 텍스트 데이터와 연동
 """
 import io
+import logging
 import re
 from typing import Optional, Tuple, List
 import polars as pl
+
+logger = logging.getLogger(__name__)
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QMimeData
 from PySide6.QtGui import QImage
@@ -139,7 +142,7 @@ class ClipboardManager:
             return df
             
         except Exception as e:
-            print(f"HTML parse error: {e}")
+            logger.error("clipboard HTML parse error", extra={"error": str(e)})
             return None
     
     @staticmethod
@@ -196,7 +199,7 @@ class ClipboardManager:
             return df
             
         except Exception as e:
-            print(f"Text parse error: {e}")
+            logger.error("clipboard text parse error", extra={"error": str(e)})
             return None
     
     @staticmethod
