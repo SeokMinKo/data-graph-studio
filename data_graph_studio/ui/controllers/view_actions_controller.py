@@ -490,7 +490,7 @@ class ViewActionsController:
             cs = cell.col_span if cell else 1
             self.w._dashboard_panel.replace_spinner(row, col, mini, rs, cs)
         except Exception as e:
-            logger.debug(f"MiniGraphWidget render failed: {e}")
+            logger.debug("view_actions_controller.mini_graph_render_failed", extra={"error": e})
             # Fallback: just refresh the panel
             layout = self.w._dashboard_controller.current_layout
             if layout and self.w._dashboard_panel:

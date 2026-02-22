@@ -221,7 +221,7 @@ class StreamingUIController:
                 self._update_streaming_status(new_row_count)
 
         except Exception as e:
-            logger.error(f"Streaming data update error: {e}", exc_info=True)
+            logger.error("streaming_ui_controller.data_update_error", extra={"error": e}, exc_info=True)
             self.w.statusbar.showMessage(f"Streaming error: {e}", 5000)
 
     @Slot(str)

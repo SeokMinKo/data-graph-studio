@@ -324,7 +324,7 @@ class ComparisonEngine:
 
         except Exception as e:
             result["error"] = str(e)
-            logger.error(f"Statistical test failed: {e}")
+            logger.error("comparison_engine.statistical_test_failed", extra={"error": e})
 
         return result
 
@@ -494,7 +494,7 @@ class ComparisonEngine:
 
         except Exception as e:
             result["error"] = str(e)
-            logger.error(f"Correlation calculation failed: {e}")
+            logger.error("comparison_engine.correlation_failed", extra={"error": e})
 
         return result
 

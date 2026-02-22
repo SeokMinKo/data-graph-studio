@@ -132,26 +132,26 @@ class FileWatcher(Observable):
         """
         # Check file exists
         if not self._fs.exists(file_path):
-            logger.warning(f"FileWatcher: file not found: {file_path}")
+            logger.warning("file_watcher.not_found", extra={"path": file_path})
             return False
 
         # Get initial stat
         try:
             st = self._fs.stat(file_path)
         except (FileNotFoundError, PermissionError) as e:
-            logger.warning(f"FileWatcher: cannot stat {file_path}: {e}")
+            logger.warning("file_watcher.stat_failed", extra={"path": file_path, "error": e})
             return False
 
         # Section 10.2: 2GB+ → tail only
         if st.st_size > LARGE_FILE_THRESHOLD and mode == "reload":
-            logger.info(f"FileWatcher: {file_path} > 2GB, forcing tail mode")
+            logger.info("file_watcher.large_file_tail_mode", extra={"path": file_path})
             mode = "tail"
 
         # Section 10.2: Max watched files → evict oldest
         if file_path not in self._entries and len(self._entries) >= MAX_WATCHED_FILES:
             # Evict oldest (first item in OrderedDict)
             oldest_path = next(iter(self._entries))
-            logger.info(f"FileWatcher: max files reached, evicting {oldest_path}")
+            logger.info("file_watcher.evicting_oldest", extra={"path": oldest_path})
             self._entries.pop(oldest_path)
 
         # Count rows for tail mode
@@ -165,7 +165,7 @@ class FileWatcher(Observable):
                     header = lines[0]
                     row_count = len(lines) - 1  # subtract header
             except Exception as e:
-                logger.warning(f"FileWatcher: cannot read {file_path} for row count: {e}")
+                logger.warning("file_watcher.read_row_count_failed", extra={"path": file_path, "error": e})
 
         # Create entry
         entry = _WatchEntry(
@@ -405,7 +405,7 @@ class FileWatcher(Observable):
             self._entries.pop(path, None)
             return
         except Exception as e:
-            logger.warning(f"FileWatcher: error reading {path}: {e}")
+            logger.warning("file_watcher.read_error", extra={"path": path, "error": e})
             self._apply_backoff(path)
             return
 

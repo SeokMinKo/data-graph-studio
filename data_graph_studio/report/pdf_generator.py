@@ -385,7 +385,7 @@ class PDFReportGenerator(ReportGenerator):
                     import os
                     os.unlink(tmp_path)
                 except Exception as e:
-                    logger.warning(f"Failed to add chart image: {e}")
+                    logger.warning("pdf_generator.add_chart_image_failed", extra={"error": e})
                     pdf.set_font('Helvetica', 'I', 10)
                     pdf.cell(0, 8, "[Chart image not available]", ln=True)
 

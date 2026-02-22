@@ -45,7 +45,7 @@ def main():
     logger = setup_logging()
     logger.info("=" * 60)
     logger.info("Data Graph Studio Starting...")
-    logger.info(f"Python: {sys.version}")
+    logger.info("app.python_version", extra={"version": sys.version})
     logger.info("=" * 60)
     
     try:
@@ -83,12 +83,12 @@ def main():
         sys.exit(app.exec())
         
     except ImportError as e:
-        logger.critical(f"Import Error: {e}")
+        logger.critical("app.import_error", extra={"error": e})
         print(f"\nImport Error: {e}")
         print("Run: pip install PySide6 polars pyqtgraph")
         sys.exit(1)
     except Exception as e:
-        logger.critical(f"Error: {e}\n{traceback.format_exc()}")
+        logger.critical("app.startup_error", extra={"error": e, "traceback": traceback.format_exc()})
         print(f"\nError: {e}")
         sys.exit(1)
 

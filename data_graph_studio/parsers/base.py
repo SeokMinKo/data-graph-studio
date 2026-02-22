@@ -102,7 +102,7 @@ class ParserProfileStore:
             try:
                 self._data = json.loads(self._path.read_text(encoding="utf-8"))
             except Exception as e:
-                logger.warning(f"Failed to load parser profiles: {e}")
+                logger.warning("parsers.base.load_profiles_failed", extra={"error": e})
                 self._data = {}
 
     def _save(self) -> None:
@@ -113,7 +113,7 @@ class ParserProfileStore:
                 encoding="utf-8",
             )
         except Exception as e:
-            logger.warning(f"Failed to save parser profiles: {e}")
+            logger.warning("parsers.base.save_profiles_failed", extra={"error": e})
 
     def list_profiles(self, parser_key: str) -> List[ParserProfile]:
         """Return all saved profiles for a parser."""

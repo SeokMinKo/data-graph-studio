@@ -729,7 +729,7 @@ class MainWindow(QMainWindow):
                 f"Available: {sys_mem['available_gb']:.1f} GB"
             )
         except Exception as e:
-            logger.debug(f"Memory status update failed: {e}")
+            logger.debug("main_window.memory_status_update_failed", extra={"error": e})
     
     def _connect_signals(self):
         """시그널 연결"""
@@ -986,9 +986,9 @@ class MainWindow(QMainWindow):
                     self.profile_controller.apply_profile(graph_setting.id)
                     self._schedule_autofit()
                 except Exception as e:
-                    logger.warning(f"Failed to apply profile: {e}", exc_info=True)
+                    logger.warning("main_window.apply_profile_failed", extra={"error": e}, exc_info=True)
                 
-                logger.info(f"Wizard result applied: {graph_setting.name}")
+                logger.info("main_window.wizard_result_applied", extra={"name": graph_setting.name})
 
     def _schedule_autofit(self):
         """프로파일 전환/생성 후 그래프를 자동으로 Fit (데이터에 맞춤)."""
@@ -1000,7 +1000,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'graph_panel') and self.engine.is_loaded:
                 self.graph_panel.autofit()
         except Exception as e:
-            logger.debug(f"Auto-fit after profile switch failed: {e}")
+            logger.debug("main_window.autofit_failed", extra={"error": e})
 
     def _setup_quick_switch_shortcuts(self):
         """Alt+1~9로 현재 데이터셋의 n번째 프로파일로 즉시 전환"""
@@ -2029,4 +2029,4 @@ class MainWindow(QMainWindow):
         """Handle shortcut customization - detect conflicts and rebind"""
         # Conflict detection is handled inside ShortcutEditDialog
         # Log the change
-        logger.info(f"Shortcut '{shortcut_id}' changed to '{new_keys}'")
+        logger.info("main_window.shortcut_changed", extra={"shortcut_id": shortcut_id, "new_keys": new_keys})

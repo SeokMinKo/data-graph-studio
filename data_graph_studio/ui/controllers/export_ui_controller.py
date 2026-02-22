@@ -273,7 +273,7 @@ class ExportUIController:
         fmt = getattr(self.w, '_auto_export_format', ExportFormat.CSV)
         if path and self.w.engine.df is not None:
             self.w._export_controller.export_data_async(self.w.engine.df, path, fmt)
-            logger.info(f"Auto-exported to {path}")
+            logger.info("export_ui_controller.auto_exported", extra={"path": path})
 
     # ============================================================
     # Capture Graph Image
@@ -298,7 +298,7 @@ class ExportUIController:
                     pass
                 return image
         except Exception as e:
-            logger.warning(f"Failed to capture graph image: {e}")
+            logger.warning("export_ui_controller.graph_image_capture_failed", extra={"error": e})
         return None
 
     # ============================================================

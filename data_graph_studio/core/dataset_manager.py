@@ -113,7 +113,7 @@ class DatasetManager:
         """
         # MAX_DATASETS 체크
         if len(self._datasets) >= self.MAX_DATASETS:
-            logger.warning(f"Maximum datasets ({self.MAX_DATASETS}) reached")
+            logger.warning("dataset_manager.max_datasets_reached", extra={"limit": self.MAX_DATASETS})
             return None
 
         if dataset_id is None:
@@ -158,7 +158,7 @@ class DatasetManager:
         if self._active_dataset_id is None:
             self._active_dataset_id = dataset_id
 
-        logger.info(f"Dataset loaded: {dataset_id} ({name}), {dataset.row_count:,} rows")
+        logger.info("dataset_manager.dataset_loaded", extra={"dataset_id": dataset_id, "name": name, "row_count": dataset.row_count})
         return dataset_id
 
     def load_dataset_from_dataframe(
@@ -201,7 +201,7 @@ class DatasetManager:
         if self._active_dataset_id is None:
             self._active_dataset_id = dataset_id
 
-        logger.info(f"Dataset from DataFrame: {dataset_id} ({name}), {dataset.row_count:,} rows")
+        logger.info("dataset_manager.dataset_from_dataframe", extra={"dataset_id": dataset_id, "name": name, "row_count": dataset.row_count})
         return dataset_id
 
     def remove_dataset(self, dataset_id: str) -> bool:
@@ -221,7 +221,7 @@ class DatasetManager:
             try:
                 self._on_dataset_removing(dataset_id)
             except Exception as e:
-                logger.warning(f"dataset_removing callback error: {e}")
+                logger.warning("dataset_manager.removing_callback_error", extra={"error": e})
 
         dataset = self._datasets[dataset_id]
         dataset.df = None
@@ -235,7 +235,7 @@ class DatasetManager:
                 self._active_dataset_id = None
 
         gc.collect()
-        logger.info(f"Dataset removed: {dataset_id}")
+        logger.info("dataset_manager.dataset_removed", extra={"dataset_id": dataset_id})
         return True
 
     def activate_dataset(self, dataset_id: str) -> bool:
@@ -438,6 +438,6 @@ class DatasetManager:
                     results[path] = did
                 except Exception as e:
                     results[path] = e
-                    logger.error(f"Parallel load failed for {path}: {e}")
+                    logger.error("dataset_manager.parallel_load_failed", extra={"path": path, "error": e})
 
         return results

@@ -388,7 +388,7 @@ class ShortcutController:
 
             return True
         except Exception as e:
-            logger.error(f"Failed to save shortcut config: {e}")
+            logger.error("shortcut_controller.save_config_failed", extra={"error": e})
             return False
 
     def load_config(self) -> bool:
@@ -417,13 +417,11 @@ class ShortcutController:
 
             return True
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.warning(
-                f"Shortcut config corrupted, resetting to defaults: {e}"
-            )
+            logger.warning("shortcut_controller.config_corrupted", extra={"error": e})
             # ERR-7.2: 기본값으로 복원
             self._manager.reset_all()
             return False
         except Exception as e:
-            logger.error(f"Failed to load shortcut config: {e}")
+            logger.error("shortcut_controller.load_config_failed", extra={"error": e})
             self._manager.reset_all()
             return False

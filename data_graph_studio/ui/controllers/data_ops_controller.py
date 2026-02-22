@@ -228,7 +228,7 @@ class DataOpsController:
 
             self.w.statusbar.showMessage(f"Computed column '{col_name}' added", 3000)
         except Exception as e:
-            logger.error(f"Failed to add computed column: {e}", exc_info=True)
+            logger.error("data_ops_controller.computed_column_failed", extra={"error": e}, exc_info=True)
             QMessageBox.warning(self.w, "Add Calculated Field", f"Failed to add column:\n{e}")
 
 

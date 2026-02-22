@@ -172,6 +172,6 @@ class GraphSettingMapper:
             state.hover_zone_changed.emit()
             logger.debug("[DEBUG-CRASH] all signals emitted OK")
         except Exception as e:
-            logger.error(f"[DEBUG-CRASH] signal emit failed: {e}", exc_info=True)
+            logger.error("graph_setting_mapper.signal_emit_failed", extra={"error": e}, exc_info=True)
         finally:
             state.end_batch_update()

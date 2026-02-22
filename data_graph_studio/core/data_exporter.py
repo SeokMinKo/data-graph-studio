@@ -36,7 +36,7 @@ class DataExporter:
 
         target = df[selected_rows] if selected_rows is not None else df
         target.write_csv(path)
-        logger.info(f"Exported {len(target)} rows to CSV: {path}")
+        logger.info("data_exporter.exported_csv", extra={"row_count": len(target), "path": path})
 
     def export_excel(
         self,
@@ -59,7 +59,7 @@ class DataExporter:
 
         target = df[selected_rows] if selected_rows is not None else df
         target.write_excel(path)
-        logger.info(f"Exported {len(target)} rows to Excel: {path}")
+        logger.info("data_exporter.exported_excel", extra={"row_count": len(target), "path": path})
 
     def export_parquet(
         self,
@@ -82,4 +82,4 @@ class DataExporter:
 
         target = df[selected_rows] if selected_rows is not None else df
         target.write_parquet(path)
-        logger.info(f"Exported {len(target)} rows to Parquet: {path}")
+        logger.info("data_exporter.exported_parquet", extra={"row_count": len(target), "path": path})

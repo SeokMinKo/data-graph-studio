@@ -197,7 +197,7 @@ class DOCXReportGenerator(ReportGenerator):
                 last_para = doc.paragraphs[-1]
                 last_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             except Exception as e:
-                logger.warning(f"Failed to add logo: {e}")
+                logger.warning("docx_generator.add_logo_failed", extra={"error": e})
 
         # 제목
         title_para = doc.add_paragraph(meta.title)
@@ -494,7 +494,7 @@ class DOCXReportGenerator(ReportGenerator):
                     last_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
                 except Exception as e:
-                    logger.warning(f"Failed to add chart image: {e}")
+                    logger.warning("docx_generator.add_chart_image_failed", extra={"error": e})
                     doc.add_paragraph("[Chart image not available]")
             elif chart.image_base64:
                 try:
@@ -506,7 +506,7 @@ class DOCXReportGenerator(ReportGenerator):
                     last_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
                 except Exception as e:
-                    logger.warning(f"Failed to add chart image: {e}")
+                    logger.warning("docx_generator.add_chart_image_failed", extra={"error": e})
                     doc.add_paragraph("[Chart image not available]")
 
             # 설명

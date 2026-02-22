@@ -339,7 +339,7 @@ class FileLoadingController:
                 self._load_file(file_path)
         except Exception as e:
             # If preview fails, just load directly
-            logger.warning(f"Preview failed for {file_path}: {e}")
+            logger.warning("file_loading_controller.preview_failed", extra={"path": file_path, "error": e})
             self._load_file(file_path)
 
     def _check_large_file_warning(self, file_path: str) -> bool:
@@ -524,7 +524,7 @@ class FileLoadingController:
             w.profile_model.refresh()
 
             gc.collect()
-            logger.info(f"Data loaded: {w.engine.row_count:,} rows, {w.engine.column_count} columns")
+            logger.info("file_loading_controller.data_loaded", extra={"row_count": w.engine.row_count, "column_count": w.engine.column_count})
 
             # Add to recent files
             source_path = w.engine._source.path if w.engine._source and w.engine._source.path else None
@@ -534,7 +534,7 @@ class FileLoadingController:
             w._apply_pending_wizard_result()
         else:
             error_msg = w.engine.progress.error_message or "Unknown error"
-            logger.error(f"Failed to load file: {error_msg}")
+            logger.error("file_loading_controller.file_load_failed", extra={"error_msg": error_msg})
             QMessageBox.critical(
                 w,
                 "Error",
@@ -602,7 +602,7 @@ class FileLoadingController:
                     gs = GraphSetting.from_dict(profile_dict)
                     w.profile_store.add(gs)
                 except Exception as e:
-                    logger.warning(f"Failed to restore profile: {e}")
+                    logger.warning("file_loading_controller.restore_profile_failed", extra={"error": e})
 
             w._last_project_path = file_path
             w.statusbar.showMessage(f"Project loaded: {file_path} ({loaded_count} datasets, {len(project.profiles)} profiles)", 3000)
@@ -775,7 +775,7 @@ class FileLoadingController:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             self._update_recent_files_menu()
         except Exception as e:
-            logger.debug(f"Failed to pin recent file: {e}")
+            logger.debug("file_loading_controller.pin_recent_file_failed", extra={"error": e})
 
     def _add_to_recent_files(self, file_path: str):
         """최근 파일에 추가"""
@@ -797,7 +797,7 @@ class FileLoadingController:
 
             self._update_recent_files_menu()
         except Exception as e:
-            logger.debug(f"Failed to add to recent files: {e}")
+            logger.debug("file_loading_controller.add_recent_file_failed", extra={"error": e})
 
     def _open_recent_file(self, file_path: str):
         """최근 파일 열기"""
@@ -816,7 +816,7 @@ class FileLoadingController:
             self._update_recent_files_menu()
             self._w.statusbar.showMessage("Recent files cleared", 3000)
         except Exception as e:
-            logger.debug(f"Failed to clear recent files: {e}")
+            logger.debug("file_loading_controller.clear_recent_files_failed", extra={"error": e})
 
     # ==================== File Watch ====================
 

@@ -148,7 +148,7 @@ class PPTXReportGenerator(ReportGenerator):
                     width=Inches(2)
                 )
             except Exception as e:
-                logger.warning(f"Failed to add logo: {e}")
+                logger.warning("pptx_generator.add_logo_failed", extra={"error": e})
 
         # 제목
         title_left = Inches(0.5)
@@ -559,7 +559,7 @@ class PPTXReportGenerator(ReportGenerator):
                     )
 
                 except Exception as e:
-                    logger.warning(f"Failed to add chart image: {e}")
+                    logger.warning("pptx_generator.add_chart_image_failed", extra={"error": e})
 
                     # 플레이스홀더 텍스트
                     text_box = slide.shapes.add_textbox(

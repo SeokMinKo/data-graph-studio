@@ -260,7 +260,7 @@ class FileLoader:
         if encoding == "utf-8" and file_type in (FileType.CSV, FileType.TSV, FileType.TXT, FileType.CUSTOM):
             detected = detect_encoding(path)
             if detected and detected != 'utf-8':
-                logger.info(f"Auto-detected encoding: {detected}")
+                logger.info("file_loader.encoding_detected", extra={"encoding": detected})
                 encoding = detected
 
         if delimiter_type == DelimiterType.AUTO:
@@ -350,10 +350,10 @@ class FileLoader:
                     self._lazy_df = self._df.lazy()
                 return success
 
-            logger.info(f"LazyFrame created for: {path}")
+            logger.info("file_loader.lazy_frame_created", extra={"path": path})
             return True
         except Exception as e:
-            logger.error(f"Failed to create LazyFrame: {e}")
+            logger.error("file_loader.lazy_frame_create_failed", extra={"error": e})
             self._update_progress(status="error", error_message=str(e))
             return False
 
@@ -379,10 +379,10 @@ class FileLoader:
             self._profile = self._create_profile(self._df, 0)
 
             gc.collect()
-            logger.info(f"LazyFrame collected: {len(self._df):,} rows")
+            logger.info("file_loader.lazy_frame_collected", extra={"row_count": len(self._df)})
             return True
         except Exception as e:
-            logger.error(f"Failed to collect LazyFrame: {e}")
+            logger.error("file_loader.lazy_frame_collect_failed", extra={"error": e})
             return False
 
     def query_lazy(self, expr: pl.Expr) -> Optional[pl.LazyFrame]:
@@ -481,7 +481,7 @@ class FileLoader:
             lf.sink_parquet(parquet_path, compression="zstd")
             return parquet_path
         except Exception as e:
-            logger.warning(f"Failed to convert to parquet: {e}")
+            logger.warning("file_loader.parquet_convert_failed", extra={"error": e})
             self._warning_message = "Memory optimization unavailable. File loaded directly (higher memory usage)."
             return None
 
@@ -586,7 +586,7 @@ class FileLoader:
                 self._update_progress(status="sampling")
                 original_rows = len(self._df)
                 self._df = self._df.sample(n=sample_n, seed=42)
-                logger.info(f"Sampled {sample_n:,} rows from {original_rows:,}")
+                logger.info("file_loader.sampled", extra={"sample_n": sample_n, "original_rows": original_rows})
 
             if optimize_memory and self._df is not None:
                 self._update_progress(status="optimizing")
@@ -609,10 +609,10 @@ class FileLoader:
 
             gc.collect()
             if self._df is not None:
-                logger.info(f"File loaded successfully: {loaded_rows:,} rows, {len(self._df.columns)} columns")
+                logger.info("file_loader.file_loaded", extra={"row_count": loaded_rows, "column_count": len(self._df.columns)})
             return True
         except Exception as e:
-            logger.error(f"Failed to load file: {e}", exc_info=True)
+            logger.error("file_loader.file_load_failed", extra={"error": e}, exc_info=True)
             self._update_progress(status="error", error_message=str(e))
             gc.collect()
             return False
@@ -640,7 +640,7 @@ class FileLoader:
                 if self._cancel_loading:
                     return None
                 if i >= MAX_TEXT_LINES:
-                    logger.warning(f"Text file truncated at {MAX_TEXT_LINES:,} lines")
+                    logger.warning("file_loader.text_file_truncated", extra={"max_lines": MAX_TEXT_LINES})
                     break
                 lines.append(line)
 
@@ -724,7 +724,7 @@ class FileLoader:
             try:
                 return self.parse_etl_binary(path)
             except (ImportError, ValueError, Exception) as e:
-                logger.warning(f"etl-parser failed: {e}")
+                logger.warning("file_loader.etl_parser_failed", extra={"error": e})
                 self._warning_message = "ETL file parsing failed, loaded as plain text. Data may be incomplete."
 
         system = platform.system()

@@ -210,14 +210,14 @@ class DatasetController:
                 w.profile_model.refresh()
 
                 gc.collect()
-                logger.info(f"Dataset added: {dataset_id} ({name}), {w.engine.row_count:,} rows")
+                logger.info("dataset_controller.dataset_added", extra={"dataset_id": dataset_id, "name": name, "row_count": w.engine.row_count})
 
             w._pending_dataset_id = None
             w._pending_dataset_name = None
             w._pending_dataset_path = None
         else:
             error_msg = w.engine.progress.error_message or "Unknown error"
-            logger.error(f"Failed to load dataset: {error_msg}")
+            logger.error("dataset_controller.dataset_load_failed", extra={"error_msg": error_msg})
             QMessageBox.critical(
                 w,
                 "Error",

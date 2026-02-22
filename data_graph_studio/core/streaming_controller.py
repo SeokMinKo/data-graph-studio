@@ -160,7 +160,7 @@ class StreamingController(Observable):
 
     def _on_file_deleted(self, path: str) -> None:
         """Handle file_deleted — ERR-2.1. Notify UI before stopping."""
-        logger.warning(f"Streaming: file deleted: {path}")
+        logger.warning("streaming_controller.file_deleted", extra={"path": path})
         self.emit("file_deleted", path)
         self.stop()
 
