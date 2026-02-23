@@ -391,7 +391,7 @@ class FileLoader:
             raise DataLoadError(
                 "Failed to collect lazy frame into DataFrame",
                 operation="collect_lazy",
-                context={},
+                context={"file": str(self._source.path) if self._source else "unknown"},
             ) from e
 
     def query_lazy(self, expr: pl.Expr) -> Optional[pl.LazyFrame]:
