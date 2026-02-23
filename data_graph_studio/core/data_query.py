@@ -19,6 +19,11 @@ from data_graph_studio.core.data_query_helpers import (
     compute_eager_column_stats,
     compute_windowed_profile,
 )
+from data_graph_studio.core.constants import (
+    CATEGORICAL_MAX_NUMERIC_UNIQUE,
+    DEFAULT_SAMPLE_SIZE,
+    DEFAULT_UNIQUE_VALUES_LIMIT,
+)
 from data_graph_studio.core.metrics import get_metrics
 
 logger = logging.getLogger(__name__)
@@ -369,7 +374,7 @@ class DataQuery:
 
         if dtype in NUMERIC_DTYPES:
             unique_count = series.n_unique()
-            return unique_count <= min(20, max_unique_count) and unique_count / len(series) < max_unique_ratio
+            return unique_count <= min(CATEGORICAL_MAX_NUMERIC_UNIQUE, max_unique_count) and unique_count / len(series) < max_unique_ratio
 
         if dtype in [pl.Date, pl.Datetime, pl.Time]:
             return False
@@ -388,7 +393,7 @@ class DataQuery:
         self,
         df: pl.DataFrame,
         column: str,
-        limit: int = 1000,
+        limit: int = DEFAULT_UNIQUE_VALUES_LIMIT,
     ) -> List[Any]:
         """Return sorted unique values for a column, up to a limit.
 
@@ -423,7 +428,7 @@ class DataQuery:
     def sample(
         self,
         df: pl.DataFrame,
-        n: int = 10000,
+        n: int = DEFAULT_SAMPLE_SIZE,
         seed: int = 42,
     ) -> Optional[pl.DataFrame]:
         """Return a random sample of at most n rows from a DataFrame.

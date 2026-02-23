@@ -19,8 +19,8 @@ from .exceptions import ConfigError
 
 
 class ProfileController(Observable):
-    _UNDO_LIMIT = 10
-    _UNDO_EXPIRY_SECONDS = 300
+    _UNDO_LIMIT = 10          # max undo entries kept per session
+    _UNDO_EXPIRY_SECONDS = 300  # 5 minutes: entries older than this are pruned on undo
 
     def __init__(self, store: ProfileStore, state: AppState):
         super().__init__()
