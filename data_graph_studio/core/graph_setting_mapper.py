@@ -6,6 +6,7 @@ import logging
 import uuid
 from typing import Any
 
+from .exceptions import ValidationError
 from .profile import GraphSetting
 from .state import AppState, ChartType, ValueColumn, GroupColumn
 
@@ -159,8 +160,12 @@ class GraphSettingMapper:
                 for key, value in setting.chart_settings.items():
                     if hasattr(cs, key):
                         setattr(cs, key, value)
-        except Exception:
-            logger.error("graph_setting_mapper.to_app_state.apply_failed", exc_info=True)
+        except Exception as e:
+            raise ValidationError(
+                f"GraphSetting을 AppState에 적용하는 데 실패했습니다: {e}",
+                operation="to_app_state",
+                context={"setting_name": getattr(setting, "name", "")},
+            ) from e
         try:
             logger.debug("[DEBUG-CRASH] emitting chart_settings_changed")
             state.chart_settings_changed.emit()

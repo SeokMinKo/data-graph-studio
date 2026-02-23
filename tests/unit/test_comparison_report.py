@@ -9,9 +9,9 @@ Covers:
 - generate_report_data: no datasets (error path), minimal two-dataset case
 - _generate_html_report: structure sanity (title, datasets section present)
 - _render_html_* helpers: individual section rendering
-- export_json: normal success, write failure (permission error), no-datasets error
+- export_json: normal success, raises ExportError on write failure, no-datasets error
 - export_csv: normal success, no-datasets error
-- export_html: normal success, no-datasets error
+- export_html: normal success, raises ExportError on write failure, no-datasets error
 """
 
 import json
@@ -26,6 +26,7 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.comparison_report import ComparisonReport
+from data_graph_studio.core.exceptions import ExportError
 
 
 # ---------------------------------------------------------------------------
@@ -203,12 +204,15 @@ class TestExportJson:
         result = report.export_json(out, [])
         assert result is False
 
-    def test_export_json_returns_false_on_write_error(self, tmp_path):
+    def test_export_json_raises_export_error_on_write_error(self, tmp_path):
         report = _make_report(dataset_ids=["ds1"])
         # Write to a non-existent directory
         out = str(tmp_path / "no_such_dir" / "report.json")
-        result = report.export_json(out, ["ds1"])
-        assert result is False
+        with pytest.raises(ExportError) as exc_info:
+            report.export_json(out, ["ds1"])
+        err = exc_info.value
+        assert err.operation == "export_json"
+        assert "path" in err.context
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +244,15 @@ class TestExportCsv:
         assert "Dataset_ds1" in content
         assert "Dataset_ds2" in content
 
+    def test_export_csv_raises_export_error_on_write_error(self, tmp_path):
+        report = _make_report(dataset_ids=["ds1"])
+        out = str(tmp_path / "no_such_dir" / "report.csv")
+        with pytest.raises(ExportError) as exc_info:
+            report.export_csv(out, ["ds1"])
+        err = exc_info.value
+        assert err.operation == "export_csv"
+        assert "path" in err.context
+
 
 # ---------------------------------------------------------------------------
 # export_html
@@ -261,8 +274,11 @@ class TestExportHtml:
         result = report.export_html(out, [])
         assert result is False
 
-    def test_export_html_returns_false_on_write_error(self, tmp_path):
+    def test_export_html_raises_export_error_on_write_error(self, tmp_path):
         report = _make_report(dataset_ids=["ds1"])
         out = str(tmp_path / "no_dir" / "report.html")
-        result = report.export_html(out, ["ds1"])
-        assert result is False
+        with pytest.raises(ExportError) as exc_info:
+            report.export_html(out, ["ds1"])
+        err = exc_info.value
+        assert err.operation == "export_html"
+        assert "path" in err.context

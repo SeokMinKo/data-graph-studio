@@ -85,3 +85,32 @@ class TestLoadEtlNonWindows:
                 regex_pattern=None,
                 has_header=True,
             )
+
+
+# ---------------------------------------------------------------------------
+# _run_with_timeout — raises DataLoadError on timeout
+# ---------------------------------------------------------------------------
+
+class TestRunWithTimeout:
+    def test_raises_data_load_error_on_timeout(self):
+        """_run_with_timeout raises DataLoadError when operation exceeds timeout."""
+        import time
+        from data_graph_studio.core.file_loader import _run_with_timeout
+        from data_graph_studio.core.exceptions import DataLoadError
+
+        with pytest.raises(DataLoadError, match="시간 초과"):
+            _run_with_timeout(lambda: time.sleep(10), timeout_s=0.05, operation="test_op")
+
+    def test_returns_result_on_success(self):
+        """_run_with_timeout returns the function's return value when it completes in time."""
+        from data_graph_studio.core.file_loader import _run_with_timeout
+
+        result = _run_with_timeout(lambda: 42, timeout_s=5.0, operation="test_return")
+        assert result == 42
+
+    def test_propagates_exception_from_fn(self):
+        """_run_with_timeout re-raises exceptions from fn (not wrapped in DataLoadError)."""
+        from data_graph_studio.core.file_loader import _run_with_timeout
+
+        with pytest.raises(ValueError, match="boom"):
+            _run_with_timeout(lambda: (_ for _ in ()).throw(ValueError("boom")), timeout_s=5.0, operation="test_exc")

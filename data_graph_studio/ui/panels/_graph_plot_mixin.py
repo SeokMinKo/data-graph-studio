@@ -448,10 +448,22 @@ class _GraphPlotMixin:
             self.legend.hide()
 
     def contextMenuEvent(self, event):
-        """Custom right-click menu (replace pyqtgraph default)."""
+        """Build and display the right-click context menu."""
+        pos = self.plotItem.vb.mapSceneToView(event.pos())
         menu = QMenu(self)
+        self._build_view_menu(menu)
+        self._build_export_menu(menu)
+        menu.addSeparator()
+        self._build_tools_menu(menu)
+        self._build_draw_menu(menu)
+        menu.addSeparator()
+        self._build_reference_menu(menu)
+        menu.addSeparator()
+        self._build_annotations_menu(menu, pos)
+        menu.exec(event.globalPos())
 
-        # View
+    def _build_view_menu(self, menu: QMenu) -> None:
+        """Add view-control actions: fit, grid, minimap, crosshair, legend, copy."""
         fit_act = QAction("Fit (Auto)", self)
         fit_act.triggered.connect(self.reset_view)
         menu.addAction(fit_act)
@@ -467,7 +479,6 @@ class _GraphPlotMixin:
 
         minimap_act = QAction("Toggle Minimap", self)
         minimap_act.setCheckable(True)
-        # Access GraphPanel parent to check/toggle minimap
         graph_panel = self._find_graph_panel()
         if graph_panel:
             minimap_act.setChecked(graph_panel._minimap_enabled)
@@ -488,8 +499,10 @@ class _GraphPlotMixin:
         copy_act.triggered.connect(self._copy_plot_image)
         menu.addAction(copy_act)
 
-        # Export
+    def _build_export_menu(self, menu: QMenu) -> None:
+        """Add Export submenu: save image, export CSV."""
         export_menu = menu.addMenu("Export")
+
         export_img = QAction("Save Image…", self)
         export_img.triggered.connect(self._export_plot_image)
         export_menu.addAction(export_img)
@@ -499,9 +512,8 @@ class _GraphPlotMixin:
         export_csv.triggered.connect(self._export_plot_data_csv)
         export_menu.addAction(export_csv)
 
-        menu.addSeparator()
-
-        # Tools
+    def _build_tools_menu(self, menu: QMenu) -> None:
+        """Add Tool submenu: pan, zoom, rect select, lasso select."""
         tools_menu = menu.addMenu("Tool")
         for label, mode in [
             ("Pan", ToolMode.PAN),
@@ -515,7 +527,8 @@ class _GraphPlotMixin:
             act.triggered.connect(lambda checked=False, m=mode: self.state.set_tool_mode(m))
             tools_menu.addAction(act)
 
-        # Draw
+    def _build_draw_menu(self, menu: QMenu) -> None:
+        """Add Draw submenu: drawing tool modes, style dialog, and undo/redo/delete/clear ops."""
         draw_menu = menu.addMenu("Draw")
         for label, mode in [
             ("Line", ToolMode.LINE_DRAW),
@@ -531,29 +544,17 @@ class _GraphPlotMixin:
             draw_menu.addAction(act)
 
         draw_menu.addSeparator()
-
         style_act = QAction("Drawing Style…", self)
-        def _open_style():
-            try:
-                dlg = DrawingStyleDialog("Drawing Style", self)
-                dlg.set_style(self._current_drawing_style)
-                if dlg.exec() == QDialog.Accepted:
-                    self.set_drawing_style(dlg.get_style())
-            except Exception:
-                logger.exception("main_graph.open_style_dialog.error")
-        style_act.triggered.connect(_open_style)
+        style_act.triggered.connect(lambda: self._open_drawing_style_dialog())
         draw_menu.addAction(style_act)
 
-        # Drawing ops
         if self._drawing_manager:
             draw_menu.addSeparator()
             undo_d = QAction("Undo Drawing", self)
-            undo_d.setEnabled(True)
             undo_d.triggered.connect(self._drawing_manager.undo)
             draw_menu.addAction(undo_d)
 
             redo_d = QAction("Redo Drawing", self)
-            redo_d.setEnabled(True)
             redo_d.triggered.connect(self._drawing_manager.redo)
             draw_menu.addAction(redo_d)
 
@@ -566,10 +567,26 @@ class _GraphPlotMixin:
             clear_d.triggered.connect(self._drawing_manager.clear)
             draw_menu.addAction(clear_d)
 
-        menu.addSeparator()
+    def _open_drawing_style_dialog(self) -> None:
+        """Open the Drawing Style dialog and apply any accepted changes."""
+        try:
+            dlg = DrawingStyleDialog("Drawing Style", self)
+            dlg.set_style(self._current_drawing_style)
+            if dlg.exec() == QDialog.Accepted:
+                self.set_drawing_style(dlg.get_style())
+        except Exception:
+            logger.exception("main_graph.open_style_dialog.error")
 
-        # Reference Lines
+    def _add_annotation_at_pos(self, vx: float, vy: float) -> None:
+        """Find the nearest data point to (vx, vy) in view coords and prompt to annotate."""
+        result = self._find_nearest_data_point(vx, vy)
+        if result:
+            self._prompt_add_annotation(result[0], result[1])
+
+    def _build_reference_menu(self, menu: QMenu) -> None:
+        """Add Reference Lines and Trendline submenus."""
         has_data = self._data_y is not None and len(self._data_y) > 0
+
         ref_menu = menu.addMenu("Reference Lines")
         mean_act = QAction("Add Mean Line", self)
         mean_act.setEnabled(has_data)
@@ -596,7 +613,10 @@ class _GraphPlotMixin:
         clear_ref.triggered.connect(self.clear_reference_lines)
         ref_menu.addAction(clear_ref)
 
-        # Trendline
+        self._build_trendline_menu(menu, has_data)
+
+    def _build_trendline_menu(self, menu: QMenu, has_data: bool) -> None:
+        """Add Trendline submenu: polynomial degrees, exponential, and clear."""
         trend_menu = menu.addMenu("Trendline")
         for label_t, deg in [("Linear (1차)", 1), ("Quadratic (2차)", 2), ("Cubic (3차)", 3)]:
             t_act = QAction(label_t, self)
@@ -615,18 +635,16 @@ class _GraphPlotMixin:
         clear_trend.triggered.connect(self.clear_trendlines)
         trend_menu.addAction(clear_trend)
 
-        menu.addSeparator()
+    def _build_annotations_menu(self, menu: QMenu, pos) -> None:
+        """Add Annotations submenu and Selection submenu."""
+        has_data = self._data_y is not None and len(self._data_y) > 0
 
-        # Annotations
         ann_menu = menu.addMenu("Annotations")
         add_ann_act = QAction("Add Annotation at Nearest Point…", self)
         add_ann_act.setEnabled(has_data)
-        def _add_ann_nearest():
-            pos = self.plotItem.vb.mapSceneToView(event.pos())
-            result = self._find_nearest_data_point(pos.x(), pos.y())
-            if result:
-                self._prompt_add_annotation(result[0], result[1])
-        add_ann_act.triggered.connect(_add_ann_nearest)
+        add_ann_act.triggered.connect(
+            lambda: self._add_annotation_at_pos(pos.x(), pos.y())
+        )
         ann_menu.addAction(add_ann_act)
 
         clear_ann_act = QAction("Clear All Annotations", self)
@@ -635,15 +653,11 @@ class _GraphPlotMixin:
         ann_menu.addAction(clear_ann_act)
 
         menu.addSeparator()
-
-        # Selection
         sel_menu = menu.addMenu("Selection")
         clear_sel = QAction("Clear Selection", self)
         clear_sel.setEnabled(bool(self.state.selection.selected_rows))
         clear_sel.triggered.connect(self.state.clear_selection)
         sel_menu.addAction(clear_sel)
-
-        menu.exec(event.globalPos())
 
     def _export_plot_image(self):
         """Save current plot as an image file."""

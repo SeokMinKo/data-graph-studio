@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 from .data_engine import DataEngine
+from .exceptions import ExportError
 from .state import AppState
 
 logger = logging.getLogger(__name__)
@@ -146,9 +147,12 @@ class ComparisonReport:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html)
             return True
-        except Exception:
-            logger.error("comparison_report.export_html.failed", extra={"path": file_path}, exc_info=True)
-            return False
+        except Exception as e:
+            raise ExportError(
+                f"HTML 리포트 파일 쓰기 실패: {e}",
+                operation="export_html",
+                context={"path": file_path},
+            ) from e
 
     def _generate_html_report(self, data: Dict[str, Any]) -> str:
         """HTML 리포트 생성"""
@@ -376,9 +380,12 @@ class ComparisonReport:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
             return True
-        except Exception:
-            logger.error("comparison_report.export_json.failed", extra={"path": file_path}, exc_info=True)
-            return False
+        except Exception as e:
+            raise ExportError(
+                f"JSON 리포트 파일 쓰기 실패: {e}",
+                operation="export_json",
+                context={"path": file_path},
+            ) from e
 
     def export_csv(self, file_path: str, dataset_ids: List[str] = None) -> bool:
         """CSV 형식으로 내보내기 (통계 테이블)"""
@@ -391,62 +398,64 @@ class ComparisonReport:
             import csv
 
             with open(file_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-
-                # Header
-                writer.writerow(['Data Comparison Report'])
-                writer.writerow(['Generated', data['generated_at']])
-                writer.writerow([])
-
-                # Datasets
-                writer.writerow(['Datasets'])
-                writer.writerow(['Name', 'Rows', 'Columns'])
-                for ds in data['datasets']:
-                    writer.writerow([
-                        ds.get('name', ds['id']),
-                        ds.get('row_count', 'N/A'),
-                        ds.get('column_count', 'N/A')
-                    ])
-                writer.writerow([])
-
-                # Statistics
-                writer.writerow(['Statistics'])
-                for col, stats in data.get('statistics', {}).items():
-                    writer.writerow([f'Column: {col}'])
-                    writer.writerow(['Dataset', 'Mean', 'Std', 'Min', 'Max', 'Count'])
-                    for did, ds_stats in stats.items():
-                        ds_name = did
-                        for ds in data['datasets']:
-                            if ds['id'] == did:
-                                ds_name = ds.get('name', did)
-                                break
-                        writer.writerow([
-                            ds_name,
-                            ds_stats.get('mean', ''),
-                            ds_stats.get('std', ''),
-                            ds_stats.get('min', ''),
-                            ds_stats.get('max', ''),
-                            ds_stats.get('count', '')
-                        ])
-                    writer.writerow([])
-
-                # Statistical tests
-                if data.get('statistical_tests'):
-                    writer.writerow(['Statistical Tests'])
-                    writer.writerow(['Column', 'Dataset A', 'Dataset B', 'Test', 'Statistic', 'p-value', 'Significant', 'Effect Size'])
-                    for test in data['statistical_tests']:
-                        writer.writerow([
-                            test.get('column', ''),
-                            test.get('dataset_a', ''),
-                            test.get('dataset_b', ''),
-                            test.get('test_name', ''),
-                            test.get('statistic', ''),
-                            test.get('p_value', ''),
-                            test.get('is_significant', ''),
-                            test.get('effect_size', '')
-                        ])
+                self._write_csv_rows(csv.writer(f), data)
 
             return True
-        except Exception:
-            logger.error("comparison_report.export_csv.failed", extra={"path": file_path}, exc_info=True)
-            return False
+        except Exception as e:
+            raise ExportError(
+                f"CSV 리포트 파일 쓰기 실패: {e}",
+                operation="export_csv",
+                context={"path": file_path},
+            ) from e
+
+    @staticmethod
+    def _write_csv_rows(writer, data: Dict[str, Any]) -> None:
+        """Write all CSV sections (header, datasets, statistics, tests) to *writer*."""
+        # Header
+        writer.writerow(['Data Comparison Report'])
+        writer.writerow(['Generated', data['generated_at']])
+        writer.writerow([])
+
+        # Datasets
+        writer.writerow(['Datasets'])
+        writer.writerow(['Name', 'Rows', 'Columns'])
+        for ds in data['datasets']:
+            writer.writerow([
+                ds.get('name', ds['id']),
+                ds.get('row_count', 'N/A'),
+                ds.get('column_count', 'N/A')
+            ])
+        writer.writerow([])
+
+        # Statistics
+        writer.writerow(['Statistics'])
+        ds_name_map = {ds['id']: ds.get('name', ds['id']) for ds in data['datasets']}
+        for col, stats in data.get('statistics', {}).items():
+            writer.writerow([f'Column: {col}'])
+            writer.writerow(['Dataset', 'Mean', 'Std', 'Min', 'Max', 'Count'])
+            for did, ds_stats in stats.items():
+                writer.writerow([
+                    ds_name_map.get(did, did),
+                    ds_stats.get('mean', ''),
+                    ds_stats.get('std', ''),
+                    ds_stats.get('min', ''),
+                    ds_stats.get('max', ''),
+                    ds_stats.get('count', '')
+                ])
+            writer.writerow([])
+
+        # Statistical tests
+        if data.get('statistical_tests'):
+            writer.writerow(['Statistical Tests'])
+            writer.writerow(['Column', 'Dataset A', 'Dataset B', 'Test', 'Statistic', 'p-value', 'Significant', 'Effect Size'])
+            for test in data['statistical_tests']:
+                writer.writerow([
+                    test.get('column', ''),
+                    test.get('dataset_a', ''),
+                    test.get('dataset_b', ''),
+                    test.get('test_name', ''),
+                    test.get('statistic', ''),
+                    test.get('p_value', ''),
+                    test.get('is_significant', ''),
+                    test.get('effect_size', '')
+                ])

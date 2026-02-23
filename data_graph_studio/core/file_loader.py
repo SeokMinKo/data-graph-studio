@@ -25,6 +25,7 @@ from .types import (
     DataSource, PrecisionMode,
 )
 from .exceptions import DataLoadError
+from .constants import FILE_ENCODING_DETECT_TIMEOUT
 
 from .file_loader_formats import (
     is_binary_etl as _is_binary_etl,
@@ -51,8 +52,37 @@ WINDOWED_LOAD_THRESHOLD = 300 * 1024 * 1024     # 300 MB
 DEFAULT_WINDOW_SIZE = 200_000
 
 
-def detect_encoding(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) -> str:
-    """파일 인코딩을 자동 감지한다."""
+def _run_with_timeout(fn, timeout_s: float, operation: str):
+    """Run fn() in a background thread; raise DataLoadError if it doesn't finish in time.
+
+    Preconditions: fn must be callable, timeout_s > 0, operation is a non-empty string
+    Raises: DataLoadError if timeout_s elapses before fn returns
+    """
+    result = [None]
+    exc = [None]
+
+    def _target():
+        try:
+            result[0] = fn()
+        except Exception as e:
+            exc[0] = e
+
+    t = threading.Thread(target=_target, daemon=True)
+    t.start()
+    t.join(timeout=timeout_s)
+    if t.is_alive():
+        raise DataLoadError(
+            f"작업 시간 초과: {operation}",
+            operation=operation,
+            context={"timeout_s": timeout_s},
+        )
+    if exc[0] is not None:
+        raise exc[0]
+    return result[0]
+
+
+def _detect_encoding_impl(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) -> str:
+    """파일 인코딩 감지 내부 구현 (I/O 수행)."""
     try:
         from charset_normalizer import from_path
         result = from_path(path)
@@ -68,6 +98,19 @@ def detect_encoding(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) -> str:
             return 'latin-1'
     except Exception:
         logger.debug("detect_encoding failed, defaulting to utf-8", exc_info=True)
+        return DEFAULT_ENCODING
+
+
+def detect_encoding(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) -> str:
+    """파일 인코딩을 자동 감지한다. FILE_ENCODING_DETECT_TIMEOUT 초 초과 시 DataLoadError."""
+    try:
+        return _run_with_timeout(
+            lambda: _detect_encoding_impl(path, sample_size),
+            timeout_s=FILE_ENCODING_DETECT_TIMEOUT,
+            operation="detect_encoding",
+        )
+    except DataLoadError:
+        logger.warning("detect_encoding timed out, defaulting to utf-8")
         return DEFAULT_ENCODING
 
 
@@ -233,12 +276,15 @@ class FileLoader:
 
     @staticmethod
     def detect_delimiter(path: str, encoding: str = DEFAULT_ENCODING, sample_lines: int = DELIMITER_SAMPLE_LINES) -> str:
-        """구분자를 자동 감지한다."""
+        """구분자를 자동 감지한다. FILE_ENCODING_DETECT_TIMEOUT 초 초과 시 기본값(쉼표) 반환."""
         delimiters = [',', '\t', ';', '|', ' ']
-        delimiter_counts: Dict[str, int] = {d: 0 for d in delimiters}
 
         try:
-            delimiter_counts = _count_delimiters(path, encoding, delimiters, sample_lines)
+            delimiter_counts = _run_with_timeout(
+                lambda: _count_delimiters(path, encoding, delimiters, sample_lines),
+                timeout_s=FILE_ENCODING_DETECT_TIMEOUT,
+                operation="detect_delimiter",
+            )
         except Exception:
             logger.debug("detect_delimiter failed, defaulting to comma", exc_info=True)
             return DEFAULT_DELIMITER

@@ -17,6 +17,20 @@ MAX_BACKOFF_MS: int = 30_000          # 30 seconds max backoff
 IPC_DEFAULT_PORT: int = 52_849
 IPC_MAX_PORT_ATTEMPTS: int = 100
 
+# IPC Protocol message keys
+IPC_KEY_COMMAND: str = "command"
+IPC_KEY_ARGS: str = "args"
+IPC_KEY_STATUS: str = "status"
+IPC_KEY_MESSAGE: str = "message"
+IPC_STATUS_OK: str = "ok"
+IPC_STATUS_ERROR: str = "error"
+
+# IPC server config
+IPC_PORT_DIR: str = ".dgs"
+IPC_PORT_FILE_NAME: str = "ipc_port"
+IPC_SERVER_HOST: str = "127.0.0.1"
+IPC_THREAD_NAME: str = "ipc-server"
+
 # --- Undo / History ---
 UNDO_MAX_DEPTH: int = 50
 
@@ -36,3 +50,10 @@ DATASET_ID_LENGTH: int = 8            # UUID prefix length used as short dataset
 
 # --- Memory ---
 MEMORY_WARNING_THRESHOLD: float = 0.9  # Warn when projected usage exceeds this fraction of the limit
+
+# --- File I/O timeouts (seconds) ---
+FILE_ENCODING_DETECT_TIMEOUT: int = 10   # encoding/delimiter sniff
+FILE_LOAD_TIMEOUT: int = 120             # full file load
+
+# --- IPC ---
+IPC_HANDLER_TIMEOUT: int = 30  # max seconds per IPC command handler call
