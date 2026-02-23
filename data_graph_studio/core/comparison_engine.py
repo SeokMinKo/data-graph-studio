@@ -426,7 +426,7 @@ class ComparisonEngine(IComparisonEngine):
                 result["test_name"], p_val, effect_size, ds_a.name, ds_b.name,
             )
 
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError) as e:
             result["error"] = str(e)
             logger.error("comparison_engine.statistical_test_failed", extra={"error": e})
 
@@ -534,7 +534,7 @@ class ComparisonEngine(IComparisonEngine):
                 f"{sig_text} (p = {p_val:.4f})"
             )
 
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError) as e:
             result["error"] = str(e)
             logger.error("comparison_engine.correlation_failed", extra={"error": e})
 

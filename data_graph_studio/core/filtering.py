@@ -706,7 +706,13 @@ class FilteringManager(Observable, IFilterApplier):
             return result
         except QueryError:
             raise
-        except Exception as e:
+        except (
+            pl.exceptions.InvalidOperationError,
+            pl.exceptions.ComputeError,
+            pl.exceptions.ColumnNotFoundError,
+            TypeError,
+            ValueError,
+        ) as e:
             raise QueryError(
                 "Filter execution failed",
                 operation="_apply_single_filter",
