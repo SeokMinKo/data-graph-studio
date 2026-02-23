@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 from .annotation import Annotation, MAX_ANNOTATION_TEXT_LENGTH
 from .exceptions import ValidationError
+from .types import AnnotationId
 
 # UndoManager는 다른 에이전트가 구현 중 — optional import
 try:
@@ -72,7 +73,7 @@ class AnnotationController:
 
     # ── CRUD ──────────────────────────────────────────────────
 
-    def add(self, annotation: Annotation) -> None:
+    def add(self, annotation: Annotation) -> AnnotationId:
         """Store a new annotation in the controller.
 
         Input: annotation — Annotation, the annotation to store; text must not exceed MAX_ANNOTATION_TEXT_LENGTH characters
@@ -82,9 +83,11 @@ class AnnotationController:
         """
         # 텍스트 길이 재검증 (dataclass __post_init__에서도 체크하지만 명시적 확인)
         if len(annotation.text) > MAX_ANNOTATION_TEXT_LENGTH:
-            raise ValueError(
+            raise ValidationError(
                 f"Annotation text exceeds {MAX_ANNOTATION_TEXT_LENGTH} characters "
-                f"(got {len(annotation.text)})"
+                f"(got {len(annotation.text)})",
+                operation="add",
+                context={"text_length": len(annotation.text), "max_length": MAX_ANNOTATION_TEXT_LENGTH},
             )
 
         before = self._snapshot_for_undo()
@@ -99,8 +102,9 @@ class AnnotationController:
             after_state=after,
             action_type_name="ANNOTATION_ADD",
         )
+        return AnnotationId(annotation.id)
 
-    def get(self, annotation_id: str) -> Optional[Annotation]:
+    def get(self, annotation_id: AnnotationId) -> Optional[Annotation]:
         """Return an annotation by its ID.
 
         Input: annotation_id — str, the ID of the annotation to look up
@@ -108,7 +112,7 @@ class AnnotationController:
         """
         return self._annotations.get(annotation_id)
 
-    def edit(self, annotation_id: str, **kwargs: Any) -> bool:
+    def edit(self, annotation_id: AnnotationId, **kwargs: Any) -> bool:
         """Update fields on an existing annotation.
 
         Input: annotation_id — str, ID of the annotation to modify;
@@ -124,9 +128,11 @@ class AnnotationController:
         # 텍스트 길이 검증
         new_text = kwargs.get("text")
         if new_text is not None and len(new_text) > MAX_ANNOTATION_TEXT_LENGTH:
-            raise ValueError(
+            raise ValidationError(
                 f"Annotation text exceeds {MAX_ANNOTATION_TEXT_LENGTH} characters "
-                f"(got {len(new_text)})"
+                f"(got {len(new_text)})",
+                operation="edit",
+                context={"text_length": len(new_text), "max_length": MAX_ANNOTATION_TEXT_LENGTH},
             )
 
         before = self._snapshot_for_undo()
@@ -148,7 +154,7 @@ class AnnotationController:
 
         return True
 
-    def delete(self, annotation_id: str) -> bool:
+    def delete(self, annotation_id: AnnotationId) -> bool:
         """Remove an annotation by ID.
 
         Input: annotation_id — str, ID of the annotation to delete

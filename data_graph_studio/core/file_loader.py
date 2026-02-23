@@ -22,7 +22,7 @@ import polars as pl
 
 from .types import (
     FileType, DelimiterType, LoadingProgress, DataProfile,
-    DataSource, PrecisionMode,
+    DataSource, PrecisionMode, FilePath,
 )
 from .exceptions import DataLoadError
 from .constants import (
@@ -384,7 +384,7 @@ class FileLoader:
 
     def load_file(
         self,
-        path: str,
+        path: FilePath,
         file_type: Optional[FileType] = None,
         encoding: str = "utf-8",
         delimiter: str = ",",

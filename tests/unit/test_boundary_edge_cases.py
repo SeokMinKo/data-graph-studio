@@ -22,7 +22,7 @@ from data_graph_studio.core.statistics import DescriptiveStatistics
 from data_graph_studio.core.marking import Marking, MarkingManager, MarkMode
 from data_graph_studio.core.data_query import DataQuery
 from data_graph_studio.core.ipc_protocol import parse_request, make_ok_response, make_error_response
-from data_graph_studio.core.exceptions import ValidationError, QueryError
+from data_graph_studio.core.exceptions import ValidationError, QueryError, DatasetError
 
 
 # ---------------------------------------------------------------------------
@@ -681,9 +681,9 @@ class TestMarkingEdgeCases:
         assert mm.markings["Main"].count == 0
 
     def test_mark_nonexistent_marking_raises_key_error(self):
-        """mark() on a non-existent marking name raises KeyError."""
+        """mark() on a non-existent marking name raises DatasetError."""
         mm = MarkingManager()
-        with pytest.raises(KeyError):
+        with pytest.raises(DatasetError):
             mm.mark("NonExistent", {1, 2})
 
     def test_mark_toggle_mode_flips_selection(self):

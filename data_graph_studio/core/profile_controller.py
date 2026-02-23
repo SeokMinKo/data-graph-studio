@@ -229,7 +229,7 @@ class ProfileController(Observable):
             imported = self._store.import_async(path)
             setting = imported.result() if hasattr(imported, "result") else imported
             if setting is None:
-                raise ValueError("Import failed")
+                raise ConfigError("Import failed", operation="import_profile")
 
             if setting.dataset_id != dataset_id:
                 setting = replace(setting, dataset_id=dataset_id)

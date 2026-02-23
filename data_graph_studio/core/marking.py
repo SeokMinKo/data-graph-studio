@@ -9,7 +9,7 @@ from typing import Dict, Set, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 from data_graph_studio.core.observable import Observable
-from data_graph_studio.core.exceptions import ValidationError
+from data_graph_studio.core.exceptions import ValidationError, DatasetError
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +314,7 @@ class MarkingManager(Observable):
             )
 
         if name not in self._markings:
-            raise KeyError(f"Marking '{name}' not found")
+            raise DatasetError(f"Marking '{name}' not found", operation="remove_marking", context={"name": name})
 
         del self._markings[name]
 
@@ -345,7 +345,7 @@ class MarkingManager(Observable):
             - No event is emitted if name == current active_marking.
         """
         if name not in self._markings:
-            raise KeyError(f"Marking '{name}' not found")
+            raise DatasetError(f"Marking '{name}' not found", operation="set_active_marking", context={"name": name})
 
         if self._active_marking != name:
             self._active_marking = name
@@ -379,7 +379,7 @@ class MarkingManager(Observable):
             - Emits "marking_changed" with the post-update selected set.
         """
         if marking_name not in self._markings:
-            raise KeyError(f"Marking '{marking_name}' not found")
+            raise DatasetError(f"Marking '{marking_name}' not found", operation="mark", context={"name": marking_name})
 
         marking = self._markings[marking_name]
 
@@ -467,7 +467,7 @@ class MarkingManager(Observable):
             - Returns a copy (not a reference) of global selected_indices.
         """
         if marking_name not in self._markings:
-            raise KeyError(f"Marking '{marking_name}' not found")
+            raise DatasetError(f"Marking '{marking_name}' not found", operation="get_marking", context={"name": marking_name})
 
         marking = self._markings[marking_name]
 
@@ -499,7 +499,7 @@ class MarkingManager(Observable):
             - Emits "marking_changed" with an empty set.
         """
         if marking_name not in self._markings:
-            raise KeyError(f"Marking '{marking_name}' not found")
+            raise DatasetError(f"Marking '{marking_name}' not found", operation="clear_marking", context={"name": marking_name})
 
         marking = self._markings[marking_name]
 

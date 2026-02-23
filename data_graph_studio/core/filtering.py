@@ -447,7 +447,7 @@ class FilteringManager(Observable, IFilterApplier):
             - Emits "filter_changed" event with scheme_name after successful addition.
         """
         if scheme_name not in self._schemes:
-            raise KeyError(f"Scheme '{scheme_name}' not found")
+            raise QueryError(f"Scheme not found: {scheme_name}", operation="get_scheme", context={"scheme_name": scheme_name})
 
         filter_obj = Filter(
             column=column,
