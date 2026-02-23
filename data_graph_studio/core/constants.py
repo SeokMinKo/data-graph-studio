@@ -86,3 +86,15 @@ DEFAULT_CHART_DPI: int = 150               # raster DPI for chart exports in rep
 DEFAULT_UNIQUE_VALUES_LIMIT: int = 1000   # max unique values returned by get_unique_values
 DEFAULT_SAMPLE_SIZE: int = 10_000         # max rows returned by sample()
 CATEGORICAL_MAX_NUMERIC_UNIQUE: int = 20  # numeric columns with <= this many unique values may be categorical
+
+# --- Statistical Analysis ---
+SHAPIRO_WILK_MAX_SAMPLE: int = 5000       # max sample size for Shapiro-Wilk vs D'Agostino
+NORMALITY_SIGNIFICANCE_LEVEL: float = 0.05  # p-value threshold for normality tests
+STATISTICAL_SAMPLE_THRESHOLD: int = 30    # min sample size for parametric tests
+
+# --- IPC ---
+IPC_SOCKET_BUFFER_SIZE: int = 4096        # bytes read per IPC socket chunk
+IPC_MAX_MESSAGE_SIZE: int = 65536         # max IPC message size in bytes (64 KB)
+
+# --- Data Processing ---
+INFER_SCHEMA_LENGTH: int = 10000          # rows sampled for schema inference

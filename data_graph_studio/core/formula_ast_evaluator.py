@@ -305,7 +305,7 @@ class FormulaAstEvaluator:
         if func_name == 'rolling_mean':
             window = int(args[1]) if len(args) > 1 else 3
             if window <= 0:
-                raise ValueError(f"Window must be positive, got {window}")
+                raise FormulaError(f"Window must be positive, got {window}")
             return self._to_series(args[0], df).rolling_mean(window_size=window)
 
         raise FormulaError(f"Unknown function: {func_name}")

@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 import polars as pl
 
 from .exceptions import QueryError
+from .types import ColumnName
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,7 @@ class AnalysisMixin(object):
 
     # -- Virtual columns (F6) -------------------------------------------------
 
-    def add_virtual_column(self, name: str, expr: pl.Expr) -> bool:
+    def add_virtual_column(self, name: ColumnName, expr: pl.Expr) -> bool:
         """Add a derived column computed by a Polars expression to the current DataFrame.
 
         Input: name — str, column name to assign; expr — pl.Expr, a valid Polars expression

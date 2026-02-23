@@ -27,6 +27,7 @@ from data_graph_studio.core.constants import (
     IPC_SERVER_HOST,
     IPC_THREAD_NAME,
     IPC_HANDLER_TIMEOUT,
+    IPC_SOCKET_BUFFER_SIZE,
 )
 from data_graph_studio.core.ipc_protocol import make_error_response, parse_request
 
@@ -345,7 +346,7 @@ class IPCClient:
 
             response = b""
             while True:
-                chunk = self._socket.recv(4096)
+                chunk = self._socket.recv(IPC_SOCKET_BUFFER_SIZE)
                 response += chunk
                 if b"\n" in response:
                     break

@@ -9,6 +9,8 @@ import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
+from .exceptions import ConfigError
+
 logger = logging.getLogger(__name__)
 
 
@@ -432,7 +434,7 @@ class ProjectManager:
             path = self._current._path
 
         if path is None:
-            raise ValueError("No path specified")
+            raise ConfigError("No path specified", operation="save")
 
         logger.debug("project_manager.save", extra={"path": path})
         self._current.save(path)

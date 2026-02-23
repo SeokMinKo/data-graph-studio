@@ -153,7 +153,7 @@ class FormulaParser:
                 FormulaColumnError — column not in df
         """
         if window <= 0:
-            raise ValueError(f"Window must be positive, got {window}")
+            raise FormulaError(f"Window must be positive, got {window}")
         self._check_numeric(column, df)
         return df[column].rolling_mean(window_size=window)
 
@@ -358,7 +358,7 @@ class FormulaParser:
         if m:
             col, window = m.group(1), int(m.group(2))
             if window <= 0:
-                raise ValueError(f"Window must be positive, got {window}")
+                raise FormulaError(f"Window must be positive, got {window}")
             self._check_numeric(col, df)
             return df[col].rolling_mean(window_size=window)
 
