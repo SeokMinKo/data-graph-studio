@@ -47,7 +47,11 @@ class ExpressionEngine:
     }
 
     def __init__(self):
-        pass
+        """Initialize the ExpressionEngine.
+
+        Output: None
+        Invariants: stateless — no instance variables; all evaluation state is per-call
+        """
 
     def evaluate(self, expression: str, df: pl.DataFrame) -> pl.Series:
         """Tokenize, parse, and evaluate an expression string against a DataFrame.

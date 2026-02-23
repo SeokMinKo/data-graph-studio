@@ -32,7 +32,17 @@ def load_csv(
     skip_rows: int = 0,
     comment_char: Optional[str] = None,
 ) -> pl.DataFrame:
-    """CSV를 로드한다."""
+    """Load a CSV file using Polars with schema inference over the first 10 000 rows.
+
+    Input: path — str, absolute path to the CSV file
+           encoding — str, file encoding (e.g. "utf-8", "cp949")
+           delimiter — str, field separator character
+           has_header — bool, whether the first non-skipped row is a header
+           skip_rows — int, number of leading rows to skip before parsing (default 0)
+           comment_char — str | None, lines starting with this character are ignored (default None)
+    Output: pl.DataFrame — parsed data; parse errors are silently ignored per ignore_errors=True
+    Raises: Exception — propagated from polars.read_csv on unrecoverable file errors
+    """
     return pl.read_csv(
         path, encoding=encoding, separator=delimiter,
         has_header=has_header, skip_rows=skip_rows,
@@ -52,7 +62,23 @@ def load_text(
     skip_rows: int = 0,
     comment_char: Optional[str] = None,
 ) -> Optional[pl.DataFrame]:
-    """텍스트 파일을 로드한다."""
+    """Load a plain-text file by splitting lines with a delimiter, regex, or whitespace.
+
+    Reads up to 1 000 000 lines. Numeric columns are inferred by sampling up to 100 values.
+    Returns None if loader._cancel_loading is set mid-read.
+
+    Input: loader — FileLoader, checked for _cancel_loading flag during reading
+           path — str, absolute path to the text file
+           encoding — str, file encoding; decode errors are replaced
+           delimiter — str, field separator used when delimiter_type is not REGEX or SPACE
+           delimiter_type — DelimiterType, controls how lines are split
+           regex_pattern — str | None, regex used when delimiter_type is REGEX
+           has_header — bool, whether the first parsed line is treated as a header
+           skip_rows — int, number of leading lines to skip (default 0)
+           comment_char — str | None, lines starting with this prefix are skipped (default None)
+    Output: pl.DataFrame | None — parsed DataFrame, empty DataFrame when no data rows,
+                                   or None when loading was cancelled
+    """
     MAX_TEXT_LINES = 1_000_000
     lines = []
     with open(path, 'r', encoding=encoding, errors='replace') as f:
@@ -129,7 +155,16 @@ def load_text(
 
 
 def apply_process_filter(df: pl.DataFrame, process_filter: List[str]) -> pl.DataFrame:
-    """프로세스 필터를 적용한다."""
+    """Filter DataFrame rows to only those whose process column value is in process_filter.
+
+    Searches for a process column by checking common names first, then any column
+    containing "process" (case-insensitive). Returns df unchanged when no match is found
+    or process_filter is empty.
+
+    Input: df — pl.DataFrame, the data to filter
+           process_filter — List[str], allowed process name values
+    Output: pl.DataFrame — filtered DataFrame, or the original when no process column is found
+    """
     if not process_filter or df is None:
         return df
 
@@ -161,7 +196,24 @@ def load_etl(
     skip_rows: int = 0,
     comment_char: Optional[str] = None,
 ) -> pl.DataFrame:
-    """ETL 파일을 로드한다."""
+    """Load an ETL trace file, dispatching to binary or text strategies as needed.
+
+    For text ETL files, delegates to load_text. For binary ETL files, tries the optional
+    etl-parser library first, then falls back to Windows tracerpt.exe (Windows only).
+
+    Input: loader — FileLoader, forwarded to load_text for cancel-flag checking
+           path — str, absolute path to the .etl file
+           encoding — str, encoding used when falling back to text parsing
+           delimiter — str, delimiter forwarded to text/CSV sub-loaders
+           delimiter_type — DelimiterType, split strategy forwarded to load_text
+           regex_pattern — str | None, regex forwarded to load_text
+           has_header — bool, header flag forwarded to sub-loaders
+           skip_rows — int, rows to skip forwarded to sub-loaders (default 0)
+           comment_char — str | None, comment prefix forwarded to sub-loaders (default None)
+    Output: pl.DataFrame — parsed trace data
+    Raises: DataLoadError — when the binary ETL cannot be parsed on the current platform
+                            or when the tracerpt.exe conversion fails/times out on Windows
+    """
     import platform
     from .file_loader_formats import is_binary_etl, parse_etl_binary
 

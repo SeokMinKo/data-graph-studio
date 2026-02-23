@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 class GraphSettingMapper:
     @staticmethod
     def from_app_state(state: AppState, name: str, dataset_id: str) -> GraphSetting:
-        """Create GraphSetting from current AppState"""
+        """Create a GraphSetting snapshot from the current AppState.
+
+        Input: state — AppState, source of chart type, columns, filters, sorts, and settings
+               name — str, display name for the saved setting
+               dataset_id — str, dataset ID to associate with the setting
+        Output: GraphSetting — fully populated setting with a new UUID; group/value columns
+            are serialized to dicts for storage
+        """
         chart_type = state._chart_settings.chart_type
         if isinstance(chart_type, ChartType):
             chart_type = chart_type.value
@@ -78,7 +85,7 @@ class GraphSettingMapper:
             return chart_type
         try:
             return ChartType(str(chart_type).lower())
-        except Exception:
+        except (TypeError, AttributeError, ValueError, KeyError):
             logger.debug("graph_setting_mapper.resolve_chart_type.coerce_failed", exc_info=True)
             return state._chart_settings.chart_type
 
@@ -143,7 +150,15 @@ class GraphSettingMapper:
 
     @staticmethod
     def to_app_state(setting: GraphSetting, state: AppState) -> None:
-        """Apply GraphSetting to AppState with signal batching."""
+        """Apply a GraphSetting to AppState, restoring all chart configuration.
+
+        Input: setting — GraphSetting, the snapshot to restore
+               state — AppState, the target whose chart type, columns, filters, and sorts are overwritten
+        Output: None
+        Raises: ValidationError — when any attribute from setting cannot be applied to state
+        Invariants: all signals (chart_settings_changed, value_zone_changed, etc.) are emitted
+            inside a batch update; state is unchanged on ValidationError
+        """
         state.begin_batch_update()
         try:
             state._chart_settings.chart_type = GraphSettingMapper._resolve_chart_type(
@@ -167,15 +182,15 @@ class GraphSettingMapper:
                 context={"setting_name": getattr(setting, "name", "")},
             ) from e
         try:
-            logger.debug("[DEBUG-CRASH] emitting chart_settings_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "chart_settings_changed"})
             state.chart_settings_changed.emit()
-            logger.debug("[DEBUG-CRASH] emitting value_zone_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "value_zone_changed"})
             state.value_zone_changed.emit()
-            logger.debug("[DEBUG-CRASH] emitting group_zone_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "group_zone_changed"})
             state.group_zone_changed.emit()
-            logger.debug("[DEBUG-CRASH] emitting hover_zone_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "hover_zone_changed"})
             state.hover_zone_changed.emit()
-            logger.debug("[DEBUG-CRASH] all signals emitted OK")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "all_signals_emitted_ok"})
         except (RuntimeError, AttributeError, TypeError) as e:
             logger.error("graph_setting_mapper.signal_emit_failed", extra={"error": e}, exc_info=True)
         finally:

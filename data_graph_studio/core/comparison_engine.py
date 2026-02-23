@@ -36,12 +36,24 @@ class IComparisonEngine(ABC):
 
     @abstractmethod
     def calculate_difference(self, dataset_a_id: str, dataset_b_id: str, value_column: str, key_column=None):
-        """Calculate difference between two datasets."""
+        """Calculate the row-by-row difference between two datasets for a given value column.
+
+        Input: dataset_a_id — str, ID of the reference dataset
+               dataset_b_id — str, ID of the comparison dataset
+               value_column — str, column name to compute differences on
+               key_column — Optional[str], column to align rows; uses positional alignment if None
+        Output: pl.DataFrame or dict — difference results; exact shape is implementation-defined
+        """
         ...
 
     @abstractmethod
     def get_comparison_statistics(self, dataset_ids: list, value_column: str) -> dict:
-        """Calculate comparison statistics for multiple datasets."""
+        """Calculate comparison statistics for multiple datasets on a single value column.
+
+        Input: dataset_ids — list of str, dataset IDs to compare
+               value_column — str, column name to aggregate and compare
+        Output: dict — per-dataset statistics keyed by dataset ID
+        """
         ...
 
 

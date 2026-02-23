@@ -344,7 +344,7 @@ class UndoStack:
             try:
                 self._on_changed()
             except Exception:
-                logger.warning("undo_manager.on_changed_callback.failed", exc_info=True)
+                logger.error("undo_manager.apply.failed", extra={"op": "on_changed_callback"}, exc_info=True)
 
 # (removed UndoAction compatibility layer)
     def _enforce_max_depth(self) -> None:

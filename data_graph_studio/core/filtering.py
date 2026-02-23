@@ -25,12 +25,20 @@ class IFilterApplier(ABC):
 
     @abstractmethod
     def apply_filters(self, df: pl.DataFrame, filters: List) -> pl.DataFrame:
-        """Apply a list of filters to a DataFrame."""
+        """Apply a list of filters to a DataFrame.
+
+        Input: df — pl.DataFrame to filter; filters — List of filter objects
+        Output: pl.DataFrame — filtered result with the same columns
+        """
         ...
 
     @abstractmethod
     def get_filter_indices(self, df: pl.DataFrame, filters: List) -> pl.Series:
-        """Return boolean mask for rows matching filters."""
+        """Return boolean mask for rows matching filters.
+
+        Input: df — pl.DataFrame to evaluate; filters — List of filter objects
+        Output: pl.Series[bool] — True for rows that pass all filters
+        """
         ...
 
 
@@ -286,6 +294,11 @@ class FilteringManager(Observable, IFilterApplier):
     """
 
     def __init__(self):
+        """Initialize the FilteringManager with a default 'Page' scheme.
+
+        Output: None
+        Invariants: exactly one scheme ('Page') exists and is active after construction
+        """
         super().__init__()
 
         self._schemes: Dict[str, FilteringScheme] = {}
@@ -300,12 +313,18 @@ class FilteringManager(Observable, IFilterApplier):
 
     @property
     def schemes(self) -> Dict[str, FilteringScheme]:
-        """모든 필터링 스킴"""
+        """Return all registered filtering schemes.
+
+        Output: Dict[str, FilteringScheme] — live reference keyed by scheme name
+        """
         return self._schemes
 
     @property
     def active_scheme(self) -> str:
-        """현재 활성 스킴"""
+        """Return the name of the currently active filtering scheme.
+
+        Output: str — scheme name; always a key present in self._schemes
+        """
         return self._active_scheme
 
     def create_scheme(

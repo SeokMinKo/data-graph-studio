@@ -39,12 +39,18 @@ class Marking:
 
     @property
     def has_selection(self) -> bool:
-        """선택이 있는지 확인"""
+        """Return True when at least one row index is selected.
+
+        Output: bool — True when selected_indices is non-empty
+        """
         return len(self.selected_indices) > 0
 
     @property
     def count(self) -> int:
-        """선택된 인덱스 수"""
+        """Return the number of currently selected row indices.
+
+        Output: int — len(selected_indices), >= 0
+        """
         return len(self.selected_indices)
 
     def select(self, indices: Set[int], mode: MarkMode = MarkMode.REPLACE) -> None:
@@ -206,6 +212,12 @@ class MarkingManager(Observable):
     ]
 
     def __init__(self):
+        """Initialize the MarkingManager with a default 'Main' marking.
+
+        Output: None
+        Invariants: exactly one marking ('Main') exists and is active after construction;
+                    _color_index starts at 1 (first auto-color slot after 'Main')
+        """
         super().__init__()
 
         self._markings: Dict[str, Marking] = {}
@@ -225,12 +237,18 @@ class MarkingManager(Observable):
 
     @property
     def markings(self) -> Dict[str, Marking]:
-        """모든 마킹"""
+        """Return the mapping of marking name to Marking instance.
+
+        Output: Dict[str, Marking] — live reference; always contains at least 'Main'
+        """
         return self._markings
 
     @property
     def active_marking(self) -> str:
-        """현재 활성 마킹 이름"""
+        """Return the name of the currently active marking.
+
+        Output: str — marking name; always a key present in self._markings
+        """
         return self._active_marking
 
     def create_marking(self, name: str, color: Optional[str] = None) -> Marking:

@@ -62,14 +62,21 @@ class LoadingProgress:
 
     @property
     def progress_percent(self) -> float:
-        """진행률(%)."""
+        """Return loading progress as a percentage of total bytes.
+
+        Output: float — 0.0 when total_bytes is zero, otherwise (loaded_bytes / total_bytes) * 100
+        """
         if self.total_bytes == 0:
             return 0.0
         return (self.loaded_bytes / self.total_bytes) * 100
 
     @property
     def eta_seconds(self) -> float:
-        """남은 예상 시간(초)."""
+        """Estimate remaining load time in seconds based on current byte rate.
+
+        Output: float — 0.0 when loaded_bytes or elapsed_seconds is zero;
+                         otherwise (remaining_bytes / byte_rate)
+        """
         if self.loaded_bytes == 0 or self.elapsed_seconds == 0:
             return 0.0
         rate = self.loaded_bytes / self.elapsed_seconds
@@ -117,27 +124,42 @@ class DatasetInfo:
 
     @property
     def row_count(self) -> int:
-        """로드된 행 수."""
+        """Return the number of rows in the loaded DataFrame, or 0 if not yet loaded.
+
+        Output: int — len(self.df) when df is not None, otherwise 0
+        """
         return len(self.df) if self.df is not None else 0
 
     @property
     def column_count(self) -> int:
-        """컬럼 수."""
+        """Return the number of columns in the loaded DataFrame, or 0 if not yet loaded.
+
+        Output: int — len(self.df.columns) when df is not None, otherwise 0
+        """
         return len(self.df.columns) if self.df is not None else 0
 
     @property
     def columns(self) -> List[str]:
-        """컬럼명 목록."""
+        """Return the list of column names, or an empty list if not yet loaded.
+
+        Output: List[str] — self.df.columns when df is not None, otherwise []
+        """
         return self.df.columns if self.df is not None else []
 
     @property
     def memory_bytes(self) -> int:
-        """메모리 사용량(bytes)."""
+        """Return the estimated memory footprint of the DataFrame in bytes.
+
+        Output: int — df.estimated_size() when df is not None, otherwise 0
+        """
         return self.df.estimated_size() if self.df is not None else 0
 
     @property
     def is_loaded(self) -> bool:
-        """데이터 로드 여부."""
+        """Return True when a DataFrame has been assigned to this dataset.
+
+        Output: bool — True if self.df is not None, False otherwise
+        """
         return self.df is not None
 
 

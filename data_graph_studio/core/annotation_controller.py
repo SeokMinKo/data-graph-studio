@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 logger = logging.getLogger(__name__)
 
 from .annotation import Annotation, MAX_ANNOTATION_TEXT_LENGTH
+from .exceptions import ValidationError
 
 # UndoManager는 다른 에이전트가 구현 중 — optional import
 try:
@@ -38,6 +39,13 @@ class AnnotationController:
     """
 
     def __init__(self, undo_manager: Any = None):
+        """Initialize the AnnotationController with an empty annotation store.
+
+        Input: undo_manager — Any, optional UndoManager instance; when provided,
+            mutating operations push undo snapshots; defaults to None (no undo)
+        Output: None
+        Invariants: _annotations is empty; _undo_manager is stored as-is
+        """
         self._annotations: Dict[str, Annotation] = {}
         self._undo_manager = undo_manager
 
@@ -58,18 +66,19 @@ class AnnotationController:
             try:
                 ann = Annotation.from_dict(ann_dict)
                 self._annotations[aid] = ann
-            except Exception:
+            except (ValidationError, TypeError, ValueError):
                 logger.warning("annotation_controller.restore_state.invalid_entry", extra={"aid": aid}, exc_info=True)
                 continue
 
     # ── CRUD ──────────────────────────────────────────────────
 
     def add(self, annotation: Annotation) -> None:
-        """
-        주석 추가.
+        """Store a new annotation in the controller.
 
-        Raises:
-            ValueError: 텍스트가 200자 초과 시 (ERR-5.1)
+        Input: annotation — Annotation, the annotation to store; text must not exceed MAX_ANNOTATION_TEXT_LENGTH characters
+        Output: None
+        Raises: ValueError — if annotation.text exceeds MAX_ANNOTATION_TEXT_LENGTH characters (ERR-5.1)
+        Invariants: annotation is reachable via get(annotation.id) after this call; undo snapshot is pushed when undo_manager is set
         """
         # 텍스트 길이 재검증 (dataclass __post_init__에서도 체크하지만 명시적 확인)
         if len(annotation.text) > MAX_ANNOTATION_TEXT_LENGTH:
@@ -92,22 +101,21 @@ class AnnotationController:
         )
 
     def get(self, annotation_id: str) -> Optional[Annotation]:
-        """ID로 주석 조회."""
+        """Return an annotation by its ID.
+
+        Input: annotation_id — str, the ID of the annotation to look up
+        Output: Annotation if found, or None if no annotation has that ID
+        """
         return self._annotations.get(annotation_id)
 
     def edit(self, annotation_id: str, **kwargs: Any) -> bool:
-        """
-        주석 편집.
+        """Update fields on an existing annotation.
 
-        Parameters:
-            annotation_id: 대상 주석 ID
-            **kwargs: 변경할 필드 (text, color, icon 등)
-
-        Returns:
-            True if edited, False if not found.
-
-        Raises:
-            ValueError: 텍스트가 200자 초과 시
+        Input: annotation_id — str, ID of the annotation to modify;
+               **kwargs — field names and new values (e.g. text, color, icon); unknown fields are silently skipped
+        Output: bool — True if the annotation was found and updated, False if not found
+        Raises: ValueError — if a new text value exceeds MAX_ANNOTATION_TEXT_LENGTH characters
+        Invariants: only fields present on the Annotation dataclass are mutated; undo snapshot is pushed when undo_manager is set
         """
         ann = self._annotations.get(annotation_id)
         if ann is None:
@@ -141,11 +149,11 @@ class AnnotationController:
         return True
 
     def delete(self, annotation_id: str) -> bool:
-        """
-        주석 삭제.
+        """Remove an annotation by ID.
 
-        Returns:
-            True if deleted, False if not found.
+        Input: annotation_id — str, ID of the annotation to delete
+        Output: bool — True if the annotation was found and deleted, False if not found
+        Invariants: annotation_id is absent from _annotations after a successful deletion; undo snapshot is pushed when undo_manager is set
         """
         before = self._snapshot_for_undo()
         ann = self._annotations.pop(annotation_id, None)
@@ -167,15 +175,26 @@ class AnnotationController:
     # ── List / Query ──────────────────────────────────────────
 
     def list_all(self) -> List[Annotation]:
-        """모든 주석 리스트."""
+        """Return all stored annotations as a list.
+
+        Output: List[Annotation] — all annotations in insertion order; empty list if none exist
+        """
         return list(self._annotations.values())
 
     def list_by_profile(self, profile_id: str) -> List[Annotation]:
-        """프로파일별 주석 리스트."""
+        """Return all annotations associated with a given profile.
+
+        Input: profile_id — str, the profile ID to filter by
+        Output: List[Annotation] — annotations whose profile_id matches; empty if none match
+        """
         return [a for a in self._annotations.values() if a.profile_id == profile_id]
 
     def list_by_dataset(self, dataset_id: str) -> List[Annotation]:
-        """데이터셋별 주석 리스트."""
+        """Return all annotations associated with a given dataset.
+
+        Input: dataset_id — str, the dataset ID to filter by
+        Output: List[Annotation] — annotations whose dataset_id matches; empty if none match
+        """
         return [a for a in self._annotations.values() if a.dataset_id == dataset_id]
 
     # ── 좌표 변환 ────────────────────────────────────────────
@@ -187,17 +206,13 @@ class AnnotationController:
         view_rect: Dict[str, float],
         screen_size: Dict[str, int],
     ) -> Tuple[float, float]:
-        """
-        데이터 좌표 → 화면 좌표 변환.
+        """Convert a data-space coordinate to a screen-space pixel position.
 
-        Parameters:
-            data_x: 데이터 X 좌표
-            data_y: 데이터 Y 좌표
-            view_rect: 현재 뷰 범위 {"x_min", "x_max", "y_min", "y_max"}
-            screen_size: 화면 크기 {"width", "height"}
-
-        Returns:
-            (screen_x, screen_y) 튜플
+        Input: data_x — float, data-space X value;
+               data_y — float, data-space Y value;
+               view_rect — Dict with keys x_min, x_max, y_min, y_max defining the visible data range;
+               screen_size — Dict with keys width and height in pixels
+        Output: Tuple[float, float] — (screen_x, screen_y) pixel coordinates; returns (0.0, 0.0) if x_range or y_range is zero
         """
         x_range = view_rect["x_max"] - view_rect["x_min"]
         y_range = view_rect["y_max"] - view_rect["y_min"]
@@ -217,17 +232,13 @@ class AnnotationController:
         view_rect: Dict[str, float],
         screen_size: Dict[str, int],
     ) -> Tuple[float, float]:
-        """
-        화면 좌표 → 데이터 좌표 변환.
+        """Convert a screen-space pixel position back to a data-space coordinate.
 
-        Parameters:
-            screen_x: 화면 X 좌표
-            screen_y: 화면 Y 좌표
-            view_rect: 현재 뷰 범위
-            screen_size: 화면 크기
-
-        Returns:
-            (data_x, data_y) 튜플
+        Input: screen_x — float, pixel X position on screen;
+               screen_y — float, pixel Y position on screen;
+               view_rect — Dict with keys x_min, x_max, y_min, y_max defining the visible data range;
+               screen_size — Dict with keys width and height in pixels
+        Output: Tuple[float, float] — (data_x, data_y) values in data space
         """
         x_range = view_rect["x_max"] - view_rect["x_min"]
         y_range = view_rect["y_max"] - view_rect["y_min"]
@@ -240,14 +251,10 @@ class AnnotationController:
     # ── Orphaned 감지 / 처리 ─────────────────────────────────
 
     def find_orphaned(self, active_dataset_ids: Set[str]) -> List[Annotation]:
-        """
-        Orphaned 주석 감지 (ERR-5.3).
+        """Return annotations whose dataset_id is not in the active dataset set (ERR-5.3).
 
-        Parameters:
-            active_dataset_ids: 현재 활성 데이터셋 ID 집합
-
-        Returns:
-            orphaned 주석 리스트
+        Input: active_dataset_ids — Set[str], IDs of datasets currently loaded in the application
+        Output: List[Annotation] — annotations referencing datasets absent from active_dataset_ids; empty if all are valid
         """
         return [
             a
@@ -256,19 +263,20 @@ class AnnotationController:
         ]
 
     def mark_orphaned(self, active_dataset_ids: Set[str]) -> None:
-        """
-        활성 데이터셋에 없는 주석을 orphaned로 표시.
-        활성 데이터셋에 있는 주석은 orphaned 해제.
+        """Set is_orphaned on every annotation to reflect whether its dataset is currently active.
+
+        Input: active_dataset_ids — Set[str], IDs of datasets currently loaded in the application
+        Output: None
+        Invariants: annotation.is_orphaned is True iff annotation.dataset_id not in active_dataset_ids for every annotation
         """
         for ann in self._annotations.values():
             ann.is_orphaned = ann.dataset_id not in active_dataset_ids
 
     def delete_orphaned(self) -> int:
-        """
-        Orphaned 주석 일괄 삭제.
+        """Delete all annotations currently flagged as orphaned.
 
-        Returns:
-            삭제된 주석 수
+        Output: int — number of annotations deleted
+        Invariants: no annotation with is_orphaned == True remains in _annotations after this call
         """
         orphaned_ids = [
             aid for aid, ann in self._annotations.items() if ann.is_orphaned
@@ -280,13 +288,20 @@ class AnnotationController:
     # ── 프로파일 연동 ────────────────────────────────────────
 
     def export_for_profile(self, profile_id: str) -> List[Dict]:
-        """프로파일 저장 시 주석 데이터 내보내기."""
+        """Serialize all annotations for a profile into a list of dicts suitable for JSON persistence.
+
+        Input: profile_id — str, the profile whose annotations to export
+        Output: List[Dict] — one dict per annotation produced by Annotation.to_dict(); empty if none exist
+        """
         return [a.to_dict() for a in self.list_by_profile(profile_id)]
 
     def import_for_profile(self, profile_id: str, data: List[Dict]) -> None:
-        """
-        프로파일 복원 시 주석 데이터 가져오기.
-        기존 해당 프로파일 주석을 교체.
+        """Replace a profile's annotations by deserializing a list of dicts.
+
+        Input: profile_id — str, the profile to restore annotations for;
+               data — List[Dict], annotation dicts as produced by export_for_profile
+        Output: None
+        Invariants: all existing annotations for profile_id are cleared before import; each imported annotation has its profile_id forced to profile_id
         """
         # 기존 프로파일 주석 제거
         self.clear_profile(profile_id)
@@ -299,7 +314,12 @@ class AnnotationController:
             self._annotations[ann.id] = ann
 
     def clear_profile(self, profile_id: str) -> None:
-        """특정 프로파일의 모든 주석 제거."""
+        """Remove all annotations belonging to a given profile.
+
+        Input: profile_id — str, the profile whose annotations should be deleted
+        Output: None
+        Invariants: no annotation with annotation.profile_id == profile_id remains in _annotations after this call
+        """
         to_remove = [
             aid for aid, ann in self._annotations.items()
             if ann.profile_id == profile_id

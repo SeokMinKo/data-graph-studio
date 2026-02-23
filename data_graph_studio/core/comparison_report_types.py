@@ -151,7 +151,7 @@ class DatasetSummary:
                             "max": str(max_date)
                         }
                         break
-                except Exception:
+                except (TypeError, ValueError, AttributeError):
                     logger.debug("comparison_report_types.date_range.failed", extra={"col": col}, exc_info=True)
 
         return cls(
@@ -267,10 +267,10 @@ class StatisticalSummary:
                 try:
                     stats.skewness = float(series.skew()) if hasattr(series, 'skew') else None
                     stats.kurtosis = float(series.kurtosis()) if hasattr(series, 'kurtosis') else None
-                except Exception:
+                except (TypeError, ValueError, AttributeError):
                     logger.debug("comparison_report_types.skewness_kurtosis.failed", exc_info=True)
 
-            except Exception:
+            except (TypeError, ValueError, AttributeError):
                 logger.debug("comparison_report_types.numeric_stats.failed", extra={"col": column}, exc_info=True)
 
         return stats

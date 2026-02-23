@@ -81,7 +81,12 @@ class ExpressionParser:
     }
 
     def __init__(self):
-        """Initialize compiled regex patterns and delegate helpers."""
+        """Initialize compiled regex patterns and delegate helper instance.
+
+        Output: None
+        Invariants: five compiled regex patterns are cached; an ExpressionEvaluatorHelpers
+            instance is created and stored for conditional/string/date evaluation
+        """
         # 컬럼 참조 패턴: [column_name]
         self._column_pattern = re.compile(r'\[([^\]]+)\]')
 
@@ -241,7 +246,7 @@ class ExpressionParser:
                 return pl.Series([result] * len(data))
             return pl.Series(result)
 
-        except Exception:
+        except (SyntaxError, ValueError, TypeError):
             logger.debug("expressions_parser.evaluate_numpy.failed", exc_info=True)
             return pl.Series([None] * len(data))
 

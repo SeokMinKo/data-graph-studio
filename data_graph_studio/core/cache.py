@@ -108,6 +108,7 @@ class CacheEntry:
         try:
             return sys.getsizeof(obj)
         except Exception:
+            logger.warning("cache.estimate_size.failed", extra={"error": str(type(obj))}, exc_info=True)
             return 64  # default fallback
 
 

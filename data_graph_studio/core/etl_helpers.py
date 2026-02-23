@@ -26,13 +26,12 @@ except ImportError:
 
 
 def is_binary_etl(path: str) -> bool:
-    """ETL 파일이 바이너리인지 확인한다.
+    """Determine whether an ETL file uses a binary encoding by sampling its first 512 bytes.
 
-    Args:
-        path: 파일 경로.
-
-    Returns:
-        바이너리이면 True.
+    Input: path — str, path to the ETL file to inspect.
+    Output: bool — True if the file is binary (many null bytes or non-printable chars);
+            False if it appears to be text or cannot be read.
+    Invariants: does not modify the file; safe to call on any file type.
     """
     try:
         with open(path, 'rb') as f:
@@ -110,29 +109,35 @@ def _build_etl_dataframe(all_events: List[Dict[str, Any]]) -> pl.DataFrame:
 
 
 def parse_etl_binary(path: str) -> pl.DataFrame:
-    """etl-parser로 바이너리 ETL 파일을 파싱한다.
+    """Parse a binary Windows ETL file using etl-parser and return it as a Polars DataFrame.
 
-    Args:
-        path: ETL 파일 경로.
-
-    Returns:
-        파싱된 DataFrame.
-
-    Raises:
-        ImportError: etl-parser 미설치.
-        DataLoadError: 파싱 실패 또는 빈 결과.
+    Input: path — str, path to a valid binary ETL file.
+    Output: pl.DataFrame — parsed events with columns for Timestamp, EventType, ProcessID,
+            ThreadID, and additional ETW-specific fields; null-only columns are dropped.
+    Raises: ImportError — if etl-parser is not installed;
+            DataLoadError — on read failure, empty file, or no parseable events.
+    Invariants: all numeric ETL columns are cast to Int64; Timestamp to Datetime('us').
     """
     if not HAS_ETL_PARSER:
         raise ImportError("etl-parser 라이브러리가 설치되지 않았습니다.")
 
     class _EtlEventCollector(IEtlFileObserver):
         def __init__(self):
+            """Initialize the collector with empty event lists and zero error count.
+
+            Output: None
+            Invariants: events and etw_events are empty; _error_count is 0
+            """
             self.events: List[Dict[str, Any]] = []
             self.etw_events: List[Dict[str, Any]] = []
             self._error_count = 0
 
         def on_system_trace(self, event):
-            """Handle a system-level ETW trace event and append a record to events."""
+            """Handle a system-level ETW trace event and append a record to events.
+
+            Input: event — ETW system trace event object from etl-parser
+            Output: None; on parse failure increments _error_count and logs at DEBUG
+            """
             try:
                 system = System(event)
                 mof = system.get_mof()
@@ -158,7 +163,11 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 self._error_count += 1
 
         def on_event_record(self, event):
-            """Handle a generic ETW event record and append it to etw_events."""
+            """Handle a generic ETW event record and append it to etw_events.
+
+            Input: event — generic ETW event record object from etl-parser
+            Output: None; attempts ETW then TraceLogging parse; silently skips if both fail
+            """
             try:
                 try:
                     msg = event.parse_etw()
@@ -189,18 +198,30 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 self._error_count += 1
 
         def on_perfinfo_trace(self, event):
-            """Handle a performance-info trace event (no-op)."""
+            """Handle a performance-info trace event (no-op).
+
+            Input: event — perf-info ETW event; intentionally ignored
+            Output: None
+            """
 
         def on_trace_record(self, event):
-            """Handle a generic trace record event (no-op)."""
+            """Handle a generic trace record event (no-op).
+
+            Input: event — generic trace record; intentionally ignored
+            Output: None
+            """
 
         def on_win_trace(self, event):
-            """Handle a Windows-specific trace event (no-op)."""
+            """Handle a Windows-specific trace event (no-op).
+
+            Input: event — Windows-specific ETW event; intentionally ignored
+            Output: None
+            """
 
     try:
         with open(path, 'rb') as f:
             raw_data = f.read()
-    except Exception as e:
+    except (pl.exceptions.InvalidOperationError, ValueError, TypeError) as e:
         raise DataLoadError(
             f"ETL 파일 읽기 실패: {e}",
             operation="parse_etl_binary",
@@ -218,7 +239,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
     try:
         reader = build_from_stream(raw_data)
         reader.parse(collector)
-    except Exception as e:
+    except (pl.exceptions.InvalidOperationError, ValueError, TypeError) as e:
         raise DataLoadError(
             f"ETL 바이너리 파싱 실패: {e}",
             operation="parse_etl_binary",

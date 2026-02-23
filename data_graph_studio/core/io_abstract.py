@@ -21,22 +21,41 @@ class IFileSystem(ABC):
 
     @abstractmethod
     def read_file(self, path: str) -> bytes:
-        """파일 읽기. 존재하지 않으면 FileNotFoundError."""
+        """Read and return the raw bytes of the file at path.
+
+        Input: path — str, file path to read.
+        Output: bytes — full file contents.
+        Raises: FileNotFoundError — if path does not exist.
+        """
         ...
 
     @abstractmethod
     def write_file(self, path: str, data: bytes) -> None:
-        """파일 쓰기. 부모 디렉토리가 없으면 생성."""
+        """Write bytes to path, creating parent directories as needed.
+
+        Input: path — str, destination file path; data — bytes to write.
+        Output: None
+        Raises: OSError — on permission errors or disk-full conditions.
+        """
         ...
 
     @abstractmethod
     def stat(self, path: str) -> os.stat_result:
-        """파일 stat. 존재하지 않으면 FileNotFoundError."""
+        """Return the stat result for path.
+
+        Input: path — str, file or directory path.
+        Output: os.stat_result — metadata including size and modification time.
+        Raises: FileNotFoundError — if path does not exist.
+        """
         ...
 
     @abstractmethod
     def exists(self, path: str) -> bool:
-        """파일/디렉토리 존재 여부."""
+        """Return True if path exists on the filesystem, False otherwise.
+
+        Input: path — str, file or directory path to check.
+        Output: bool — True if the path exists.
+        """
         ...
 
 
@@ -45,7 +64,12 @@ class ITimerFactory(ABC):
 
     @abstractmethod
     def create_timer(self, interval_ms: int, callback: Callable) -> Any:
-        """주기적 타이머 생성. 반환값은 구현에 따라 다름."""
+        """Create a recurring timer that fires callback every interval_ms milliseconds.
+
+        Input: interval_ms — int, polling period in milliseconds (> 0);
+               callback — Callable[[], None], invoked on each tick.
+        Output: timer handle — implementation-specific object with start()/stop() interface.
+        """
         ...
 
 
@@ -104,7 +128,13 @@ class ThreadingTimerFactory(ITimerFactory):
     """
 
     def create_timer(self, interval_ms: int, callback: Callable) -> _ThreadingTimerHandle:
-        """Create a recurring timer handle. Call .start() to begin firing."""
+        """Create a daemon-threaded recurring timer handle.
+
+        Input: interval_ms — int, firing period in milliseconds (> 0);
+               callback — Callable[[], None], invoked on each interval tick.
+        Output: _ThreadingTimerHandle — call .start() to begin firing, .stop() to cancel.
+        Invariants: returned timer is not yet running; start() must be called explicitly.
+        """
         return _ThreadingTimerHandle(interval_ms / 1000.0, callback)
 
 
@@ -112,12 +142,23 @@ class RealFileSystem(IFileSystem):
     """실제 OS 파일 시스템 구현"""
 
     def read_file(self, path: str) -> bytes:
-        """Read and return the raw bytes of the file at path."""
+        """Read and return the raw bytes of the file at path.
+
+        Input: path — str, file path to read.
+        Output: bytes — full file contents.
+        Raises: FileNotFoundError — if path does not exist; OSError on permission errors.
+        """
         with open(path, "rb") as f:
             return f.read()
 
     def write_file(self, path: str, data: bytes) -> None:
-        """Write bytes to path, creating parent directories as needed."""
+        """Write bytes to path, creating parent directories as needed.
+
+        Input: path — str, destination file path; data — bytes to write.
+        Output: None
+        Raises: OSError — on permission errors or disk-full conditions.
+        Invariants: parent directories are created with exist_ok=True before writing.
+        """
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -125,11 +166,20 @@ class RealFileSystem(IFileSystem):
             f.write(data)
 
     def stat(self, path: str) -> os.stat_result:
-        """Return os.stat_result for the file at path."""
+        """Return os.stat_result for the file at path.
+
+        Input: path — str, file or directory path.
+        Output: os.stat_result — metadata including size and modification time.
+        Raises: FileNotFoundError — if path does not exist.
+        """
         return os.stat(path)
 
     def exists(self, path: str) -> bool:
-        """Return True if the path exists on the filesystem."""
+        """Return True if the path exists on the filesystem.
+
+        Input: path — str, file or directory path to check.
+        Output: bool — True if the path exists, False otherwise.
+        """
         return os.path.exists(path)
 
 
@@ -182,12 +232,14 @@ class IExportRenderer(ABC):
 
 
 def atomic_write(path: str, data: bytes) -> None:
-    """
-    원자적 파일 저장 — PRD Section 10.3
+    """Write data to path atomically using write-fsync-rename (PRD Section 10.3).
 
-    temp 파일에 쓰고 → fsync → rename.
-    POSIX에서 rename은 원자적이므로 중간 상태 없음.
-    실패 시 temp 파일 정리.
+    Input: path — str, destination file path; data — bytes to persist.
+    Output: None
+    Raises: OSError, IOError, PermissionError — on write or rename failure; the
+            temporary file is cleaned up before re-raising.
+    Invariants: on success, path contains exactly data; no partial writes are visible;
+                parent directories are created as needed.
     """
     tmp_path = path + ".tmp"
     try:

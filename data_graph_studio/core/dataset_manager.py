@@ -59,22 +59,34 @@ class DatasetManager:
 
     @property
     def datasets(self) -> Dict[str, DatasetInfo]:
-        """모든 데이터셋."""
+        """Return the mapping of all loaded datasets.
+
+        Output: Dict[str, DatasetInfo] — live reference keyed by dataset ID
+        """
         return self._datasets
 
     @property
     def dataset_count(self) -> int:
-        """로드된 데이터셋 수."""
+        """Return the number of currently loaded datasets.
+
+        Output: int — count of entries in _datasets, >= 0
+        """
         return len(self._datasets)
 
     @property
     def active_dataset_id(self) -> Optional[str]:
-        """현재 활성 데이터셋 ID."""
+        """Return the ID of the currently active dataset.
+
+        Output: Optional[str] — dataset ID string, or None if none is active
+        """
         return self._active_dataset_id
 
     @property
     def active_dataset(self) -> Optional[DatasetInfo]:
-        """현재 활성 데이터셋."""
+        """Return the DatasetInfo for the currently active dataset, or None.
+
+        Output: Optional[DatasetInfo] — active dataset, or None when no dataset is active
+        """
         if self._active_dataset_id:
             return self._datasets.get(self._active_dataset_id)
         return None

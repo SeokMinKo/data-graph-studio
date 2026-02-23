@@ -355,10 +355,19 @@ class IPCClient:
             return {IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": str(e)}
 
     def __enter__(self):
+        """Connect to the IPC server and return self for context manager use.
+
+        Output: IPCClient — self, with an open socket connection
+        """
         self.connect()
         return self
 
     def __exit__(self, *args):
+        """Disconnect from the IPC server on context manager exit.
+
+        Output: None
+        Invariants: socket is closed and set to None regardless of exception type
+        """
         self.disconnect()
 
 

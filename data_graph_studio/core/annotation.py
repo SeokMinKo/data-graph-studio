@@ -49,6 +49,11 @@ class Annotation:
     is_orphaned: bool = False
 
     def __post_init__(self):
+        """Validate the annotation after dataclass initialization.
+
+        Output: None
+        Raises: ValidationError — when text exceeds MAX_ANNOTATION_TEXT_LENGTH characters
+        """
         if len(self.text) > MAX_ANNOTATION_TEXT_LENGTH:
             raise ValidationError(
                 f"Annotation text exceeds {MAX_ANNOTATION_TEXT_LENGTH} characters "
@@ -58,7 +63,11 @@ class Annotation:
             )
 
     def to_dict(self) -> Dict[str, Any]:
-        """직렬화 → dict (is_orphaned는 런타임 상태이므로 제외)"""
+        """Serialize the annotation to a dict, excluding runtime-only is_orphaned field.
+
+        Output: Dict[str, Any] — JSON-serializable dict with id, kind, x, text, color,
+                                  icon, dataset_id, profile_id; x_end and y only when non-default
+        """
         d: Dict[str, Any] = {
             "id": self.id,
             "kind": self.kind,
@@ -77,9 +86,10 @@ class Annotation:
         return d
 
     def to_compact_dict(self) -> Dict[str, Any]:
-        """
-        프로파일 저장용 컴팩트 직렬화.
-        profile_id와 dataset_id는 상위 컨텍스트에서 제공하므로 제외.
+        """Compact serialization for profile storage, omitting profile_id and default values.
+
+        Output: Dict[str, Any] — sparse dict using abbreviated keys (k, x, t, xe, y, c, i, ds);
+                                  fields equal to their defaults are omitted to reduce payload size
         """
         d: Dict[str, Any] = {
             "id": self.id,
@@ -103,7 +113,14 @@ class Annotation:
     def from_compact_dict(
         cls, data: Dict[str, Any], profile_id: str = "", dataset_id: str = ""
     ) -> Annotation:
-        """컴팩트 dict에서 복원."""
+        """Restore an Annotation from a compact dict produced by to_compact_dict.
+
+        Input: data — Dict[str, Any], compact dict with abbreviated keys
+               profile_id — str, profile to assign (overrides any stored value, default "")
+               dataset_id — str, dataset to assign when not present in data (default "")
+        Output: Annotation — reconstructed instance with defaults applied for missing keys
+        Raises: ValidationError — when the restored text exceeds MAX_ANNOTATION_TEXT_LENGTH
+        """
         kind_map = {"p": "point", "r": "range"}
         return cls(
             id=data["id"],
@@ -120,7 +137,12 @@ class Annotation:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Annotation:
-        """dict → 역직렬화"""
+        """Restore an Annotation from a full dict produced by to_dict.
+
+        Input: data — Dict[str, Any], dict with full-length keys (id, kind, x, text, color, etc.)
+        Output: Annotation — reconstructed instance with defaults applied for missing optional keys
+        Raises: ValidationError — when the restored text exceeds MAX_ANNOTATION_TEXT_LENGTH
+        """
         return cls(
             id=data["id"],
             kind=data["kind"],

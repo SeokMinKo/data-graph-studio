@@ -32,16 +32,28 @@ class ColumnDependencyGraph:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty dependency graph with no registered columns.
+
+        Output: None
+        Invariants: self._edges is always a dict mapping column name to its dependency set
+        """
         # column_name → set of columns it depends on (its prerequisites)
         self._edges: Dict[str, Set[str]] = {}
 
     # ── Public API ────────────────────────────────────────────
 
     def add_column(self, name: str, dependencies: Set[str]) -> None:
-        """
-        Register a computed column with its dependencies.
+        """Register a computed column with its set of prerequisite columns.
 
-        Raises CycleDetectedError if adding this column would create a cycle.
+        Uses a temporary-add-then-rollback strategy to atomically validate that
+        no cycle is introduced before committing the new edge set.
+
+        Input: name — str, name of the computed column to register
+               dependencies — Set[str], column names that name directly depends on
+        Output: None
+        Raises: CycleDetectedError — when name depends on itself or when adding the column
+                                      would create a cycle in the graph
+        Invariants: on CycleDetectedError the graph is unchanged (previous state restored)
         """
         # Check for self-reference
         if name in dependencies:
@@ -66,11 +78,11 @@ class ColumnDependencyGraph:
             )
 
     def remove_column(self, name: str) -> Set[str]:
-        """
-        Remove a column from the graph.
+        """Remove a column from the graph and clean up references in other columns' dependency sets.
 
-        Returns the set of columns that were depending on *name*
-        (useful for cascade warnings).
+        Input: name — str, the computed column to remove
+        Output: Set[str] — set of columns that transitively depended on name before removal
+                            (useful for issuing cascade warnings to callers)
         """
         dependents = self.get_dependents(name)
         self._edges.pop(name, None)
@@ -80,7 +92,10 @@ class ColumnDependencyGraph:
         return dependents
 
     def has_cycle(self) -> bool:
-        """Check if the current graph contains any cycle."""
+        """Return True if the graph currently contains any cycle.
+
+        Output: bool — True when a directed cycle is detected by DFS over all nodes
+        """
         visited: Set[str] = set()
         rec_stack: Set[str] = set()
 
@@ -91,10 +106,10 @@ class ColumnDependencyGraph:
         return False
 
     def get_evaluation_order(self) -> List[str]:
-        """
-        Return columns in topological order (dependencies first).
+        """Return all registered columns in topological (dependency-first) order via Kahn's algorithm.
 
-        Raises CycleDetectedError if a cycle exists.
+        Output: List[str] — columns ordered so that each column appears after all its dependencies
+        Raises: CycleDetectedError — when the graph contains a cycle and topological sort is impossible
         """
         # Kahn's algorithm
         # Build in-degree map
@@ -128,10 +143,12 @@ class ColumnDependencyGraph:
         return result
 
     def get_dependents(self, name: str) -> Set[str]:
-        """
-        Return all columns that (transitively) depend on *name*.
+        """Return all columns that transitively depend on name (i.e. would break if name is removed).
 
-        i.e. if name is deleted, these columns would be affected.
+        Uses BFS over reverse edges to collect the full transitive dependent set.
+
+        Input: name — str, the column whose downstream dependents are sought
+        Output: Set[str] — all columns that directly or indirectly reference name; empty if none
         """
         dependents: Set[str] = set()
         queue: deque[str] = deque([name])
@@ -146,11 +163,18 @@ class ColumnDependencyGraph:
         return dependents
 
     def get_dependencies(self, name: str) -> Set[str]:
-        """Return the direct dependencies of *name*."""
+        """Return the direct (non-transitive) dependencies of the named column.
+
+        Input: name — str, the column whose prerequisite set is requested
+        Output: Set[str] — copy of the direct dependency set; empty set if name is not registered
+        """
         return set(self._edges.get(name, set()))
 
     def columns(self) -> Set[str]:
-        """All registered column names."""
+        """Return all registered computed column names.
+
+        Output: Set[str] — snapshot set of all column names currently in the graph
+        """
         return set(self._edges.keys())
 
     # ── Internal ──────────────────────────────────────────────

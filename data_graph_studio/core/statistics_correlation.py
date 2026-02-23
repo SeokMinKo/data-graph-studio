@@ -31,13 +31,23 @@ class CorrelationResult:
     p_value_matrix: Optional[np.ndarray] = None
 
     def get_correlation(self, col1: str, col2: str) -> float:
-        """두 컬럼 간 상관계수"""
+        """Return the pre-computed correlation coefficient between two columns.
+
+        Input: col1 — str, first column name (must be in self.columns);
+               col2 — str, second column name (must be in self.columns).
+        Output: float — correlation coefficient in [-1.0, 1.0].
+        Raises: ValueError — if col1 or col2 is not in self.columns.
+        """
         i = self.columns.index(col1)
         j = self.columns.index(col2)
         return self.matrix[i, j]
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
-        """딕셔너리로 변환"""
+        """Convert the correlation matrix to a nested dictionary.
+
+        Output: Dict[str, Dict[str, float]] — outer key is col1, inner key is col2,
+                value is the correlation coefficient between them.
+        """
         result = {}
         for i, col1 in enumerate(self.columns):
             result[col1] = {}
@@ -59,16 +69,13 @@ class CorrelationAnalyzer:
         columns: List[str],
         method: CorrelationMethod = CorrelationMethod.PEARSON
     ) -> CorrelationResult:
-        """
-        상관 행렬 계산
+        """Compute a pairwise correlation matrix for the specified columns.
 
-        Args:
-            data: 데이터프레임
-            columns: 분석할 컬럼 목록
-            method: 상관 계수 방법
-
-        Returns:
-            상관 분석 결과
+        Input: data — pl.DataFrame, source data; columns — List[str], column names to analyse
+               (non-existent columns are silently skipped); method — CorrelationMethod.
+        Output: CorrelationResult — contains the n×n matrix, p-value matrix, column list,
+                and method used.
+        Invariants: diagonal of the correlation matrix is always 1.0; p-value diagonal is NaN.
         """
         # 데이터 추출
         logger.debug("statistics.calculate_correlation", extra={"method": method.value, "columns": columns})
@@ -104,16 +111,13 @@ class CorrelationAnalyzer:
         y: np.ndarray,
         method: CorrelationMethod = CorrelationMethod.PEARSON
     ) -> Tuple[float, float]:
-        """
-        두 변수 간 상관계수 계산
+        """Compute the correlation coefficient and p-value for two numeric arrays.
 
-        Args:
-            x: 첫 번째 변수
-            y: 두 번째 변수
-            method: 상관 계수 방법
-
-        Returns:
-            (상관계수, p-value) 튜플
+        Input: x — np.ndarray, first variable; y — np.ndarray, second variable (same length);
+               method — CorrelationMethod (PEARSON, SPEARMAN, or KENDALL).
+        Output: Tuple[float, float] — (correlation_coefficient, p_value); returns (0.0, 1.0)
+                when fewer than 3 non-NaN paired observations remain after masking.
+        Invariants: NaN values are excluded from both arrays jointly before computation.
         """
         # NaN 제거
         mask = ~(np.isnan(x) | np.isnan(y))
@@ -135,7 +139,11 @@ class CorrelationAnalyzer:
         return corr, p_value
 
     def get_p_value_matrix(self, result: CorrelationResult) -> np.ndarray:
-        """상관 행렬의 p-value 행렬 반환"""
+        """Return the p-value matrix from a CorrelationResult.
+
+        Input: result — CorrelationResult produced by calculate_correlation.
+        Output: np.ndarray — n×n matrix of p-values; diagonal entries are NaN.
+        """
         return result.p_value_matrix
 
     def get_significant_pairs(
@@ -144,16 +152,14 @@ class CorrelationAnalyzer:
         alpha: float = 0.05,
         min_correlation: float = 0.0
     ) -> List[Dict[str, Any]]:
-        """
-        유의한 상관 쌍 찾기
+        """Return column pairs whose correlation is statistically significant and meets the minimum threshold.
 
-        Args:
-            result: 상관 분석 결과
-            alpha: 유의 수준
-            min_correlation: 최소 상관계수 절대값
-
-        Returns:
-            유의한 상관 쌍 목록
+        Input: result — CorrelationResult from calculate_correlation; alpha — float, significance
+               level (default 0.05); min_correlation — float, minimum absolute correlation value
+               (default 0.0).
+        Output: List[Dict[str, Any]] — each entry has keys 'col1', 'col2', 'correlation',
+                'p_value'; sorted by absolute correlation descending.
+        Invariants: only upper-triangle pairs are checked (no duplicates); diagonal is excluded.
         """
         pairs = []
         n = len(result.columns)

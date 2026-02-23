@@ -41,6 +41,12 @@ class ReportGenerator(ABC):
     """레포트 생성기 추상 클래스"""
 
     def __init__(self, template: Optional[ReportTemplate] = None):
+        """Initialise the generator with an optional custom template.
+
+        Input: template — Optional[ReportTemplate], template to use; defaults to _get_default_template()
+        Output: None
+        Invariants: self.template is always a valid ReportTemplate instance
+        """
         self.template = template or self._get_default_template()
 
     @abstractmethod
@@ -49,7 +55,12 @@ class ReportGenerator(ABC):
         report_data: ReportData,
         options: ReportOptions
     ) -> bytes:
-        """레포트 생성"""
+        """Generate report bytes in the format implemented by the subclass.
+
+        Input: report_data — ReportData, structured report content
+               options — ReportOptions, formatting and output options
+        Output: bytes — serialised report content
+        """
         pass
 
     def save(
@@ -58,7 +69,14 @@ class ReportGenerator(ABC):
         options: ReportOptions,
         output_path: Union[str, Path]
     ) -> Path:
-        """레포트 파일 저장"""
+        """Generate a report and write it to disk.
+
+        Input: report_data — ReportData, structured report content
+               options — ReportOptions, formatting and output options
+               output_path — Union[str, Path], destination file path
+        Output: Path — resolved path of the written file
+        Raises: OSError — if the file cannot be opened or written
+        """
         output_path = Path(output_path)
         content = self.generate(report_data, options)
 
@@ -76,7 +94,13 @@ class ReportGenerator(ABC):
         options: ReportOptions,
         max_pages: int = 2
     ) -> bytes:
-        """미리보기 생성"""
+        """Generate a preview of the report (delegates to generate by default).
+
+        Input: report_data — ReportData, structured report content
+               options — ReportOptions, formatting and output options
+               max_pages — int, maximum pages to include in the preview (hint for subclasses)
+        Output: bytes — preview report content
+        """
         return self.generate(report_data, options)
 
     def _get_default_template(self) -> ReportTemplate:
@@ -89,7 +113,12 @@ class ReportGenerator(ABC):
 
     @staticmethod
     def format_number(value: Optional[float], decimals: int = 2) -> str:
-        """숫자 포맷팅"""
+        """Format a numeric value as a human-readable string with K/M suffix.
+
+        Input: value — Optional[float], value to format; None returns "-"
+               decimals — int, decimal places in the formatted output
+        Output: str — formatted number string, e.g. "1.23K", "4.56M", or "-"
+        """
         if value is None:
             return "-"
         if abs(value) >= 1_000_000:
@@ -101,14 +130,23 @@ class ReportGenerator(ABC):
 
     @staticmethod
     def format_percentage(value: Optional[float], decimals: int = 1) -> str:
-        """퍼센트 포맷팅"""
+        """Format a float as a percentage string.
+
+        Input: value — Optional[float], percentage value; None returns "-"
+               decimals — int, decimal places in the formatted output
+        Output: str — formatted string, e.g. "12.3%", or "-"
+        """
         if value is None:
             return "-"
         return f"{value:.{decimals}f}%"
 
     @staticmethod
     def format_bytes(bytes_value: int) -> str:
-        """바이트 크기 포맷팅"""
+        """Format a byte count as a human-readable size string.
+
+        Input: bytes_value — int, size in bytes
+        Output: str — formatted string with unit, e.g. "1.5 MB", "3.2 GB"
+        """
         for unit in ['B', 'KB', 'MB', 'GB']:
             if bytes_value < 1024:
                 return f"{bytes_value:.1f} {unit}"
@@ -120,6 +158,11 @@ class ReportManager:
     """레포트 관리자"""
 
     def __init__(self):
+        """Initialise the manager with empty generator registry and default templates.
+
+        Output: None
+        Invariants: self.templates contains at least "default", "corporate", "modern", and "minimal" after init
+        """
         self.generators: Dict[ReportFormat, ReportGenerator] = {}
         self.templates: Dict[str, ReportTemplate] = {}
         self._init_default_templates()
@@ -168,11 +211,20 @@ class ReportManager:
         format: ReportFormat,
         generator: ReportGenerator
     ):
-        """생성기 등록"""
+        """Register a generator for a specific report format, replacing any prior registration.
+
+        Input: format — ReportFormat, the output format this generator handles
+               generator — ReportGenerator, the generator instance to register
+        Output: None
+        """
         self.generators[format] = generator
 
     def get_generator(self, format: ReportFormat) -> Optional[ReportGenerator]:
-        """생성기 조회"""
+        """Return the registered generator for the given format, or None if not registered.
+
+        Input: format — ReportFormat, the format to look up
+        Output: Optional[ReportGenerator] — registered generator, or None
+        """
         return self.generators.get(format)
 
     def generate_report(
@@ -181,7 +233,14 @@ class ReportManager:
         options: ReportOptions,
         output_path: Optional[Union[str, Path]] = None
     ) -> Union[bytes, Path]:
-        """레포트 생성"""
+        """Generate a report, optionally saving it to disk.
+
+        Input: report_data — ReportData, structured report content
+               options — ReportOptions, formatting options including format and template_id
+               output_path — Optional[Union[str, Path]], if provided the report is saved here
+        Output: Union[bytes, Path] — raw bytes when no output_path; resolved Path when saved
+        Raises: ExportError — when no generator is registered for the requested format
+        """
         generator = self.generators.get(options.format)
         if not generator:
             raise ExportError(
@@ -199,19 +258,33 @@ class ReportManager:
         return generator.generate(report_data, options)
 
     def add_template(self, template: ReportTemplate):
-        """템플릿 추가"""
+        """Register a custom template, keyed by template.id.
+
+        Input: template — ReportTemplate, the template to add; replaces any existing template with the same id
+        Output: None
+        """
         self.templates[template.id] = template
 
     def get_template(self, template_id: str) -> Optional[ReportTemplate]:
-        """템플릿 조회"""
+        """Return the template with the given id, or None if not found.
+
+        Input: template_id — str, the id of the template to retrieve
+        Output: Optional[ReportTemplate] — the matching template, or None
+        """
         return self.templates.get(template_id)
 
     def list_templates(self) -> List[ReportTemplate]:
-        """템플릿 목록 조회"""
+        """Return all registered templates as a list.
+
+        Output: List[ReportTemplate] — all templates in registration order
+        """
         return list(self.templates.values())
 
     def list_formats(self) -> List[ReportFormat]:
-        """지원 형식 목록"""
+        """Return all report formats that have a registered generator.
+
+        Output: List[ReportFormat] — formats with an active generator
+        """
         return list(self.generators.keys())
 
 
@@ -221,7 +294,13 @@ def collect_statistics_from_dataframe(
     dataset_id: str,
     dataset_name: str
 ) -> List[StatisticalSummary]:
-    """DataFrame에서 통계 수집"""
+    """Compute per-column statistics for all numeric columns in a DataFrame.
+
+    Input: df — pl.DataFrame, the source data
+           dataset_id — str, identifier for the originating dataset
+           dataset_name — str, display name for the originating dataset
+    Output: List[StatisticalSummary] — one entry per numeric column; empty if no numeric columns
+    """
     stats = []
     for col in df.columns:
         if df[col].dtype.is_numeric():
@@ -239,7 +318,12 @@ def create_comparison_table(
     statistics: Dict[str, List[StatisticalSummary]],
     metric: str = "mean"
 ) -> TableData:
-    """비교 테이블 생성"""
+    """Build a cross-dataset comparison TableData for a single statistical metric.
+
+    Input: statistics — Dict[str, List[StatisticalSummary]], mapping dataset_id to its column stats
+           metric — str, attribute name on StatisticalSummary to compare (default "mean")
+    Output: TableData — table with columns [Column, dataset_id1, dataset_id2, ...] sorted by column name
+    """
     # 공통 컬럼 찾기
     all_columns = set()
     for dataset_stats in statistics.values():

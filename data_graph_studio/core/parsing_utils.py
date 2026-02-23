@@ -53,7 +53,7 @@ class ParsingEngine:
             result = from_bytes(raw).best()
             if result is not None:
                 encoding = result.encoding
-        except Exception:
+        except (ImportError, ValueError, SyntaxError, TypeError):
             logger.debug("parsing_utils.detect_encoding.charset_normalizer_failed", exc_info=True)
             encoding = None
 
@@ -63,7 +63,7 @@ class ParsingEngine:
 
                 result = chardet.detect(raw)
                 encoding = result.get("encoding")
-            except Exception:
+            except (ImportError, ValueError, SyntaxError, TypeError):
                 logger.debug("parsing_utils.detect_encoding.chardet_failed", exc_info=True)
                 encoding = None
 

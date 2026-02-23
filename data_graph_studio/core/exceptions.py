@@ -18,11 +18,23 @@ class DGSError(Exception):
         context: Optional dict with extra diagnostic info (file, column, etc.)
     """
     def __init__(self, message: str, operation: str = "", context: dict[str, Any] | None = None) -> None:
+        """Construct a DGSError with an optional operation label and context dict.
+
+        Input: message — str, human-readable error description
+               operation — str, label for the failing operation (default empty)
+               context — dict | None, extra diagnostic key/value pairs (default empty dict)
+        Output: None
+        Invariants: self.context is always a dict (never None)
+        """
         self.operation = operation
         self.context = context or {}
         super().__init__(message)
 
     def __str__(self) -> str:
+        """Return the error message, prefixed with [operation] when operation is set.
+
+        Output: str — formatted error string
+        """
         base = super().__str__()
         if self.operation:
             return f"[{self.operation}] {base}"
