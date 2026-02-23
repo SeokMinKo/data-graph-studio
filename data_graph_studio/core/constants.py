@@ -64,3 +64,25 @@ IPC_HANDLER_TIMEOUT: int = 30  # max seconds per IPC command handler call
 
 # --- Filter Schemes ---
 DEFAULT_SCHEME_NAME: str = "Page"  # Name of the built-in, protected filtering scheme
+
+# --- File Loading ---
+DEFAULT_DELIMITER: str = ','
+DEFAULT_ENCODING: str = 'utf-8'
+DELIMITER_SAMPLE_LINES: int = 10
+ENCODING_SAMPLE_SIZE: int = 65536          # 64 KB sample — enough for encoding detection
+PARQUET_CONVERT_THRESHOLD: int = 500 * 1024 * 1024   # 500 MB — convert CSV → Parquet above this
+WINDOWED_LOAD_THRESHOLD: int = 300 * 1024 * 1024     # 300 MB — use windowed loading above this
+DEFAULT_WINDOW_SIZE: int = 200_000         # rows per window in windowed-load mode
+FILE_LOADER_CHUNK_SIZE: int = 100_000      # rows per chunk in streaming/chunked reads
+FILE_LOADER_LARGE_FILE_THRESHOLD: int = 100 * 1024 * 1024  # 100 MB — file-loader heuristic
+LAZY_EVAL_THRESHOLD: int = 1024 * 1024 * 1024  # 1 GB — use LazyFrame above this
+FILE_LOADER_MAX_RETRIES: int = 3           # retries for transient file-access failures
+FILE_LOADER_RETRY_DELAY_SECONDS: float = 0.5  # base delay (multiplied by attempt index)
+
+# --- Reports ---
+DEFAULT_CHART_DPI: int = 150               # raster DPI for chart exports in reports
+
+# --- DataQuery defaults ---
+DEFAULT_UNIQUE_VALUES_LIMIT: int = 1000   # max unique values returned by get_unique_values
+DEFAULT_SAMPLE_SIZE: int = 10_000         # max rows returned by sample()
+CATEGORICAL_MAX_NUMERIC_UNIQUE: int = 20  # numeric columns with <= this many unique values may be categorical

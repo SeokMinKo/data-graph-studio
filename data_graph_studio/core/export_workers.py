@@ -26,6 +26,18 @@ import polars as pl
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Export progress checkpoints (passed to _on_progress; 0–100)
+# ---------------------------------------------------------------------------
+_PROGRESS_RENDER_START: int = 10    # format dispatch done, rendering begins
+_PROGRESS_SVG_RENDER: int = 30      # SVG render complete, about to write
+_PROGRESS_SVG_WRITE: int = 70       # SVG written
+_PROGRESS_PDF_PHASE1: int = 20      # PDF setup complete
+_PROGRESS_PDF_PHASE2: int = 40      # PDF render started
+_PROGRESS_PDF_FINALIZE: int = 80    # PDF render done, about to write
+_PROGRESS_WRITE_MIDPOINT: int = 50  # file write in progress (CSV/PNG/Parquet/Excel)
+_PROGRESS_DONE: int = 100           # export complete
+
 
 # ---------------------------------------------------------------------------
 # ExportFormat
@@ -149,7 +161,7 @@ class ExportWorker:
             self._on_failed("Cannot export: image is null or empty.")
             return
 
-        self._on_progress(10)  # Rendering chart...
+        self._on_progress(_PROGRESS_RENDER_START)  # Rendering chart...
 
         if self.fmt == ExportFormat.PNG:
             self._export_png()
@@ -162,7 +174,7 @@ class ExportWorker:
             return
 
         if not self._cancelled:
-            self._on_progress(100)
+            self._on_progress(_PROGRESS_DONE)
             get_metrics().increment("export.completed")
             self._on_completed(self.path)
 
@@ -175,7 +187,7 @@ class ExportWorker:
             self._cleanup()
             return
 
-        self._on_progress(50)  # Writing file...
+        self._on_progress(_PROGRESS_WRITE_MIDPOINT)  # Writing file...
 
         renderer = self._get_renderer()
         data = renderer.render_to_png_with_background(
@@ -199,7 +211,7 @@ class ExportWorker:
         width = opts.width or img.width()
         height = opts.height or img.height()
 
-        self._on_progress(30)
+        self._on_progress(_PROGRESS_SVG_RENDER)
 
         renderer = self._get_renderer()
         data = renderer.render_to_svg(img, width, height)
@@ -208,7 +220,7 @@ class ExportWorker:
             self._cleanup()
             return
 
-        self._on_progress(70)
+        self._on_progress(_PROGRESS_SVG_WRITE)
         atomic_write(self.path, data)
 
     def _export_pdf(self) -> None:
@@ -216,20 +228,20 @@ class ExportWorker:
         opts = self.options
         img = self.image
 
-        self._on_progress(20)
+        self._on_progress(_PROGRESS_PDF_PHASE1)
 
         if self._cancelled:
             self._cleanup()
             return
 
-        self._on_progress(40)
+        self._on_progress(_PROGRESS_PDF_PHASE2)
 
         renderer = self._get_renderer()
         width = opts.width or (img.width() if img is not None else 0)
         height = opts.height or (img.height() if img is not None else 0)
         data = renderer.render_to_pdf(img, width, height, opts)
 
-        self._on_progress(80)
+        self._on_progress(_PROGRESS_PDF_FINALIZE)
 
         if self._cancelled:
             self._cleanup()
@@ -249,7 +261,7 @@ class ExportWorker:
             self._on_failed("Cannot export: no DataFrame provided.")
             return
 
-        self._on_progress(10)
+        self._on_progress(_PROGRESS_RENDER_START)
 
         if self.fmt == ExportFormat.CSV:
             self._export_csv()
@@ -262,7 +274,7 @@ class ExportWorker:
             return
 
         if not self._cancelled:
-            self._on_progress(100)
+            self._on_progress(_PROGRESS_DONE)
             get_metrics().increment("export.completed")
             self._on_completed(self.path)
 
@@ -271,7 +283,7 @@ class ExportWorker:
         if self._cancelled:
             self._cleanup()
             return
-        self._on_progress(50)
+        self._on_progress(_PROGRESS_WRITE_MIDPOINT)
         atomic_write(self.path, data)
 
     def _export_parquet(self) -> None:
@@ -286,7 +298,7 @@ class ExportWorker:
             if self._cancelled:
                 self._cleanup()
                 return
-            self._on_progress(50)
+            self._on_progress(_PROGRESS_WRITE_MIDPOINT)
             os.rename(tmp_path, self.path)
         except (OSError, MemoryError, PermissionError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
             if os.path.exists(tmp_path):
@@ -306,7 +318,7 @@ class ExportWorker:
             if self._cancelled:
                 self._cleanup()
                 return
-            self._on_progress(50)
+            self._on_progress(_PROGRESS_WRITE_MIDPOINT)
             os.rename(tmp_path, self.path)
         except (OSError, MemoryError, PermissionError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
             if os.path.exists(tmp_path):

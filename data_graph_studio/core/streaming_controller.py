@@ -19,6 +19,7 @@ from typing import Optional
 from data_graph_studio.core.file_watcher import FileWatcher
 from data_graph_studio.core.io_abstract import IFileSystem, ITimerFactory
 from data_graph_studio.core.observable import Observable
+from data_graph_studio.core.constants import DEFAULT_POLL_INTERVAL_MS
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class StreamingController(Observable):
         self._watcher: Optional[FileWatcher] = None
         self._current_path: Optional[str] = None
         self._current_mode: str = "tail"
-        self._poll_interval_ms: int = 1000
+        self._poll_interval_ms: int = DEFAULT_POLL_INTERVAL_MS
         self._follow_tail: bool = False
 
     # ── Properties ────────────────────────────────────────────
