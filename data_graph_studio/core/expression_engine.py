@@ -24,14 +24,11 @@ logger = logging.getLogger(__name__)
 
 
 class ExpressionEngine:
-    """
-    수식 엔진
+    """Evaluate expression strings against a Polars DataFrame.
 
-    Features:
-    - 사칙연산, 비교 연산
-    - 내장 함수 (ROUND, IF, CONCAT, DATE_DIFF 등)
-    - 컬럼 참조
-    - 계산 필드 추가
+    Supports arithmetic, comparison, and a curated set of built-in functions
+    (math, string, conditional, datetime). Uses Lexer/Parser from
+    expression_lexer.py to produce an AST, then walks it recursively.
     """
 
     # 지원 함수 목록
@@ -53,15 +50,16 @@ class ExpressionEngine:
         pass
 
     def evaluate(self, expression: str, df: pl.DataFrame) -> pl.Series:
-        """
-        수식 평가
+        """Tokenize, parse, and evaluate an expression string against a DataFrame.
 
-        Args:
-            expression: 수식 문자열
-            df: 데이터프레임
-
-        Returns:
-            계산된 Series
+        Input:
+            expression — str, the formula to evaluate (e.g., "ROUND([col] / 2, 1)").
+            df — pl.DataFrame, source data; column names are referenced by identifier tokens.
+        Output: pl.Series — one element per row in df; dtype depends on the expression result.
+        Raises: ExpressionError — on unknown column, unknown function, or malformed expression.
+        Invariants:
+            - Increments the "expression.evaluated" metrics counter on each call.
+            - len(result) == len(df) for well-formed expressions.
         """
         logger.debug("expression_engine.evaluate", extra={"expr": str(expression)[:80]})
         get_metrics().increment("expression.evaluated")
@@ -77,7 +75,12 @@ class ExpressionEngine:
         return self._evaluate_ast(ast, df)
 
     def _evaluate_ast(self, node: Dict, df: pl.DataFrame) -> pl.Series:
-        """AST 평가"""
+        """Recursively evaluate an AST node against df and return a Series.
+
+        Input: node — Dict with 'type' key; df — source DataFrame.
+        Output: pl.Series — result for the subtree rooted at node.
+        Raises: ExpressionError — on unknown column, unknown function, or unknown node type.
+        """
         node_type = node['type']
         n_rows = len(df) if len(df) > 0 else 1
 
@@ -148,7 +151,13 @@ class ExpressionEngine:
         return arg
 
     def _evaluate_function(self, node: Dict, df: pl.DataFrame) -> pl.Series:
-        """함수 평가 — dispatches to typed handler groups."""
+        """Dispatch a function AST node to the appropriate handler group.
+
+        Input: node — Dict with 'name' (uppercase str) and 'args' (List[Dict]).
+            df — source DataFrame for argument evaluation.
+        Output: pl.Series — result of the named function applied to evaluated args.
+        Raises: ExpressionError — when the function name is not recognized by any handler.
+        """
         func_name = node['name']
         args = [self._evaluate_ast(arg, df) for arg in node['args']]
 
@@ -304,16 +313,14 @@ class ExpressionEngine:
         column_name: str,
         expression: str
     ) -> pl.DataFrame:
-        """
-        계산 필드 컬럼 추가
+        """Evaluate expression and append the result as a new column to df.
 
-        Args:
-            df: 원본 데이터프레임
-            column_name: 새 컬럼 이름
-            expression: 수식
-
-        Returns:
-            새 컬럼이 추가된 데이터프레임
+        Input:
+            df — pl.DataFrame, source data.
+            column_name — str, name for the new column; overwrites if it already exists.
+            expression — str, formula evaluated via self.evaluate().
+        Output: pl.DataFrame — df with the new or replaced column aliased to column_name.
+        Raises: ExpressionError — propagated from evaluate() on bad expression.
         """
         result = self.evaluate(expression, df)
         return df.with_columns(result.alias(column_name))
@@ -323,11 +330,14 @@ class ExpressionEngine:
         expression: str,
         df: pl.DataFrame
     ) -> Tuple[bool, Optional[str]]:
-        """
-        수식 유효성 검사
+        """Tokenize, parse, and structurally validate an expression without evaluating it.
 
-        Returns:
-            (is_valid, error_message)
+        Input:
+            expression — str, the formula to validate.
+            df — pl.DataFrame, used for column existence checks during AST walk.
+        Output: Tuple[bool, Optional[str]] — (True, None) when valid;
+            (False, error_message) on any parse or validation error.
+        Raises: nothing — all exceptions are caught and returned as the error string.
         """
         try:
             # 토큰화
@@ -351,7 +361,12 @@ class ExpressionEngine:
             return False, str(e)
 
     def _validate_ast(self, node: Dict, df: pl.DataFrame):
-        """AST 유효성 검증"""
+        """Walk an AST node and verify column existence and function names.
+
+        Input: node — Dict AST node; df — DataFrame for column lookups.
+        Raises: ExpressionError — when a referenced column is absent from df.columns,
+            or a function name is not in self.FUNCTIONS.
+        """
         node_type = node['type']
 
         if node_type == 'column':
@@ -375,7 +390,12 @@ class ExpressionEngine:
             self._validate_ast(node['operand'], df)
 
     def get_referenced_columns(self, expression: str) -> List[str]:
-        """수식에서 참조하는 컬럼 목록 반환"""
+        """Parse an expression and return the unique column names it references.
+
+        Input: expression — str, any valid (or structurally valid) expression string.
+        Output: List[str] — deduplicated column names; order is not guaranteed.
+        Raises: ExpressionError — on tokenization or parse failure.
+        """
         lexer = Lexer(expression)
         tokens = lexer.tokenize()
         parser = Parser(tokens)
@@ -386,7 +406,11 @@ class ExpressionEngine:
         return list(set(columns))
 
     def _collect_columns(self, node: Dict, columns: List[str]):
-        """AST에서 컬럼 참조 수집"""
+        """Recursively collect column names from an AST node into columns (in-place).
+
+        Input: node — Dict AST node; columns — mutable list accumulating column names.
+        Invariants: columns may contain duplicates; deduplication is done by the caller.
+        """
         if node['type'] == 'column':
             columns.append(node['name'])
         elif node['type'] in ('binary', 'comparison'):

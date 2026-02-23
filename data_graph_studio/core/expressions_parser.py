@@ -25,21 +25,29 @@ class SecurityError(Exception):
 
 
 class ExpressionType(Enum):
-    """표현식 타입"""
-    ARITHMETIC = "arithmetic"       # 산술 연산
-    COMPARISON = "comparison"       # 비교 연산
-    LOGICAL = "logical"            # 논리 연산
-    AGGREGATE = "aggregate"        # 집계 함수
-    WINDOW = "window"              # 윈도우 함수 (OVER)
-    STRING = "string"              # 문자열 함수
-    DATE = "date"                  # 날짜 함수
-    MATH = "math"                  # 수학 함수
-    CONDITIONAL = "conditional"    # 조건문
+    """Categorizes an expression by its primary operation for routing/display purposes."""
+    ARITHMETIC = "arithmetic"
+    COMPARISON = "comparison"
+    LOGICAL = "logical"
+    AGGREGATE = "aggregate"
+    WINDOW = "window"
+    STRING = "string"
+    DATE = "date"
+    MATH = "math"
+    CONDITIONAL = "conditional"
 
 
 @dataclass
 class ValidationResult:
-    """유효성 검사 결과"""
+    """Result of ExpressionParser or ExpressionValidator validation.
+
+    Attributes:
+        is_valid: True iff errors is empty.
+        errors: List of human-readable error descriptions; non-empty means invalid.
+        warnings: Non-fatal issues (e.g., missing optional columns) that don't
+            block evaluation.
+        referenced_columns: Set of column names extracted from the expression.
+    """
     is_valid: bool
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -47,10 +55,17 @@ class ValidationResult:
 
 
 class ExpressionParser:
-    """
-    수식 파서
+    """Spotfire-style expression parser and evaluator for Polars DataFrames.
 
-    Spotfire 스타일의 수식을 파싱하고 평가합니다.
+    Handles four expression categories in priority order:
+    1. OVER expressions (window/partition-based aggregation via regex detection)
+    2. Aggregate expressions (sum, avg, count, etc. without OVER)
+    3. Conditional expressions (If(…) / Case When … End)
+    4. Simple arithmetic/string/math/date expressions (via numpy eval)
+
+    Column references use Spotfire bracket notation: [ColumnName].
+    Delegate helpers (string/math/date/null transforms, IF, CASE, &-concat)
+    live in ExpressionEvaluatorHelpers (expressions_ast_evaluator.py).
     """
 
     # 집계 함수 목록
@@ -66,6 +81,7 @@ class ExpressionParser:
     }
 
     def __init__(self):
+        """Initialize compiled regex patterns and delegate helpers."""
         # 컬럼 참조 패턴: [column_name]
         self._column_pattern = re.compile(r'\[([^\]]+)\]')
 
@@ -90,16 +106,18 @@ class ExpressionParser:
         data: pl.DataFrame,
         context: Optional[Dict[str, Any]] = None
     ) -> Union[pl.Series, Any]:
-        """
-        수식 평가
+        """Evaluate a Spotfire-style expression against a DataFrame.
 
-        Args:
-            expression: 평가할 수식
-            data: 데이터프레임
-            context: 추가 컨텍스트 (변수 등)
-
-        Returns:
-            평가 결과 (Series 또는 스칼라)
+        Input:
+            expression — str, the formula string (column refs as [Name]).
+            data — pl.DataFrame, source data for column lookups.
+            context — Optional[Dict[str, Any]], additional named variables
+                (currently unused but reserved for future variable binding).
+        Output: Union[pl.Series, Any] — pl.Series (one element per row) for
+            row-level expressions; scalar for aggregate expressions.
+        Raises: nothing directly — each sub-evaluator catches its own errors and
+            may return a null-filled Series on failure.
+        Invariants: OVER detection takes priority over aggregate detection.
         """
         if context is None:
             context = {}
@@ -121,7 +139,11 @@ class ExpressionParser:
         return self._evaluate_simple(expression, data, context)
 
     def _is_aggregate_expression(self, expression: str) -> bool:
-        """집계 표현식인지 확인"""
+        """Return True if expression contains an aggregate function call without OVER.
+
+        Input: expression — str to classify.
+        Output: bool — True when a bare aggregate function (no OVER clause) is found.
+        """
         expr_lower = expression.lower()
         for func in self.AGGREGATE_FUNCTIONS:
             if re.search(rf'\b{func}\s*\(', expr_lower):
@@ -131,7 +153,11 @@ class ExpressionParser:
         return False
 
     def _is_conditional_expression(self, expression: str) -> bool:
-        """조건 표현식인지 확인"""
+        """Return True if expression starts with If( or Case (case-insensitive).
+
+        Input: expression — str to classify.
+        Output: bool.
+        """
         expr_lower = expression.lower().strip()
         return expr_lower.startswith('if(') or expr_lower.startswith('case ')
 
@@ -141,7 +167,15 @@ class ExpressionParser:
         data: pl.DataFrame,
         context: Dict[str, Any]
     ) -> pl.Series:
-        """단순 수식 평가"""
+        """Evaluate a non-aggregate, non-conditional expression via numpy eval fallback.
+
+        Input:
+            expression — str, a formula with [col] references, string/math/date/null
+                function calls, or arithmetic operators.
+            data — pl.DataFrame, source data.
+            context — Dict, currently unused.
+        Output: pl.Series — row-level result; null-filled on eval failure.
+        """
         expr = expression
 
         # 문자열 함수 처리
@@ -170,7 +204,17 @@ class ExpressionParser:
         data: pl.DataFrame,
         columns_used: List[str]
     ) -> pl.Series:
-        """수식 계산"""
+        """Compute an expression by substituting column refs with numpy arrays and eval()ing.
+
+        Input:
+            expression — str with [col] references already partially transformed
+                by handle_* helpers.
+            data — pl.DataFrame for column value lookup.
+            columns_used — List[str] of column names extracted from expression.
+        Output: pl.Series — result; null-filled Series on eval error or & operator
+            (delegated to evaluate_string_concat).
+        Invariants: eval() runs with empty __builtins__ and only numpy exposed.
+        """
         expr = expression
 
         # 컬럼 참조를 numpy 배열로 변환
@@ -206,7 +250,14 @@ class ExpressionParser:
         expression: str,
         data: pl.DataFrame
     ) -> Any:
-        """집계 표현식 평가"""
+        """Evaluate a bare aggregate function (sum/avg/mean/count/min/max/median/std/var/first/last).
+
+        Input:
+            expression — str containing exactly one aggregate function call with a [col] ref.
+            data — pl.DataFrame, source data.
+        Output: Any — scalar aggregate result (int/float/None); None when column not found
+            or no aggregate function matched.
+        """
         expr_lower = expression.lower()
 
         col_match = self._column_pattern.search(expression)
@@ -248,7 +299,18 @@ class ExpressionParser:
         data: pl.DataFrame,
         match: re.Match
     ) -> pl.Series:
-        """OVER 표현식 평가 (윈도우 함수)"""
+        """Evaluate a Spotfire-style OVER (window) expression using Polars .over().
+
+        Input:
+            expression — str, the full expression (unused after regex extraction).
+            data — pl.DataFrame, source data.
+            match — re.Match from self._over_pattern; groups: (func, value_col, partition).
+        Output: pl.Series — partition-aggregated result aligned to df row order;
+            null-filled when value_col is missing, partition_col is missing, or
+            func is not one of sum/avg/mean/count/min/max/rank/denserank/dense_rank.
+        Invariants: AllPrevious(…) partition syntax is detected first and routes to
+            _evaluate_running_aggregate.
+        """
         func_name = match.group(1).lower()
         value_col = match.group(2)
         partition_col = match.group(3)
@@ -303,7 +365,16 @@ class ExpressionParser:
         partition_col: str,
         data: pl.DataFrame
     ) -> pl.Series:
-        """누적 집계"""
+        """Evaluate a running (cumulative) aggregate using Polars cum_sum / cum_count.
+
+        Input:
+            func_name — str, one of 'sum', 'avg', 'mean' (lowercase).
+            value_col — str, name of the column to aggregate.
+            partition_col — str, name of the column that defines partition groups.
+            data — pl.DataFrame, source data.
+        Output: pl.Series — row-aligned cumulative result; null-filled Series when
+            value_col is absent from data or func_name is not supported.
+        """
         if value_col not in data.columns:
             return pl.Series([None] * len(data))
 
@@ -357,5 +428,9 @@ class ExpressionParser:
         return self._helpers.evaluate_string_concat(expression, data)
 
     def get_referenced_columns(self, expression: str) -> Set[str]:
-        """수식에서 참조하는 컬럼 목록"""
+        """Extract the set of column names referenced by bracket notation in expression.
+
+        Input: expression — str, any Spotfire-style expression.
+        Output: Set[str] — unique column names found inside [brackets]; empty set if none.
+        """
         return set(self._column_pattern.findall(expression))

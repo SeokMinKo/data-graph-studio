@@ -19,10 +19,10 @@ from data_graph_studio.core.expressions_parser import (
 
 
 class OverExpression:
-    """
-    OVER 표현식 (윈도우 함수)
+    """Partition-based window aggregate in Spotfire OVER style.
 
-    Spotfire 스타일의 파티션 기반 집계를 지원합니다.
+    Wraps a Polars .over() call for a single aggregate function applied to
+    value_column, optionally partitioned by one or more columns.
     """
 
     def __init__(
@@ -32,13 +32,31 @@ class OverExpression:
         partition_by: Optional[List[str]] = None,
         order_by: Optional[List[str]] = None
     ):
+        """Initialize an OVER expression.
+
+        Input:
+            aggregate_func — str, one of: sum, avg/mean, count, min, max, rank
+                (case-insensitive; stored as lowercase).
+            value_column — str, name of the column to aggregate.
+            partition_by — Optional[List[str]], partition group columns; defaults to [].
+            order_by — Optional[List[str]], ordering columns (stored but not used
+                by the current Polars implementation).
+        """
         self.aggregate_func = aggregate_func.lower()
         self.value_column = value_column
         self.partition_by = partition_by or []
         self.order_by = order_by or []
 
     def evaluate(self, data: pl.DataFrame) -> pl.Series:
-        """표현식 평가"""
+        """Apply the window aggregate to data and return a row-aligned Series.
+
+        Input: data — pl.DataFrame, source data; must contain value_column when
+            a non-null result is expected.
+        Output: pl.Series — one element per row; null-filled when value_column
+            is absent or aggregate_func is not recognized.
+        Invariants: When partition_by is non-empty, Polars .over() is used so
+            each row receives the aggregate for its partition group.
+        """
         if self.value_column not in data.columns:
             return pl.Series([None] * len(data))
 
@@ -70,10 +88,17 @@ class OverExpression:
 
 @dataclass
 class CalculatedColumn:
-    """
-    계산 컬럼
+    """Expression-based derived column definition.
 
-    수식 기반의 새 컬럼을 정의합니다.
+    Stores a name, a Spotfire-style formula, and optional metadata. Evaluation
+    is delegated to ExpressionParser. Instantiated as a dataclass; call apply()
+    to materialize the column.
+
+    Attributes:
+        name: Output column name.
+        expression: Spotfire-style formula string.
+        description: Human-readable description (optional, not used in evaluation).
+        data_type: Expected output dtype hint (optional, not enforced).
     """
     name: str
     expression: str
@@ -84,14 +109,12 @@ class CalculatedColumn:
         self._parser = ExpressionParser()
 
     def apply(self, data: pl.DataFrame) -> pl.DataFrame:
-        """
-        데이터프레임에 계산 컬럼 추가
+        """Evaluate the expression and append the result as a new column to data.
 
-        Args:
-            data: 원본 데이터프레임
-
-        Returns:
-            계산 컬럼이 추가된 데이터프레임
+        Input: data — pl.DataFrame, source data passed to ExpressionParser.evaluate().
+        Output: pl.DataFrame — data with the new column aliased to self.name.
+            Scalar results are broadcast to a constant column via pl.lit().
+        Raises: propagates any exception from ExpressionParser.evaluate().
         """
         result = self._parser.evaluate(self.expression, data)
 
@@ -102,16 +125,27 @@ class CalculatedColumn:
             return data.with_columns(pl.lit(result).alias(self.name))
 
     def get_referenced_columns(self) -> Set[str]:
-        """참조 컬럼 목록"""
+        """Return the set of column names referenced in this column's expression.
+
+        Output: Set[str] — unique column names found via ExpressionParser.get_referenced_columns().
+        """
         return self._parser.get_referenced_columns(self.expression)
 
 
 @dataclass
 class DataFunction:
-    """
-    데이터 함수
+    """User-defined function executed as sandboxed Python code.
 
-    Python 코드를 사용한 커스텀 함수입니다.
+    The function body is AST-scanned before exec() to block dunder access and
+    dangerous built-in names. The exec() sandbox exposes only numpy (np),
+    polars (pl), the input DataFrame (data), and any extra kwargs.
+
+    Attributes:
+        name: Function identifier used by DataFunctionRegistry.
+        parameters: Ordered list of expected parameter names (informational).
+        body: Python source code; must assign to a local variable named 'result'.
+        description: Human-readable description.
+        return_type: Expected return type hint (not enforced).
     """
     name: str
     parameters: List[str]
@@ -126,11 +160,14 @@ class DataFunction:
     )
 
     def _validate_body_ast(self, body: str) -> None:
-        """
-        AST-scan the function body before exec().
+        """AST-scan the function body before exec() to block dangerous constructs.
 
-        Raises SecurityError if dunder attribute access or blocked built-in
-        names are detected.
+        Input: body — str, Python source code to validate.
+        Raises:
+            SecurityError — when a dunder attribute access (__..__) is detected.
+            SecurityError — when a name in _BLOCKED_NAMES is referenced.
+            SecurityError — when body contains a SyntaxError.
+        Invariants: Called unconditionally before every exec() in execute().
         """
         try:
             tree = ast.parse(body)
@@ -152,15 +189,19 @@ class DataFunction:
         data: pl.DataFrame,
         **kwargs
     ) -> Any:
-        """
-        함수 실행
+        """Execute the function body in a sandboxed environment.
 
-        Args:
-            data: 입력 데이터프레임
-            **kwargs: 함수 파라미터
-
-        Returns:
-            함수 실행 결과
+        Input:
+            data — pl.DataFrame, available as 'data' inside the body.
+            **kwargs — additional named variables exposed inside the body.
+        Output: Any — the value assigned to 'result' inside the body;
+            None when 'result' is never assigned or an exception occurs.
+        Raises:
+            SecurityError — propagated from _validate_body_ast() when body fails AST check.
+        Invariants:
+            - _validate_body_ast() always runs before exec().
+            - exec() uses empty __builtins__; only np, pl, data, and kwargs are accessible.
+            - Non-SecurityError exceptions are logged at DEBUG and return None.
         """
         # AST validation before exec — blocks dunder access and dangerous names
         self._validate_body_ast(self.body)
@@ -184,10 +225,11 @@ class DataFunction:
 
 
 class DataFunctionRegistry:
-    """
-    데이터 함수 레지스트리
+    """Registry for built-in and user-defined DataFunction instances.
 
-    내장 및 사용자 정의 데이터 함수를 관리합니다.
+    Built-in functions (Normalize, ZScore, Percentile, MovingAverage) are
+    registered on construction. Custom functions can be added with register()
+    and removed with unregister().
     """
 
     def __init__(self):
@@ -195,7 +237,7 @@ class DataFunctionRegistry:
         self._register_builtins()
 
     def _register_builtins(self) -> None:
-        """내장 함수 등록"""
+        """Register the four built-in DataFunctions: Normalize, ZScore, Percentile, MovingAverage."""
         # Normalize (정규화)
         self._functions['Normalize'] = DataFunction(
             name='Normalize',
@@ -243,24 +285,40 @@ result = np.convolve(values, np.ones(window)/window, mode='same')
         )
 
     def register(self, func: DataFunction) -> None:
-        """함수 등록"""
+        """Add or replace a DataFunction in the registry.
+
+        Input: func — DataFunction, keyed by func.name; overwrites any existing entry.
+        """
         self._functions[func.name] = func
 
     def unregister(self, name: str) -> None:
-        """함수 제거"""
+        """Remove a function from the registry by name; no-op if name not found.
+
+        Input: name — str, the function name to remove.
+        """
         if name in self._functions:
             del self._functions[name]
 
     def get(self, name: str) -> Optional[DataFunction]:
-        """함수 조회"""
+        """Look up a DataFunction by name.
+
+        Input: name — str, function name.
+        Output: Optional[DataFunction] — the function object, or None if not registered.
+        """
         return self._functions.get(name)
 
     def list_functions(self) -> List[str]:
-        """함수 목록"""
+        """Return the names of all registered functions (built-in and user-defined).
+
+        Output: List[str] — function names in insertion order.
+        """
         return list(self._functions.keys())
 
     def list_builtin_functions(self) -> List[str]:
-        """내장 함수 목록"""
+        """Return the names of the four built-in functions registered at construction.
+
+        Output: List[str] — ['Normalize', 'ZScore', 'Percentile', 'MovingAverage'].
+        """
         return ['Normalize', 'ZScore', 'Percentile', 'MovingAverage']
 
     def execute(
@@ -269,7 +327,15 @@ result = np.convolve(values, np.ones(window)/window, mode='same')
         data: pl.DataFrame,
         **kwargs
     ) -> Any:
-        """함수 실행"""
+        """Look up a function by name and execute it against data.
+
+        Input:
+            name — str, the function name to look up.
+            data — pl.DataFrame, passed to DataFunction.execute().
+            **kwargs — additional named variables forwarded to the function body.
+        Output: Any — function result, or None when name is not registered.
+        Raises: SecurityError — propagated from DataFunction.execute() on unsafe body.
+        """
         func = self.get(name)
         if func is None:
             return None
@@ -277,8 +343,10 @@ result = np.convolve(values, np.ones(window)/window, mode='same')
 
 
 class ExpressionValidator:
-    """
-    수식 유효성 검사기
+    """Validates Spotfire-style expressions against a known column list.
+
+    Checks for: column existence, balanced parentheses, balanced brackets.
+    Also provides circular-reference detection for networks of calculated columns.
     """
 
     def __init__(self):
@@ -289,15 +357,15 @@ class ExpressionValidator:
         expression: str,
         available_columns: List[str]
     ) -> ValidationResult:
-        """
-        수식 유효성 검사
+        """Validate an expression against the given column list.
 
-        Args:
-            expression: 검사할 수식
-            available_columns: 사용 가능한 컬럼 목록
-
-        Returns:
-            유효성 검사 결과
+        Input:
+            expression — str, the formula to validate.
+            available_columns — List[str], column names considered valid references.
+        Output: ValidationResult — is_valid=True iff errors is empty;
+            errors contains messages for missing columns and unbalanced brackets/parens;
+            referenced_columns holds all [bracket]-extracted column names.
+        Raises: nothing — all errors are returned in ValidationResult.errors.
         """
         errors = []
         warnings = []
@@ -331,16 +399,18 @@ class ExpressionValidator:
         expression: str,
         existing_calculated_columns: Dict[str, str]
     ) -> bool:
-        """
-        순환 참조 검사
+        """Detect whether adding column_name with expression would create a circular dependency.
 
-        Args:
-            column_name: 새 컬럼 이름
-            expression: 새 컬럼 수식
-            existing_calculated_columns: 기존 계산 컬럼 {이름: 수식}
-
-        Returns:
-            순환 참조 존재 여부
+        Input:
+            column_name — str, name of the proposed new calculated column.
+            expression — str, formula for column_name.
+            existing_calculated_columns — Dict[str, str], map of existing calculated
+                column names to their expressions.
+        Output: bool — True when a cycle is detected (i.e., following dependencies of
+            expression eventually leads back to column_name); False otherwise.
+        Raises: nothing.
+        Invariants: Uses iterative DFS with a visited set to prevent infinite recursion
+            on pre-existing cycles in existing_calculated_columns.
         """
         # 현재 컬럼이 참조하는 컬럼들
         referenced = self._parser.get_referenced_columns(expression)

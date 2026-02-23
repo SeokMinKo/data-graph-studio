@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class TimeSeriesAnalyzer:
-    """
-    시계열 분석기
+    """Time series analysis utilities: smoothing, decomposition, autocorrelation, stationarity.
 
-    이동 평균, 분해, 자기상관 분석 등을 제공합니다.
+    All methods accept raw numpy arrays and return numpy arrays or dicts.
+    No state is maintained between calls.
     """
 
     def moving_average(
@@ -24,15 +24,14 @@ class TimeSeriesAnalyzer:
         values: np.ndarray,
         window: int = 5
     ) -> np.ndarray:
-        """
-        이동 평균
+        """Compute a simple trailing moving average.
 
-        Args:
-            values: 시계열 값
-            window: 윈도우 크기
-
-        Returns:
-            이동 평균 배열
+        Input:
+            values — np.ndarray, 1-D array of numeric time series values.
+            window — int > 0, number of periods in the trailing window (default 5).
+        Output: np.ndarray (float) — same length as values; the first (window-1) elements
+            are NaN because insufficient history is available.
+        Invariants: result[i] = mean(values[i-window+1 : i+1]) for i >= window-1.
         """
         result = np.full_like(values, np.nan, dtype=float)
 
@@ -46,15 +45,15 @@ class TimeSeriesAnalyzer:
         values: np.ndarray,
         alpha: float = 0.3
     ) -> np.ndarray:
-        """
-        지수 평활
+        """Apply simple exponential smoothing (Holt's level-only model).
 
-        Args:
-            values: 시계열 값
-            alpha: 평활 계수 (0 < alpha <= 1)
-
-        Returns:
-            평활된 배열
+        Input:
+            values — np.ndarray, 1-D numeric time series; must have at least one element.
+            alpha — float in (0, 1], smoothing coefficient (default 0.3). Higher values
+                give more weight to recent observations.
+        Output: np.ndarray (float) — smoothed series; same length as values;
+            result[0] == values[0].
+        Invariants: result[i] = alpha * values[i] + (1-alpha) * result[i-1].
         """
         result = np.zeros_like(values, dtype=float)
         result[0] = values[0]
@@ -70,16 +69,19 @@ class TimeSeriesAnalyzer:
         period: int = 12,
         model: str = "additive"
     ) -> Dict[str, np.ndarray]:
-        """
-        시계열 분해 (트렌드 + 계절성 + 잔차)
+        """Decompose a time series into trend, seasonal, and residual components.
 
-        Args:
-            values: 시계열 값
-            period: 계절성 주기
-            model: 분해 모델 ("additive" 또는 "multiplicative")
-
-        Returns:
-            {"trend", "seasonal", "residual"} 딕셔너리
+        Input:
+            values — np.ndarray, 1-D numeric time series.
+            period — int > 0, length of the seasonal cycle (default 12).
+            model — str, 'additive' or 'multiplicative'. Additive: value = trend +
+                seasonal + residual. Multiplicative: value = trend * seasonal * residual.
+        Output: Dict[str, np.ndarray] with keys 'trend', 'seasonal', 'residual';
+            each array is the same length as values. 'trend' contains NaN for the first
+            (period-1) positions (from moving_average).
+        Invariants:
+            - trend computed via moving_average(values, window=period).
+            - seasonal pattern is the per-position nanmean of the detrended series.
         """
         n = len(values)
 
@@ -118,15 +120,15 @@ class TimeSeriesAnalyzer:
         values: np.ndarray,
         max_lag: int = 20
     ) -> np.ndarray:
-        """
-        자기상관 함수 (ACF)
+        """Compute the autocorrelation function (ACF) up to max_lag.
 
-        Args:
-            values: 시계열 값
-            max_lag: 최대 시차
-
-        Returns:
-            자기상관 계수 배열
+        Input:
+            values — np.ndarray, 1-D numeric time series.
+            max_lag — int >= 0, maximum lag to compute (default 20).
+        Output: np.ndarray of float, shape (max_lag+1,); acf[0] == 1.0 always.
+        Invariants:
+            - When variance is 0 (constant series), returns np.ones(max_lag+1).
+            - acf[lag] = Cov(values[lag:], values[:-lag]) / Var(values).
         """
         n = len(values)
         mean = np.mean(values)
@@ -151,15 +153,14 @@ class TimeSeriesAnalyzer:
         values: np.ndarray,
         max_lag: int = 10
     ) -> np.ndarray:
-        """
-        편자기상관 함수 (PACF)
+        """Compute the partial autocorrelation function (PACF) via the Durbin-Levinson algorithm.
 
-        Args:
-            values: 시계열 값
-            max_lag: 최대 시차
-
-        Returns:
-            편자기상관 계수 배열
+        Input:
+            values — np.ndarray, 1-D numeric time series.
+            max_lag — int >= 0, maximum lag to compute (default 10).
+        Output: np.ndarray of float, shape (max_lag+1,); pacf[0] == 1.0, pacf[1] == acf[1].
+        Invariants: Uses autocorrelation() internally; pacf[k] is the partial correlation
+            at lag k after removing linear effects of shorter lags.
         """
         acf = self.autocorrelation(values, max_lag)
         pacf = np.zeros(max_lag + 1)
@@ -192,11 +193,16 @@ class TimeSeriesAnalyzer:
         self,
         values: np.ndarray
     ) -> Dict[str, Any]:
-        """
-        정상성 검정 (Augmented Dickey-Fuller Test 단순화)
+        """Run a simplified Augmented Dickey-Fuller (ADF) stationarity test.
 
-        Returns:
-            {"statistic", "p_value", "is_stationary"} 딕셔너리
+        Input: values — np.ndarray, 1-D numeric time series; must have at least 3 elements.
+        Output: Dict[str, Any] with keys:
+            'statistic' (float) — the ADF t-statistic.
+            'p_value' (float) — approximate p-value (0.01/0.05/0.10/0.50 discretized).
+            'is_stationary' (bool) — True when p_value < 0.05.
+            'critical_values' (dict, on success) — {0.01: -3.43, 0.05: -2.86, 0.10: -2.57}.
+        Raises: nothing — NumPy errors (e.g., singular matrix) are logged at WARNING
+            and return {'statistic': 0, 'p_value': 1.0, 'is_stationary': False}.
         """
         # 단순화된 ADF 테스트 (1차 차분 사용)
         diff = np.diff(values)
@@ -250,11 +256,14 @@ class TimeSeriesAnalyzer:
         values: np.ndarray,
         max_period: int = 50
     ) -> Optional[int]:
-        """
-        계절성 주기 탐지
+        """Detect the dominant seasonal period using ACF peak detection.
 
-        Returns:
-            탐지된 주기 또는 None
+        Input:
+            values — np.ndarray, 1-D numeric time series.
+            max_period — int, maximum lag to examine in the ACF (default 50).
+        Output: Optional[int] — lag of the first ACF peak with height > 0.1;
+            None when no such peak is found.
+        Invariants: Uses scipy.signal.find_peaks on acf[1:] (lag-0 excluded).
         """
         acf = self.autocorrelation(values, max_period)
 

@@ -24,12 +24,18 @@ logger = logging.getLogger(__name__)
 
 
 class ExpressionEvaluatorHelpers:
-    """Stateless helper methods for ExpressionParser evaluation."""
+    """Stateless helper methods for ExpressionParser evaluation.
+
+    Handles conditional (IF/CASE), value parsing, expression string transforms
+    (string/math/date/null function rewriting), and string concatenation (&).
+    All methods are called by ExpressionParser; not intended for direct use.
+    """
 
     def __init__(self, column_pattern: re.Pattern):
-        """
-        Args:
-            column_pattern: compiled regex matching [column_name] references.
+        """Initialize with a compiled column-reference regex.
+
+        Input: column_pattern — re.Pattern, pre-compiled regex that matches [col] references
+            and captures the column name in group(1).
         """
         self._column_pattern = column_pattern
 
@@ -42,7 +48,14 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> pl.Series:
-        """조건문 평가 (If / Case)."""
+        """Route an If(…) or Case … End expression to the appropriate evaluator.
+
+        Input:
+            expression — str, a conditional expression starting with 'if(' or 'case '.
+            data — pl.DataFrame, source data for condition and value evaluation.
+        Output: pl.Series — row-level result; null-filled Series when neither
+            pattern matches.
+        """
         expr_lower = expression.lower().strip()
         if expr_lower.startswith('if('):
             return self.evaluate_if(expression, data)
@@ -55,7 +68,14 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> pl.Series:
-        """IF 표현식 평가: If(condition, true_value, false_value)."""
+        """Evaluate a Spotfire If(condition, true_value, false_value) expression.
+
+        Input:
+            expression — str, must match the pattern If(cond, true, false) (case-insensitive).
+            data — pl.DataFrame, source data for condition and value sub-evaluation.
+        Output: pl.Series — element-wise selection; null-filled when the regex doesn't match.
+        Invariants: condition is evaluated via evaluate_condition(); values via parse_value().
+        """
         match = re.match(
             r"If\s*\(\s*(.+?)\s*,\s*(.+?)\s*,\s*(.+?)\s*\)",
             expression,
@@ -92,7 +112,15 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> pl.Series:
-        """CASE 표현식 평가: Case When ... Then ... Else ... End."""
+        """Evaluate a Case When … Then … Else … End expression row-by-row.
+
+        Input:
+            expression — str, a CASE expression (case-insensitive keywords).
+            data — pl.DataFrame, source data; each row is sliced individually for condition checking.
+        Output: pl.Series — element-wise result; None for rows where no WHEN branch matched
+            and no ELSE clause is present.
+        Invariants: WHEN branches are evaluated in declaration order; first match wins.
+        """
         when_pattern = re.compile(
             r'When\s+(.+?)\s+Then\s+(.+?)(?=\s+When|\s+Else|\s+End)',
             re.IGNORECASE,
@@ -130,7 +158,17 @@ class ExpressionEvaluatorHelpers:
         condition: str,
         data: pl.DataFrame,
     ) -> List[bool]:
-        """조건식 평가."""
+        """Evaluate a simple binary condition string and return a per-row boolean list.
+
+        Input:
+            condition — str containing exactly one comparison operator from
+                >=, <=, !=, <>, =, >, < (tried in that priority order).
+            data — pl.DataFrame, source data for column value lookup.
+        Output: List[bool] — one bool per row; all-False when no operator is found
+            or the condition cannot be split cleanly.
+        Invariants: TypeError/ValueError during individual comparisons are caught
+            and logged at DEBUG, producing False for that row.
+        """
         operators = ['>=', '<=', '!=', '<>', '=', '>', '<']
         op = None
         for o in operators:
@@ -187,7 +225,15 @@ class ExpressionEvaluatorHelpers:
         value_str: str,
         data: pl.DataFrame,
     ) -> Any:
-        """값 문자열 파싱."""
+        """Parse a value string into a Python scalar or a column value list.
+
+        Input:
+            value_str — str, one of: a quoted string literal ('…'/"…"),
+                a [column_name] reference, an integer/float literal, or a raw string.
+            data — pl.DataFrame, used to resolve column references.
+        Output: Any — str for string literals; List for column references (or None if
+            column absent); int/float for numeric literals; raw str otherwise.
+        """
         value_str = value_str.strip()
 
         # 문자열 리터럴
@@ -222,7 +268,11 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> str:
-        """문자열 함수 처리."""
+        """Rewrite Spotfire string function calls in expression for downstream evaluation.
+
+        Input: expression — str to transform; data — pl.DataFrame (available for future use).
+        Output: str — transformed expression (currently a no-op placeholder).
+        """
         expr = expression
         for match in re.finditer(r'Upper\s*\(\s*\[([^\]]+)\]\s*\)', expr, re.IGNORECASE):
             col = match.group(1)
@@ -239,7 +289,13 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> str:
-        """수학 함수 처리."""
+        """Rewrite Spotfire math function names to numpy equivalents for eval().
+
+        Input: expression — str, e.g. "Abs([col])" or "Round([col], 2)".
+            data — pl.DataFrame (unused; present for API symmetry).
+        Output: str — expression with Abs→np.abs, Sqrt→np.sqrt, Round→np.round,
+            Log→np.log, Exp→np.exp, Power→np.power (case-insensitive).
+        """
         expr = expression
         expr = re.sub(r'Abs\s*\(', 'np.abs(', expr, flags=re.IGNORECASE)
         expr = re.sub(r'Sqrt\s*\(', 'np.sqrt(', expr, flags=re.IGNORECASE)
@@ -254,7 +310,11 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> str:
-        """날짜 함수 처리."""
+        """Rewrite Spotfire date function calls in expression for downstream evaluation.
+
+        Input: expression — str; data — pl.DataFrame (unused; present for API symmetry).
+        Output: str — expression unchanged (currently a no-op placeholder).
+        """
         return expression
 
     def handle_null_functions(
@@ -262,7 +322,11 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> str:
-        """NULL 처리 함수."""
+        """Rewrite Spotfire null-handling function calls in expression for downstream evaluation.
+
+        Input: expression — str; data — pl.DataFrame (unused; present for API symmetry).
+        Output: str — expression unchanged (currently a no-op placeholder).
+        """
         return expression
 
     # ------------------------------------------------------------------
@@ -274,7 +338,16 @@ class ExpressionEvaluatorHelpers:
         expression: str,
         data: pl.DataFrame,
     ) -> pl.Series:
-        """문자열 연결 평가 (&)."""
+        """Evaluate a & (ampersand) string concatenation expression.
+
+        Input:
+            expression — str containing & as the concatenation operator; each part is
+                either a [column] reference or a quoted string literal.
+            data — pl.DataFrame, source data for column value lookup.
+        Output: pl.Series of str — one concatenated string per row; parts that are
+            neither a column reference nor a quoted literal are silently skipped.
+        Invariants: Result Series has the same length as data.
+        """
         parts = expression.split('&')
         result = [''] * len(data)
 
