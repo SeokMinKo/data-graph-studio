@@ -16,6 +16,7 @@ from .profile import GraphSetting
 from .profile_store import ProfileStore
 from .state import AppState
 from .exceptions import ConfigError
+from .types import ProfileId
 
 
 class ProfileController(Observable):
@@ -42,7 +43,7 @@ class ProfileController(Observable):
         self._active_profile_id: Optional[str] = None
         self._undo_stack: List[Dict[str, Any]] = []
 
-    def create_profile(self, dataset_id: str, name: str) -> Optional[str]:
+    def create_profile(self, dataset_id: str, name: str) -> Optional[ProfileId]:
         """Create a new graph setting profile for a dataset and return its ID.
 
         Input: dataset_id — str, the dataset this profile belongs to
@@ -101,7 +102,7 @@ class ProfileController(Observable):
         self._store.update(updated)
         return True
 
-    def apply_profile(self, profile_id: str) -> bool:
+    def apply_profile(self, profile_id: ProfileId) -> bool:
         """Load a profile by ID and apply it to the current AppState.
 
         Input: profile_id — str, UUID of the profile to activate
@@ -123,7 +124,7 @@ class ProfileController(Observable):
         self.emit("profile_applied", profile_id)
         return True
 
-    def rename_profile(self, profile_id: str, new_name: str) -> bool:
+    def rename_profile(self, profile_id: ProfileId, new_name: str) -> bool:
         """Rename an existing profile and push the change onto the undo stack.
 
         Input: profile_id — str, UUID of the profile to rename
@@ -147,7 +148,7 @@ class ProfileController(Observable):
         self.emit("profile_renamed", profile_id, new_name)
         return True
 
-    def delete_profile(self, profile_id: str) -> bool:
+    def delete_profile(self, profile_id: ProfileId) -> bool:
         """Delete a profile from the store and record it for undo.
 
         Input: profile_id — str, UUID of the profile to delete

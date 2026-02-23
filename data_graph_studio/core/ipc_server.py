@@ -267,7 +267,7 @@ class IPCServer(IpcServer):
         """
         super().stop()
         remove_port_file()
-        logger.info("[IPC] Server stopped")
+        logger.info("ipc_server.server.stopped")
 
 
 class IPCClient:

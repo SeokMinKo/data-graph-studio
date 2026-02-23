@@ -17,7 +17,7 @@ from typing import Optional, List, Dict, Tuple, Callable, Any
 import polars as pl
 
 from .constants import DATASET_ID_LENGTH, MEMORY_WARNING_THRESHOLD
-from .types import DatasetInfo, DataSource
+from .types import DatasetId, DatasetInfo, DataSource
 from .file_loader import FileLoader
 from .exceptions import DataLoadError, DatasetError
 
@@ -114,7 +114,7 @@ class DatasetManager:
         name: Optional[str] = None,
         dataset_id: Optional[str] = None,
         **load_kwargs: Any,
-    ) -> Optional[str]:
+    ) -> Optional[DatasetId]:
         """Load a file from disk and register it as a new dataset.
 
         Input: path — str, absolute or relative path to the data file
@@ -180,7 +180,7 @@ class DatasetManager:
         name: str = "Untitled",
         dataset_id: Optional[str] = None,
         source_path: Optional[str] = None,
-    ) -> Optional[str]:
+    ) -> Optional[DatasetId]:
         """Register an in-memory Polars DataFrame as a new dataset without file I/O.
 
         Input: df — pl.DataFrame, the data to register
@@ -215,7 +215,7 @@ class DatasetManager:
         logger.info("dataset_manager.dataset_from_dataframe", extra={"dataset_id": dataset_id, "dataset_name": name, "row_count": dataset.row_count})
         return dataset_id
 
-    def remove_dataset(self, dataset_id: str) -> bool:
+    def remove_dataset(self, dataset_id: DatasetId) -> bool:
         """Remove a dataset and free its memory.
 
         Input: dataset_id — str, ID of the dataset to remove
@@ -249,7 +249,7 @@ class DatasetManager:
         logger.info("dataset_manager.dataset_removed", extra={"dataset_id": dataset_id})
         return True
 
-    def activate_dataset(self, dataset_id: str) -> bool:
+    def activate_dataset(self, dataset_id: DatasetId) -> bool:
         """Set a dataset as the active dataset.
 
         Input: dataset_id — str, ID of the dataset to activate; must exist in _datasets
