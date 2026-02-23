@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional
 import numpy as np
 from scipy.signal import find_peaks
 
+from .metrics import get_metrics
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,37 +85,38 @@ class TimeSeriesAnalyzer:
             - trend computed via moving_average(values, window=period).
             - seasonal pattern is the per-position nanmean of the detrended series.
         """
-        n = len(values)
+        with get_metrics().timed_operation("statistics.timeseries.decompose"):
+            n = len(values)
 
-        # 트렌드 (이동 평균)
-        trend = self.moving_average(values, window=period)
+            # 트렌드 (이동 평균)
+            trend = self.moving_average(values, window=period)
 
-        # 계절성 제거된 값
-        if model == "additive":
-            detrended = values - trend
-        else:
-            detrended = values / np.where(trend != 0, trend, 1)
+            # 계절성 제거된 값
+            if model == "additive":
+                detrended = values - trend
+            else:
+                detrended = values / np.where(trend != 0, trend, 1)
 
-        # 계절성 패턴 추출
-        seasonal = np.zeros(n)
-        for i in range(period):
-            indices = np.arange(i, n, period)
-            valid = ~np.isnan(detrended[indices])
-            if np.sum(valid) > 0:
-                pattern = np.nanmean(detrended[indices])
-                seasonal[indices] = pattern
+            # 계절성 패턴 추출
+            seasonal = np.zeros(n)
+            for i in range(period):
+                indices = np.arange(i, n, period)
+                valid = ~np.isnan(detrended[indices])
+                if np.sum(valid) > 0:
+                    pattern = np.nanmean(detrended[indices])
+                    seasonal[indices] = pattern
 
-        # 잔차
-        if model == "additive":
-            residual = values - trend - seasonal
-        else:
-            residual = values / (trend * seasonal + 1e-10)
+            # 잔차
+            if model == "additive":
+                residual = values - trend - seasonal
+            else:
+                residual = values / (trend * seasonal + 1e-10)
 
-        return {
-            "trend": trend,
-            "seasonal": seasonal,
-            "residual": residual
-        }
+            return {
+                "trend": trend,
+                "seasonal": seasonal,
+                "residual": residual
+            }
 
     def autocorrelation(
         self,

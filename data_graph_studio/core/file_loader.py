@@ -104,7 +104,7 @@ def _detect_encoding_impl(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) ->
         except UnicodeDecodeError:
             return 'latin-1'
     except (OSError, UnicodeDecodeError):
-        logger.debug("detect_encoding failed, defaulting to utf-8", exc_info=True)
+        logger.debug("file_loader.detect_encoding_failed", extra={"fallback": "utf-8"}, exc_info=True)
         return DEFAULT_ENCODING
 
 
@@ -123,7 +123,7 @@ def detect_encoding(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) -> str:
             operation="detect_encoding",
         )
     except DataLoadError:
-        logger.warning("detect_encoding timed out, defaulting to utf-8")
+        logger.warning("file_loader.detect_encoding_timeout", extra={"fallback": "utf-8"})
         return DEFAULT_ENCODING
 
 
@@ -332,7 +332,7 @@ class FileLoader:
                 operation="detect_delimiter",
             )
         except (OSError, DataLoadError):
-            logger.debug("detect_delimiter failed, defaulting to comma", exc_info=True)
+            logger.debug("file_loader.detect_delimiter_failed", extra={"fallback": ","}, exc_info=True)
             return DEFAULT_DELIMITER
 
         return _pick_best_delimiter(delimiter_counts, delimiters)
@@ -479,7 +479,7 @@ class FileLoader:
         Invariants: _df and _profile are set on success; gc.collect() is called before returning
         """
         if self._lazy_df is None:
-            logger.warning("No LazyFrame to collect")
+            logger.warning("file_loader.collect_lazy_frame_skipped", extra={"reason": "no_lazy_frame"})
             return False
 
         try:

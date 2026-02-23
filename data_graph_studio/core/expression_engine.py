@@ -63,16 +63,17 @@ class ExpressionEngine:
         """
         logger.debug("expression_engine.evaluate", extra={"expr": str(expression)[:80]})
         get_metrics().increment("expression.evaluated")
-        # 토큰화
-        lexer = Lexer(expression)
-        tokens = lexer.tokenize()
+        with get_metrics().timed_operation("expression.evaluate"):
+            # 토큰화
+            lexer = Lexer(expression)
+            tokens = lexer.tokenize()
 
-        # 파싱
-        parser = Parser(tokens)
-        ast = parser.parse()
+            # 파싱
+            parser = Parser(tokens)
+            ast = parser.parse()
 
-        # 평가
-        return self._evaluate_ast(ast, df)
+            # 평가
+            return self._evaluate_ast(ast, df)
 
     def _evaluate_ast(self, node: Dict, df: pl.DataFrame) -> pl.Series:
         """Recursively evaluate an AST node against df and return a Series.

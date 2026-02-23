@@ -26,6 +26,7 @@ import threading
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from data_graph_studio.core.io_abstract import IExportRenderer
+from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.exceptions import ExportError
 from data_graph_studio.core.export_workers import (
@@ -90,21 +91,22 @@ class ExportController(Observable):
 
         Designed for unit tests and IPC handlers.
         """
-        worker = ExportWorker(
-            task="chart",
-            image=image,
-            path=path,
-            fmt=fmt,
-            options=options,
-            renderer=self._renderer,
-            on_progress=lambda n: self.emit("progress_changed", n),
-            on_completed=lambda p: self.emit("export_completed", p),
-            on_failed=lambda e: self.emit("export_failed", e),
-        )
-        worker._cancelled = self._cancelled
+        with get_metrics().timed_operation("export.dispatch"):
+            worker = ExportWorker(
+                task="chart",
+                image=image,
+                path=path,
+                fmt=fmt,
+                options=options,
+                renderer=self._renderer,
+                on_progress=lambda n: self.emit("progress_changed", n),
+                on_completed=lambda p: self.emit("export_completed", p),
+                on_failed=lambda e: self.emit("export_failed", e),
+            )
+            worker._cancelled = self._cancelled
 
-        # Run directly (synchronous)
-        worker.run()
+            # Run directly (synchronous)
+            worker.run()
 
     def export_data_sync(
         self,

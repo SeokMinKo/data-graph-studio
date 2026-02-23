@@ -393,44 +393,45 @@ class ComparisonEngine(IComparisonEngine):
         if len(data_a) < 2 or len(data_b) < 2:
             return {"error": "Not enough data points for statistical testing"}
 
-        if test_type == "auto":
-            test_type = select_test_type(data_a, data_b)
+        with get_metrics().timed_operation("comparison.statistical_test"):
+            if test_type == "auto":
+                test_type = select_test_type(data_a, data_b)
 
-        result: Dict[str, Any] = {
-            "test_name": test_type, "statistic": None,
-            "p_value": None, "is_significant": None,
-            "effect_size": None, "interpretation": "",
-        }
+            result: Dict[str, Any] = {
+                "test_name": test_type, "statistic": None,
+                "p_value": None, "is_significant": None,
+                "effect_size": None, "interpretation": "",
+            }
 
-        try:
-            if test_type == "ttest":
-                stat, p_val = ttest_ind(data_a, data_b, equal_var=False)
-                result["test_name"] = "Welch's t-test"
-            elif test_type == "mannwhitney":
-                stat, p_val = mannwhitneyu(data_a, data_b, alternative='two-sided')
-                result["test_name"] = "Mann-Whitney U test"
-            elif test_type == "ks":
-                stat, p_val = ks_2samp(data_a, data_b)
-                result["test_name"] = "Kolmogorov-Smirnov test"
-            else:
-                return {"error": f"Unknown test type: {test_type}"}
+            try:
+                if test_type == "ttest":
+                    stat, p_val = ttest_ind(data_a, data_b, equal_var=False)
+                    result["test_name"] = "Welch's t-test"
+                elif test_type == "mannwhitney":
+                    stat, p_val = mannwhitneyu(data_a, data_b, alternative='two-sided')
+                    result["test_name"] = "Mann-Whitney U test"
+                elif test_type == "ks":
+                    stat, p_val = ks_2samp(data_a, data_b)
+                    result["test_name"] = "Kolmogorov-Smirnov test"
+                else:
+                    return {"error": f"Unknown test type: {test_type}"}
 
-            pooled_std = np.sqrt((np.var(data_a, ddof=1) + np.var(data_b, ddof=1)) / 2)
-            effect_size = (np.mean(data_a) - np.mean(data_b)) / pooled_std if pooled_std > 0 else 0.0
+                pooled_std = np.sqrt((np.var(data_a, ddof=1) + np.var(data_b, ddof=1)) / 2)
+                effect_size = (np.mean(data_a) - np.mean(data_b)) / pooled_std if pooled_std > 0 else 0.0
 
-            result["statistic"] = float(stat)
-            result["p_value"] = float(p_val)
-            result["is_significant"] = p_val < 0.05
-            result["effect_size"] = float(effect_size)
-            result["interpretation"] = interpret_test_result(
-                result["test_name"], p_val, effect_size, ds_a.name, ds_b.name,
-            )
+                result["statistic"] = float(stat)
+                result["p_value"] = float(p_val)
+                result["is_significant"] = p_val < 0.05
+                result["effect_size"] = float(effect_size)
+                result["interpretation"] = interpret_test_result(
+                    result["test_name"], p_val, effect_size, ds_a.name, ds_b.name,
+                )
 
-        except (ValueError, TypeError, ArithmeticError) as e:
-            result["error"] = str(e)
-            logger.error("comparison_engine.statistical_test_failed", extra={"error": e})
+            except (ValueError, TypeError, ArithmeticError) as e:
+                result["error"] = str(e)
+                logger.error("comparison_engine.statistical_test_failed", extra={"error": e})
 
-        return result
+            return result
 
     def calculate_correlation(
         self,
