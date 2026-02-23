@@ -1,5 +1,5 @@
 """
-IPC Server - 외부 프로세스에서 앱 제어 가능하게 해주는 서버
+IPC Server — allows external processes to control the app over TCP.
 
 Uses asyncio TCP server (no Qt dependency).
 """
@@ -45,13 +45,21 @@ def _pid_is_alive(pid: int) -> bool:
 
 
 def write_port_file(port: int) -> None:
-    """Write ``{pid}:{port}`` to the port file, creating dirs as needed."""
+    """Write the current PID and port to the port file.
+
+    Input: port — int, the TCP port the server is bound to
+    Output: None — side-effects only (creates ~/.dgs/ if needed, writes ``{pid}:{port}``)
+    """
     _PORT_FILE.parent.mkdir(parents=True, exist_ok=True)
     _PORT_FILE.write_text(f"{os.getpid()}:{port}")
 
 
 def read_port_file() -> Optional[int]:
-    """Read the port from ~/.dgs/ipc_port if the owning process is alive."""
+    """Read the server port from the port file, validating the owning process is alive.
+
+    Output: Optional[int] — port number if the file exists and the recorded PID is
+        running; None if the file is absent, stale (PID dead), or malformed
+    """
     try:
         text = _PORT_FILE.read_text().strip()
         pid_str, port_str = text.split(":", 1)
@@ -66,7 +74,10 @@ def read_port_file() -> Optional[int]:
 
 
 def remove_port_file() -> None:
-    """Remove the port file (best-effort)."""
+    """Remove the port file on a best-effort basis.
+
+    Output: None — side-effects only (deletes ~/.dgs/ipc_port if it exists; OSError silently ignored)
+    """
     try:
         _PORT_FILE.unlink(missing_ok=True)
     except OSError:
@@ -77,9 +88,11 @@ class IpcServer:
     """Asyncio-based TCP IPC server."""
 
     def __init__(self, message_handler: Callable[[dict], object]):
-        """
-        Args:
-            message_handler: Called with parsed JSON dict on each received message.
+        """Initialize the IPC server without starting it.
+
+        Input: message_handler — Callable[[dict], object], called with the parsed
+            JSON dict for each incoming request; must return a JSON-serializable value
+        Output: None — side-effects only (stores handler, initializes internal state)
         """
         self._handler = message_handler
         self._server: Optional[asyncio.Server] = None
@@ -89,11 +102,21 @@ class IpcServer:
 
     @property
     def port(self) -> Optional[int]:
-        """The port the server is listening on, or None if not started."""
+        """The TCP port the server is listening on.
+
+        Output: Optional[int] — bound port number, or None if the server has not
+            been started or failed to bind
+        """
         return self._port
 
     def start(self) -> int:
-        """Start the server in a background thread. Returns bound port."""
+        """Start the asyncio server in a daemon background thread.
+
+        Output: int — the TCP port the server bound to; None if no port could be
+            found within MAX_PORT_ATTEMPTS attempts
+        Invariants: after return, the server thread is running and the port file
+            has been written (or the event loop has signalled failure)
+        """
         ready = threading.Event()
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(
@@ -104,7 +127,11 @@ class IpcServer:
         return self._port
 
     def stop(self) -> None:
-        """Stop the server and clean up."""
+        """Close the asyncio server and delete the port file.
+
+        Output: None — side-effects only (schedules server.close() on the event
+            loop, removes port file; OSError on file deletion is logged and ignored)
+        """
         if self._loop and self._server:
             self._loop.call_soon_threadsafe(self._server.close)
         try:
@@ -184,11 +211,23 @@ class IPCServer(IpcServer):
     """
 
     def __init__(self, parent=None):
+        """Initialize the backward-compatible IPC server.
+
+        Input: parent — optional Qt parent object (unused; accepted for API compatibility)
+        Output: None — side-effects only (initializes handler registry, delegates to IpcServer.__init__)
+        """
         self._handlers: dict = {}
         super().__init__(message_handler=self._dispatch)
 
     def register_handler(self, command: str, handler: Callable) -> None:
-        """Register a named command handler (old API)."""
+        """Register a callable to handle a named IPC command.
+
+        Input: command — str, the command name to match in incoming requests
+               handler — Callable, invoked with unpacked args dict as keyword arguments;
+                   must return a JSON-serializable value
+        Output: None — side-effects only (stores handler in registry; overwrites any
+            previously registered handler for the same command)
+        """
         self._handlers[command] = handler
 
     def _dispatch(self, msg: dict) -> object:
@@ -211,38 +250,63 @@ class IPCServer(IpcServer):
             return {IPC_KEY_STATUS: IPC_STATUS_ERROR, IPC_KEY_MESSAGE: f"unknown command: {command}"}
 
     def start(self, port: int = None) -> bool:  # type: ignore[override]
-        """Start the server. Returns True on success (old API)."""
+        """Start the IPC server using the old boolean-return API.
+
+        Input: port — int, ignored (port selection is automatic); accepted for
+            backward-compatible call signatures
+        Output: bool — True if the server bound to a port successfully, False otherwise
+        """
         result = super().start()
         return result is not None
 
     def stop(self) -> None:
-        """Stop the IPC server and remove the port file."""
+        """Stop the IPC server, remove the port file, and log shutdown.
+
+        Output: None — side-effects only (calls IpcServer.stop(), removes port file,
+            emits INFO log)
+        """
         super().stop()
         remove_port_file()
         logger.info("[IPC] Server stopped")
 
 
 class IPCClient:
-    """IPC 클라이언트 - 외부에서 앱 제어용.
+    """IPC client for controlling the app from an external process.
 
     Automatically discovers the server port from the port file.
     """
 
     def __init__(self, host: str = "localhost", port: int = None):
+        """Initialize the IPC client without opening a connection.
+
+        Input: host — str, hostname or IP to connect to (default: "localhost")
+               port — Optional[int], explicit port; if None, port is resolved from
+                   the port file or falls back to DEFAULT_PORT
+        Output: None — side-effects only (stores connection parameters)
+        """
         self.host = host
         self._explicit_port = port
         self._socket = None
 
     @property
     def port(self) -> int:
-        """Resolve port: explicit → port-file → default."""
+        """Resolve the server port using explicit value, port file, or default.
+
+        Output: int — the explicit port if provided at construction; otherwise the
+            port from the port file if the owning process is alive; otherwise DEFAULT_PORT
+        """
         if self._explicit_port is not None:
             return self._explicit_port
         discovered = read_port_file()
         return discovered if discovered is not None else DEFAULT_PORT
 
     def connect(self) -> bool:
-        """Open a TCP connection to the IPC server. Returns True on success."""
+        """Open a TCP connection to the IPC server.
+
+        Output: bool — True if the connection was established; False if the server
+            refused or a timeout occurred (OSError / socket.timeout caught internally)
+        Invariants: on True, self._socket is a connected socket with a 5-second timeout
+        """
         try:
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._socket.settimeout(5.0)
@@ -252,14 +316,26 @@ class IPCClient:
             logger.debug("[IPC Client] Connection failed: %s", e)
             return False
 
-    def disconnect(self):
-        """Close the TCP connection to the IPC server."""
+    def disconnect(self) -> None:
+        """Close the TCP connection to the IPC server.
+
+        Output: None — side-effects only (closes and nulls self._socket; no-op if
+            already disconnected)
+        """
         if self._socket:
             self._socket.close()
             self._socket = None
 
     def send_command(self, command: str, **args) -> dict:
-        """Send a JSON command to the server and return the parsed response dict."""
+        """Send a JSON command to the server and return the parsed response.
+
+        Input: command — str, the command name
+               **args — keyword arguments forwarded as the ``args`` field of the request
+        Output: dict — parsed server response; on socket or decode error, returns an
+            error dict with ``status="error"`` and an ``"error"`` key describing the failure
+        Raises: nothing — all OSError / socket.timeout / decode errors are caught and
+            returned as error dicts
+        """
         if not self._socket:
             return {IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": "Not connected"}
 
@@ -286,8 +362,14 @@ class IPCClient:
         self.disconnect()
 
 
-# 편의 함수
 def send_command(command: str, port: int = None, **args) -> dict:
-    """단일 명령 전송 (자동 연결/해제)"""
+    """Send a single IPC command with automatic connect and disconnect.
+
+    Input: command — str, the command name to send
+           port — Optional[int], explicit port override; None uses port-file discovery
+           **args — keyword arguments forwarded to the command handler
+    Output: dict — parsed server response, or an error dict if the connection or
+        send fails
+    """
     with IPCClient(port=port) as client:
         return client.send_command(command, **args)
