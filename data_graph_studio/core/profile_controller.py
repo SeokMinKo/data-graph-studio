@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import replace
@@ -50,7 +51,7 @@ class ProfileController(Observable):
         except ConfigError as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return None
-        except Exception as exc:  # pragma: no cover - defensive
+        except (TypeError, AttributeError, ValueError) as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return None
 
@@ -152,7 +153,7 @@ class ProfileController(Observable):
         except ConfigError as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return False
-        except Exception as exc:  # pragma: no cover - defensive
+        except (OSError, PermissionError, TypeError) as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return False
 
@@ -173,7 +174,7 @@ class ProfileController(Observable):
         except ConfigError as exc:
             self.emit("error_occurred", str(exc))
             return None
-        except Exception as exc:
+        except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
             logger.error("profile_controller.import_profile.failed", exc_info=True)
             self.emit("error_occurred", str(exc))
             return None
