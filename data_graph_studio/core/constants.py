@@ -50,3 +50,10 @@ DATASET_ID_LENGTH: int = 8            # UUID prefix length used as short dataset
 
 # --- Memory ---
 MEMORY_WARNING_THRESHOLD: float = 0.9  # Warn when projected usage exceeds this fraction of the limit
+
+# --- File I/O timeouts (seconds) ---
+FILE_ENCODING_DETECT_TIMEOUT: int = 10   # encoding/delimiter sniff
+FILE_LOAD_TIMEOUT: int = 120             # full file load
+
+# --- IPC ---
+IPC_HANDLER_TIMEOUT: int = 30  # max seconds per IPC command handler call
