@@ -11,6 +11,8 @@ from typing import Optional, List, Dict, Any
 
 import polars as pl
 
+from .exceptions import QueryError
+
 logger = logging.getLogger(__name__)
 
 
@@ -233,6 +235,9 @@ class AnalysisMixin(object):
             self.update_dataframe(new_df)
             self._virtual_columns.add(name)
             return True
-        except Exception:
-            logger.warning("analysis_mixin.add_virtual_column.failed", extra={"name": name}, exc_info=True)
-            return False
+        except Exception as e:
+            raise QueryError(
+                f"Cannot add virtual column '{name}'",
+                operation="add_virtual_column",
+                context={"name": name},
+            ) from e

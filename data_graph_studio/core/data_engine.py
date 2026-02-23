@@ -40,6 +40,7 @@ except ImportError:
 from .constants import LRU_CACHE_MAXSIZE
 from .data_engine_dataset_mixin import DatasetMixin
 from .data_engine_analysis_mixin import AnalysisMixin
+from .exceptions import QueryError
 
 logger = logging.getLogger(__name__)
 
@@ -455,9 +456,12 @@ class DataEngine(DatasetMixin, AnalysisMixin):
                 timestamp=time.time(),
             ))
             return True
-        except Exception:
-            logger.warning("data_engine.cast_column.failed", extra={"col": col_name, "dtype": str(target_dtype)}, exc_info=True)
-            return False
+        except Exception as e:
+            raise QueryError(
+                f"Cannot cast column '{col_name}' to {target_dtype}",
+                operation="cast_column",
+                context={"column": col_name, "dtype": str(target_dtype)},
+            ) from e
 
     # -- State sync (7) -------------------------------------------------------
 

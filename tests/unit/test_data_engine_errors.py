@@ -7,6 +7,8 @@ Tests cover documented edge cases:
 - Accessing df/row_count/column_count when no dataset is loaded
 - filter on a missing column
 - cast_column on a non-existent column returns False
+- cast_column on incompatible types raises QueryError
+- add_virtual_column with invalid expr raises QueryError
 - lazy_query when no data is loaded returns None
 """
 
@@ -14,7 +16,7 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.data_engine import DataEngine
-from data_graph_studio.core.exceptions import DataLoadError
+from data_graph_studio.core.exceptions import DataLoadError, QueryError
 
 
 # ---------------------------------------------------------------------------
@@ -286,3 +288,93 @@ class TestAppendRowsNoData:
         assert engine.df is None
         with pytest.raises(DataLoadError):
             engine.append_rows("/nonexistent/path.csv", new_row_count=5)
+
+
+# ---------------------------------------------------------------------------
+# cast_column — incompatible type raises QueryError
+# ---------------------------------------------------------------------------
+
+class TestCastColumnQueryError:
+    def test_cast_incompatible_type_raises_query_error(self):
+        """cast_column raises QueryError when the cast is incompatible (e.g. string → Int64)."""
+        engine = DataEngine()
+        df = pl.DataFrame({"name": ["alice", "bob", "charlie"]})
+        engine.load_dataset_from_dataframe(df, name="test")
+        with pytest.raises(QueryError) as exc_info:
+            engine.cast_column("name", pl.Int64)
+        assert "cast_column" in exc_info.value.operation
+
+    def test_cast_query_error_carries_context(self):
+        """QueryError from cast_column includes column name in context."""
+        engine = DataEngine()
+        df = pl.DataFrame({"label": ["a", "b", "c"]})
+        engine.load_dataset_from_dataframe(df, name="test")
+        with pytest.raises(QueryError) as exc_info:
+            engine.cast_column("label", pl.Boolean)
+        assert exc_info.value.context.get("column") == "label"
+
+    def test_cast_query_error_chains_original_exception(self):
+        """QueryError raised from cast_column chains the original Polars exception."""
+        engine = DataEngine()
+        df = pl.DataFrame({"txt": ["not-a-date"]})
+        engine.load_dataset_from_dataframe(df, name="test")
+        with pytest.raises(QueryError) as exc_info:
+            engine.cast_column("txt", pl.Date)
+        assert exc_info.value.__cause__ is not None
+
+    def test_cast_nonexistent_column_still_returns_false(self):
+        """cast_column on a missing column still returns False — no QueryError."""
+        engine = _engine_with_df()
+        result = engine.cast_column("nonexistent", pl.Int64)
+        assert result is False
+
+    def test_cast_no_df_still_returns_false(self):
+        """cast_column when no DataFrame is loaded still returns False — no QueryError."""
+        engine = _empty_engine()
+        result = engine.cast_column("x", pl.Int64)
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# add_virtual_column — invalid expr raises QueryError
+# ---------------------------------------------------------------------------
+
+class TestAddVirtualColumnQueryError:
+    def test_add_virtual_column_invalid_expr_raises_query_error(self):
+        """add_virtual_column raises QueryError when the expression references a nonexistent column."""
+        engine = DataEngine()
+        df = pl.DataFrame({"value": [1, 2, 3]})
+        engine.load_dataset_from_dataframe(df, name="test")
+        bad_expr = pl.col("nonexistent_col") * 2
+        with pytest.raises(QueryError) as exc_info:
+            engine.add_virtual_column("result", bad_expr)
+        assert "add_virtual_column" in exc_info.value.operation
+
+    def test_add_virtual_column_query_error_carries_name_in_context(self):
+        """QueryError from add_virtual_column includes the column name in context."""
+        engine = DataEngine()
+        df = pl.DataFrame({"x": [1.0, 2.0]})
+        engine.load_dataset_from_dataframe(df, name="test")
+        bad_expr = pl.col("missing") + 1
+        with pytest.raises(QueryError) as exc_info:
+            engine.add_virtual_column("bad_col", bad_expr)
+        assert exc_info.value.context.get("name") == "bad_col"
+
+    def test_add_virtual_column_chains_original_exception(self):
+        """QueryError from add_virtual_column chains the original Polars exception."""
+        engine = DataEngine()
+        df = pl.DataFrame({"a": [1, 2, 3]})
+        engine.load_dataset_from_dataframe(df, name="test")
+        bad_expr = pl.col("does_not_exist")
+        with pytest.raises(QueryError) as exc_info:
+            engine.add_virtual_column("v", bad_expr)
+        assert exc_info.value.__cause__ is not None
+
+    def test_add_virtual_column_valid_expr_returns_true(self):
+        """add_virtual_column with a valid expression succeeds and returns True."""
+        engine = DataEngine()
+        df = pl.DataFrame({"x": [1, 2, 3]})
+        engine.load_dataset_from_dataframe(df, name="test")
+        result = engine.add_virtual_column("doubled", pl.col("x") * 2)
+        assert result is True
+        assert "doubled" in engine.columns
