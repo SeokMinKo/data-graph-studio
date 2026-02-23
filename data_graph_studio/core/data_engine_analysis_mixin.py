@@ -152,9 +152,13 @@ class AnalysisMixin(object):
         y_cols: List[str],
         group_cols: Optional[List[str]] = None,
     ) -> List[tuple]:
-        """데이터 특성 분석 후 추천 차트 타입 반환 (최대 3개, 이유 포함).
+        """Analyse data characteristics and return up to three chart type recommendations.
 
-        Returns list of (ChartType, reason_str) tuples.
+        Input: x_col — Optional[str], the X-axis column name or None;
+               y_cols — List[str], Y-axis column names;
+               group_cols — Optional[List[str]], grouping column names (default None)
+        Output: List[tuple] — up to 3 (ChartType, reason_str) tuples ordered by relevance; empty list if no DataFrame is loaded
+        Invariants: never returns more than 3 items; always returns at least one item when a DataFrame is loaded and y_cols is non-empty
         """
         if self.df is None:
             return []
@@ -210,7 +214,11 @@ class AnalysisMixin(object):
     # -- Data quality report (F4) ---------------------------------------------
 
     def data_quality_report(self) -> Dict[str, Any]:
-        """null 비율, 중복 행, 타입별 통계."""
+        """Produce a data quality summary of the current DataFrame.
+
+        Output: Dict[str, Any] — contains keys row_count, col_count, null_counts, null_pct, duplicate_rows, and dtypes;
+                returns an empty dict if no DataFrame is loaded
+        """
         if self.df is None:
             return {}
         df = self.df
@@ -227,7 +235,13 @@ class AnalysisMixin(object):
     # -- Virtual columns (F6) -------------------------------------------------
 
     def add_virtual_column(self, name: str, expr: pl.Expr) -> bool:
-        """가상 컬럼 추가."""
+        """Add a derived column computed by a Polars expression to the current DataFrame.
+
+        Input: name — str, column name to assign; expr — pl.Expr, a valid Polars expression
+        Output: bool — True if the column was added; False if no DataFrame is loaded
+        Raises: QueryError — if Polars raises any error evaluating expr (invalid expression, type mismatch, etc.)
+        Invariants: name is added to _virtual_columns and present in self.df.columns on success
+        """
         if self.df is None:
             return False
         try:

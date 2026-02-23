@@ -59,7 +59,13 @@ class GraphSetting:
 
     @classmethod
     def create_new(cls, name: str, icon: str = "📊", dataset_id: str = "") -> 'GraphSetting':
-        """새 GraphSetting 생성"""
+        """Create a new GraphSetting with a freshly generated UUID and default field values.
+
+        Input: name — str, display name for the setting;
+               icon — str, emoji icon (default "📊");
+               dataset_id — str, associated dataset ID (default "")
+        Output: GraphSetting — a frozen instance with a new UUID, both timestamps set to now, and all columns/filters empty
+        """
         return cls(
             id=str(uuid.uuid4()),
             name=name,
@@ -72,7 +78,11 @@ class GraphSetting:
         return dataclasses.replace(self, name=name, modified_at=time.time())
 
     def update_modified(self) -> 'GraphSetting':
-        """수정 시간 업데이트한 새 인스턴스 반환 (frozen이므로 replace 사용)"""
+        """Return a copy of this GraphSetting with modified_at refreshed to the current time.
+
+        Output: GraphSetting — a new frozen instance identical to self except for an updated modified_at timestamp
+        Invariants: all fields except modified_at are identical to the original
+        """
         return dataclasses.replace(self, modified_at=time.time())
 
     def to_dict(self) -> Dict:
