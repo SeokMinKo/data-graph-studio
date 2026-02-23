@@ -16,6 +16,7 @@ from typing import Optional, List, Dict, Tuple, Callable, Any
 
 import polars as pl
 
+from .constants import DATASET_ID_LENGTH, MEMORY_WARNING_THRESHOLD
 from .types import DatasetInfo, DataSource
 from .file_loader import FileLoader
 
@@ -117,7 +118,7 @@ class DatasetManager:
             return None
 
         if dataset_id is None:
-            dataset_id = str(uuid.uuid4())[:8]
+            dataset_id = str(uuid.uuid4())[:DATASET_ID_LENGTH]
 
         if name is None:
             name = Path(path).name
@@ -180,7 +181,7 @@ class DatasetManager:
             생성된 dataset_id. 실패 시 None.
         """
         if dataset_id is None:
-            dataset_id = str(uuid.uuid4())[:8]
+            dataset_id = str(uuid.uuid4())[:DATASET_ID_LENGTH]
 
         color = self.DEFAULT_COLORS[self._color_index % len(self.DEFAULT_COLORS)]
         self._color_index += 1
@@ -317,7 +318,7 @@ class DatasetManager:
                 f"한도: {self.MAX_TOTAL_MEMORY / 1e9:.1f}GB"
             )
 
-        if projected > self.MAX_TOTAL_MEMORY * 0.9:
+        if projected > self.MAX_TOTAL_MEMORY * MEMORY_WARNING_THRESHOLD:
             return True, "⚠️ 메모리 사용량이 높습니다. 일부 데이터셋 제거를 권장합니다."
 
         return True, ""

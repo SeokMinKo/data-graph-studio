@@ -10,6 +10,7 @@ import os
 import logging
 import queue
 import threading
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
@@ -27,6 +28,7 @@ class IPCController:
     """IPC 서버 관리 컨트롤러"""
 
     def __init__(self, window: 'MainWindow'):
+        """Initialise the controller, binding it to the given MainWindow."""
         self._w = window
         self._work_queue: queue.SimpleQueue = queue.SimpleQueue()
 
@@ -35,55 +37,12 @@ class IPCController:
         from ...core.ipc_server import IPCServer
 
         self._w._ipc_server = IPCServer(self._w)
-
         server = self._w._ipc_server
 
-        # 핸들러 등록 — all Qt-touching handlers wrapped with _ui()
-        # to ensure they execute on the main thread (IPC runs in background thread)
-        ui = self._ui
-        server.register_handler('ping', lambda: 'pong')  # pure data, no Qt
-        server.register_handler('get_state', ui(self._ipc_get_state))
-        server.register_handler('get_data_info', ui(self._ipc_get_data_info))
-        server.register_handler('set_chart_type', ui(self._ipc_set_chart_type))
-        server.register_handler('set_columns', ui(self._ipc_set_columns))
-        server.register_handler('load_file', ui(self._ipc_load_file))
-        server.register_handler('parse_ftrace', ui(self._ipc_parse_ftrace))
-        server.register_handler('get_panels', ui(self._ipc_get_panels))
-        server.register_handler('get_summary', ui(self._ipc_get_summary))
-        server.register_handler('execute', ui(self._ipc_execute))
-
-        # Zone control handlers
-        server.register_handler('set_x_column', ui(self._ipc_set_x_column))
-        server.register_handler('set_value_columns', ui(self._ipc_set_value_columns))
-        server.register_handler('set_group_columns', ui(self._ipc_set_group_columns))
-        server.register_handler('set_hover_columns', ui(self._ipc_set_hover_columns))
-        server.register_handler('clear_all_zones', ui(self._ipc_clear_all_zones))
-        server.register_handler('get_zones', ui(self._ipc_get_zones))
-
-        # UI control handlers
-        server.register_handler('set_theme', ui(self._ipc_set_theme))
-        server.register_handler('refresh', ui(self._ipc_refresh))
-        server.register_handler('get_screenshot', ui(self._ipc_get_screenshot))
-        server.register_handler('set_agg', ui(self._ipc_set_agg))
-
-        # Profile comparison handlers
-        server.register_handler('list_profiles', ui(self._ipc_list_profiles))
-        server.register_handler('create_profile', ui(self._ipc_create_profile))
-        server.register_handler('apply_profile', ui(self._ipc_apply_profile))
-        server.register_handler('delete_profile', ui(self._ipc_delete_profile))
-        server.register_handler('duplicate_profile', ui(self._ipc_duplicate_profile))
-        server.register_handler('start_profile_comparison', ui(self._ipc_start_profile_comparison))
-        server.register_handler('stop_profile_comparison', ui(self._ipc_stop_profile_comparison))
-        server.register_handler('get_profile_comparison_state', ui(self._ipc_get_profile_comparison_state))
-        server.register_handler('set_comparison_sync', ui(self._ipc_set_comparison_sync))
-
-        # Panel capture handler
-        self._setup_capture_service()
-        server.register_handler('capture', ui(self._ipc_capture))
-
-        # Filter handlers
-        server.register_handler('apply_filter', ui(self._ipc_apply_filter))
-        server.register_handler('clear_filters', ui(self._ipc_clear_filters))
+        self._register_data_handlers(server, self._ui)
+        self._register_zone_handlers(server, self._ui)
+        self._register_ui_handlers(server, self._ui)
+        self._register_profile_handlers(server, self._ui)
 
         # 서버 시작
         server.start()
@@ -93,6 +52,51 @@ class IPCController:
         self._pump_timer = QTimer(self._w)
         self._pump_timer.timeout.connect(self._pump_work_queue)
         self._pump_timer.start(5)
+
+    def _register_data_handlers(self, server, ui) -> None:
+        """Register data/state handlers: load_file, parse_ftrace, get_state, get_data_info, execute."""
+        server.register_handler('ping', lambda: 'pong')  # pure data, no Qt
+        server.register_handler('get_state', ui(self._ipc_get_state))
+        server.register_handler('get_data_info', ui(self._ipc_get_data_info))
+        server.register_handler('load_file', ui(self._ipc_load_file))
+        server.register_handler('parse_ftrace', ui(self._ipc_parse_ftrace))
+        server.register_handler('get_panels', ui(self._ipc_get_panels))
+        server.register_handler('get_summary', ui(self._ipc_get_summary))
+        server.register_handler('execute', ui(self._ipc_execute))
+
+    def _register_zone_handlers(self, server, ui) -> None:
+        """Register zone control handlers: set_x_column, set_value_columns, set_group_columns, etc."""
+        server.register_handler('set_x_column', ui(self._ipc_set_x_column))
+        server.register_handler('set_value_columns', ui(self._ipc_set_value_columns))
+        server.register_handler('set_group_columns', ui(self._ipc_set_group_columns))
+        server.register_handler('set_hover_columns', ui(self._ipc_set_hover_columns))
+        server.register_handler('clear_all_zones', ui(self._ipc_clear_all_zones))
+        server.register_handler('get_zones', ui(self._ipc_get_zones))
+
+    def _register_ui_handlers(self, server, ui) -> None:
+        """Register UI control handlers: set_theme, refresh, get_screenshot, capture, set_agg, set_chart_type, set_columns."""
+        server.register_handler('set_theme', ui(self._ipc_set_theme))
+        server.register_handler('refresh', ui(self._ipc_refresh))
+        server.register_handler('get_screenshot', ui(self._ipc_get_screenshot))
+        server.register_handler('set_agg', ui(self._ipc_set_agg))
+        server.register_handler('set_chart_type', ui(self._ipc_set_chart_type))
+        server.register_handler('set_columns', ui(self._ipc_set_columns))
+        server.register_handler('apply_filter', ui(self._ipc_apply_filter))
+        server.register_handler('clear_filters', ui(self._ipc_clear_filters))
+        self._setup_capture_service()
+        server.register_handler('capture', ui(self._ipc_capture))
+
+    def _register_profile_handlers(self, server, ui) -> None:
+        """Register profile comparison handlers: list_profiles, create_profile, apply_profile, etc."""
+        server.register_handler('list_profiles', ui(self._ipc_list_profiles))
+        server.register_handler('create_profile', ui(self._ipc_create_profile))
+        server.register_handler('apply_profile', ui(self._ipc_apply_profile))
+        server.register_handler('delete_profile', ui(self._ipc_delete_profile))
+        server.register_handler('duplicate_profile', ui(self._ipc_duplicate_profile))
+        server.register_handler('start_profile_comparison', ui(self._ipc_start_profile_comparison))
+        server.register_handler('stop_profile_comparison', ui(self._ipc_stop_profile_comparison))
+        server.register_handler('get_profile_comparison_state', ui(self._ipc_get_profile_comparison_state))
+        server.register_handler('set_comparison_sync', ui(self._ipc_set_comparison_sync))
 
     # ------------------------------------------------------------------
     # Main-thread dispatcher
@@ -126,6 +130,8 @@ class IPCController:
     def _ui(self, fn: Callable) -> Callable:
         """Wrap an IPC handler to execute on the Qt main thread."""
         def wrapper(*args, **kwargs):
+            corr_id = str(uuid.uuid4())[:8]
+            logger.debug("ipc.dispatch", extra={"command": fn.__name__, "corr_id": corr_id})
             return self._main_thread(lambda: fn(*args, **kwargs))
         return wrapper
 

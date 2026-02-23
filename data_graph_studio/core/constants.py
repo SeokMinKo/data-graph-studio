@@ -27,3 +27,12 @@ MAX_ANNOTATION_TEXT_LENGTH: int = 200
 DIFF_POSITIVE_COLOR: str = "#2ca02c"  # green (increase)
 DIFF_NEGATIVE_COLOR: str = "#d62728"  # red (decrease)
 DIFF_NEUTRAL_COLOR: str = "#7f7f7f"   # grey (no change)
+
+# --- Cache ---
+LRU_CACHE_MAXSIZE: int = 128          # LRU cache capacity for DataEngine query results
+
+# --- Dataset IDs ---
+DATASET_ID_LENGTH: int = 8            # UUID prefix length used as short dataset ID
+
+# --- Memory ---
+MEMORY_WARNING_THRESHOLD: float = 0.9  # Warn when projected usage exceeds this fraction of the limit

@@ -18,6 +18,7 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+from data_graph_studio.core.constants import DATASET_ID_LENGTH
 from data_graph_studio.core.observable import Observable
 
 if TYPE_CHECKING:
@@ -37,7 +38,7 @@ class ComparisonMode(Enum):
 @dataclass
 class DatasetMetadata:
     """데이터셋 메타데이터"""
-    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:DATASET_ID_LENGTH])
     name: str = ""
     file_path: Optional[str] = None
     color: str = "#1f77b4"

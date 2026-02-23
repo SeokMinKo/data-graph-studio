@@ -37,6 +37,7 @@ try:
 except ImportError:
     HAS_ETL_PARSER = False
 
+from .constants import LRU_CACHE_MAXSIZE
 from .data_engine_dataset_mixin import DatasetMixin
 from .data_engine_analysis_mixin import AnalysisMixin
 
@@ -81,7 +82,7 @@ class DataEngine(DatasetMixin, AnalysisMixin):
         self._datasets_mgr = DM(self._loader)
         self._comparison = CE(self._datasets_mgr)
         self._cache: OrderedDict = OrderedDict()
-        self._cache_maxsize: int = 128
+        self._cache_maxsize: int = LRU_CACHE_MAXSIZE
         self._indexes: Dict[str, Dict] = {}
         self._precision_mode = precision_mode
         self._transform_chain = TransformChain()
