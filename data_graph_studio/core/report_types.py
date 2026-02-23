@@ -1,6 +1,9 @@
 """
 Report Value Objects, Enums, and Dataclasses
-레포트 타입 정의 모듈
+
+Defines all data-transfer types used by the report generation pipeline:
+TableData, ReportSection, ReportOptions, ReportData, ReportTemplate.
+Re-exports enums and chart/comparison sub-types from their respective modules.
 """
 
 from dataclasses import dataclass, field, asdict
@@ -43,7 +46,13 @@ __all__ = [
 
 @dataclass
 class TableData:
-    """테이블 데이터"""
+    """Tabular data snapshot ready for report rendering.
+
+    Stores column names, row values, per-column format hints, and
+    optional highlight rules. Captures both total and displayed row
+    counts so templates can render truncation notices.
+    """
+
     id: str
     title: str
     table_type: str  # "raw", "grouped", "pivot", "top_n", "comparison"
@@ -56,7 +65,10 @@ class TableData:
     description: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this instance to a plain dictionary.
+
+        Output: Dict[str, Any] — all fields via dataclasses.asdict
+        """
         return asdict(self)
 
     @classmethod
@@ -68,7 +80,16 @@ class TableData:
         table_type: str = "raw",
         max_rows: Optional[int] = 100
     ) -> "TableData":
-        """DataFrame에서 생성"""
+        """Construct a TableData from a Polars DataFrame.
+
+        Input: df — pl.DataFrame, source data
+               id — str, unique identifier for this table
+               title — str, display title
+               table_type — str, one of "raw"/"grouped"/"pivot"/"top_n"/"comparison"
+               max_rows — int | None, row cap for display (None = unlimited)
+        Output: TableData — populated with columns, rows, and inferred column_formats
+        Invariants: shown_rows <= total_rows; column_formats keyed by every column name
+        """
         total_rows = len(df)
 
         if max_rows and total_rows > max_rows:
@@ -109,7 +130,13 @@ class TableData:
 
 @dataclass
 class ReportSection:
-    """레포트 섹션"""
+    """A single logical section within a generated report.
+
+    section_type controls which renderer handles the section content.
+    Disabled sections (enabled=False) are skipped by report builders
+    without removing them from the options UI.
+    """
+
     id: str
     title: str
     section_type: str  # "summary", "overview", "statistics", "charts", "comparison", "tables", "appendix"
@@ -119,7 +146,10 @@ class ReportSection:
     description: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this section to a plain dictionary (content excluded).
+
+        Output: Dict[str, Any] — id, title, section_type, enabled, order, description
+        """
         return {
             "id": self.id,
             "title": self.title,
@@ -132,7 +162,12 @@ class ReportSection:
 
 @dataclass
 class ReportOptions:
-    """레포트 생성 옵션"""
+    """Configuration knobs for a single report generation run.
+
+    Controls output format, theme, page layout, which sections to include,
+    chart rendering parameters, table size caps, and template overrides.
+    HTML interactive charts are only valid when format == ReportFormat.HTML.
+    """
     format: ReportFormat = ReportFormat.HTML
     theme: ReportTheme = ReportTheme.LIGHT
     page_size: PageSize = PageSize.A4
@@ -180,7 +215,10 @@ class ReportOptions:
     language: str = "ko"  # "ko", "en"
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize report options to a JSON-safe dictionary.
+
+        Output: Dict[str, Any] — enum fields serialized as their .value strings
+        """
         return {
             "format": self.format.value,
             "theme": self.theme.value,
@@ -204,7 +242,12 @@ class ReportOptions:
 
 @dataclass
 class ReportData:
-    """레포트 전체 데이터"""
+    """Aggregated payload passed to a report renderer.
+
+    Holds all datasets, statistics, comparisons, charts, tables, and
+    sections assembled by the report builder.  Helper methods provide
+    a clean append API so builders don't reach into the lists directly.
+    """
     metadata: ReportMetadata
     datasets: List[DatasetSummary] = field(default_factory=list)
     statistics: Dict[str, List[StatisticalSummary]] = field(default_factory=dict)
@@ -219,7 +262,10 @@ class ReportData:
     data_quality_notes: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Recursively serialize all report data to a JSON-safe dictionary.
+
+        Output: Dict[str, Any] — all nested objects serialized via their to_dict()
+        """
         return {
             "metadata": self.metadata.to_dict(),
             "datasets": [d.to_dict() for d in self.datasets],
@@ -239,41 +285,77 @@ class ReportData:
         }
 
     def to_json(self, indent: int = 2) -> str:
-        """JSON 문자열로 변환"""
+        """Serialize to a pretty-printed JSON string.
+
+        Input: indent — int, spaces per indentation level (default 2)
+        Output: str — UTF-8 safe JSON with non-ASCII characters preserved
+        """
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False, default=str)
 
-    def add_dataset(self, dataset: DatasetSummary):
-        """데이터셋 추가"""
+    def add_dataset(self, dataset: DatasetSummary) -> None:
+        """Append a dataset summary to this report's dataset list.
+
+        Input: dataset — DatasetSummary, the summary to append
+        Invariants: self.datasets grows by exactly one entry
+        """
         self.datasets.append(dataset)
 
-    def add_statistics(self, dataset_id: str, stats: List[StatisticalSummary]):
-        """통계 추가"""
+    def add_statistics(self, dataset_id: str, stats: List[StatisticalSummary]) -> None:
+        """Associate a list of statistical summaries with a dataset ID.
+
+        Input: dataset_id — str, key for the statistics dict
+               stats — List[StatisticalSummary], replaces any existing entry for that key
+        Invariants: self.statistics[dataset_id] == stats after call
+        """
         self.statistics[dataset_id] = stats
 
-    def add_chart(self, chart: ChartData):
-        """차트 추가"""
+    def add_chart(self, chart: ChartData) -> None:
+        """Append a chart data object to this report.
+
+        Input: chart — ChartData, the chart to append
+        Invariants: self.charts grows by exactly one entry
+        """
         self.charts.append(chart)
 
-    def add_table(self, table: TableData):
-        """테이블 추가"""
+    def add_table(self, table: TableData) -> None:
+        """Append a table data object to this report.
+
+        Input: table — TableData, the table to append
+        Invariants: self.tables grows by exactly one entry
+        """
         self.tables.append(table)
 
-    def add_comparison(self, comparison: ComparisonResult):
-        """비교 결과 추가"""
+    def add_comparison(self, comparison: ComparisonResult) -> None:
+        """Append a comparison result to this report.
+
+        Input: comparison — ComparisonResult, the result to append
+        Invariants: self.comparisons grows by exactly one entry
+        """
         self.comparisons.append(comparison)
 
     def get_total_rows(self) -> int:
-        """전체 행 수 반환"""
+        """Return the sum of row_count across all datasets.
+
+        Output: int — total row count; 0 if no datasets are present
+        """
         return sum(d.row_count for d in self.datasets)
 
     def is_multi_dataset(self) -> bool:
-        """멀티 데이터셋 여부"""
+        """Return True if more than one dataset is present in this report.
+
+        Output: bool — True when len(self.datasets) > 1
+        """
         return len(self.datasets) > 1
 
 
 @dataclass
 class ReportTemplate:
-    """레포트 템플릿"""
+    """Visual and structural template applied during report rendering.
+
+    Stores branding colors, fonts, optional header/footer HTML, and the
+    ordered list of sections that should be included by default when this
+    template is selected.
+    """
     id: str
     name: str
     description: str = ""
@@ -300,7 +382,11 @@ class ReportTemplate:
     ])
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this template to a JSON-safe dictionary.
+
+        Output: Dict[str, Any] — id, name, description, author, created_at (ISO 8601),
+                colors, font_family, and default_sections
+        """
         return {
             "id": self.id,
             "name": self.name,

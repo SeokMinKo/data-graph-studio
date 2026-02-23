@@ -59,6 +59,12 @@ class ExportController(Observable):
         self,
         renderer: Optional[IExportRenderer] = None,
     ):
+        """Initialize with an optional chart renderer.
+
+        Input: renderer — IExportRenderer | None, injected for chart export;
+               when None, ExportWorker falls back to its own default renderer
+        Invariants: _cancelled starts False; no background thread is running
+        """
         super().__init__()
         self._worker: Optional[ExportWorker] = None
         self._thread: Optional[threading.Thread] = None
@@ -68,13 +74,19 @@ class ExportController(Observable):
     # -- cancel / reset --------------------------------------------------------
 
     def cancel(self) -> None:
-        """Request cancellation of the current export."""
+        """Request cancellation of the current export.
+
+        Invariants: _cancelled is True after return; worker.cancel() called if one exists
+        """
         self._cancelled = True
         if self._worker is not None:
             self._worker.cancel()
 
     def reset(self) -> None:
-        """Reset cancellation flag for a fresh export."""
+        """Reset the cancellation flag so a new export can proceed.
+
+        Invariants: _cancelled is False after return
+        """
         self._cancelled = False
 
     # -- synchronous helpers (for tests & simple uses) -------------------------
@@ -86,10 +98,14 @@ class ExportController(Observable):
         fmt: ExportFormat,
         options: Optional[ExportOptions] = None,
     ) -> None:
-        """
-        Export a chart image synchronously (blocks caller).
+        """Export a chart image synchronously, blocking the caller until done.
 
-        Designed for unit tests and IPC handlers.
+        Input: image — QImage or compatible image object to export
+               path — str, destination file path (must be writable)
+               fmt — ExportFormat, one of PNG/SVG/PDF
+               options — ExportOptions | None, resolution/DPI overrides
+        Raises: ExportError — if the write fails
+        Invariants: emits progress_changed, then export_completed or export_failed
         """
         with get_metrics().timed_operation("export.dispatch"):
             worker = ExportWorker(
@@ -115,8 +131,14 @@ class ExportController(Observable):
         fmt: ExportFormat,
         options: Optional[ExportOptions] = None,
     ) -> None:
-        """
-        Export data synchronously (blocks caller).
+        """Export a DataFrame synchronously, blocking the caller until done.
+
+        Input: df — pl.DataFrame, data to export
+               path — str, destination file path (must be writable)
+               fmt — ExportFormat, one of CSV/EXCEL/PARQUET
+               options — ExportOptions | None, format-specific overrides
+        Raises: ExportError — if the write fails
+        Invariants: emits progress_changed, then export_completed or export_failed
         """
         worker = ExportWorker(
             task="data",
@@ -141,10 +163,15 @@ class ExportController(Observable):
         fmt: ExportFormat,
         options: Optional[ExportOptions] = None,
     ) -> None:
-        """
-        Export a chart on a background thread — PRD NFR-4.3.
+        """Export a chart on a daemon background thread (non-blocking).
 
-        Emits progress_changed, export_completed, or export_failed.
+        Cancels any in-progress export before starting the new one.
+        Input: image — QImage or compatible image object to export
+               path — str, destination file path
+               fmt — ExportFormat, one of PNG/SVG/PDF
+               options — ExportOptions | None, resolution/DPI overrides
+        Invariants: exactly one background thread running after return;
+                    emits progress_changed, then export_completed or export_failed
         """
         self._stop_current_worker()
         self._cancelled = False
@@ -170,8 +197,15 @@ class ExportController(Observable):
         fmt: ExportFormat,
         options: Optional[ExportOptions] = None,
     ) -> None:
-        """
-        Export data on a background thread.
+        """Export a DataFrame on a daemon background thread (non-blocking).
+
+        Cancels any in-progress export before starting the new one.
+        Input: df — pl.DataFrame, data to export
+               path — str, destination file path
+               fmt — ExportFormat, one of CSV/EXCEL/PARQUET
+               options — ExportOptions | None, format-specific overrides
+        Invariants: exactly one background thread running after return;
+                    emits progress_changed, then export_completed or export_failed
         """
         self._stop_current_worker()
         self._cancelled = False
@@ -192,10 +226,14 @@ class ExportController(Observable):
     # -- IPC commands (FR-4.8) -------------------------------------------------
 
     def handle_ipc_export_chart(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """IPC: export_chart {path, format, width?, height?, dpi?}
+        """Handle an IPC export_chart command (FR-4.8).
 
-        Requires ``set_image_provider(callable)`` to be called first so
-        the controller can obtain the current chart image.
+        Input: params — dict with keys: path (str, required), format (str, default "png"),
+               width (int | None), height (int | None), dpi (int, default 96)
+        Output: Dict[str, str] — {"status": "ok", "message": ...} on success
+                                  {"status": "error", "message": ...} on failure
+        Raises: nothing — all errors are caught and returned as {"status": "error"}
+        Invariants: requires set_image_provider() to have been called beforehand
         """
         path = params.get("path")
         fmt_str = params.get("format", "png").lower()
@@ -231,9 +269,13 @@ class ExportController(Observable):
             return {"status": "error", "message": str(e)}
 
     def handle_ipc_export_data(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """IPC: export_data {path, format}
+        """Handle an IPC export_data command (FR-4.8).
 
-        Requires ``set_dataframe_provider(callable)`` to be called first.
+        Input: params — dict with keys: path (str, required), format (str, default "csv")
+        Output: Dict[str, str] — {"status": "ok", "message": ...} on success
+                                  {"status": "error", "message": ...} on failure
+        Raises: nothing — all errors are caught and returned as {"status": "error"}
+        Invariants: requires set_dataframe_provider() to have been called beforehand
         """
         path = params.get("path")
         fmt_str = params.get("format", "csv").lower()
@@ -265,9 +307,10 @@ class ExportController(Observable):
             return {"status": "error", "message": str(e)}
 
     def handle_ipc_export_dashboard(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """IPC: export_dashboard {path, format}
+        """Handle an IPC export_dashboard command (stub, not yet implemented).
 
-        Not yet implemented — dashboard export requires multi-chart capture.
+        Raises: NotImplementedError — dashboard export requires multi-chart capture
+                and is not yet supported via IPC
         """
         raise NotImplementedError(
             "Dashboard export via IPC is not yet implemented. "
@@ -275,17 +318,28 @@ class ExportController(Observable):
         )
 
     def set_image_provider(self, provider) -> None:
-        """Set a callable that returns the current chart image."""
+        """Register a zero-argument callable that returns the current chart image.
+
+        Input: provider — callable() -> QImage, called by IPC chart export handlers
+        Invariants: stored as self._image_provider; replaces any previous provider
+        """
         self._image_provider = provider
 
     def set_dataframe_provider(self, provider) -> None:
-        """Set a callable that returns the current polars DataFrame."""
+        """Register a zero-argument callable that returns the current Polars DataFrame.
+
+        Input: provider — callable() -> pl.DataFrame | None, called by IPC data export handlers
+        Invariants: stored as self._dataframe_provider; replaces any previous provider
+        """
         self._dataframe_provider = provider
 
     # -- internals -------------------------------------------------------------
 
     def _run_worker(self) -> None:
-        """Thread target: run worker then clear references."""
+        """Thread target: execute the current worker and clear references on completion.
+
+        Invariants: _worker and _thread are both None after this returns
+        """
         if self._worker is not None:
             self._worker.run()
         self._worker = None
@@ -298,7 +352,10 @@ class ExportController(Observable):
         self.emit("export_failed", error)
 
     def _stop_current_worker(self) -> None:
-        """Cancel and wait for the current worker (PRD §10.5)."""
+        """Cancel the running worker and join its thread with a 3-second timeout.
+
+        Invariants: _worker and _thread are both None after return
+        """
         if self._worker is not None:
             self._worker.cancel()
             self._worker = None
@@ -307,5 +364,8 @@ class ExportController(Observable):
             self._thread = None
 
     def shutdown(self) -> None:
-        """Called during app close — PRD §10.6."""
+        """Gracefully stop any running export worker during application close.
+
+        Invariants: no background thread is running after return (PRD §10.6)
+        """
         self._stop_current_worker()
