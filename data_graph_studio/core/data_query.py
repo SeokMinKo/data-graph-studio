@@ -58,8 +58,9 @@ class DataQuery:
 
         try:
             return self._collect_streaming(df.lazy().filter(ops[operator]))
-        except Exception:
-            logger.debug("data_query.filter.streaming_fallback", exc_info=True)
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError) as e:
+            logger.debug("data_query.filter.streaming_fallback",
+                         extra={"reason": type(e).__name__, "operator": operator, "column": column})
             return df.filter(ops[operator])
 
     def sort(
@@ -73,8 +74,9 @@ class DataQuery:
             return None
         try:
             return self._collect_streaming(df.lazy().sort(columns, descending=descending))
-        except Exception:
-            logger.debug("data_query.sort.streaming_fallback", exc_info=True)
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError) as e:
+            logger.debug("data_query.sort.streaming_fallback",
+                         extra={"reason": type(e).__name__, "columns": columns})
             return df.sort(columns, descending=descending)
 
     def group_aggregate(
@@ -101,8 +103,9 @@ class DataQuery:
         get_metrics().increment("query.executed")
         try:
             return self._collect_streaming(df.lazy().group_by(group_columns).agg(agg_exprs))
-        except Exception:
-            logger.debug("data_query.group_aggregate.streaming_fallback", exc_info=True)
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError) as e:
+            logger.debug("data_query.group_aggregate.streaming_fallback",
+                         extra={"reason": type(e).__name__, "group_columns": group_columns})
             return df.group_by(group_columns).agg(agg_exprs)
 
     def get_statistics(
@@ -290,8 +293,9 @@ class DataQuery:
             try:
                 cond = pl.col(col).cast(pl.Utf8).str.contains(query_pattern, literal=literal)
                 conditions.append(cond)
-            except Exception:
-                logger.warning("data_query.search.column_skip", extra={"col": col}, exc_info=True)
+            except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, TypeError) as e:
+                logger.warning("data_query.search.column_skip",
+                               extra={"col": col, "reason": type(e).__name__})
                 continue
 
         if not conditions:
@@ -340,8 +344,9 @@ class DataQuery:
 
         try:
             return self._collect_streaming(lf)
-        except Exception:
-            logger.debug("data_query.filter_by_map.streaming_fallback", exc_info=True)
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError) as e:
+            logger.debug("data_query.filter_by_map.streaming_fallback",
+                         extra={"reason": type(e).__name__, "filter_columns": list(filter_map.keys())})
             return lf.collect()
 
     def create_index(self, df: pl.DataFrame, column: str) -> Dict[Any, List[int]]:
@@ -398,8 +403,9 @@ class DataQuery:
                 stats_df = self._collect_streaming(lazy_df.select(exprs))
                 if stats_df is not None and stats_df.height > 0:
                     return stats_df.to_dicts()[0]
-            except Exception:
-                logger.debug("data_query.windowed_stats.streaming_fallback", exc_info=True)
+            except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError) as e:
+                logger.debug("data_query.windowed_stats.streaming_fallback",
+                             extra={"reason": type(e).__name__, "column": column})
 
         if df is None or column not in df.columns:
             return {}
@@ -411,6 +417,7 @@ class DataQuery:
         """LazyFrame을 streaming 모드로 수집한다."""
         try:
             return lazy_df.collect(engine="streaming")
-        except Exception:
-            logger.debug("data_query.collect_streaming.engine_fallback", exc_info=True)
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError, OSError) as e:
+            logger.debug("data_query.collect_streaming.engine_fallback",
+                         extra={"reason": type(e).__name__})
             return lazy_df.collect()

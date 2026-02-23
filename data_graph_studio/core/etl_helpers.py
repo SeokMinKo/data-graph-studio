@@ -37,8 +37,9 @@ def is_binary_etl(path: str) -> bool:
     try:
         with open(path, 'rb') as f:
             header = f.read(512)
-    except Exception:
-        logger.debug("etl_helpers.is_binary_etl.read_failed", extra={"path": path}, exc_info=True)
+    except OSError as e:
+        logger.debug("etl_helpers.is_binary_etl.read_failed",
+                     extra={"path": path, "reason": type(e).__name__})
         return False
     if not header:
         return False
@@ -92,15 +93,17 @@ def _build_etl_dataframe(all_events: List[Dict[str, Any]]) -> pl.DataFrame:
     if 'Timestamp' in df.columns:
         try:
             df = df.with_columns(pl.col('Timestamp').cast(pl.Datetime('us')))
-        except Exception:
-            logger.debug("etl_helpers.build_df.timestamp_cast_failed", exc_info=True)
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as e:
+            logger.debug("etl_helpers.build_df.timestamp_cast_failed",
+                         extra={"reason": type(e).__name__})
 
     for col in _ETL_NUMERIC_COLUMNS:
         if col in df.columns:
             try:
                 df = df.with_columns(pl.col(col).cast(pl.Int64))
-            except Exception:
-                logger.debug("etl_helpers.build_df.numeric_cast_failed", extra={"col": col}, exc_info=True)
+            except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as e:
+                logger.debug("etl_helpers.build_df.numeric_cast_failed",
+                             extra={"col": col, "reason": type(e).__name__})
 
     non_null_cols = [col for col in df.columns if df[col].null_count() < len(df)]
     return df.select(non_null_cols) if non_null_cols else df
@@ -149,8 +152,9 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                     'Source': 'SystemTrace',
                 }
                 self.events.append(record)
-            except Exception:
-                logger.debug("etl_helpers.on_system_trace.parse_failed", exc_info=True)
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
+                logger.debug("etl_helpers.on_system_trace.parse_failed",
+                             extra={"reason": type(e).__name__})
                 self._error_count += 1
 
         def on_event_record(self, event):
@@ -158,10 +162,10 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
             try:
                 try:
                     msg = event.parse_etw()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, RuntimeError):
                     try:
                         msg = event.parse_tracelogging()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, RuntimeError):
                         return
                 if msg is None:
                     return
@@ -179,8 +183,9 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                         if key not in record:
                             record[key] = str(val) if val is not None else None
                 self.etw_events.append(record)
-            except Exception:
-                logger.debug("etl_helpers.on_event_record.parse_failed", exc_info=True)
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
+                logger.debug("etl_helpers.on_event_record.parse_failed",
+                             extra={"reason": type(e).__name__})
                 self._error_count += 1
 
         def on_perfinfo_trace(self, event):

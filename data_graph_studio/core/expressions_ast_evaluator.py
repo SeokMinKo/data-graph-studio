@@ -171,8 +171,9 @@ class ExpressionEvaluatorHelpers:
                     result.append(lv <= rv)
                 else:
                     result.append(False)
-            except Exception:
-                logger.debug("expressions_ast_evaluator.evaluate_condition.comparison_failed", exc_info=True)
+            except (TypeError, ValueError) as e:
+                logger.debug("expressions_ast_evaluator.evaluate_condition.comparison_failed",
+                             extra={"reason": type(e).__name__, "op": op})
                 result.append(False)
 
         return result

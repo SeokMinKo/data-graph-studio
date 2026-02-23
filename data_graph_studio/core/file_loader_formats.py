@@ -104,8 +104,9 @@ def collect_streaming(lazy_df: pl.LazyFrame) -> pl.DataFrame:
     """LazyFrame을 streaming 모드로 수집한다."""
     try:
         return lazy_df.collect(engine="streaming")
-    except Exception:
-        logger.debug("file_loader_formats.collect_streaming.engine_fallback", exc_info=True)
+    except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError, OSError) as e:
+        logger.debug("file_loader_formats.collect_streaming.engine_fallback",
+                     extra={"reason": type(e).__name__})
         return lazy_df.collect()
 
 
@@ -224,8 +225,9 @@ def load_windowed(
     loader._lazy_df = lazy_df
     try:
         loader._total_rows = int(loader._lazy_df.select(pl.len()).collect()[0, 0])
-    except Exception:
-        logger.warning("file_loader_formats.load_windowed.row_count_failed", exc_info=True)
+    except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError, OSError) as e:
+        logger.warning("file_loader_formats.load_windowed.row_count_failed",
+                       extra={"reason": type(e).__name__, "path": path})
         loader._total_rows = 0
 
     window_size = min(loader._window_size, loader._total_rows) if loader._total_rows > 0 else loader._window_size

@@ -200,8 +200,9 @@ class ViewSyncManager(Observable):
                         sync_x=self._sync_x,
                         sync_y=self._sync_y,
                     )
-                except Exception:
-                    logger.debug("view_sync.dispatch_range.panel_failed", extra={"panel_id": pid}, exc_info=True)
+                except (AttributeError, RuntimeError, TypeError) as e:
+                    logger.debug("view_sync.dispatch_range.panel_failed",
+                                 extra={"panel_id": pid, "reason": type(e).__name__})
             self.emit("view_range_synced", source_id, list(x_range), list(y_range))
         finally:
             self._is_syncing = False
@@ -271,8 +272,9 @@ class ViewSyncManager(Observable):
                     continue
                 try:
                     panel.set_selection(indices)
-                except Exception:
-                    logger.debug("view_sync.dispatch_selection.panel_failed", extra={"panel_id": pid}, exc_info=True)
+                except (AttributeError, RuntimeError, TypeError) as e:
+                    logger.debug("view_sync.dispatch_selection.panel_failed",
+                                 extra={"panel_id": pid, "reason": type(e).__name__})
             self.emit("selection_synced", source_id, list(indices))
         finally:
             self._is_syncing = False
@@ -293,8 +295,9 @@ class ViewSyncManager(Observable):
             for panel in list(self._panels.values()):
                 try:
                     panel.set_view_range(None, None, True, True)
-                except Exception:
-                    logger.debug("view_sync.reset_all_views.panel_failed", exc_info=True)
+                except (AttributeError, RuntimeError, TypeError) as e:
+                    logger.debug("view_sync.reset_all_views.panel_failed",
+                                 extra={"reason": type(e).__name__})
         finally:
             self._is_syncing = False
 
@@ -318,8 +321,9 @@ class ViewSyncManager(Observable):
                     continue
                 try:
                     panel.highlight_selection(row_indices)
-                except Exception:
-                    logger.debug("view_sync.row_selection.panel_failed", extra={"panel_id": pid}, exc_info=True)
+                except (AttributeError, RuntimeError, TypeError) as e:
+                    logger.debug("view_sync.row_selection.panel_failed",
+                                 extra={"panel_id": pid, "reason": type(e).__name__})
         finally:
             self._is_syncing = False
 
