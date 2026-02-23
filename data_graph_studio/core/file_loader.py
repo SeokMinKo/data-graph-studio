@@ -98,7 +98,7 @@ def _detect_encoding_impl(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) ->
             return DEFAULT_ENCODING
         except UnicodeDecodeError:
             return 'latin-1'
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         logger.debug("detect_encoding failed, defaulting to utf-8", exc_info=True)
         return DEFAULT_ENCODING
 
@@ -287,7 +287,7 @@ class FileLoader:
                 timeout_s=FILE_ENCODING_DETECT_TIMEOUT,
                 operation="detect_delimiter",
             )
-        except Exception:
+        except (OSError, DataLoadError):
             logger.debug("detect_delimiter failed, defaulting to comma", exc_info=True)
             return DEFAULT_DELIMITER
 
@@ -402,7 +402,7 @@ class FileLoader:
 
             logger.info("file_loader.lazy_frame_created", extra={"path": path})
             return True
-        except Exception as e:
+        except (OSError, PermissionError, MemoryError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as e:
             logger.error("file_loader.lazy_frame_create_failed", extra={"error": e}, exc_info=True)
             raise DataLoadError(
                 f"Failed to create lazy frame for: {Path(path).name}",
@@ -434,7 +434,7 @@ class FileLoader:
             gc.collect()
             logger.info("file_loader.lazy_frame_collected", extra={"row_count": len(self._df)})
             return True
-        except Exception as e:
+        except (OSError, MemoryError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as e:
             logger.error("file_loader.lazy_frame_collect_failed", extra={"error": e}, exc_info=True)
             raise DataLoadError(
                 "Failed to collect lazy frame into DataFrame",
