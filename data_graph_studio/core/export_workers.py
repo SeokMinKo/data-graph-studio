@@ -128,7 +128,11 @@ class ExportWorker:
             elif self.task == "data":
                 self._export_data()
             else:
-                raise ValueError(f"Unknown export task: {self.task}")
+                raise ExportError(
+                    f"Unknown export task: {self.task}",
+                    operation="run",
+                    context={"task": self.task},
+                )
         except ExportError as exc:
             self._on_failed(str(exc))
         except Exception as exc:

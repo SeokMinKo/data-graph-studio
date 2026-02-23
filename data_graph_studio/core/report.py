@@ -10,6 +10,8 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 import json
 
+from data_graph_studio.core.exceptions import ExportError
+
 import polars as pl
 
 from data_graph_studio.core.report_types import (
@@ -182,7 +184,11 @@ class ReportManager:
         """레포트 생성"""
         generator = self.generators.get(options.format)
         if not generator:
-            raise ValueError(f"Unsupported format: {options.format}")
+            raise ExportError(
+                f"Unsupported format: {options.format}",
+                operation="generate_report",
+                context={"format": str(options.format)},
+            )
 
         # 템플릿 적용
         if options.template_id and options.template_id in self.templates:
