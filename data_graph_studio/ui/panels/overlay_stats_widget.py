@@ -314,8 +314,13 @@ class OverlayStatsWidget(QWidget):
                         sig_color = "#757575"
 
                     self.significance_label.setText(sig_text)
+                    rgba = (
+                        f"rgba({int(sig_color[1:3], 16)}, {int(sig_color[3:5], 16)}, "
+                        f"{int(sig_color[5:7], 16)}, 0.1)"
+                    )
                     self.significance_label.setStyleSheet(
-                        f"font-size: 10px; padding: 4px; background: rgba({int(sig_color[1:3], 16)}, {int(sig_color[3:5], 16)}, {int(sig_color[5:7], 16)}, 0.1); border-radius: 4px; color: {sig_color};"
+                        "font-size: 10px; padding: 4px; "
+                        f"background: {rgba}; border-radius: 4px; color: {sig_color};"
                     )
         else:
             muted = "#666" if self._is_light else "#9CA3AF"
