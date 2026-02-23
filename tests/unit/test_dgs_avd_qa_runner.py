@@ -9,11 +9,13 @@ def test_ipc_send_returns_status_ok():
     import json
     from data_graph_studio.tools.dgs_avd_qa_runner import _ipc_send
 
-    fake_response = json.dumps({"status": "ok"}).encode()
+    # Server appends \n to response
+    fake_response = json.dumps({"status": "ok"}).encode() + b"\n"
     mock_sock = MagicMock()
     mock_sock.recv.return_value = fake_response
 
-    with patch("socket.create_connection") as mock_conn:
+    with patch("data_graph_studio.tools.dgs_avd_qa_runner.read_port_file", return_value=None), \
+         patch("socket.create_connection") as mock_conn:
         mock_conn.return_value.__enter__ = lambda s: mock_sock
         mock_conn.return_value.__exit__ = MagicMock(return_value=False)
         result = _ipc_send({"cmd": "ping"})

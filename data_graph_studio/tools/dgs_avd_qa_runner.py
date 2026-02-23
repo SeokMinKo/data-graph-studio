@@ -27,11 +27,15 @@ from typing import Any, Dict, List, Optional
 
 import polars as pl
 
+from data_graph_studio.core.ipc_server import read_port_file
+from data_graph_studio.core.constants import IPC_DEFAULT_PORT
+
 logger = logging.getLogger("avd_qa_runner")
 
 # IPC settings (must match DGS ipc_server.py)
 IPC_HOST = "127.0.0.1"
-IPC_PORT = 9876
+# Port is discovered at runtime via ~/.dgs/ipc_port; IPC_DEFAULT_PORT is the fallback.
+IPC_PORT = IPC_DEFAULT_PORT
 
 # Block layer columns produced by the blocklayer converter
 REQUIRED_BLOCK_COLUMNS = [
@@ -48,11 +52,23 @@ REPORT_DIR = Path("docs/qa/avd")
 
 
 def _ipc_send(payload: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
-    """Send a single IPC command and return the parsed response."""
+    """Send a single IPC command and return the parsed response.
+
+    The server terminates every response with ``\\n``; we read until we see it
+    so that large payloads spanning multiple TCP segments are reassembled
+    correctly.
+    """
+    port = read_port_file() or IPC_PORT
     data = json.dumps(payload).encode()
-    with socket.create_connection((IPC_HOST, IPC_PORT), timeout=timeout) as sock:
+    with socket.create_connection((IPC_HOST, port), timeout=timeout) as sock:
         sock.sendall(data)
-        response = sock.recv(65536)
+        chunks = b""
+        while b"\n" not in chunks:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            chunks += chunk
+        response = chunks
     return json.loads(response)
 
 
@@ -67,7 +83,7 @@ def _wait_for_dataset(
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            resp = _ipc_send({"cmd": "ping"}, timeout=5)
+            resp = _ipc_send({"command": "ping"}, timeout=5)
             if resp.get("row_count", 0) > 0:
                 return True
         except Exception:
@@ -151,7 +167,7 @@ def run_avd_qa(
     # ── Step 1: Connect to DGS ─────────────────────────────────────────
     logger.info("step1: connect to DGS")
     try:
-        resp = _ipc_send({"cmd": "ping"}, timeout=5)
+        resp = _ipc_send({"command": "ping"}, timeout=5)
         if resp.get("status") != "ok":
             logger.error("DGS ping failed: %s", resp)
             print("Cannot connect to DGS. Start DGS first, then run this script.")
@@ -210,7 +226,7 @@ def run_avd_qa(
     # ── Step 4: Parse ftrace via IPC ───────────────────────────────────
     logger.info("step4: parse ftrace via IPC")
     try:
-        resp = _ipc_send({"cmd": "parse_ftrace", "file_path": trace_path})
+        resp = _ipc_send({"command": "parse_ftrace", "args": {"file_path": trace_path}})
         if resp.get("status") != "ok":
             raise RuntimeError(f"parse_ftrace IPC error: {resp}")
 
@@ -255,15 +271,16 @@ def run_avd_qa(
         for target in ["graph_panel", "summary_panel", "table_panel"]:
             path = str(out_dir / f"{target}_{ts}.png")
             resp = _ipc_send({
-                "cmd": "capture",
-                "target": target,
-                "path": path,
+                "command": "capture",
+                "args": {"target": target, "path": path},
             })
             if resp.get("status") == "ok":
                 screenshots.append(path)
 
-        scenarios.append({"name": "screenshot", "status": "PASS",
-                          "notes": f"{len(screenshots)} captures"})
+        target_count = 3  # graph_panel, summary_panel, table_panel
+        status = "PASS" if len(screenshots) == target_count else "WARN"
+        scenarios.append({"name": "screenshot", "status": status,
+                          "notes": f"{len(screenshots)}/{target_count} captures"})
     except Exception as e:
         scenarios.append({"name": "screenshot", "status": "WARN",
                           "notes": str(e)})
