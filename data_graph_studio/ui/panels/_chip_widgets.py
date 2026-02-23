@@ -4,7 +4,6 @@ import logging
 from typing import Optional, Dict, Any
 import json
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -16,6 +15,8 @@ from PySide6.QtGui import QDrag, QDropEvent, QDragEnterEvent
 
 from ...core.state import AppState, AggregationType, ValueColumn
 
+
+logger = logging.getLogger(__name__)
 
 # ==================== Drag helpers ====================
 

@@ -5,7 +5,6 @@ Covers the bug where numeric_columns and text_columns were missing
 from the non-windowed (profile-based) return dict.
 """
 
-import pytest
 from data_graph_studio.core.data_query import DataQuery
 from data_graph_studio.core.types import ColumnInfo, DataProfile
 

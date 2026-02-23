@@ -1,7 +1,5 @@
 """Unit tests for the parse_ftrace IPC command."""
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 def _make_controller(tmp_path):

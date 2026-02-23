@@ -3,11 +3,9 @@ State Management 테스트
 """
 
 import pytest
-from unittest.mock import MagicMock
 
 from data_graph_studio.core.state import (
-    AppState, SelectionState, GroupColumn, ValueColumn,
-    AggregationType, ChartType, ToolMode, FilterCondition, SortCondition
+    AppState, SelectionState, AggregationType, ChartType, ToolMode
 )
 from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 

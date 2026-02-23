@@ -11,8 +11,9 @@ from PySide6.QtGui import QAction, QColor
 from ...core.state import ToolMode, ChartType
 from ..toolbars.compare_toolbar import CompareToolbar
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

@@ -10,7 +10,7 @@ Contains standalone functions that do not depend on DatasetManager:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import numpy as np
 

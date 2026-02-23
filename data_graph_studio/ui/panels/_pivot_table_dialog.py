@@ -3,7 +3,6 @@
 import logging
 from typing import Optional
 
-logger = logging.getLogger(__name__)
 
 import polars as pl
 
@@ -14,6 +13,8 @@ from PySide6.QtWidgets import (
 
 from ._polars_table_model import PolarsTableModel
 
+
+logger = logging.getLogger(__name__)
 
 class PivotTableDialog(QDialog):
     """Dialog for creating pivot tables from data."""

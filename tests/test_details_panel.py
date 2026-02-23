@@ -4,9 +4,8 @@ Details-on-Demand Panel 테스트
 
 import pytest
 import polars as pl
-from typing import Set
 
-from data_graph_studio.core.marking import MarkingManager, MarkMode
+from data_graph_studio.core.marking import MarkingManager
 from data_graph_studio.ui.panels.details_panel import (
     DetailsOnDemandModel,
     DetailsColumnConfig,

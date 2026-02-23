@@ -11,14 +11,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 import polars as pl
 
-logger = logging.getLogger(__name__)
-
 from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
 from data_graph_studio.core.exceptions import QueryError, ValidationError
 from data_graph_studio.core.constants import DEFAULT_SCHEME_NAME
 from data_graph_studio.core.types import ColumnName
+
+logger = logging.getLogger(__name__)
 
 
 class IFilterApplier(ABC):

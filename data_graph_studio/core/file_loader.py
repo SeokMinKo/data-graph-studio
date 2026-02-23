@@ -46,7 +46,6 @@ from .file_loader_formats import (
     parse_etl_binary as _parse_etl_binary,
     prepare_parquet_from_csv,
     load_window_from_lazy,
-    collect_streaming,
     load_file_internal,
     optimize_memory_df,
     create_profile,

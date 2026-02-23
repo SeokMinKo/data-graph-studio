@@ -8,8 +8,6 @@ import logging
 
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication
 
 from .graph_widgets import FormattedAxisItem
 from ...core.state import AppState, ToolMode
@@ -21,13 +19,11 @@ from ._graph_drawing_mixin import _GraphDrawingMixin
 from ._graph_tooltip_mixin import _GraphTooltipMixin
 from ._graph_reference_mixin import _GraphReferenceMixin
 from ._graph_plot_mixin import _GraphPlotMixin
+from ._annotation_item import AnnotationItem  # noqa: F401  (re-exported)
 
 logger = logging.getLogger(__name__)
 
-
 # ==================== Annotation Item ====================
-
-from ._annotation_item import AnnotationItem  # noqa: F401  (re-exported)
 
 
 # ==================== Main Graph ====================

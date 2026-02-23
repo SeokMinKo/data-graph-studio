@@ -14,7 +14,6 @@ Attributes accessed on ``self`` (from GraphPanel):
 import logging
 from typing import Dict, List, Any
 
-logger = logging.getLogger(__name__)
 
 import numpy as np
 import polars as pl
@@ -25,6 +24,8 @@ from PySide6.QtGui import QColor
 
 from .....core.state import ChartType
 
+
+logger = logging.getLogger(__name__)
 
 class GridChartMixin:
     """Mixin providing grid/facet view rendering methods for GraphPanel."""

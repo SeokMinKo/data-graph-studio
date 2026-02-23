@@ -8,7 +8,7 @@ import pytest
 
 from data_graph_studio.core.graph_setting_mapper import GraphSettingMapper
 from data_graph_studio.core.profile import GraphSetting
-from data_graph_studio.core.state import AppState, ChartType, GroupColumn, ValueColumn
+from data_graph_studio.core.state import AppState, ChartType
 
 
 @pytest.fixture

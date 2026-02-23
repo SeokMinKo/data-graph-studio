@@ -5,10 +5,9 @@ Report Generation Core Module
 Supports: HTML, PDF, DOCX, PPTX, JSON, Markdown
 """
 
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Union
 from pathlib import Path
 from abc import ABC, abstractmethod
-import json
 
 from data_graph_studio.core.exceptions import ExportError
 

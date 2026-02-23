@@ -8,8 +8,6 @@ import time
 from dataclasses import replace
 from typing import Optional, List, Dict, Any
 
-logger = logging.getLogger(__name__)
-
 from .graph_setting_mapper import GraphSettingMapper
 from .observable import Observable
 from .profile import GraphSetting
@@ -17,6 +15,8 @@ from .profile_store import ProfileStore
 from .state import AppState
 from .exceptions import ConfigError
 from .types import ProfileId
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileController(Observable):

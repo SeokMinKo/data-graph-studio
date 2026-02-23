@@ -5,7 +5,6 @@ from collections import OrderedDict
 import logging
 import polars as pl
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import (
     Qt, QAbstractTableModel, QModelIndex,
@@ -14,6 +13,8 @@ from PySide6.QtGui import QBrush, QColor
 
 from .conditional_formatting import ConditionalFormat
 
+
+logger = logging.getLogger(__name__)
 
 class PolarsTableModel(QAbstractTableModel):
     """Polars DataFrame을 위한 Qt 테이블 모델 (최적화 버전)

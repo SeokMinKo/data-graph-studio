@@ -7,11 +7,12 @@ from dataclasses import dataclass, field
 import logging
 import polars as pl
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import Qt, QAbstractItemModel, QModelIndex, Signal
 from PySide6.QtGui import QFont, QColor, QBrush
 
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class GroupNode:

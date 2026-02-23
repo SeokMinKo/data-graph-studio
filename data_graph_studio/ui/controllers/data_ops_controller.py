@@ -11,8 +11,9 @@ from PySide6.QtCore import Qt
 from ..dialogs.computed_column_dialog import ComputedColumnDialog
 from ..clipboard_manager import ClipboardManager
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

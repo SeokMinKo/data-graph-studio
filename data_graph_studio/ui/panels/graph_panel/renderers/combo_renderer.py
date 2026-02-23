@@ -11,16 +11,16 @@ Attributes accessed on ``self`` (from GraphPanel):
 """
 
 import logging
-from typing import Dict, Optional
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
 import pyqtgraph as pg
 from PySide6.QtGui import QColor
 
 from .....core.state import ChartType
 
+
+logger = logging.getLogger(__name__)
 
 class ComboChartMixin:
     """Mixin providing combo chart rendering methods for GraphPanel."""

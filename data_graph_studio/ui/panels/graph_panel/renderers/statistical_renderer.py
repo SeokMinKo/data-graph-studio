@@ -11,17 +11,18 @@ Attributes accessed on ``self`` (from GraphPanel):
 """
 
 import logging
-from typing import Dict, List
+from typing import Dict
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
 import pyqtgraph as pg
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from .....core.state import ChartType
 
+
+logger = logging.getLogger(__name__)
 
 class StatisticalChartMixin:
     """Mixin providing statistical chart rendering methods for GraphPanel."""

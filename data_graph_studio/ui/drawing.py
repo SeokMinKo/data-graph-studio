@@ -11,7 +11,6 @@ import uuid
 import math
 import logging
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -24,6 +23,8 @@ from PySide6.QtGui import QColor, QFont, QPen, QBrush, QPainterPath
 
 import pyqtgraph as pg
 
+
+logger = logging.getLogger(__name__)
 
 # ==================== Drawing Object Types ====================
 

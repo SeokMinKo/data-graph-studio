@@ -2,7 +2,6 @@
 Data Sampling 알고리즘 테스트
 """
 
-import pytest
 import numpy as np
 
 from data_graph_studio.graph.sampling import DataSampler
@@ -312,7 +311,7 @@ class TestGroupAwareSampling:
             current_offset += group_len
         
         x_sampled = np.concatenate(x_sampled_list)
-        y_sampled = np.concatenate(y_sampled_list)
+        np.concatenate(y_sampled_list)
         
         # 새 그룹 마스크 생성
         total_sampled = len(x_sampled)
@@ -341,10 +340,10 @@ class TestGroupAwareSampling:
     def test_proportional_sampling(self):
         """그룹 크기에 비례한 샘플링 테스트"""
         # 불균형 그룹: Large=900, Small=100
-        x = np.arange(1000).astype(float)
-        y = np.arange(1000).astype(float)
+        np.arange(1000).astype(float)
+        np.arange(1000).astype(float)
         
-        groups = {
+        {
             'Large': np.array([True] * 900 + [False] * 100),
             'Small': np.array([False] * 900 + [True] * 100)
         }
@@ -368,8 +367,8 @@ class TestGroupAwareSampling:
     
     def test_empty_group_handling(self):
         """빈 그룹 처리 테스트"""
-        x = np.arange(100).astype(float)
-        y = np.arange(100).astype(float)
+        np.arange(100).astype(float)
+        np.arange(100).astype(float)
         
         groups = {
             'A': np.array([True] * 50 + [False] * 50),

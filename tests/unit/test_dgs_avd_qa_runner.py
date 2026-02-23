@@ -1,7 +1,6 @@
 # tests/unit/test_dgs_avd_qa_runner.py
 """Unit tests for dgs_avd_qa_runner."""
 from unittest.mock import patch, MagicMock
-import pytest
 
 
 def test_ipc_send_returns_status_ok():

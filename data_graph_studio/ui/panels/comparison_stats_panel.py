@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QComboBox, QPushButton, QTabWidget, QTextEdit, QFileDialog
 )
 
-logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
@@ -21,6 +20,8 @@ from ...core.state import (
 )
 from ..adapters.app_state_adapter import AppStateAdapter
 
+
+logger = logging.getLogger(__name__)
 
 class ComparisonStatsPanel(QWidget):
     """

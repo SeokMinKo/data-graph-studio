@@ -38,8 +38,9 @@ from PySide6.QtWidgets import (
 from ...core.data_engine import FileType, DelimiterType, DataEngine, HAS_ETL_PARSER
 from ...core.parsing import ParsingSettings
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 class ParsingStep(QWizardPage):
     """Step 1: 파싱 설정"""

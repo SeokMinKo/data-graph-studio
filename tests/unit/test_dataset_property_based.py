@@ -17,7 +17,6 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.dataset_manager import DatasetManager
-from data_graph_studio.core.types import DatasetInfo
 
 
 # ---------------------------------------------------------------------------

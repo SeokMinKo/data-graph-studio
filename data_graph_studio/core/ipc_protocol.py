@@ -12,7 +12,6 @@ from .constants import (
     IPC_KEY_COMMAND,
     IPC_KEY_ARGS,
     IPC_KEY_STATUS,
-    IPC_KEY_MESSAGE,
     IPC_STATUS_OK,
     IPC_STATUS_ERROR,
 )

@@ -6,10 +6,8 @@ Tests for streaming UI integration:
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog
 
 from data_graph_studio.ui.dialogs.streaming_dialog import StreamingDialog
 from data_graph_studio.core.streaming_controller import StreamingController

@@ -1,4 +1,4 @@
-from data_graph_studio.core.metrics import MetricsCollector, get_metrics
+from data_graph_studio.core.metrics import MetricsCollector
 import threading
 
 def test_counter_increment():
@@ -19,8 +19,10 @@ def test_timer_records_duration():
 def test_thread_safety():
     m = MetricsCollector()
     threads = [threading.Thread(target=lambda: m.increment("x", 1)) for _ in range(100)]
-    for t in threads: t.start()
-    for t in threads: t.join()
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
     assert m.snapshot()["counters"]["x"] == 100
 
 def test_snapshot_is_independent():

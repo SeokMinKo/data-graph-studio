@@ -36,7 +36,9 @@ def test_file_changed_event_fires(tmp_path):
     watcher.watch(str(test_file))
 
     # Simulate file modification and trigger check
-    import time; time.sleep(0.01)  # ensure mtime advances
+    import time
+
+    time.sleep(0.01)  # ensure mtime advances
     test_file.write_bytes(b"a,b\n1,2\n3,4\n")
     watcher._check_file(str(test_file))
     assert str(test_file) in received

@@ -4,7 +4,6 @@ Tests the behavior at the limits of normal operation:
 empty inputs, null values, NaN propagation, special chars, type boundaries,
 single-row DataFrames, large-n performance, marking edge cases, and IPC protocol.
 """
-import math
 import sys
 import time
 
@@ -13,16 +12,15 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.filtering import (
-    Filter,
     FilteringManager,
     FilterOperator,
     FilterType,
 )
 from data_graph_studio.core.statistics import DescriptiveStatistics
-from data_graph_studio.core.marking import Marking, MarkingManager, MarkMode
+from data_graph_studio.core.marking import MarkingManager, MarkMode
 from data_graph_studio.core.data_query import DataQuery
 from data_graph_studio.core.ipc_protocol import parse_request, make_ok_response, make_error_response
-from data_graph_studio.core.exceptions import ValidationError, QueryError, DatasetError
+from data_graph_studio.core.exceptions import ValidationError, DatasetError
 
 
 # ---------------------------------------------------------------------------

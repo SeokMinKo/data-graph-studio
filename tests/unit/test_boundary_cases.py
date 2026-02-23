@@ -13,7 +13,6 @@ Covers edge cases not addressed by happy-path tests:
   remove-then-activate sequences
 """
 
-import math
 from unittest.mock import MagicMock
 
 import polars as pl
@@ -21,7 +20,6 @@ import pytest
 
 from data_graph_studio.core.dataset_manager import DatasetManager
 from data_graph_studio.core.filtering import (
-    Filter,
     FilteringManager,
     FilterOperator,
     FilterType,
@@ -464,7 +462,7 @@ class TestDatasetManager0ColumnDataset:
         # Polars allows a DataFrame with 0 columns and 0 rows
         df = pl.DataFrame()
         try:
-            did = manager.load_dataset_from_dataframe(df, name="no_cols")
+            manager.load_dataset_from_dataframe(df, name="no_cols")
         except Exception as exc:
             pytest.fail(f"load_dataset_from_dataframe raised unexpectedly: {exc}")
 
@@ -523,7 +521,7 @@ class TestDatasetManagerActivateAfterRemove:
     def test_active_dataset_id_is_not_stale_after_remove_and_failed_activate(self):
         manager = _make_manager()
         df = pl.DataFrame({"x": [1]})
-        did1 = manager.load_dataset_from_dataframe(df, name="first")
+        manager.load_dataset_from_dataframe(df, name="first")
         did2 = manager.load_dataset_from_dataframe(df, name="second")
         manager.activate_dataset(did2)
         manager.remove_dataset(did2)

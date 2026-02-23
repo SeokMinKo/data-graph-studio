@@ -1,5 +1,4 @@
 """ComparisonManager uses Observable, not Qt signals."""
-import polars as pl
 from data_graph_studio.core.comparison_manager import ComparisonManager
 from data_graph_studio.core.observable import Observable
 

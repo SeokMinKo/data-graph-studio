@@ -2,13 +2,12 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from PySide6.QtWidgets import QApplication, QMainWindow, QMenuBar, QMenu
+from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 
 from data_graph_studio.ui.dialogs.command_palette_dialog import (
     CommandPaletteDialog,
-    CommandEntry,
 )
 
 
@@ -76,15 +75,15 @@ class TestCommandPaletteIndexing:
     def test_file_menu_indexed(self, palette):
         """File menu actions should appear in entries."""
         labels = [e.label for e in palette._entries]
-        assert any("Open Data" in l for l in labels)
-        assert any("Save" in l for l in labels)
-        assert any("xit" in l for l in labels)
+        assert any("Open Data" in label for label in labels)
+        assert any("Save" in label for label in labels)
+        assert any("xit" in label for label in labels)
 
     def test_submenu_actions_indexed(self, palette):
         """Submenu actions (e.g., Theme > Light) should be indexed with prefix."""
         labels = [e.label for e in palette._entries]
-        assert any("Theme" in l and "Light" in l for l in labels)
-        assert any("Theme" in l and "Dark" in l for l in labels)
+        assert any("Theme" in label and "Light" in label for label in labels)
+        assert any("Theme" in label and "Dark" in label for label in labels)
 
     def test_shortcuts_captured(self, palette):
         """Shortcuts should be captured from QAction."""
@@ -100,8 +99,8 @@ class TestCommandPaletteIndexing:
     def test_nested_chart_type(self, palette):
         """Nested menu items like Graph > Chart Type > Line should be indexed."""
         labels = [e.label for e in palette._entries]
-        assert any("Chart Type" in l and "Line" in l for l in labels)
-        assert any("Chart Type" in l and "Bar" in l for l in labels)
+        assert any("Chart Type" in label and "Line" in label for label in labels)
+        assert any("Chart Type" in label and "Bar" in label for label in labels)
 
 
 class TestCommandPaletteFiltering:

@@ -5,10 +5,8 @@ TDD: tests written before implementation.
 """
 
 import gc
-import time
 
 import pytest
-from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QWidget
 
 

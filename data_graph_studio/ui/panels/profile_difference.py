@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional, TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -20,6 +19,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.data_engine import DataEngine

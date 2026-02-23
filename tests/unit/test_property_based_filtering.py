@@ -17,7 +17,6 @@ Invariants tested:
 """
 from __future__ import annotations
 
-import pytest
 from hypothesis import given, settings, assume, HealthCheck
 from hypothesis import strategies as st
 import polars as pl
@@ -27,7 +26,6 @@ from data_graph_studio.core.filtering import (
     FilterOperator,
     FilterType,
     FilteringManager,
-    FilteringScheme,
 )
 from data_graph_studio.core.constants import DEFAULT_SCHEME_NAME
 

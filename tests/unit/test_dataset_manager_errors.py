@@ -9,12 +9,11 @@ Tests cover all documented failure modes:
 - can_load_dataset validation
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import polars as pl
 import pytest
 
 from data_graph_studio.core.dataset_manager import DatasetManager
-from data_graph_studio.core.types import DatasetInfo
 
 
 # ---------------------------------------------------------------------------

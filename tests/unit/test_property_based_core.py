@@ -9,7 +9,6 @@ from hypothesis import given, assume, settings, HealthCheck
 from hypothesis import strategies as st
 
 from data_graph_studio.core.filtering import (
-    Filter,
     FilteringManager,
     FilterOperator,
     FilterType,

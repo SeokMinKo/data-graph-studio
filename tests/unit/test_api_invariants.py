@@ -19,7 +19,6 @@ import polars as pl
 from unittest.mock import MagicMock
 
 from data_graph_studio.core.dataset_manager import DatasetManager
-from data_graph_studio.core.file_loader import FileLoader
 from data_graph_studio.core.undo_manager import UndoStack, UndoCommand, UndoActionType
 from data_graph_studio.core.profile_store import ProfileStore
 from data_graph_studio.core.profile import GraphSetting

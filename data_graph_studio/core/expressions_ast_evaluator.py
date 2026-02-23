@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List
 
 import polars as pl
 import numpy as np

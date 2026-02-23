@@ -13,12 +13,11 @@ import gc
 import os
 import time
 import logging
-from typing import TYPE_CHECKING, Optional, List, Dict
+from typing import TYPE_CHECKING, Optional, List
 
 import polars as pl
 
 from .types import FileType, DelimiterType, PrecisionMode, DataProfile, ColumnInfo
-from .etl_helpers import HAS_ETL_PARSER
 from .metrics import get_metrics
 from .exceptions import DataLoadError
 from .constants import INFER_SCHEMA_LENGTH

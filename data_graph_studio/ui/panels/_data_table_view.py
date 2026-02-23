@@ -5,7 +5,7 @@ from typing import List, Tuple
 from PySide6.QtWidgets import (
     QTableView, QAbstractItemView, QMenu, QApplication,
 )
-from PySide6.QtCore import Qt, Signal, QItemSelection, QItemSelectionModel
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 
 

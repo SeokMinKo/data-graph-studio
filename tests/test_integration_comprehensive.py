@@ -14,20 +14,19 @@ import tempfile
 import os
 import numpy as np
 import polars as pl
-from datetime import date, datetime
-from pathlib import Path
+from datetime import date
 
 # Core imports
 from data_graph_studio.core.data_engine import DataEngine
 from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
 from data_graph_studio.core.filtering import (
-    FilteringManager, FilterOperator, FilterType, Filter, FilteringScheme
+    FilteringManager, FilterOperator
 )
-from data_graph_studio.core.state import AppState, ChartType
+from data_graph_studio.core.state import ChartType
 
 # Graph imports
 from data_graph_studio.graph.curve_fitting import (
-    CurveFitter, FitType, TrendLine, CurveFitSettings, ForecastSettings
+    CurveFitter, FitType, CurveFitSettings, ForecastSettings
 )
 from data_graph_studio.graph.trellis import (
     TrellisMode, TrellisSettings, TrellisCalculator
@@ -35,14 +34,14 @@ from data_graph_studio.graph.trellis import (
 
 # UI imports
 from data_graph_studio.ui.dashboard import (
-    DashboardLayout, DashboardItem, 
+    DashboardItem, 
     DashboardManager, GridPosition
 )
 
 # Report imports
 from data_graph_studio.core.report import (
     ReportFormat, ReportMetadata, ReportOptions, ReportData,
-    DatasetSummary, StatisticalSummary, ChartData, TableData,
+    DatasetSummary, TableData,
     collect_statistics_from_dataframe
 )
 from data_graph_studio.report.html_generator import HTMLReportGenerator

@@ -3,15 +3,12 @@ Tests for Drawing functionality
 """
 
 import pytest
-import numpy as np
-import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Test drawing module imports
 from data_graph_studio.ui.drawing import (
     DrawingType, LineStyle,
-    DrawingStyle, DrawingObjectBase,
-    LineDrawing, CircleDrawing, RectDrawing, TextDrawing,
+    DrawingStyle, LineDrawing, CircleDrawing, RectDrawing, TextDrawing,
     DrawingManager,
     snap_to_angle
 )

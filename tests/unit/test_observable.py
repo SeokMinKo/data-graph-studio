@@ -40,7 +40,8 @@ def test_emit_unknown_event_does_not_raise():
 def test_duplicate_subscribe_is_noop():
     obs = Observable()
     received = []
-    handler = lambda v: received.append(v)
+    def handler(v):
+        return received.append(v)
     obs.subscribe("ev", handler)
     obs.subscribe("ev", handler)  # duplicate
     obs.emit("ev", 1)

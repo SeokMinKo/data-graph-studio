@@ -16,10 +16,11 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from ...core.state import ChartType, AggregationType, ComparisonMode
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
-logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 

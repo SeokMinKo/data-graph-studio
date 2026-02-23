@@ -7,7 +7,6 @@ from typing import Optional, Dict, Any
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -22,6 +21,8 @@ import pyqtgraph as pg
 
 
 
+
+logger = logging.getLogger(__name__)
 
 # ==================== Stat Panel ====================
 

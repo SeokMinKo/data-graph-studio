@@ -12,10 +12,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-logger = logging.getLogger(__name__)
 
 from ...core.profile import Profile, GraphSetting, ProfileManager
 
+
+logger = logging.getLogger(__name__)
 
 class SettingItem(QFrame):
     """설정 아이템 위젯"""

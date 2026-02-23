@@ -10,12 +10,11 @@ import time
 import uuid
 from dataclasses import replace
 from typing import Dict, List, Optional, Set
-
-logger = logging.getLogger(__name__)
-
 from concurrent.futures import Future, ThreadPoolExecutor
 
 from .profile import GraphSetting
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileStore:

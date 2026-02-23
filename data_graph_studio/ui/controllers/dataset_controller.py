@@ -23,10 +23,11 @@ from ...core.undo_manager import UndoCommand, UndoActionType
 from ...core.comparison_report import ComparisonReport
 from ...core.parsing import ParsingSettings
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
-logger = logging.getLogger(__name__)
 
 
 class DatasetController:

@@ -8,7 +8,6 @@ Tests for:
 """
 
 import os
-import tempfile
 import pytest
 
 from data_graph_studio.core.io_abstract import (

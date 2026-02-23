@@ -4,14 +4,13 @@ Tests for Calculated Fields / Expression Engine
 
 import pytest
 import polars as pl
-import numpy as np
-from datetime import datetime, date, timedelta
+from datetime import date
 
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
+from data_graph_studio.core.expression_engine import ExpressionEngine
 
 
 class TestExpressionParsing:

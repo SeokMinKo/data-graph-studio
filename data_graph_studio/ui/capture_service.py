@@ -7,10 +7,10 @@ via QOffscreenSurface when no display is available.
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from data_graph_studio.core.capture_protocol import (
-    CaptureRequest, CaptureResult, ICaptureService, VALID_TARGETS
+    CaptureRequest, CaptureResult, ICaptureService
 )
 from data_graph_studio.core.metrics import get_metrics
 

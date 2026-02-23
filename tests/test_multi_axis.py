@@ -3,14 +3,12 @@ Tests for Multi Y-Axis support
 """
 
 import pytest
-import numpy as np
-from unittest.mock import MagicMock, patch
 
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data_graph_studio.core.state import AppState, ValueColumn, AggregationType
+from data_graph_studio.core.state import AppState, AggregationType
 from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
 

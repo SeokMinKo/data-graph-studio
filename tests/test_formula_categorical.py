@@ -3,7 +3,6 @@ Tests for Y-axis formula support and categorical axis detection
 """
 
 import pytest
-import numpy as np
 import polars as pl
 
 

@@ -5,7 +5,6 @@ State Management - 앱 상태 관리
 """
 
 from typing import Optional, List, Dict, Any, Set, TYPE_CHECKING
-import copy
 from .observable import Observable
 
 from .undo_manager import UndoStack
@@ -15,11 +14,11 @@ from .undo_manager import UndoStack
 # continues to work unchanged (backward compatibility).
 from .comparison_manager import (
     ComparisonManager,
-    ComparisonMode,
-    ComparisonSettings,
-    DatasetMetadata,
-    DatasetState,
-    DEFAULT_DATASET_COLORS,
+    ComparisonMode,  # noqa: F401
+    ComparisonSettings,  # noqa: F401
+    DatasetMetadata,  # noqa: F401
+    DatasetState,  # noqa: F401
+    DEFAULT_DATASET_COLORS,  # noqa: F401
 )
 
 if TYPE_CHECKING:
@@ -27,16 +26,16 @@ if TYPE_CHECKING:
 
 # 차이 모드 색상 (비교 색상 팔레트는 comparison_manager.py 참조)
 from data_graph_studio.core.constants import (
-    DIFF_POSITIVE_COLOR,
-    DIFF_NEGATIVE_COLOR,
-    DIFF_NEUTRAL_COLOR,
+    DIFF_POSITIVE_COLOR,  # noqa: F401
+    DIFF_NEGATIVE_COLOR,  # noqa: F401
+    DIFF_NEUTRAL_COLOR,  # noqa: F401
 )
 
 # Value objects and enums live in state_types.py.
 # Re-exported here so all existing imports remain valid:
 #   from data_graph_studio.core.state import ChartType  (still works)
 from .state_types import (
-    ThemeState,
+    ThemeState,  # noqa: F401
     AggregationType,
     ChartType,
     ToolMode,
@@ -44,8 +43,8 @@ from .state_types import (
     ValueColumn,
     FilterCondition,
     SortCondition,
-    GridDirection,
-    GridViewSettings,
+    GridDirection,  # noqa: F401
+    GridViewSettings,  # noqa: F401
     ChartSettings,
     SelectionState,
 )
@@ -128,8 +127,6 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
         self._floating_windows: Dict[str, Any] = {}  # window_id -> FloatingGraphWindow
 
         # Multi-dataset comparison — delegated to ComparisonManager
-        # Lazy import avoids circular dependency with comparison_manager.py
-        from .comparison_manager import ComparisonManager
         self.comparison_manager = ComparisonManager()
 
         # Forward ComparisonManager events through AppState's own Observable events so

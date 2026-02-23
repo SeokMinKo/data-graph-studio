@@ -12,8 +12,6 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional
 
-logger = logging.getLogger(__name__)
-
 from data_graph_studio.core.constants import (
     IPC_DEFAULT_PORT as DEFAULT_PORT,
     IPC_MAX_PORT_ATTEMPTS as MAX_PORT_ATTEMPTS,
@@ -32,6 +30,8 @@ from data_graph_studio.core.constants import (
 )
 from data_graph_studio.core.ipc_protocol import make_error_response, parse_request
 from data_graph_studio.core.exceptions import ConfigError
+
+logger = logging.getLogger(__name__)
 
 _PORT_FILE = Path.home() / IPC_PORT_DIR / IPC_PORT_FILE_NAME
 

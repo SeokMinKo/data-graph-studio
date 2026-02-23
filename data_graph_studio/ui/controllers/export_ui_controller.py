@@ -9,8 +9,9 @@ from PySide6.QtWidgets import QFileDialog, QApplication, QMessageBox
 
 from ...core.export_controller import ExportFormat
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

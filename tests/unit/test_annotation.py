@@ -8,7 +8,6 @@ UT-5.4: Annotation 텍스트 200자 초과 → 차단
 UT-5.5: Orphaned annotation 감지 (데이터셋 삭제 후)
 """
 
-import copy
 import json
 import uuid
 import pytest

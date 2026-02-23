@@ -14,7 +14,6 @@ from data_graph_studio.core.statistics import (
     TimeSeriesAnalyzer,
     HypothesisTest,
     HypothesisTester,
-    StatisticalSummary,
     DescriptiveStatistics,
 )
 

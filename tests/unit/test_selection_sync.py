@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 
@@ -220,6 +219,6 @@ class TestCompareToolbarCheckboxes:
         qtbot.addWidget(tb)
 
         # Should find the container widget
-        container = tb.findChild(type(tb), "")  # any child
-        children = tb.findChildren(type(None))  # just check the toolbar has widgets
+        tb.findChild(type(tb), "")  # any child
+        tb.findChildren(type(None))  # just check the toolbar has widgets
         assert tb.widgetForAction(tb.actions()[0]) is not None

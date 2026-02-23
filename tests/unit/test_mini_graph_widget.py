@@ -9,12 +9,10 @@ UT-8b: MiniGraphWidget without GraphSetting uses state (backward compat)
        SideBySideLayout uses ViewSyncManager
 """
 
-import gc
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +97,7 @@ class FakeDataEngine:
 
 @pytest.fixture()
 def state(qtbot):
-    from data_graph_studio.core.state import AppState, ValueColumn
+    from data_graph_studio.core.state import AppState
     s = AppState()
     s.add_dataset(
         dataset_id="ds-1", name="Test Dataset",
@@ -172,10 +170,10 @@ class TestMiniGraphWidgetWithGraphSetting:
 
         # Find the name label in the header — first QLabel in the widget
         labels = widget.findChildren(QLabel)
-        name_labels = [l for l in labels if l.text() == "Current Profile"]
+        name_labels = [label for label in labels if label.text() == "Current Profile"]
         assert len(name_labels) >= 1, (
             f"Expected header to show profile name 'Current Profile', "
-            f"found labels: {[l.text() for l in labels]}"
+            f"found labels: {[label.text() for label in labels]}"
         )
 
     def test_effective_x_column_uses_graph_setting(self, state, engine, graph_setting, qtbot):
@@ -225,10 +223,10 @@ class TestMiniGraphWidgetBackwardCompat:
         qtbot.addWidget(widget)
 
         labels = widget.findChildren(QLabel)
-        name_labels = [l for l in labels if l.text() == "Test Dataset"]
+        name_labels = [label for label in labels if label.text() == "Test Dataset"]
         assert len(name_labels) >= 1, (
             f"Expected header to show dataset name 'Test Dataset', "
-            f"found labels: {[l.text() for l in labels]}"
+            f"found labels: {[label.text() for label in labels]}"
         )
 
     def test_effective_x_column_uses_state(self, state, engine, qtbot):
@@ -247,7 +245,7 @@ class TestMiniGraphWidgetBackwardCompat:
         widget = MiniGraphWidget("ds-1", engine, state)
         qtbot.addWidget(widget)
 
-        expected = [
+        [
             {"name": vc.name, "aggregation": vc.aggregation.value,
              "color": vc.color, "use_secondary_axis": vc.use_secondary_axis,
              "order": vc.order, "formula": vc.formula}

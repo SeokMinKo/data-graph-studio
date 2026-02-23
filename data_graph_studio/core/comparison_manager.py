@@ -11,15 +11,15 @@ DatasetState, DEFAULT_DATASET_COLORS)도 함께 정의하여 state.py와의 순�
 
 import logging
 import uuid
-from typing import Optional, List, Dict, Set, TYPE_CHECKING
+from typing import Optional, List, Dict, TYPE_CHECKING
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-logger = logging.getLogger(__name__)
-
 from data_graph_studio.core.constants import DATASET_ID_LENGTH
 from data_graph_studio.core.observable import Observable
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .profile import GraphSetting
@@ -90,7 +90,7 @@ class ComparisonSettings:
 # DatasetState is a plain dataclass so forward refs resolve fine.
 
 if TYPE_CHECKING:
-    from .state import GroupColumn, ValueColumn, FilterCondition, SortCondition, SelectionState, ChartSettings, GraphSetting as _GraphSetting
+    pass
 
 
 @dataclass

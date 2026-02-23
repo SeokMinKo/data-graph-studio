@@ -14,11 +14,12 @@ from PySide6.QtGui import QCloseEvent
 
 from ..core.state import AppState
 
-logger = logging.getLogger(__name__)
 from ..core.data_engine import DataEngine
 from ..core.profile import GraphSetting
 from .adapters.app_state_adapter import AppStateAdapter
 
+
+logger = logging.getLogger(__name__)
 
 class FloatingGraphWindow(QDialog):
     """

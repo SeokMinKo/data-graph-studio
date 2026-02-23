@@ -3,7 +3,6 @@ Test UI-Function Connections - 시그널-슬롯 연결 테스트
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 # Test closure fix in ValueZone
 class TestValueZoneClosures:
@@ -12,7 +11,7 @@ class TestValueZoneClosures:
     @pytest.fixture
     def mock_state(self):
         """Mock AppState"""
-        from data_graph_studio.core.state import AppState, ValueColumn, AggregationType
+        from data_graph_studio.core.state import AppState, AggregationType
         state = AppState()
         
         # Add multiple value columns
@@ -176,7 +175,7 @@ class TestSignalConnectionsExist:
     def test_panel_signals_defined(self):
         """주요 패널의 시그널들이 정의되어 있는지 확인"""
         from data_graph_studio.ui.panels.table_panel import (
-            TablePanel, DataTableView, FilterBar, HiddenColumnsBar
+            DataTableView, FilterBar, HiddenColumnsBar
         )
         from data_graph_studio.ui.panels.graph_panel import (
             GraphOptionsPanel, MainGraph

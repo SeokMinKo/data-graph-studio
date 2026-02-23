@@ -1,9 +1,9 @@
 """Tests for DataQuery module."""
 
 import pytest
-import polars as pl
 
 from data_graph_studio.core.data_query import DataQuery
+from data_graph_studio.core.exceptions import QueryError
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ class TestDataQueryFilter:
         assert query.filter(None, "x", "eq", 1) is None
 
     def test_data_query_filter_unknown_operator_raises(self, query, sample_df):
-        with pytest.raises(ValueError, match="Unknown operator"):
+        with pytest.raises(QueryError, match="Unknown operator"):
             query.filter(sample_df, "age", "unknown", 1)
 
     def test_data_query_filter_empty_result(self, query, sample_df):

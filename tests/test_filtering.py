@@ -4,7 +4,6 @@ Filtering System 테스트 - Spotfire 스타일 필터링 스킴
 
 import pytest
 import polars as pl
-from typing import List
 
 from data_graph_studio.core.filtering import (
     FilterType,

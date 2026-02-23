@@ -11,13 +11,10 @@ TDD tests covering:
 import json
 import os
 import sys
-import tempfile
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QKeySequence
-from PySide6.QtCore import Qt
 
 # Ensure QApplication exists
 app = QApplication.instance()
@@ -29,7 +26,7 @@ project_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_path not in sys.path:
     sys.path.insert(0, project_path)
 
-from data_graph_studio.ui.shortcuts import ShortcutManager, Shortcut, ShortcutCategory
+from data_graph_studio.ui.shortcuts import ShortcutManager
 from data_graph_studio.ui.controllers.shortcut_controller import ShortcutController
 
 

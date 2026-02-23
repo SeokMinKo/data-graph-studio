@@ -42,7 +42,7 @@ def _create_wizard_with_step(graph_step: GraphSetupStep, df):
 
 def test_initialize_page_populates_columns(sample_df):
     step = GraphSetupStep()
-    wizard = _create_wizard_with_step(step, sample_df)
+    _create_wizard_with_step(step, sample_df)
 
     step.initializePage()
 
@@ -54,7 +54,7 @@ def test_initialize_page_populates_columns(sample_df):
 
 def test_validate_page_requires_x_and_y(sample_df):
     step = GraphSetupStep()
-    wizard = _create_wizard_with_step(step, sample_df)
+    _create_wizard_with_step(step, sample_df)
 
     step.initializePage()
     assert step.validatePage() is False
@@ -68,7 +68,7 @@ def test_validate_page_requires_x_and_y(sample_df):
 
 def test_get_graph_setting(sample_df):
     step = GraphSetupStep()
-    wizard = _create_wizard_with_step(step, sample_df)
+    _create_wizard_with_step(step, sample_df)
 
     step.initializePage()
     step.chart_type_combo.setCurrentText("Line")

@@ -12,8 +12,6 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
-
 from .dashboard_layout import (
     DashboardCell,
     DashboardLayout,
@@ -22,6 +20,8 @@ from .dashboard_layout import (
     validate_layout_json,
 )
 from .undo_manager import UndoActionType, UndoCommand, UndoStack
+
+logger = logging.getLogger(__name__)
 
 
 class DashboardController:

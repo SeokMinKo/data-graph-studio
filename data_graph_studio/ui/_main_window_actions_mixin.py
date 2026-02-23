@@ -14,8 +14,9 @@ from PySide6.QtCore import Qt
 
 from .clipboard_manager import ClipboardManager
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 class _MainWindowActionsMixin:
     """Mixin providing Qt action slot handlers for MainWindow.

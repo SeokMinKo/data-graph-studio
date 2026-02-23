@@ -4,12 +4,9 @@ Advanced Expressions 테스트 - Spotfire 스타일 수식 엔진
 
 import pytest
 import polars as pl
-import numpy as np
 
 from data_graph_studio.core.expressions import (
     ExpressionParser,
-    ExpressionType,
-    OverExpression,
     CalculatedColumn,
     DataFunction,
     DataFunctionRegistry,
@@ -145,8 +142,8 @@ class TestExpressionParser:
         })
 
         result = parser.evaluate("IsNull([a])", data)
-        assert result[0] == False
-        assert result[1] == True
+        assert not result[0]
+        assert result[1]
 
         result_coalesce = parser.evaluate("IfNull([b], 0)", data)
         assert result_coalesce[2] == 0
@@ -437,7 +434,6 @@ class TestExpressionValidator:
 
     def test_circular_reference(self, validator):
         """순환 참조 검사"""
-        columns = ["sales", "profit"]
 
         # profit이 이미 계산 컬럼이고 sales를 참조한다면
         # sales에서 profit을 참조하면 순환 참조
@@ -451,7 +447,6 @@ class TestExpressionValidator:
 
     def test_no_circular_reference(self, validator):
         """순환 참조 없음"""
-        columns = ["sales", "cost"]
 
         result = validator.check_circular_reference(
             "profit",

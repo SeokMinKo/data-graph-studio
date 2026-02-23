@@ -12,11 +12,8 @@ from hypothesis import strategies as st
 
 from data_graph_studio.core.formula_parser import (
     FormulaParser,
-    FormulaError,
-    FormulaColumnError,
-    FormulaTypeError,
 )
-from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
+from data_graph_studio.core.expression_engine import ExpressionEngine
 from data_graph_studio.core.statistics import (
     CorrelationAnalyzer,
     CorrelationMethod,

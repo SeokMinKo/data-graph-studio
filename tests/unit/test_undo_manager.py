@@ -8,7 +8,6 @@ UT-8.4: 복합 동작 (cascade 삭제) → 하나의 Undo로 전체 복원
 """
 
 import time
-import pytest
 
 from data_graph_studio.core.undo_manager import (
     UndoActionType,

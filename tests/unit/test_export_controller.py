@@ -11,18 +11,16 @@ UT-4.5: 내보내기 취소 시 부분 파일 삭제
 from __future__ import annotations
 
 import os
-import tempfile
-import time
 from pathlib import Path
 from typing import Optional
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import patch
 
 import pytest
 
 # Ensure headless Qt before any PySide6 import
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QTimer, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QImage, QPainter, QColor
 
@@ -81,9 +79,8 @@ from data_graph_studio.core.export_controller import (
     ExportController,
     ExportFormat,
     ExportOptions,
-    ExportWorker,
 )
-from data_graph_studio.core.io_abstract import atomic_write, RealFileSystem
+from data_graph_studio.core.io_abstract import atomic_write
 from data_graph_studio.ui.renderers.qt_export_renderer import QtExportRenderer
 
 

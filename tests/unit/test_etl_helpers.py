@@ -7,13 +7,10 @@ Covers:
 - _build_etl_dataframe: normal event list, empty list, extra columns, all-null column pruning
 """
 
-import io
-import os
 import tempfile
 from datetime import datetime
 
 import polars as pl
-import pytest
 
 from data_graph_studio.core.etl_helpers import (
     _FILETIME_EPOCH,

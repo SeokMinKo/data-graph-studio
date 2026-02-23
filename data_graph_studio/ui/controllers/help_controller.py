@@ -13,8 +13,9 @@ from ...core.updater import (
 )
 from ..dialogs.command_palette_dialog import CommandPaletteDialog
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

@@ -397,7 +397,7 @@ class TestEdgeCases:
             tmp_path = f.name
         
         try:
-            success = self.engine.load_file(tmp_path, file_type=FileType.TXT)
+            self.engine.load_file(tmp_path, file_type=FileType.TXT)
             # 빈 파일은 성공하지만 데이터 없음
             assert self.engine.row_count == 0
         finally:

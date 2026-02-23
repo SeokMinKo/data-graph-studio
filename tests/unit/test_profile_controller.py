@@ -1,7 +1,6 @@
 import time
 import uuid
 
-from data_graph_studio.core.graph_setting_mapper import GraphSettingMapper
 from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.core.profile_controller import ProfileController
 from data_graph_studio.core.profile_store import ProfileStore

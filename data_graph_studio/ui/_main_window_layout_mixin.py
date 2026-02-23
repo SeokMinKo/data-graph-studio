@@ -26,8 +26,9 @@ from .floating_graph import FloatingGraphManager
 from .models.profile_model import ProfileModel
 from .views.project_tree_view import ProjectTreeView
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 class _MainWindowLayoutMixin:
     """Mixin providing layout setup and panel management for MainWindow.

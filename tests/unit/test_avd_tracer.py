@@ -1,7 +1,6 @@
 # tests/unit/test_avd_tracer.py
 """Unit tests for avd_tracer — adb-based ftrace capture utility."""
-from unittest.mock import patch, MagicMock, call
-import subprocess
+from unittest.mock import patch, MagicMock
 import pytest
 
 
@@ -53,7 +52,7 @@ def test_pull_trace_calls_adb_pull(tmp_path):
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        out = pull_trace("emulator-5554", str(tmp_path / "trace.txt"))
+        pull_trace("emulator-5554", str(tmp_path / "trace.txt"))
 
     assert mock_run.called
     args = mock_run.call_args[0][0]
@@ -92,7 +91,7 @@ def test_capture_block_trace_disables_tracing_on_error(tmp_path):
 
     with patch("subprocess.run", side_effect=side_effect), \
          patch("data_graph_studio.tools.avd_tracer.run_io_workload",
-               side_effect=RuntimeError("workload failed")) as mock_workload, \
+               side_effect=RuntimeError("workload failed")), \
          patch("data_graph_studio.tools.avd_tracer.disable_block_tracing") as mock_disable:
         with pytest.raises(RuntimeError, match="workload failed"):
             capture_block_trace(

@@ -3,7 +3,6 @@ Marking System 테스트 - Spotfire 스타일 마킹 시스템
 """
 
 import pytest
-from typing import Set
 
 from data_graph_studio.core.marking import (
     Marking,

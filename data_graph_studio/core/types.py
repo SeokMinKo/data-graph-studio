@@ -14,6 +14,8 @@ from enum import Enum
 from typing import Any, List, NewType, Optional
 import uuid
 
+import polars as pl
+
 # ---------------------------------------------------------------------------
 # Semantic ID types — use instead of raw str for domain identifiers
 # ---------------------------------------------------------------------------
@@ -22,8 +24,6 @@ ProfileId = NewType("ProfileId", str)
 AnnotationId = NewType("AnnotationId", str)
 ColumnName = NewType("ColumnName", str)
 FilePath = NewType("FilePath", str)
-
-import polars as pl
 
 
 class FileType(Enum):

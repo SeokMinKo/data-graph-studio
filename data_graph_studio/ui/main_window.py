@@ -51,7 +51,6 @@ from .controllers.export_ui_controller import ExportUIController
 from .controllers.autorecovery_controller import AutorecoveryController
 
 # 에러 로깅 설정
-logger = logging.getLogger(__name__)
 
 
 from ._qt_timer_factory import _QtTimerFactory  # noqa: F401
@@ -59,6 +58,8 @@ from ._main_window_ipc_mixin import _MainWindowIpcMixin
 from ._main_window_actions_mixin import _MainWindowActionsMixin
 from ._main_window_events_mixin import _MainWindowEventsMixin
 from ._main_window_layout_mixin import _MainWindowLayoutMixin
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(_MainWindowIpcMixin, _MainWindowActionsMixin, _MainWindowEventsMixin, _MainWindowLayoutMixin, QMainWindow):

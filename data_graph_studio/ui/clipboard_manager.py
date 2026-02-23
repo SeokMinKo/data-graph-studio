@@ -8,11 +8,12 @@ import re
 from typing import Optional, Tuple, List
 import polars as pl
 
-logger = logging.getLogger(__name__)
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QMimeData
 from PySide6.QtGui import QImage
 
+
+logger = logging.getLogger(__name__)
 
 class ClipboardManager:
     """클립보드 데이터 관리"""

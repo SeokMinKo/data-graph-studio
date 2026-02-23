@@ -15,12 +15,9 @@ Covers:
 """
 
 import json
-import os
-import stat
-import tempfile
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
+from typing import Any, Dict, List
+from unittest.mock import MagicMock
 
 import polars as pl
 import pytest

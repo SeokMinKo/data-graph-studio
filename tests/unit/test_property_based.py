@@ -36,7 +36,7 @@ def test_filter_count_invariant(col_a, col_b, values_a, threshold_a, threshold_b
     assume(col_a != col_b)
 
     # Build a DataFrame with two numeric columns
-    n = len(values_a)
+    len(values_a)
     # col_b values: just mirror col_a for simplicity
     df = pl.DataFrame({col_a: values_a, col_b: values_a})
 

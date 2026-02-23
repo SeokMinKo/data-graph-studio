@@ -16,10 +16,8 @@ Plus additional tests for safety policies (Section 10.2):
 - 에러 시 백오프
 """
 
-import os
 import time
-from typing import Any, Callable, Dict, List, Optional
-from unittest.mock import MagicMock
+from typing import Callable, Dict, List, Optional
 
 import pytest
 
@@ -574,7 +572,6 @@ class TestErrorBackoff:
         """파일 읽기 실패 시 폴링 간격 2배 증가"""
         mock_fs.add_file("/data.csv", csv_data_5rows, mtime=1000.0)
         watcher.watch("/data.csv", mode="reload")
-        original_interval = watcher.poll_interval_ms
 
         # 파일을 일시적으로 접근 불가
         mock_fs.set_permission_denied("/data.csv")
@@ -609,7 +606,7 @@ class TestErrorBackoff:
 
         # 백오프 적용
         watcher._apply_backoff("/data.csv")
-        info_after_backoff = watcher.get_watch_info("/data.csv")
+        watcher.get_watch_info("/data.csv")
 
         # 성공적 변경 감지 후 리셋
         mock_fs.update_file("/data.csv", b"changed", mtime=1001.0)

@@ -6,10 +6,11 @@ import logging
 import numpy as np
 from PySide6.QtWidgets import QWidget
 
-logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont
 
+
+logger = logging.getLogger(__name__)
 
 class SlidingWindowWidget(QWidget):
     """

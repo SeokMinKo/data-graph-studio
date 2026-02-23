@@ -5,12 +5,7 @@ not parser.parse_raw() (step 1 only).
 We test this by verifying that the converter runs and the result contains
 block layer columns (d2c_ms) rather than raw event columns (event, details).
 """
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import polars as pl
-import pytest
 
 BLOCK_TRACE = """\
      kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker]

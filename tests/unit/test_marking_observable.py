@@ -1,5 +1,4 @@
 """MarkingManager uses Observable, not Qt signals."""
-import pytest
 from data_graph_studio.core.marking import MarkingManager, MarkMode
 
 

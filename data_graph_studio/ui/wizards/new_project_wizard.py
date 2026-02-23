@@ -5,6 +5,7 @@ import logging
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWizard, QWizardPage
 
+
 logger = logging.getLogger(__name__)
 
 try:

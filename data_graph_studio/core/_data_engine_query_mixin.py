@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
 import polars as pl
 

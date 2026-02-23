@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from typing import List, Dict, Set, TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -20,14 +19,6 @@ from PySide6.QtCore import Qt, Signal, Slot, QStringListModel
 
 from ...core.state import AppState
 from ..adapters.app_state_adapter import AppStateAdapter
-
-if TYPE_CHECKING:
-    from ...core.data_engine import DataEngine
-
-# ---------------------------------------------------------------------------
-# Constants, helpers, and reusable widgets — extracted to _data_tab_widgets.py
-# ---------------------------------------------------------------------------
-
 from ._data_tab_widgets import (  # noqa: F401  (re-exported for tests and backward compat)
     _INDEX_SENTINEL,
     _AGG_ITEMS,
@@ -44,6 +35,11 @@ from ._data_tab_widgets import (  # noqa: F401  (re-exported for tests and backw
     _YAxisListItem,
     _YAxisItemWidget,
 )
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from ...core.data_engine import DataEngine
 
 # ---------------------------------------------------------------------------
 # DataTab

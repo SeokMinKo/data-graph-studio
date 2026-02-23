@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional, TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -22,6 +21,8 @@ from PySide6.QtGui import QShortcut, QKeySequence
 
 from .side_by_side_layout import MiniGraphWidget
 from ...core.view_sync import ViewSyncManager
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.data_engine import DataEngine

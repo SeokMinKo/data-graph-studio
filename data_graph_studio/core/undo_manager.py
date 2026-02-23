@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, List, Optional
 
-logger = logging.getLogger(__name__)
-
 from data_graph_studio.core.constants import UNDO_MAX_DEPTH
+
+logger = logging.getLogger(__name__)
 
 
 class UndoActionType(Enum):

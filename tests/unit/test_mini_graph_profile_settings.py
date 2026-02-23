@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
-from types import MappingProxyType
+from unittest.mock import MagicMock
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt
 
 # Ensure QApplication exists
 _app = QApplication.instance()

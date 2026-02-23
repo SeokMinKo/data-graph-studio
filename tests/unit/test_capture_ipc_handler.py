@@ -1,6 +1,6 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from data_graph_studio.core.capture_protocol import CaptureRequest, CaptureResult
+from data_graph_studio.core.capture_protocol import CaptureRequest
 from data_graph_studio.ui.capture_service import CaptureService
 
 

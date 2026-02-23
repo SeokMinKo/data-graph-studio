@@ -4,12 +4,10 @@ Curve Fitting 테스트 - Spotfire 스타일 Lines & Curves
 
 import pytest
 import numpy as np
-from typing import List, Tuple
 
 from data_graph_studio.graph.curve_fitting import (
     FitType,
     CurveFitSettings,
-    CurveFitResult,
     CurveFitter,
     TrendLine,
     ForecastSettings,

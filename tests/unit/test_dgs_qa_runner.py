@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from data_graph_studio.tools.dgs_qa_runner import QARunner, QAResult, build_report
 
 

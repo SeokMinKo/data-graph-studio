@@ -13,8 +13,9 @@ from ..panels.annotation_panel import AnnotationPanel
 from ..panels.dashboard_panel import DashboardPanel
 from ..floatable import FloatWindow
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

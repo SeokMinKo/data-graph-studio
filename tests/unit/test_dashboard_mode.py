@@ -15,12 +15,11 @@ UT-1.8: 빈 데이터셋에서 대시보드 활성화 차단
 
 from __future__ import annotations
 
-import copy
 import json
 import sys
 import os
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 # Ensure project root is on sys.path
 PROJECT_ROOT = os.path.abspath(
@@ -39,7 +38,7 @@ from data_graph_studio.core.dashboard_layout import (
     MIN_CELL_HEIGHT,
 )
 from data_graph_studio.core.dashboard_controller import DashboardController
-from data_graph_studio.core.undo_manager import UndoStack, UndoActionType
+from data_graph_studio.core.undo_manager import UndoStack
 from data_graph_studio.graph.sampling import DataSampler
 
 import numpy as np

@@ -11,3 +11,13 @@ qt_api = "pyside6"
 markers = [
   "qt: headless Qt smoke tests (widget construction)",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402"]

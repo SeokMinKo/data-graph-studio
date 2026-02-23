@@ -35,7 +35,6 @@ from data_graph_studio.core.expression_engine import ExpressionEngine, Expressio
 from data_graph_studio.core.expressions import (
     ExpressionParser,
     DataFunction,
-    DataFunctionRegistry,
     SecurityError,
 )
 
@@ -449,7 +448,7 @@ class TestExpressionParserSecurity:
         """
         # The expression is 'exec' with no parens — treated as a column ref
         try:
-            result = ep.evaluate("[exec]", df)
+            ep.evaluate("[exec]", df)
             # If it gets here, exec was treated as a column lookup and failed
             # silently (returned null series) — acceptable.
         except Exception:
@@ -583,7 +582,7 @@ class TestExpressionParserEmptyInput:
         """evaluate() on an empty DataFrame should not crash."""
         df = pl.DataFrame({"x": pl.Series([], dtype=pl.Float64)})
         try:
-            result = ep.evaluate("[x] * 2", df)
+            ep.evaluate("[x] * 2", df)
             # Empty result or null series — acceptable
         except Exception:
             pass
@@ -598,7 +597,7 @@ class TestExpressionParserEmptyInput:
         """Referencing a non-existent column should return error, not crash."""
         df = pl.DataFrame({"x": [1.0]})
         try:
-            result = ep.evaluate("[does_not_exist] * 2", df)
+            ep.evaluate("[does_not_exist] * 2", df)
             # Silently returns null series — acceptable
         except Exception:
             pass  # ExpressionError or similar — also acceptable
@@ -607,6 +606,6 @@ class TestExpressionParserEmptyInput:
         """An empty expression string should not cause an unhandled crash."""
         df = pl.DataFrame({"x": [1.0, 2.0]})
         try:
-            result = ep.evaluate("", df)
+            ep.evaluate("", df)
         except Exception:
             pass  # Any exception is fine — no unhandled crash allowed

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shlex
 import shutil
 import subprocess
@@ -19,6 +20,8 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QMessageBox,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def is_wpr_file(file_path: str) -> bool:

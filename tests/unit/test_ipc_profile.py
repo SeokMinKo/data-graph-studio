@@ -6,7 +6,6 @@ without needing an actual TCP connection.
 
 import time
 import uuid
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,7 +16,6 @@ from data_graph_studio.core.state import (
     AppState,
     ChartType,
     ComparisonMode,
-    ComparisonSettings,
 )
 
 

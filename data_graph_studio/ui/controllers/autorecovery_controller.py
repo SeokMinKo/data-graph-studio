@@ -14,8 +14,9 @@ from PySide6.QtCore import Qt, QTimer
 from ...core.state import AggregationType, ChartType
 from ...core.profile import GraphSetting
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

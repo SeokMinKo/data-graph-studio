@@ -1,7 +1,6 @@
 """Tests for DatasetManager module."""
 
 import pytest
-import polars as pl
 
 from data_graph_studio.core.file_loader import FileLoader
 from data_graph_studio.core.dataset_manager import DatasetManager
@@ -39,7 +38,7 @@ class TestDatasetManagerCRUD:
         assert manager.remove_dataset("xxx") is False
 
     def test_dataset_manager_activate(self, manager, sample_csv_path):
-        d1 = manager.load_dataset(sample_csv_path, name="a")
+        manager.load_dataset(sample_csv_path, name="a")
         d2 = manager.load_dataset(sample_csv_path, name="b")
         assert manager.activate_dataset(d2) is True
         assert manager.active_dataset_id == d2

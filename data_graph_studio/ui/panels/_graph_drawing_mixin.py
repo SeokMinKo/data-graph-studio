@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PySide6.QtCore import Qt
 from PySide6.QtCore import QLineF
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import QDialog
@@ -14,7 +13,7 @@ import pyqtgraph as pg
 from ...core.state import ToolMode
 from ..drawing import (
     DrawingManager, DrawingStyle, LineDrawing, ArrowDrawing,
-    CircleDrawing, RectDrawing, DrawingStyleDialog, TextInputDialog,
+    CircleDrawing, RectDrawing, TextInputDialog,
     snap_to_angle,
 )
 

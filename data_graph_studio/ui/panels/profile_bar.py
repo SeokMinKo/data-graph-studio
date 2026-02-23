@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QScrollArea, QMenu, QToolButton, QMessageBox, QFileDialog, QInputDialog
 )
 
-logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal, QMimeData
 from PySide6.QtGui import QDrag, QMouseEvent, QAction
 
@@ -16,6 +15,8 @@ from ...core.state import AppState
 from ..adapters.app_state_adapter import AppStateAdapter
 from ...core.profile import Profile, GraphSetting, ProfileManager
 
+
+logger = logging.getLogger(__name__)
 
 class SettingButton(QFrame):
     """프로파일 설정 버튼"""

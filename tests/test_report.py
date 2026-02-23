@@ -5,7 +5,6 @@ Tests for Report Generation Module
 
 import pytest
 from datetime import datetime
-from pathlib import Path
 import json
 
 import polars as pl
@@ -14,7 +13,6 @@ from data_graph_studio.core.report import (
     ReportFormat,
     ReportTheme,
     PageSize,
-    PageOrientation,
     ReportMetadata,
     ReportOptions,
     ReportData,
@@ -23,14 +21,11 @@ from data_graph_studio.core.report import (
     DatasetSummary,
     StatisticalSummary,
     ComparisonResult,
-    DifferenceAnalysis,
     ChartData,
     TableData,
     ChartStatistics,
     ChartStatisticsConfig,
     StatisticType,
-    ChartType,
-    DEFAULT_CHART_STATISTICS,
     get_default_statistics_for_chart,
     collect_statistics_from_dataframe,
     create_comparison_table,

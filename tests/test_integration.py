@@ -6,14 +6,13 @@ import pytest
 import tempfile
 import os
 import numpy as np
-import polars as pl
 
 from PySide6.QtCore import Qt
 
 from data_graph_studio.core.data_engine import DataEngine
 from data_graph_studio.core.state import AppState, ChartType, AggregationType, ToolMode
-from data_graph_studio.ui.panels.table_panel import PolarsTableModel, TablePanel
-from data_graph_studio.ui.panels.graph_panel import MainGraph, GraphPanel
+from data_graph_studio.ui.panels.table_panel import PolarsTableModel
+from data_graph_studio.ui.panels.graph_panel import MainGraph
 from data_graph_studio.graph.sampling import DataSampler
 from data_graph_studio.ui.adapters.app_state_adapter import AppStateAdapter
 
@@ -299,7 +298,7 @@ class TestDataFlowIntegration:
         full_stats = engine.get_statistics('sales')
         
         # 필터링된 통계
-        filtered = engine.filter('region', 'eq', 'North')
+        engine.filter('region', 'eq', 'North')
         # 필터링된 데이터의 통계는 다시 계산해야 함
         assert full_stats['count'] == 500
 

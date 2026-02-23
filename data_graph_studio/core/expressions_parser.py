@@ -10,14 +10,13 @@ import logging
 from typing import List, Dict, Any, Optional, Union, Set
 from dataclasses import dataclass, field
 from enum import Enum
-import ast
 import re
 import polars as pl
 import numpy as np
 
-logger = logging.getLogger(__name__)
-
 from data_graph_studio.core.expressions_ast_evaluator import ExpressionEvaluatorHelpers
+
+logger = logging.getLogger(__name__)
 
 
 class SecurityError(Exception):

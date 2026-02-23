@@ -4,8 +4,6 @@ UI/UX Panels 테스트 - Spotfire 스타일 UI 컴포넌트
 
 import pytest
 import polars as pl
-from unittest.mock import MagicMock, patch
-import sys
 
 # Qt imports
 from PySide6.QtWidgets import QApplication
@@ -16,12 +14,9 @@ if not app:
     app = QApplication([])
 
 from data_graph_studio.ui.panels.filter_panel import (
-    FilterWidget,
     FilterPanelModel,
-    FilterType as UIFilterType,
     RangeSliderWidget,
     CheckboxListWidget,
-    TextSearchWidget,
 )
 
 from data_graph_studio.ui.panels.property_panel import (
@@ -29,8 +24,6 @@ from data_graph_studio.ui.panels.property_panel import (
     PropertyItem,
     PropertyGroup,
     PropertyType,
-    ColorPickerWidget,
-    FontPickerWidget,
 )
 
 from data_graph_studio.ui.panels.tooltip_config import (
@@ -47,7 +40,6 @@ from data_graph_studio.ui.panels.legend_panel import (
 
 from data_graph_studio.ui.panels.color_scheme import (
     ColorScheme,
-    ColorPalette,
     ColorScale,
     ColorSchemeManager,
 )

@@ -15,7 +15,7 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QSplitter, QDialog, QGridLayout
+    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QSplitter, QGridLayout
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
@@ -26,7 +26,7 @@ from ...adapters.app_state_adapter import AppStateAdapter
 from ....core.expression_engine import ExpressionEngine, ExpressionError
 from ....graph.sampling import DataSampler
 from ...drawing import (
-    DrawingManager, DrawingStyle, DrawingStyleDialog
+    DrawingManager
 )
 from ..empty_state import EmptyStateWidget
 from ..sliding_window import SlidingWindowWidget

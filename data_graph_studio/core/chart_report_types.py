@@ -8,7 +8,6 @@ from typing import Optional, List, Dict, Any
 import base64
 
 from data_graph_studio.core.report_enums import (
-    ChartType,
     StatisticType,
 )
 

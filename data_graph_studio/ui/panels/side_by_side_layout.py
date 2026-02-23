@@ -20,6 +20,7 @@ from ...core.state import AppState
 from ...core.view_sync import ViewSyncManager
 from ..adapters.app_state_adapter import AppStateAdapter
 
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:

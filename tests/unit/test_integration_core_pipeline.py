@@ -6,7 +6,6 @@ Tests the complete data path across two or more core layers:
 No UI, no Qt — pure core layer integration. This is the cross-layer
 integration coverage flagged as missing in the GOAT audit.
 """
-import math
 from pathlib import Path
 
 import polars as pl

@@ -13,10 +13,10 @@ from typing import Iterable, List, Optional, Tuple
 
 import pandas as pd
 
-logger = logging.getLogger(__name__)
-
 from .data_engine import FileType, DelimiterType
 from .parsing import ParsingSettings
+
+logger = logging.getLogger(__name__)
 
 
 class ParsingEngine:

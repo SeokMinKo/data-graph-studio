@@ -3,7 +3,6 @@
 Ensures DEFAULT_SCHEME_NAME value is stable and FilteringManager
 uses it as the default scheme name.
 """
-import pytest
 from data_graph_studio.core.constants import DEFAULT_SCHEME_NAME
 
 

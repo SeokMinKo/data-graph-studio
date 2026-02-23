@@ -9,8 +9,6 @@ Covers:
 - compute_windowed_profile: normal profile, zero-row result, collect_fn returns None, failure
 """
 
-from typing import Any
-from unittest.mock import MagicMock
 
 import polars as pl
 import pytest

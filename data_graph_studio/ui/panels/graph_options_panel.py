@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -21,6 +20,8 @@ from PySide6.QtGui import QColor
 from .graph_widgets import ColorButton
 from .data_tab import DataTab
 from ...core.state import AppState, ChartType
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.data_engine import DataEngine

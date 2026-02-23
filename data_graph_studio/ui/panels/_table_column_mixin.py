@@ -4,12 +4,13 @@ from __future__ import annotations
 import logging
 import polars as pl
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import QMessageBox, QDialog
 
 from .conditional_formatting import ConditionalFormatDialog
 
+
+logger = logging.getLogger(__name__)
 
 class _TableColumnMixin:
     """Mixin: column type conversion, freeze, visibility, and conditional formatting for TablePanel.

@@ -5,7 +5,7 @@ All methods operate on shared instance state (self.*) and can call
 self.emit(...) because AppState also inherits from Observable.
 """
 
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, TYPE_CHECKING
 import copy
 import uuid
 
@@ -17,17 +17,8 @@ from .comparison_manager import (
 )
 
 if TYPE_CHECKING:
-    from .profile import Profile, GraphSetting
+    from .profile import GraphSetting
 
-from .state_types import (
-    AggregationType,
-    ChartType,
-    GroupColumn,
-    ValueColumn,
-    FilterCondition,
-    SortCondition,
-    ChartSettings,
-)
 from .undo_manager import UndoStack, UndoCommand
 
 

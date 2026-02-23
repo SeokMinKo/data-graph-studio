@@ -3,10 +3,8 @@ Tests for Graph Profiles functionality
 """
 
 import pytest
-import json
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from data_graph_studio.core.profile import GraphSetting, Profile, ProfileManager
 from data_graph_studio.core.state import AppState, ChartType, AggregationType
@@ -270,7 +268,7 @@ class TestProfileManager:
 
         # 여러 프로파일 저장
         for i in range(3):
-            profile = manager.new_profile(f"Profile {i}")
+            manager.new_profile(f"Profile {i}")
             manager.save(str(tmp_path / f"profile_{i}.dgp"))
 
         recent = manager.get_recent_profiles()

@@ -6,13 +6,12 @@ All external dependencies (ADB, subprocess, QFileDialog) are mocked (NFR-8).
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PySide6.QtCore import QProcess, Qt
-from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 app = QApplication.instance()
 if not app:
@@ -27,9 +26,7 @@ from data_graph_studio.ui.dialogs.trace_config_dialog import (
     load_logger_config,
     save_logger_config,
     migrate_config,
-    CONFIG_PATH,
     CAT_CONNECTION,
-    CAT_CAPTURE_MODE,
     CAT_EVENTS,
     CAT_OUTPUT,
 )
@@ -293,7 +290,7 @@ class TestEventsZero:
             cb.setChecked(False)
 
         with patch.object(QMessageBox, "warning", return_value=QMessageBox.StandardButton.Ok):
-            result = dialog._validate()
+            dialog._validate()
             # Should fail due to no device first, but let's set up device
             # Actually, adb_found + no device → connection check fails first
             # So let's test events panel directly

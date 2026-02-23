@@ -4,7 +4,6 @@ Tests every public method directly with constructed DataFrames.
 Covers normal, boundary, error, and property-based cases per method.
 """
 
-import warnings
 
 import polars as pl
 import pytest
@@ -197,7 +196,7 @@ class TestGetStatistics:
 
     def test_cache_hit_returns_cached(self, dq, int_df):
         cache = {}
-        first = dq.get_statistics(int_df, "a", cache=cache)
+        dq.get_statistics(int_df, "a", cache=cache)
         # Poison the cache with a sentinel value to verify cache is returned
         cache["stats_a"] = {"count": 999}
         second = dq.get_statistics(int_df, "a", cache=cache)

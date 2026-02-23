@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QToolButton, QFileDialog, QTreeWidget, QTreeWidgetItem
 )
 
-logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap, QAction
 
@@ -25,6 +24,8 @@ from ...core.state import (
 from ...core.profile import Profile
 from ..adapters.app_state_adapter import AppStateAdapter
 
+
+logger = logging.getLogger(__name__)
 
 class DatasetItemWidget(QFrame):
     """개별 데이터셋 아이템 위젯"""

@@ -11,7 +11,6 @@ import polars as pl
 from data_graph_studio.core.filtering import (
     Filter,
     FilterOperator,
-    FilterType,
 )
 
 

@@ -11,8 +11,9 @@ from PySide6.QtCore import Slot, QTimer
 
 from ..dialogs.streaming_dialog import StreamingDialog
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

@@ -6,7 +6,6 @@ import pytest
 import json
 import tempfile
 import os
-from pathlib import Path
 
 import sys
 
@@ -16,7 +15,6 @@ if project_path not in sys.path:
     sys.path.insert(0, project_path)
 
 from data_graph_studio.core.project import Project, ProjectManager, DataSourceRef
-from data_graph_studio.core.state import ChartType, AggregationType
 
 
 class TestDataSourceRef:

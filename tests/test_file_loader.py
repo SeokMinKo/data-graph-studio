@@ -1,6 +1,5 @@
 """Tests for FileLoader module."""
 
-import os
 import pytest
 import polars as pl
 
@@ -55,7 +54,7 @@ class TestFileLoaderLoad:
         loader = FileLoader()
         loader._cancel_loading = True
         # async_load=False but cancel is already set
-        result = loader.load_file(sample_csv_path)
+        loader.load_file(sample_csv_path)
         # Cancel is checked after loading, so df should be None
         assert loader.df is None
 

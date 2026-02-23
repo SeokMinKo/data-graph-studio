@@ -4,12 +4,10 @@ Trellis Visualization 테스트
 
 import pytest
 import polars as pl
-from typing import List, Dict
 
 from data_graph_studio.graph.trellis import (
     TrellisMode,
     TrellisSettings,
-    TrellisLayout,
     TrellisCalculator,
 )
 

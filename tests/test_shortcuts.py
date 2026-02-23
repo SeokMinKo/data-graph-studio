@@ -3,10 +3,9 @@ Tests for Keyboard Shortcuts
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 
 import sys

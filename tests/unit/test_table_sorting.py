@@ -4,7 +4,7 @@ Table Sorting 테스트 - PolarsTableModel.sort() 기능
 
 import pytest
 import polars as pl
-from PySide6.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt
 
 from data_graph_studio.ui.panels.table_panel import PolarsTableModel
 
@@ -137,7 +137,7 @@ class TestPolarsTableModelSorting:
         model.set_dataframe(numeric_df)
         
         # 정렬 전 원본 인덱스
-        original_first_id = numeric_df['id'][0]  # 3
+        numeric_df['id'][0]  # 3
         
         # 정렬
         model.sort(0, Qt.AscendingOrder)

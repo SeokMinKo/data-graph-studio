@@ -5,7 +5,6 @@ Data Engine 테스트
 import pytest
 import tempfile
 import os
-import polars as pl
 
 from data_graph_studio.core.data_engine import DataEngine, FileType, LoadingProgress
 

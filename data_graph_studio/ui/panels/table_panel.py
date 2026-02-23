@@ -6,12 +6,10 @@ from typing import Optional, List
 import logging
 import polars as pl
 
-logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
     QTableView, QLineEdit, QComboBox, QPushButton,
-    QApplication,
 )
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
@@ -23,21 +21,16 @@ from ...core.state import AppState, AggregationType
 from ...core.data_engine import DataEngine
 from ..adapters.app_state_adapter import AppStateAdapter
 from .grouped_table_model import GroupedTableModel
-from .conditional_formatting import ConditionalFormatDialog
 from ._table_search_mixin import _TableSearchMixin
 from ._table_focus_mixin import _TableFocusMixin
 from ._table_window_mixin import _TableWindowMixin
 from ._table_column_mixin import _TableColumnMixin
 from ._polars_table_model import PolarsTableModel
-from ._chip_widgets import (
-    DragHandleLabel, ChipWidget, ValueChipWidget, ChipListWidget,
-    _parse_drag_payload, _build_drag_payload, _remove_from_source,
-)
-from ._zone_widgets import XAxisZone, GroupZone, ValueZone, HoverZone
 from ._data_table_view import DataTableView
 from ._table_bars import FilterBar, HiddenColumnsBar
-from ._pivot_table_dialog import PivotTableDialog
 
+
+logger = logging.getLogger(__name__)
 
 # ==================== Table Panel ====================
 
@@ -235,7 +228,6 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
         self.agg_combo.setMinimumWidth(80)
         self.agg_combo.setMaximumWidth(120)
         self.agg_combo.setToolTip("Aggregation function")
-        from ...core.state import AggregationType
         for agg in AggregationType:
             self.agg_combo.addItem(agg.value.capitalize(), agg.value)
         self.agg_combo.setCurrentText("Sum")
@@ -587,7 +579,6 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
 
     def _on_agg_combo_changed(self):
         """Aggregation 변경 시 현재 value_columns의 aggregation 업데이트"""
-        from ...core.state import AggregationType
         agg_text = self.agg_combo.currentData()
         if not agg_text:
             return

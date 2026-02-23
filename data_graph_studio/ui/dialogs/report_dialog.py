@@ -26,8 +26,9 @@ from data_graph_studio.core.report import (
     ReportData,
 )
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 class ReportGeneratorThread(QThread):
     """레포트 생성 작업 스레드"""

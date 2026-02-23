@@ -3,7 +3,6 @@ Tests for Dashboard Mode
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 import sys
 import os

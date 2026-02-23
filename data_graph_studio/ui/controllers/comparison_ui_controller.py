@@ -8,8 +8,9 @@ from PySide6.QtWidgets import QWidget
 
 from ...core.state import ComparisonMode
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..main_window import MainWindow

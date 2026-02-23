@@ -7,7 +7,6 @@ ensuring chart type, x/y/group columns are correctly applied to AppState.
 from __future__ import annotations
 
 import uuid
-from dataclasses import replace
 
 import polars as pl
 import pytest
@@ -17,7 +16,7 @@ from data_graph_studio.core.profile_store import ProfileStore
 from data_graph_studio.core.profile_controller import ProfileController
 from data_graph_studio.core.graph_setting_mapper import GraphSettingMapper
 from data_graph_studio.core.state import AppState, ChartType, AggregationType, ValueColumn, GroupColumn
-from data_graph_studio.parsers.graph_preset import GraphPreset, BUILTIN_PRESETS, select_preset
+from data_graph_studio.parsers.graph_preset import GraphPreset, BUILTIN_PRESETS
 
 
 # ── Fixtures ──────────────────────────────────────────────────

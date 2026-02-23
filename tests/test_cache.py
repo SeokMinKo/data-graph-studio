@@ -6,7 +6,6 @@ import pytest
 import polars as pl
 import numpy as np
 import time
-from unittest.mock import MagicMock, patch
 
 import sys
 import os

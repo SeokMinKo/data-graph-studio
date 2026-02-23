@@ -5,7 +5,7 @@ Extracted to keep data_query.py concise.  All logic here is stateless.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import polars as pl
 

@@ -19,6 +19,6 @@ def test_profile_controller_is_not_qobject():
 def test_profile_created_event_fires():
     """profile_created event fires when a profile is created."""
     from data_graph_studio.core.profile_controller import ProfileController
-    ctrl = ProfileController.__new__(ProfileController)
+    ProfileController.__new__(ProfileController)
     # At minimum verify the class structure
     assert issubclass(ProfileController, Observable)

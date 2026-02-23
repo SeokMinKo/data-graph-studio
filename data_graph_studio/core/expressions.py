@@ -6,16 +6,16 @@ Advanced Expressions - Spotfire 스타일 수식 엔진
 
 import logging
 from typing import List, Dict, Any, Optional, Set
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import ast
 import polars as pl
 import numpy as np
 
-logger = logging.getLogger(__name__)
-
 from data_graph_studio.core.expressions_parser import (
-    SecurityError, ExpressionType, ValidationResult, ExpressionParser
+    SecurityError, ValidationResult, ExpressionParser
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OverExpression:

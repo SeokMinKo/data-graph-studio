@@ -4,8 +4,7 @@ Table Search Enhancement 테스트
 
 import pytest
 import polars as pl
-from unittest.mock import MagicMock, patch
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 # QApplication이 필요한 테스트를 위한 fixture
@@ -23,12 +22,11 @@ class TestSearchDebouncing:
     
     def test_debounce_timer_setup(self, qapp):
         """디바운스 타이머 설정 확인"""
-        from data_graph_studio.ui.panels.table_panel import TablePanel
         from data_graph_studio.core.state import AppState
         from data_graph_studio.core.data_engine import DataEngine
         
-        state = AppState()
-        engine = DataEngine()
+        AppState()
+        DataEngine()
         
         # TablePanel에 search_debounce_timer가 있어야 함
         # 이 테스트는 구현 후 활성화

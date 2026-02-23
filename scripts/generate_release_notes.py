@@ -150,7 +150,7 @@ def parse_commit(line: str) -> Commit:
 
 def build_version_notes(tag: str, prev_tag: Optional[str]) -> VersionNotes:
     lines = get_commits_between(prev_tag, tag)
-    commits = [parse_commit(l) for l in lines]
+    commits = [parse_commit(line) for line in lines]
     breaking = [c for c in commits if c.breaking]
 
     return VersionNotes(

@@ -16,11 +16,11 @@ import copy
 import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-logger = logging.getLogger(__name__)
-
 from .annotation import Annotation, MAX_ANNOTATION_TEXT_LENGTH
 from .exceptions import ValidationError
 from .types import AnnotationId
+
+logger = logging.getLogger(__name__)
 
 # UndoManager는 다른 에이전트가 구현 중 — optional import
 try:

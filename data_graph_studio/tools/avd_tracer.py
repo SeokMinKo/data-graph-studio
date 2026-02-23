@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 import subprocess
 import time
-from pathlib import Path
 from typing import List
 
 logger = logging.getLogger(__name__)

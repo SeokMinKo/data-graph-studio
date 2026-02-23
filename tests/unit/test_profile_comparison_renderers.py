@@ -15,11 +15,11 @@ UT-10: Mixed chart_type detection
 """
 
 import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication
 
 
 # ---------------------------------------------------------------------------

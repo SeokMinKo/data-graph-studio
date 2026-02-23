@@ -14,7 +14,6 @@ Tests cover:
 """
 
 import base64
-import math
 from datetime import datetime
 
 import pytest

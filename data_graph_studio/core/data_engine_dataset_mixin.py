@@ -6,7 +6,6 @@ All methods delegate to self._datasets_mgr and self._loader,
 which are initialised by DataEngine.__init__.
 """
 
-from typing import Optional, List
 
 
 class DatasetMixin(object):

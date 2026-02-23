@@ -3,19 +3,17 @@
 """
 
 import pytest
-import numpy as np
 import polars as pl
-from typing import List, Dict, Any
 
 from data_graph_studio.graph.charts.horizontal_bar import HorizontalBarChart
 from data_graph_studio.graph.charts.stacked_bar import StackedBarChart
 from data_graph_studio.graph.charts.bubble import BubbleChart
 from data_graph_studio.graph.charts.donut import DonutChart
 from data_graph_studio.graph.charts.combination import CombinationChart
-from data_graph_studio.graph.charts.cross_table import CrossTableData, CrossTableCalculator
-from data_graph_studio.graph.charts.treemap import TreeMapData, TreeMapCalculator
-from data_graph_studio.graph.charts.funnel import FunnelData, FunnelCalculator
-from data_graph_studio.graph.charts.radar import RadarData, RadarCalculator
+from data_graph_studio.graph.charts.cross_table import CrossTableCalculator
+from data_graph_studio.graph.charts.treemap import TreeMapCalculator
+from data_graph_studio.graph.charts.funnel import FunnelCalculator
+from data_graph_studio.graph.charts.radar import RadarCalculator
 
 
 class TestHorizontalBarChart:

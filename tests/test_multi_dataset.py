@@ -531,7 +531,6 @@ class TestDatasetInfo:
 
     def test_create_dataset_info(self):
         """DatasetInfo 생성 테스트"""
-        from datetime import datetime
 
         df = pl.DataFrame({
             "id": [1, 2, 3],
@@ -720,7 +719,7 @@ class TestStatisticalTesting:
         assert result.get("interpretation") is not None
 
         # 유의미한 차이가 있어야 함 (평균 100 vs 120)
-        assert result.get("is_significant") == True
+        assert result.get("is_significant")
         assert result.get("p_value") < 0.05
 
     def test_perform_statistical_test_auto(self, statistical_data):
@@ -774,7 +773,7 @@ class TestStatisticalTesting:
         # 강한 양의 상관
         assert result.get("correlation") is not None
         assert result.get("correlation") > 0.9  # 거의 완벽한 상관
-        assert result.get("is_significant") == True
+        assert result.get("is_significant")
         assert result.get("strength") in ["strong", "very strong"]
 
     def test_calculate_correlation_spearman(self, correlated_data):
@@ -802,7 +801,7 @@ class TestStatisticalTesting:
         # 정규분포로 생성된 데이터이므로 정규성 검정 통과해야 함
         assert result.get("test_name") is not None
         assert result.get("p_value") is not None
-        assert result.get("is_normal") == True  # np.random.normal로 생성
+        assert result.get("is_normal")  # np.random.normal로 생성
 
     def test_descriptive_comparison(self, statistical_data):
         """기술통계 비교 테스트"""

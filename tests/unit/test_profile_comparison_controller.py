@@ -3,7 +3,6 @@
 import time
 import uuid
 
-import pytest
 
 from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.core.profile_controller import ProfileController

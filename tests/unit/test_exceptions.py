@@ -244,7 +244,6 @@ class TestFilteringQueryErrorPassthrough:
     """
 
     def _make_filter(self):
-        import polars as pl
         from data_graph_studio.core.filtering import Filter, FilterOperator, FilterType
         f = Filter(
             column="a",
