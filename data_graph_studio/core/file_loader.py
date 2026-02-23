@@ -24,6 +24,7 @@ from .types import (
     FileType, DelimiterType, LoadingProgress, DataProfile,
     DataSource, PrecisionMode,
 )
+from .exceptions import DataLoadError
 
 from .file_loader_formats import (
     is_binary_etl as _is_binary_etl,
@@ -273,8 +274,11 @@ class FileLoader:
             self._precision_mode = precision_mode
 
         if not self._retry_file_access(path):
-            self._update_progress(status="error", error_message=f"File not found or not accessible: {path}")
-            return False
+            raise DataLoadError(
+                f"File not found or not accessible: {path}",
+                operation="load_file",
+                context={"file": path},
+            )
 
         file_type, encoding, delimiter = self._resolve_load_params(
             path, file_type, encoding, delimiter, delimiter_type, regex_pattern
@@ -326,8 +330,11 @@ class FileLoader:
     def load_lazy(self, path: str, **kwargs: Any) -> bool:
         """LazyFrame으로 파일을 로드한다."""
         if not self._retry_file_access(path):
-            self._update_progress(status="error", error_message=f"File not found: {path}")
-            return False
+            raise DataLoadError(
+                f"File not found or not accessible: {path}",
+                operation="load_lazy",
+                context={"file": path},
+            )
 
         file_type = self.detect_file_type(path)
 
@@ -349,8 +356,11 @@ class FileLoader:
             return True
         except Exception as e:
             logger.error("file_loader.lazy_frame_create_failed", extra={"error": e}, exc_info=True)
-            self._update_progress(status="error", error_message=str(e))
-            return False
+            raise DataLoadError(
+                f"Failed to create lazy frame for: {Path(path).name}",
+                operation="load_lazy",
+                context={"file": path, "suffix": Path(path).suffix},
+            ) from e
 
     def collect_lazy(self, limit: Optional[int] = None, optimize_memory: bool = True) -> bool:
         """LazyFrame을 DataFrame으로 수집한다."""
@@ -378,7 +388,11 @@ class FileLoader:
             return True
         except Exception as e:
             logger.error("file_loader.lazy_frame_collect_failed", extra={"error": e}, exc_info=True)
-            return False
+            raise DataLoadError(
+                "Failed to collect lazy frame into DataFrame",
+                operation="collect_lazy",
+                context={},
+            ) from e
 
     def query_lazy(self, expr: pl.Expr) -> Optional[pl.LazyFrame]:
         """LazyFrame에 표현식을 적용한다."""

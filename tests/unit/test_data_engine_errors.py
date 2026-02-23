@@ -14,6 +14,7 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.data_engine import DataEngine
+from data_graph_studio.core.exceptions import DataLoadError
 
 
 # ---------------------------------------------------------------------------
@@ -278,10 +279,10 @@ class TestClearResetsState:
 # ---------------------------------------------------------------------------
 
 class TestAppendRowsNoData:
-    def test_append_rows_when_no_df_loaded_returns_false_on_missing_file(self):
+    def test_append_rows_when_no_df_loaded_raises_on_missing_file(self):
         """append_rows falls back to load_file when no current DataFrame exists;
-        that fails for a nonexistent path and returns False."""
+        that raises DataLoadError for a nonexistent path."""
         engine = _empty_engine()
         assert engine.df is None
-        result = engine.append_rows("/nonexistent/path.csv", new_row_count=5)
-        assert result is False
+        with pytest.raises(DataLoadError):
+            engine.append_rows("/nonexistent/path.csv", new_row_count=5)

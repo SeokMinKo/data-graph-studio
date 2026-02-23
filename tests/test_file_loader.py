@@ -6,6 +6,7 @@ import polars as pl
 
 from data_graph_studio.core.file_loader import FileLoader
 from data_graph_studio.core.data_engine import FileType, PrecisionMode
+from data_graph_studio.core.exceptions import DataLoadError
 
 
 class TestFileLoaderDetection:
@@ -45,10 +46,10 @@ class TestFileLoaderLoad:
         assert loader.load_file(sample_tsv_path) is True
         assert loader.row_count == 10
 
-    def test_file_loader_nonexistent_file_returns_false(self):
+    def test_file_loader_nonexistent_file_raises(self):
         loader = FileLoader()
-        assert loader.load_file("/nonexistent/path.csv") is False
-        assert loader.df is None
+        with pytest.raises(DataLoadError):
+            loader.load_file("/nonexistent/path.csv")
 
     def test_file_loader_cancel_loading(self, sample_csv_path):
         loader = FileLoader()
