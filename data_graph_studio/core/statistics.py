@@ -12,6 +12,8 @@ import numpy as np
 from scipy import stats
 
 from data_graph_studio.core.metrics import get_metrics
+from data_graph_studio.core.file_loader import _run_with_timeout
+from data_graph_studio.core.constants import STATISTICS_TIMEOUT
 
 from data_graph_studio.core.statistics_correlation import (
     CorrelationMethod,
@@ -97,7 +99,7 @@ class DescriptiveStatistics(IStatisticsAnalyzer):
             kurtosis, n, se (standard error). Returns an empty dict if all values are NaN.
 
         Raises:
-            None
+            DataLoadError: If the operation exceeds STATISTICS_TIMEOUT seconds.
 
         Invariants:
             - NaN values are always stripped before any computation.
@@ -105,6 +107,17 @@ class DescriptiveStatistics(IStatisticsAnalyzer):
             - Operation is timed via MetricsCollector.timed_operation("statistics.calculate").
             - "statistics.calculated" counter is incremented on successful computation.
         """
+        return _run_with_timeout(
+            lambda: self._calculate_impl(values),
+            timeout_s=STATISTICS_TIMEOUT,
+            operation="statistics.calculate",
+        )
+
+    def _calculate_impl(
+        self,
+        values: np.ndarray
+    ) -> Dict[str, float]:
+        """Internal implementation for calculate; runs under timeout."""
         with get_metrics().timed_operation("statistics.calculate"):
             values = values[~np.isnan(values)]
 

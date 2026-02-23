@@ -24,6 +24,8 @@ except ImportError:
 
 from .dataset_manager import DatasetManager
 from .comparison_algorithms import select_test_type, interpret_test_result, run_normality_test
+from .file_loader import _run_with_timeout
+from .constants import COMPARISON_TIMEOUT
 from data_graph_studio.core.metrics import get_metrics
 
 logger = logging.getLogger(__name__)
@@ -159,7 +161,7 @@ class ComparisonEngine(IComparisonEngine):
             "diff_pct"], or None if either dataset is missing or value_column is absent.
 
         Raises:
-            None
+            DataLoadError: If the operation exceeds COMPARISON_TIMEOUT seconds.
 
         Invariants:
             - "diff" == value_a - value_b for each row.
@@ -167,6 +169,22 @@ class ComparisonEngine(IComparisonEngine):
             - Operation is timed via MetricsCollector.timed_operation("comparison.calculate_difference").
             - metrics "comparison.calculated" counter is incremented on success.
         """
+        return _run_with_timeout(
+            lambda: self._calculate_difference_impl(
+                dataset_a_id, dataset_b_id, value_column, key_column
+            ),
+            timeout_s=COMPARISON_TIMEOUT,
+            operation="comparison.calculate_difference",
+        )
+
+    def _calculate_difference_impl(
+        self,
+        dataset_a_id: str,
+        dataset_b_id: str,
+        value_column: str,
+        key_column: Optional[str],
+    ) -> Optional[pl.DataFrame]:
+        """Internal implementation for calculate_difference; runs under timeout."""
         with get_metrics().timed_operation("comparison.calculate_difference"):
             df_a = self._get_df_snapshot(dataset_a_id)
             df_b = self._get_df_snapshot(dataset_b_id)
@@ -223,12 +241,24 @@ class ComparisonEngine(IComparisonEngine):
             median, std, min, max, q1, q3. Datasets that are skipped are absent from the dict.
 
         Raises:
-            None
+            DataLoadError: If the operation exceeds COMPARISON_TIMEOUT seconds.
 
         Invariants:
             - Only numeric columns produce entries; non-numeric datasets are skipped silently.
             - Does not modify any dataset state.
         """
+        return _run_with_timeout(
+            lambda: self._get_comparison_statistics_impl(dataset_ids, value_column),
+            timeout_s=COMPARISON_TIMEOUT,
+            operation="comparison.get_comparison_statistics",
+        )
+
+    def _get_comparison_statistics_impl(
+        self,
+        dataset_ids: List[str],
+        value_column: str,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Internal implementation for get_comparison_statistics; runs under timeout."""
         stats: Dict[str, Dict[str, Any]] = {}
 
         for did in dataset_ids:
