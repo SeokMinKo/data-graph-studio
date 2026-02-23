@@ -132,29 +132,53 @@ class ViewSettingsMixin:
 
     @property
     def grid_view_settings(self) -> GridViewSettings:
-        """Grid View 설정"""
+        """Current grid view configuration (split column, direction, column count, shared axis flags)."""
         return self._chart_settings.grid_view
 
     def set_grid_view_enabled(self, enabled: bool):
-        """Grid View 활성화/비활성화"""
+        """Enable or disable grid view mode.
+
+        Input: enabled — bool; True to activate grid view, False to deactivate.
+        Output: None
+        Emits: grid_view_changed signal if the value changed.
+        """
         if self._chart_settings.grid_view.enabled != enabled:
             self._chart_settings.grid_view.enabled = enabled
             self.emit("grid_view_changed")
 
     def set_grid_view_split_by(self, column: Optional[str]):
-        """Grid View 분할 기준 열 설정"""
+        """Set the column used to split data into grid view panels.
+
+        Input: column — str or None; column name to split on, or None to clear.
+        Output: None
+        Emits: grid_view_changed signal if the value changed.
+        """
         if self._chart_settings.grid_view.split_by != column:
             self._chart_settings.grid_view.split_by = column
             self.emit("grid_view_changed")
 
     def set_grid_view_direction(self, direction: GridDirection):
-        """Grid View 방향 설정"""
+        """Set the layout direction of grid view panels (horizontal or vertical).
+
+        Input: direction — GridDirection enum value.
+        Output: None
+        Emits: grid_view_changed signal if the value changed.
+        """
         if self._chart_settings.grid_view.direction != direction:
             self._chart_settings.grid_view.direction = direction
             self.emit("grid_view_changed")
 
     def update_grid_view_settings(self, **kwargs):
-        """Grid View 설정 업데이트"""
+        """Update one or more GridViewSettings fields in a single call.
+
+        Only fields that exist on GridViewSettings and whose values differ are applied.
+        No-op if nothing changed.
+
+        Input: **kwargs — GridViewSettings attribute names and their new values
+            (e.g. columns=3, share_x_axis=True).
+        Output: None
+        Emits: grid_view_changed signal if any field changed.
+        """
         changed = False
         for key, value in kwargs.items():
             if hasattr(self._chart_settings.grid_view, key):
@@ -255,5 +279,10 @@ class ViewSettingsMixin:
     # ==================== Summary Update ====================
 
     def update_summary(self, stats: Dict[str, Any]):
-        """Summary 패널 업데이트"""
+        """Emit a summary_updated signal carrying the given statistics payload.
+
+        Input: stats — Dict[str, Any], computed summary statistics to display in the panel.
+        Output: None
+        Emits: summary_updated signal with stats as the payload.
+        """
         self.emit("summary_updated", stats)

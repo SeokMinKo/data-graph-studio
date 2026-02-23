@@ -10,12 +10,11 @@ from typing import Any, Dict, List
 
 
 class ExpressionError(Exception):
-    """수식 오류"""
-    pass
+    """Raised when an expression cannot be tokenized, parsed, or evaluated."""
 
 
 class TokenType(Enum):
-    """토큰 타입"""
+    """Discriminator enum for Token variants produced by Lexer."""
     NUMBER = "NUMBER"
     STRING = "STRING"
     IDENTIFIER = "IDENTIFIER"
@@ -29,25 +28,47 @@ class TokenType(Enum):
 
 @dataclass
 class Token:
-    """토큰"""
+    """Single lexical unit produced by Lexer.
+
+    Attributes:
+        type: TokenType discriminator.
+        value: Raw value — int/float for NUMBER, str for all others, None for EOF.
+        position: Byte offset in the original expression string.
+    """
     type: TokenType
     value: Any
     position: int = 0
 
 
 class Lexer:
-    """수식 렉서"""
+    """Tokenizer for expression strings.
+
+    Converts a raw expression string into a flat list of Token objects for
+    consumption by Parser. Handles numbers, quoted strings, identifiers,
+    arithmetic operators, comparison operators, parentheses, and commas.
+    """
 
     OPERATORS = {'+', '-', '*', '/', '%', '^'}
     COMPARISONS = {'==', '!=', '>=', '<=', '>', '<'}
 
     def __init__(self, expression: str):
+        """Initialize the lexer with the expression to tokenize.
+
+        Input: expression — str, the raw expression string (may be empty).
+        """
         self.expression = expression
         self.pos = 0
         self.length = len(expression)
 
     def tokenize(self) -> List[Token]:
-        """토큰화"""
+        """Scan the expression and return all tokens including a terminal EOF.
+
+        Output: List[Token] — ordered tokens; the last element is always
+            Token(EOF, None). Two-character comparison operators are emitted as
+            a single COMPARISON token before single-character ones are tried.
+        Raises: ExpressionError — when an unrecognized character is encountered.
+        Invariants: result[-1].type == TokenType.EOF.
+        """
         tokens = []
 
         while self.pos < self.length:
@@ -117,7 +138,12 @@ class Lexer:
         return tokens
 
     def _read_number(self) -> Token:
-        """숫자 읽기"""
+        """Consume a numeric literal from the current position and return a NUMBER token.
+
+        Output: Token(NUMBER, int | float, start_pos) — int when no decimal point
+            is present, float otherwise.
+        Invariants: self.pos is advanced past the consumed digits and optional dot.
+        """
         start = self.pos
         has_dot = False
 
@@ -138,7 +164,12 @@ class Lexer:
         return Token(TokenType.NUMBER, value, start)
 
     def _read_string(self) -> Token:
-        """문자열 읽기"""
+        """Consume a quoted string literal (single or double quotes) and return a STRING token.
+
+        Output: Token(STRING, str, start_pos) — the unquoted, backslash-unescaped content.
+        Raises: ExpressionError — when the string is not closed before end of input.
+        Invariants: self.pos is advanced past the closing quote.
+        """
         quote = self.expression[self.pos]
         start = self.pos
         self.pos += 1  # Skip opening quote
@@ -159,7 +190,11 @@ class Lexer:
         raise ExpressionError(f"Unterminated string starting at position {start}")
 
     def _read_identifier(self) -> Token:
-        """식별자 읽기"""
+        """Consume an alphanumeric/underscore identifier and return an IDENTIFIER token.
+
+        Output: Token(IDENTIFIER, str, start_pos) — the identifier text as-is.
+        Invariants: self.pos is advanced past the last alphanumeric or underscore character.
+        """
         start = self.pos
 
         while self.pos < self.length:
@@ -173,9 +208,18 @@ class Lexer:
 
 
 class Parser:
-    """수식 파서 (AST 생성)"""
+    """Recursive-descent parser that converts a token list into a nested AST dict.
+
+    Precedence (lowest to highest): comparison → additive → multiplicative →
+    power → unary → primary (number/string/column/function call/parenthesized expr).
+    All AST nodes are plain dicts with a 'type' key.
+    """
 
     def __init__(self, tokens: List[Token]):
+        """Initialize the parser with a token stream from Lexer.
+
+        Input: tokens — List[Token], must end with an EOF token.
+        """
         self.tokens = tokens
         self.pos = 0
 
@@ -192,11 +236,19 @@ class Parser:
         return token
 
     def parse(self) -> Dict:
-        """파싱 시작"""
+        """Parse the full token stream and return the root AST node.
+
+        Output: Dict — root AST node, same shape as parse_expression().
+        Raises: ExpressionError — on any structural parse error.
+        """
         return self.parse_expression()
 
     def parse_expression(self) -> Dict:
-        """비교 연산 파싱"""
+        """Parse a comparison expression (lowest precedence level).
+
+        Output: Dict — {'type': 'comparison', 'op': str, 'left': Dict, 'right': Dict}
+            when a comparison operator is present, otherwise the inner additive node.
+        """
         left = self.parse_additive()
 
         while self.current.type == TokenType.COMPARISON:
@@ -207,7 +259,11 @@ class Parser:
         return left
 
     def parse_additive(self) -> Dict:
-        """덧셈/뺄셈 파싱"""
+        """Parse addition and subtraction (left-associative).
+
+        Output: Dict — {'type': 'binary', 'op': '+'/'-', 'left': Dict, 'right': Dict}
+            or the inner multiplicative node when no + / - is present.
+        """
         left = self.parse_multiplicative()
 
         while self.current.type == TokenType.OPERATOR and self.current.value in ('+', '-'):
@@ -218,7 +274,11 @@ class Parser:
         return left
 
     def parse_multiplicative(self) -> Dict:
-        """곱셈/나눗셈 파싱"""
+        """Parse multiplication, division, and modulo (left-associative).
+
+        Output: Dict — {'type': 'binary', 'op': '*'/'/'/'%', 'left': Dict, 'right': Dict}
+            or the inner power node when none of those operators is present.
+        """
         left = self.parse_power()
 
         while self.current.type == TokenType.OPERATOR and self.current.value in ('*', '/', '%'):
@@ -229,7 +289,11 @@ class Parser:
         return left
 
     def parse_power(self) -> Dict:
-        """거듭제곱 파싱"""
+        """Parse exponentiation (right-associative via recursion).
+
+        Output: Dict — {'type': 'binary', 'op': '^', 'left': Dict, 'right': Dict}
+            or the inner unary node when no '^' is present.
+        """
         left = self.parse_unary()
 
         if self.current.type == TokenType.OPERATOR and self.current.value == '^':
@@ -240,7 +304,11 @@ class Parser:
         return left
 
     def parse_unary(self) -> Dict:
-        """단항 연산 파싱"""
+        """Parse a unary negation or delegate to parse_primary.
+
+        Output: Dict — {'type': 'unary', 'op': '-', 'operand': Dict}
+            when a leading minus is present, otherwise the inner primary node.
+        """
         if self.current.type == TokenType.OPERATOR and self.current.value == '-':
             self.advance()
             operand = self.parse_unary()
@@ -249,7 +317,16 @@ class Parser:
         return self.parse_primary()
 
     def parse_primary(self) -> Dict:
-        """기본 요소 파싱"""
+        """Parse a primary expression: number, string, column reference, function call, or parenthesized expression.
+
+        Output: Dict — one of:
+            {'type': 'number', 'value': int | float}
+            {'type': 'string', 'value': str}
+            {'type': 'column', 'name': str}
+            {'type': 'function', 'name': str (uppercase), 'args': List[Dict]}
+            or the inner expression for a parenthesized group.
+        Raises: ExpressionError — on unexpected token or unmatched closing parenthesis.
+        """
         token = self.current
 
         # 숫자
@@ -285,7 +362,15 @@ class Parser:
         raise ExpressionError(f"Unexpected token '{token.value}' at position {token.position}")
 
     def parse_function_call(self, name: str) -> Dict:
-        """함수 호출 파싱"""
+        """Parse a function call argument list and return a function AST node.
+
+        Input: name — str, the function name as seen in the token stream
+            (will be uppercased in the output node).
+        Output: Dict — {'type': 'function', 'name': str (uppercase), 'args': List[Dict]},
+            where each arg is a fully parsed expression node.
+        Raises: ExpressionError — when the closing ')' is missing.
+        Invariants: self.pos is advanced past the closing ')'.
+        """
         self.advance()  # Skip '('
 
         args = []

@@ -218,7 +218,12 @@ class DatasetMixin:
         return self.comparison_manager.activate_dataset(dataset_id)
 
     def _on_dataset_activated(self, dataset_id: str):
-        """ComparisonManager.dataset_activated 신호 수신 → SINGLE 모드 동기화."""
+        """Handle the ComparisonManager dataset_activated signal and sync state in SINGLE mode.
+
+        Input: dataset_id — str, ID of the dataset that was just activated.
+        Output: None
+        Invariants: in SINGLE mode, AppState legacy properties reflect the activated dataset's state.
+        """
         if self.comparison_manager.comparison_mode == ComparisonMode.SINGLE:
             self._sync_from_dataset_state(dataset_id)
 
@@ -376,10 +381,15 @@ class DatasetMixin:
         return gs
 
     def _sync_from_dataset_state(self, dataset_id: str):
-        """
-        데이터셋 상태를 기존 AppState 속성들로 동기화
+        """Copy a DatasetState's fields into AppState legacy properties and emit refresh signals.
 
-        단일 모드에서 활성 데이터셋 전환 시 호출됨
+        Called when switching the active dataset in SINGLE mode so that the rest of
+        the UI reads from the correct dataset's column zones, filters, sorts, and settings.
+
+        Input: dataset_id — str, ID of the dataset whose state is the source of truth.
+        Output: None — no-op if dataset_id is not found in comparison_manager.
+        Emits: group_zone_changed, value_zone_changed, hover_zone_changed,
+               chart_settings_changed, filter_changed, sort_changed.
         """
         state = self.comparison_manager.dataset_states.get(dataset_id)
         if not state:
@@ -405,10 +415,13 @@ class DatasetMixin:
         self.emit("sort_changed")
 
     def _sync_to_dataset_state(self, dataset_id: str = None):
-        """
-        기존 AppState 속성들을 데이터셋 상태로 동기화
+        """Persist AppState legacy properties back into a DatasetState.
 
-        단일 모드에서 상태 변경 시 호출됨
+        Called after a state mutation in SINGLE mode so the DatasetState snapshot
+        stays consistent with what the user configured.
+
+        Input: dataset_id — str or None; defaults to the currently active dataset ID.
+        Output: None — no-op if the resolved dataset_id is absent from dataset_states.
         """
         target_id = dataset_id or self.comparison_manager.active_dataset_id
         dataset_states = self.comparison_manager.dataset_states
