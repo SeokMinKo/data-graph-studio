@@ -17,21 +17,29 @@ logger = logging.getLogger(__name__)
 
 
 class ComparisonReport:
-    """비교 리포트 생성"""
+    """Generate dataset comparison reports in HTML, JSON, and CSV formats."""
 
-    def __init__(self, engine: DataEngine, state: AppState):
+    def __init__(self, engine: DataEngine, state: AppState) -> None:
+        """Initialise ComparisonReport with the data engine and application state.
+
+        Input: engine — DataEngine, provides dataset access and statistical operations;
+               state — AppState, provides active comparison dataset IDs and comparison mode
+        Output: None
+        Invariants: engine and state are stored as references; no data is read at construction
+        """
         self.engine = engine
         self.state = state
 
     def generate_report_data(self, dataset_ids: List[str] = None) -> Dict[str, Any]:
-        """
-        리포트 데이터 생성
+        """Collect all data needed to render a comparison report.
 
-        Args:
-            dataset_ids: 비교할 데이터셋 ID 목록 (None이면 state에서 가져옴)
-
-        Returns:
-            리포트 데이터 딕셔너리
+        Input: dataset_ids — List[str] | None, IDs of datasets to compare;
+               falls back to state.comparison_dataset_ids when None
+        Output: Dict[str, Any] — report payload with keys title, generated_at,
+                comparison_mode, datasets, common_columns, statistics,
+                statistical_tests, correlations; or {"error": str} if no datasets
+        Invariants: statistics capped at 5 numeric columns; tests and correlations
+                    capped at 3 columns; df is never mutated
         """
         if dataset_ids is None:
             dataset_ids = self.state.comparison_dataset_ids
@@ -126,15 +134,13 @@ class ComparisonReport:
         return report
 
     def export_html(self, file_path: str, dataset_ids: List[str] = None) -> bool:
-        """
-        HTML 형식으로 내보내기
+        """Generate a comparison report and write it as a self-contained HTML file.
 
-        Args:
-            file_path: 저장 경로
-            dataset_ids: 비교할 데이터셋 ID 목록
-
-        Returns:
-            성공 여부
+        Input: file_path — str, destination path (created or overwritten);
+               dataset_ids — List[str] | None, datasets to include (defaults to state)
+        Output: bool — True on success, False if no datasets are available
+        Raises: ExportError — file write fails (OSError, PermissionError, or encoding error)
+        Invariants: HTML is UTF-8 encoded with inline CSS; existing file is overwritten
         """
         data = self.generate_report_data(dataset_ids)
 
@@ -155,7 +161,11 @@ class ComparisonReport:
             ) from e
 
     def _generate_html_report(self, data: Dict[str, Any]) -> str:
-        """HTML 리포트 생성"""
+        """Assemble a full HTML document string from report data sections.
+
+        Input: data — Dict[str, Any], validated report payload from generate_report_data
+        Output: str — complete HTML document (DOCTYPE through </html>)
+        """
         parts = [
             self._render_html_head(data),
             self._render_html_datasets_section(data),
@@ -167,7 +177,11 @@ class ComparisonReport:
         return "".join(parts)
 
     def _render_html_head(self, data: Dict[str, Any]) -> str:
-        """Render DOCTYPE, head with inline CSS, and opening body/container tags."""
+        """Render the HTML DOCTYPE, <head> with inline CSS, and opening <body> tag.
+
+        Input: data — Dict[str, Any], must contain 'title', 'generated_at', 'comparison_mode'
+        Output: str — HTML fragment from <!DOCTYPE html> through the opening container <div>
+        """
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -225,7 +239,11 @@ class ComparisonReport:
 """
 
     def _render_html_datasets_section(self, data: Dict[str, Any]) -> str:
-        """Render the Datasets summary table."""
+        """Render the Datasets summary table (name, row count, column count).
+
+        Input: data — Dict[str, Any], must contain 'datasets' list
+        Output: str — HTML fragment with <h2> and <table> for dataset overview
+        """
         rows = ""
         for ds in data['datasets']:
             color = ds.get('color', '#1f77b4')
@@ -245,7 +263,11 @@ class ComparisonReport:
 """
 
     def _render_html_stats_section(self, data: Dict[str, Any]) -> str:
-        """Render the Descriptive Statistics section."""
+        """Render descriptive statistics tables, one per numeric column.
+
+        Input: data — Dict[str, Any], must contain 'statistics' and 'datasets'
+        Output: str — HTML fragment with stat-card divs, or empty string if no statistics
+        """
         if not data.get('statistics'):
             return ""
         ds_name_map = {ds['id']: ds.get('name', ds['id']) for ds in data['datasets']}
@@ -282,7 +304,12 @@ class ComparisonReport:
         return "".join(parts)
 
     def _render_html_tests_section(self, data: Dict[str, Any]) -> str:
-        """Render the Statistical Tests section (empty string if no tests)."""
+        """Render the Statistical Tests table with significance styling.
+
+        Input: data — Dict[str, Any], must contain 'statistical_tests' and 'datasets'
+        Output: str — HTML fragment with <h2> and <table>, or empty string if no tests;
+                rows are colour-coded by p-value significance level
+        """
         if not data.get('statistical_tests'):
             return ""
         ds_name_map = {ds['id']: ds.get('name', ds['id']) for ds in data['datasets']}
@@ -324,7 +351,11 @@ class ComparisonReport:
 """
 
     def _render_html_correlations_section(self, data: Dict[str, Any]) -> str:
-        """Render the Correlations section (empty string if no correlations)."""
+        """Render the Correlations table with positive/negative colour coding.
+
+        Input: data — Dict[str, Any], must contain 'correlations' and 'datasets'
+        Output: str — HTML fragment with <h2> and <table>, or empty string if no correlations
+        """
         if not data.get('correlations'):
             return ""
         ds_name_map = {ds['id']: ds.get('name', ds['id']) for ds in data['datasets']}
@@ -370,7 +401,14 @@ class ComparisonReport:
 """
 
     def export_json(self, file_path: str, dataset_ids: List[str] = None) -> bool:
-        """JSON 형식으로 내보내기"""
+        """Serialize the comparison report to a pretty-printed JSON file.
+
+        Input: file_path — str, destination path (created or overwritten);
+               dataset_ids — List[str] | None, datasets to include (defaults to state)
+        Output: bool — True on success, False if no datasets are available
+        Raises: ExportError — file write fails (OSError, PermissionError, or encoding error)
+        Invariants: JSON is UTF-8 encoded with indent=2; non-serialisable values use str()
+        """
         data = self.generate_report_data(dataset_ids)
 
         if "error" in data:
@@ -388,7 +426,14 @@ class ComparisonReport:
             ) from e
 
     def export_csv(self, file_path: str, dataset_ids: List[str] = None) -> bool:
-        """CSV 형식으로 내보내기 (통계 테이블)"""
+        """Export comparison statistics to a flat CSV file.
+
+        Input: file_path — str, destination path (created or overwritten);
+               dataset_ids — List[str] | None, datasets to include (defaults to state)
+        Output: bool — True on success, False if no datasets are available
+        Raises: ExportError — file write fails (OSError, PermissionError, or encoding error)
+        Invariants: CSV uses UTF-8 encoding; sections are separated by blank rows
+        """
         data = self.generate_report_data(dataset_ids)
 
         if "error" in data:
@@ -410,7 +455,13 @@ class ComparisonReport:
 
     @staticmethod
     def _write_csv_rows(writer, data: Dict[str, Any]) -> None:
-        """Write all CSV sections (header, datasets, statistics, tests) to *writer*."""
+        """Write all CSV sections — header, datasets, statistics, and tests — to writer.
+
+        Input: writer — csv.writer instance (open for writing);
+               data — Dict[str, Any], validated report payload from generate_report_data
+        Output: None
+        Invariants: sections are separated by blank rows; dataset IDs are resolved to names
+        """
         # Header
         writer.writerow(['Data Comparison Report'])
         writer.writerow(['Generated', data['generated_at']])

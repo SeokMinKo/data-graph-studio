@@ -493,7 +493,7 @@ class _MainWindowLayoutMixin:
 
         if graph_setting:
             active_id = self.engine.active_dataset_id
-            logger.debug("active_id=%s, graph_setting=%s", active_id, graph_setting)
+            logger.debug("layout_mixin.graph_setting_loaded", extra={"active_id": active_id, "graph_setting": graph_setting})
             if active_id:
                 # 프로젝트 탐색창에 추가
                 from dataclasses import replace

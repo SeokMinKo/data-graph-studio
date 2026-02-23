@@ -372,23 +372,22 @@ def select_preset(
 
     presets = BUILTIN_PRESETS.get(converter)
     if not presets:
-        logger.debug("[GraphPreset] no presets for converter=%s", converter)
+        logger.debug("graph_preset.no_presets", extra={"converter": converter})
         return None
 
     if preset_name:
         for p in presets:
             if p.name == preset_name and p.columns_present(df):
-                logger.info("[GraphPreset] selected preset: %s (explicit)", p.name)
+                logger.info("graph_preset.selected.explicit", extra={"preset": p.name})
                 return p
-        logger.warning("[GraphPreset] preset '%s' not found or columns missing", preset_name)
+        logger.warning("graph_preset.not_found_or_columns_missing", extra={"preset": preset_name})
         return None
 
     # Auto-select: first preset whose columns are present
     for p in presets:
         if p.columns_present(df):
-            logger.info("[GraphPreset] auto-selected preset: %s for converter=%s", p.name, converter)
+            logger.info("graph_preset.selected.auto", extra={"preset": p.name, "converter": converter})
             return p
 
-    logger.warning("[GraphPreset] no preset matched columns=%s for converter=%s",
-                   df.columns, converter)
+    logger.warning("graph_preset.no_match", extra={"columns": df.columns, "converter": converter})
     return None

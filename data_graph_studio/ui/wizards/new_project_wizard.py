@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 try:
     from .parsing_step import ParsingStep
 except ImportError as e:  # pragma: no cover - placeholder until implemented
-    logger.warning("ParsingStep import failed: %s", e)
+    logger.warning("new_project_wizard.import.failed", extra={"step": "ParsingStep", "error": str(e)})
 
     class ParsingStep(QWizardPage):
         def __init__(self, file_path: str, parent=None):
@@ -20,7 +20,7 @@ except ImportError as e:  # pragma: no cover - placeholder until implemented
 try:
     from .wpr_convert_step import WprConvertStep, is_wpr_file
 except ImportError as e:  # pragma: no cover
-    logger.warning("WprConvertStep import failed: %s", e)
+    logger.warning("new_project_wizard.import.failed", extra={"step": "WprConvertStep", "error": str(e)})
 
     def is_wpr_file(_: str) -> bool:
         return False
@@ -34,7 +34,7 @@ except ImportError as e:  # pragma: no cover
 try:
     from .graph_setup_step import GraphSetupStep
 except ImportError as e:  # pragma: no cover - placeholder until implemented
-    logger.warning("GraphSetupStep import failed: %s", e)
+    logger.warning("new_project_wizard.import.failed", extra={"step": "GraphSetupStep", "error": str(e)})
 
     class GraphSetupStep(QWizardPage):
         def __init__(self, parent=None):
@@ -44,7 +44,7 @@ except ImportError as e:  # pragma: no cover - placeholder until implemented
 try:
     from .finish_step import FinishStep
 except ImportError as e:  # pragma: no cover - placeholder until implemented
-    logger.warning("FinishStep import failed: %s", e)
+    logger.warning("new_project_wizard.import.failed", extra={"step": "FinishStep", "error": str(e)})
 
     class FinishStep(QWizardPage):
         def __init__(self, parent=None):

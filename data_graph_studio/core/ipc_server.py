@@ -313,7 +313,7 @@ class IPCClient:
             self._socket.connect((self.host, self.port))
             return True
         except (OSError, socket.timeout) as e:
-            logger.debug("[IPC Client] Connection failed: %s", e)
+            logger.debug("ipc_client.connect.failed", extra={"error": str(e)})
             return False
 
     def disconnect(self) -> None:

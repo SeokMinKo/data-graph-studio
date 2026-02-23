@@ -40,7 +40,7 @@ _DEVICE_TRACE_PATH = "/data/local/tmp/dgs_block_trace.txt"
 def _adb(serial: str, *args: str, timeout: int = 30) -> subprocess.CompletedProcess:
     """Run an adb command against the given device serial."""
     cmd = ["adb", "-s", serial, *args]
-    logger.debug("adb: %s", " ".join(cmd))
+    logger.debug("avd_tracer.adb", extra={"cmd": " ".join(cmd)})
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
@@ -86,13 +86,13 @@ def enable_block_tracing(serial: str, tracefs: str) -> None:
         path = f"{tracefs}/events/{event}/enable"
         r = _adb_shell(serial, f"echo 1 > {path}")
         if r.returncode != 0:
-            logger.warning("could not enable %s: %s", event, r.stderr.strip())
+            logger.warning("avd_tracer.enable_event.failed", extra={"event": event, "stderr": r.stderr.strip()})
 
     # Start tracing (load-bearing — raise if this fails)
     r = _adb_shell(serial, f"echo 1 > {tracefs}/tracing_on")
     if r.returncode != 0:
         raise RuntimeError(f"Failed to enable tracing on {serial}: {r.stderr.strip()}")
-    logger.info("block tracing enabled on %s", serial)
+    logger.info("avd_tracer.block_tracing.enabled", extra={"serial": serial})
 
 
 def disable_block_tracing(serial: str, tracefs: str) -> None:
@@ -110,7 +110,7 @@ def run_io_workload(serial: str, block_count: int = 256) -> None:
     """
     cmd = f"dd if=/dev/zero of=/sdcard/dgs_test_io.bin bs=4096 count={block_count} conv=fsync"
     result = _adb(serial, "shell", cmd, timeout=60)
-    logger.info("I/O workload done: %s", result.stderr.strip() or "ok")
+    logger.info("avd_tracer.io_workload.done", extra={"output": result.stderr.strip() or "ok"})
 
 
 def dump_trace(serial: str, tracefs: str) -> None:
@@ -150,8 +150,7 @@ def capture_block_trace(
         RuntimeError: If adb commands fail or tracefs not found.
     """
     tracefs = find_tracefs(serial)
-    logger.info("capture_block_trace: serial=%s tracefs=%s output=%s",
-                serial, tracefs, output_path)
+    logger.info("avd_tracer.capture_block_trace", extra={"serial": serial, "tracefs": tracefs, "output": output_path})
 
     try:
         enable_block_tracing(serial, tracefs)

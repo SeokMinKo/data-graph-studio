@@ -90,19 +90,30 @@ class FormulaParser:
     """
 
     def __init__(self) -> None:
+        """Initialise FormulaParser with a fresh AST evaluator.
+
+        Output: None
+        Invariants: self._ast_eval is a ready FormulaAstEvaluator instance.
+        """
         self._ast_eval = FormulaAstEvaluator()
 
     # ── Public API ────────────────────────────────────────────
 
     def extract_column_references(self, formula: str) -> Set[str]:
-        """Return the set of column names referenced via {name}."""
+        """Return the set of column names referenced via {name} syntax.
+
+        Input: formula — str, raw formula string
+        Output: Set[str] — zero or more column names found between braces
+        """
         return set(_COL_REF_RE.findall(formula))
 
     def validate(self, formula: str, df: pl.DataFrame) -> None:
-        """
-        Validate a formula against a DataFrame schema.
+        """Validate a formula against a DataFrame schema without evaluating it.
 
-        Raises FormulaSecurityError, FormulaColumnError, or FormulaTypeError.
+        Input: formula — str, raw formula string; df — pl.DataFrame, provides column names
+        Output: None
+        Raises: FormulaSecurityError — blocked identifier or prefix found;
+                FormulaColumnError — referenced column absent from df
         """
         self._security_check(formula)
         # Check column references exist
@@ -116,11 +127,15 @@ class FormulaParser:
                 )
 
     def evaluate(self, formula: str, df: pl.DataFrame) -> pl.Series:
-        """
-        Evaluate a formula string against *df* and return a pl.Series.
+        """Evaluate a formula string against df and return a pl.Series.
 
-        Division by zero produces null (ERR-3.2).
-        Type mismatches raise FormulaTypeError (ERR-3.3).
+        Input: formula — str, raw formula with {col} references; df — pl.DataFrame, source data
+        Output: pl.Series — computed result, length == len(df)
+        Raises: FormulaSecurityError — blocked construct detected;
+                FormulaColumnError — referenced column not in df;
+                FormulaTypeError — non-numeric column used in numeric context;
+                FormulaError — syntax error or unsupported expression
+        Invariants: division by zero produces null (ERR-3.2); df is not mutated
         """
         logger.debug("formula_parser.evaluate", extra={"formula": str(formula)[:80]})
         self.validate(formula, df)
@@ -130,7 +145,13 @@ class FormulaParser:
     def evaluate_moving_avg(
         self, column: str, window: int, df: pl.DataFrame
     ) -> pl.Series:
-        """Convenience: rolling_mean for a single column (FR-3.2)."""
+        """Compute rolling mean for a single numeric column (FR-3.2).
+
+        Input: column — str, column name; window — int, positive window size; df — pl.DataFrame
+        Output: pl.Series — rolling mean, same length as df, nulls at leading edge
+        Raises: ValueError — window <= 0; FormulaTypeError — column is not numeric;
+                FormulaColumnError — column not in df
+        """
         if window <= 0:
             raise ValueError(f"Window must be positive, got {window}")
         self._check_numeric(column, df)
@@ -139,22 +160,36 @@ class FormulaParser:
     def evaluate_diff(
         self, column: str, n: int, df: pl.DataFrame
     ) -> pl.Series:
-        """Convenience: diff for a single column (FR-3.3)."""
+        """Compute element-wise difference (lag n) for a numeric column (FR-3.3).
+
+        Input: column — str, column name; n — int, lag steps; df — pl.DataFrame
+        Output: pl.Series — differenced series, first n values are null
+        Raises: FormulaTypeError — column is not numeric; FormulaColumnError — column not in df
+        """
         self._check_numeric(column, df)
         return df[column].diff(n=n)
 
     def evaluate_cumsum(self, column: str, df: pl.DataFrame) -> pl.Series:
-        """Convenience: cumsum for a single column (FR-3.4)."""
+        """Compute cumulative sum for a single numeric column (FR-3.4).
+
+        Input: column — str, column name; df — pl.DataFrame
+        Output: pl.Series — cumulative sum, same length as df
+        Raises: FormulaTypeError — column is not numeric; FormulaColumnError — column not in df
+        """
         self._check_numeric(column, df)
         return df[column].cum_sum()
 
     def evaluate_normalize(
         self, column: str, method: str, df: pl.DataFrame
     ) -> pl.Series:
-        """
-        Normalize a column (FR-3.5).
+        """Normalize a numeric column using min-max or z-score scaling (FR-3.5).
 
-        method: 'min_max' | 'z_score'
+        Input: column — str, column name; method — str, 'min_max' | 'z_score';
+               df — pl.DataFrame
+        Output: pl.Series (Float64) — normalized values, same length as df;
+                all-zeros if range/std is zero
+        Raises: FormulaError — unknown method; FormulaTypeError — column is not numeric;
+                FormulaColumnError — column not in df
         """
         self._check_numeric(column, df)
         series = df[column].cast(pl.Float64)
@@ -179,7 +214,13 @@ class FormulaParser:
     # ── Security ──────────────────────────────────────────────
 
     def _security_check(self, formula: str) -> None:
-        """FR-3.11 whitelist / blacklist enforcement."""
+        """Enforce FR-3.11 security whitelist/blacklist on raw formula text.
+
+        Input: formula — str, raw formula before column-reference substitution
+        Output: None
+        Raises: FormulaSecurityError — blocked prefix, dunder identifier,
+                or non-whitelisted function call detected
+        """
         # Check for blocked prefixes / keywords in raw text
         lower = formula.lower()
         for prefix in BLOCKED_PREFIXES:
@@ -234,10 +275,11 @@ class FormulaParser:
     # ── Preparation ───────────────────────────────────────────
 
     def _prepare_formula(self, formula: str, df: pl.DataFrame) -> str:
-        """
-        Replace {col} references and validate types.
+        """Validate column references exist in df and return the formula unchanged.
 
-        Returns a cleaned formula string ready for _eval_prepared.
+        Input: formula — str, raw formula string; df — pl.DataFrame, reference schema
+        Output: str — same formula string (column existence confirmed)
+        Raises: FormulaColumnError — any {col} reference is absent from df.columns
         """
         refs = self.extract_column_references(formula)
         available = set(df.columns)
@@ -254,7 +296,13 @@ class FormulaParser:
     # ── Type Checking ─────────────────────────────────────────
 
     def _check_numeric(self, column: str, df: pl.DataFrame) -> None:
-        """Raise FormulaTypeError if column is not numeric."""
+        """Assert that a column exists in df and has a numeric dtype.
+
+        Input: column — str, column name; df — pl.DataFrame
+        Output: None
+        Raises: FormulaColumnError — column not in df;
+                FormulaTypeError — column dtype not in _NUMERIC_DTYPES
+        """
         if column not in df.columns:
             raise FormulaColumnError(
                 f"Column '{column}' not found. "
@@ -267,7 +315,12 @@ class FormulaParser:
             )
 
     def _check_numeric_refs(self, formula: str, df: pl.DataFrame) -> None:
-        """Check that all column refs in formula are numeric (for math ops)."""
+        """Check that every {col} reference in formula resolves to a numeric column.
+
+        Input: formula — str, formula containing zero or more {col} tokens; df — pl.DataFrame
+        Output: None
+        Raises: FormulaTypeError — any referenced column has a non-numeric dtype
+        """
         refs = self.extract_column_references(formula)
         for ref in refs:
             if ref in df.columns:
@@ -280,12 +333,12 @@ class FormulaParser:
     # ── Evaluation Engine ─────────────────────────────────────
 
     def _eval_prepared(self, formula: str, df: pl.DataFrame) -> pl.Series:
-        """
-        Evaluate the formula by interpreting it with Polars operations.
+        """Dispatch a validated formula to the appropriate evaluation path.
 
-        Strategy:
-        1. Handle special function forms (rolling_mean, diff, cumsum, etc.)
-        2. For general expressions, build a Polars expression via AST.
+        Input: formula — str, security-checked formula with {col} refs intact;
+               df — pl.DataFrame
+        Output: pl.Series — computed result, length == len(df)
+        Invariants: tries special-function patterns first; falls back to AST evaluator
         """
         stripped = formula.strip()
         result = self._eval_special_function(stripped, df)
@@ -413,7 +466,12 @@ class FormulaParser:
         return None
 
     def _eval_aggregate(self, fn: str, col: str, df: pl.DataFrame) -> pl.Series:
-        """Evaluate an aggregate function, returning a scalar broadcast to len(df)."""
+        """Evaluate an aggregate function and broadcast the scalar result to len(df).
+
+        Input: fn — str, one of sum/mean/std/count/first/last/min/max;
+               col — str, numeric column name; df — pl.DataFrame
+        Output: pl.Series — constant series of length len(df) containing the aggregate value
+        """
         series = df[col]
         mapping = {
             'sum': series.sum,
@@ -429,10 +487,14 @@ class FormulaParser:
         return pl.Series([val] * len(df))
 
     def _eval_general_expression(self, formula: str, df: pl.DataFrame) -> pl.Series:
-        """
-        Evaluate a general arithmetic / comparison / logic expression.
+        """Evaluate a general arithmetic, comparison, or logic expression via AST.
 
-        Replaces {col} with Polars column data and evaluates via AST.
+        Input: formula — str, formula with {col} references; df — pl.DataFrame
+        Output: pl.Series — computed result, length == len(df)
+        Raises: FormulaError — Python SyntaxError parsing the expression;
+                FormulaTypeError — non-numeric column in arithmetic context
+        Invariants: {col} tokens are replaced with safe placeholder variable names
+                    before AST parsing; df is not mutated
         """
         # Type-check numeric columns used in math context
         self._check_numeric_refs(formula, df)

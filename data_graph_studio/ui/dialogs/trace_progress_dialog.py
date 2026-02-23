@@ -64,7 +64,7 @@ class AdbTraceController(QObject):
         quoted = shlex.quote(shell_cmd)
         cmd = ["adb", "-s", serial, "shell", "su", "-c", quoted]
         self.log_message.emit(f"$ {' '.join(cmd)}")
-        logger.debug("[AdbTrace] exec: %s", " ".join(cmd))
+        logger.debug("adb_trace.exec", extra={"cmd": " ".join(cmd)})
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=10,
         )
@@ -75,7 +75,7 @@ class AdbTraceController(QObject):
                 result.stdout[:500], result.stderr[:500],
             )
         else:
-            logger.debug("[AdbTrace] cmd ok: %s (stdout=%d bytes)", shell_cmd, len(result.stdout))
+            logger.debug("adb_trace.cmd.ok", extra={"cmd": shell_cmd, "stdout_bytes": len(result.stdout)})
         return result
 
     def _detect_sysfs_path(self, serial: str) -> str:
@@ -91,12 +91,12 @@ class AdbTraceController(QObject):
             RuntimeError: 두 경로 모두 접근 불가 시.
         """
         for path in ["/sys/kernel/tracing", "/sys/kernel/debug/tracing"]:
-            logger.debug("[AdbTrace] probing sysfs: %s", path)
+            logger.debug("adb_trace.probe_sysfs", extra={"path": path})
             result = self._run_adb_cmd(serial, f"ls {path}/trace")
             if result.returncode == 0:
-                logger.info("[AdbTrace] sysfs path found: %s", path)
+                logger.info("adb_trace.sysfs.found", extra={"path": path})
                 return path
-        logger.error("[AdbTrace] no sysfs path found on device %s", serial)
+        logger.error("adb_trace.sysfs.not_found", extra={"serial": serial})
         raise RuntimeError("ftrace sysfs path not found on device")
 
     def start_trace(self, serial: str, config: dict[str, Any]) -> None:
@@ -106,8 +106,9 @@ class AdbTraceController(QObject):
             serial: 기기 시리얼 번호.
             config: 트레이스 설정 (buffer_size_mb, events, save_path).
         """
-        logger.info("[AdbTrace] start_trace: serial=%s, config=%s", serial, {
-            k: v for k, v in config.items() if k != "save_path"
+        logger.info("adb_trace.start_trace", extra={
+            "serial": serial,
+            "config": {k: v for k, v in config.items() if k != "save_path"},
         })
         self._serial = serial
         self._sysfs_path = self._detect_sysfs_path(serial)
@@ -139,7 +140,7 @@ class AdbTraceController(QObject):
             save_path: 트레이스 파일 저장 경로.
         """
         try:
-            logger.info("[AdbTrace] stop_trace: save_path=%s", save_path)
+            logger.info("adb_trace.stop_trace", extra={"save_path": save_path})
             self.progress.emit("Stopping trace...")
             self._run_adb_cmd(self._serial, f"echo 0 > {self._sysfs_path}/tracing_on")
             self._tracing = False
@@ -149,17 +150,19 @@ class AdbTraceController(QObject):
                 self._serial, f"cat {self._sysfs_path}/trace"
             )
             trace_size = len(result.stdout)
-            logger.info("[AdbTrace] trace data pulled: %d bytes, stderr=%s",
-                        trace_size, result.stderr[:200] if result.stderr else "")
+            logger.info("adb_trace.trace.pulled", extra={
+                "bytes": trace_size,
+                "stderr": result.stderr[:200] if result.stderr else "",
+            })
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             Path(save_path).write_text(result.stdout, encoding="utf-8")
-            logger.info("[AdbTrace] trace saved: %s (%d bytes)", save_path, trace_size)
+            logger.info("adb_trace.trace.saved", extra={"save_path": save_path, "bytes": trace_size})
             self.log_message.emit(f"Trace saved to {save_path}")
 
             self._disable_events()
             self.finished.emit(save_path)
         except Exception as e:
-            logger.error("[AdbTrace] stop_trace failed: %s", e, exc_info=True)
+            logger.error("adb_trace.stop_trace.failed", extra={"error": str(e)}, exc_info=True)
             self.error.emit(str(e))
         finally:
             self.cleanup()
@@ -173,14 +176,14 @@ class AdbTraceController(QObject):
                     f"echo 0 > {self._sysfs_path}/events/{event}/enable",
                 )
             except Exception as e:
-                logger.warning("[AdbTrace] failed to disable event %s: %s", event, e, exc_info=True)
+                logger.warning("adb_trace.disable_event.failed", extra={"event": event, "error": str(e)}, exc_info=True)
 
     def cleanup(self) -> None:
         """트레이싱 상태를 정리한다 (idempotent)."""
         if not self._serial or not self._sysfs_path:
             logger.debug("[AdbTrace] cleanup: nothing to clean (no serial/sysfs)")
             return
-        logger.debug("[AdbTrace] cleanup: tracing=%s, serial=%s", self._tracing, self._serial)
+        logger.debug("adb_trace.cleanup", extra={"tracing": self._tracing, "serial": self._serial})
         try:
             if self._tracing:
                 self._run_adb_cmd(
@@ -190,7 +193,7 @@ class AdbTraceController(QObject):
                 self._tracing = False
                 logger.info("[AdbTrace] cleanup: tracing stopped")
         except Exception as e:
-            logger.warning("[AdbTrace] cleanup: failed to stop tracing: %s", e, exc_info=True)
+            logger.warning("adb_trace.cleanup.stop_failed", extra={"error": str(e)}, exc_info=True)
         self._disable_events()
 
 
@@ -281,7 +284,7 @@ class PerfettoTraceController(QObject):
             exe_name = "trace_processor_shell.exe" if sys.platform == "win32" else "trace_processor_shell"
             bundled = plat_bin / exe_name
             if bundled.exists():
-                logger.debug("[trace_processor] found bundled: %s", bundled)
+                logger.debug("trace_processor.bundled.found", extra={"path": str(bundled)})
                 return str(bundled)
 
         # 2b. 프로젝트 루트 assets (개발 모드 레거시)
@@ -329,7 +332,7 @@ class PerfettoTraceController(QObject):
         last_error: Exception | None = None
 
         for url in urls:
-            logger.info("Downloading trace_processor from %s ...", url)
+            logger.info("trace_processor.download.start", extra={"url": url})
             try:
                 req = urllib.request.Request(url, headers=headers)
                 # Allow up to 30s connection timeout
@@ -342,10 +345,10 @@ class PerfettoTraceController(QObject):
                     dest.chmod(0o755)
                 except OSError:
                     pass
-                logger.info("Downloaded trace_processor to %s (%d bytes)", dest, len(data))
+                logger.info("trace_processor.download.ok", extra={"dest": str(dest), "bytes": len(data)})
                 return str(dest)
             except Exception as e:
-                logger.warning("Failed to download from %s: %s", url, e, exc_info=True)
+                logger.warning("trace_processor.download.failed", extra={"url": url, "error": str(e)}, exc_info=True)
                 last_error = e
                 dest.unlink(missing_ok=True)
                 continue
@@ -366,11 +369,14 @@ class PerfettoTraceController(QObject):
             serial: 기기 시리얼 번호.
             config: 트레이스 설정 (buffer_size_mb, events).
         """
-        logger.info("[Perfetto] start_trace: serial=%s, buffer=%dMB, events=%s",
-                    serial, config.get("buffer_size_mb", 64), config.get("events", []))
+        logger.info("perfetto.start_trace", extra={
+            "serial": serial,
+            "buffer_mb": config.get("buffer_size_mb", 64),
+            "events": config.get("events", []),
+        })
         self._serial = serial
         self._tp_shell = self.find_trace_processor()
-        logger.debug("[Perfetto] trace_processor: %s", self._tp_shell)
+        logger.debug("perfetto.trace_processor.path", extra={"path": self._tp_shell})
 
         buffer_kb = config.get("buffer_size_mb", 64) * 1024
         events = config.get("events", [
@@ -444,13 +450,12 @@ class PerfettoTraceController(QObject):
             # Exited immediately — read stderr for error
             _, stderr = self._process.communicate(timeout=5)
             err_msg = stderr.decode(errors="replace").strip() if stderr else "unknown error"
-            logger.error("[Perfetto] exited immediately: rc=%s, stderr=%s",
-                         self._process.returncode, err_msg)
+            logger.error("perfetto.start.exited_immediately", extra={"rc": self._process.returncode, "stderr": err_msg})
             self._process = None
             raise RuntimeError(f"Perfetto failed to start: {err_msg}")
 
         self._tracing = True
-        logger.info("[Perfetto] tracing started (pid=%s)", self._process.pid)
+        logger.info("perfetto.tracing.started", extra={"pid": self._process.pid})
         self.log_message.emit("Perfetto tracing started.")
 
     def stop_trace(self, save_path: str) -> None:
@@ -461,7 +466,7 @@ class PerfettoTraceController(QObject):
         """
         adb = ["adb", "-s", self._serial]
         trace_local = str(Path(save_path).with_suffix(".perfetto-trace"))
-        logger.info("[Perfetto] stop_trace: save_path=%s, trace_local=%s", save_path, trace_local)
+        logger.info("perfetto.stop_trace", extra={"save_path": save_path, "trace_local": trace_local})
 
         try:
             # 1. Stop perfetto (SIGINT)
@@ -472,19 +477,18 @@ class PerfettoTraceController(QObject):
             )
             perfetto_pid = pid_result.stdout.strip()
             if perfetto_pid:
-                logger.debug("[Perfetto] sending SIGINT to pid %s", perfetto_pid)
+                logger.debug("perfetto.stop.sigint", extra={"pid": perfetto_pid})
                 kill_result = subprocess.run(
                     adb + ["shell", "kill", "-SIGINT", perfetto_pid],
                     capture_output=True, text=True, timeout=5,
                 )
-                logger.debug("[Perfetto] kill result: rc=%d, stderr=%s",
-                             kill_result.returncode, kill_result.stderr.strip())
+                logger.debug("perfetto.stop.kill_result", extra={"rc": kill_result.returncode, "stderr": kill_result.stderr.strip()})
             else:
                 logger.warning("[Perfetto] perfetto process not found on device")
             if self._process:
                 try:
                     rc = self._process.wait(timeout=20)
-                    logger.debug("[Perfetto] local process exited: rc=%s", rc)
+                    logger.debug("perfetto.local_process.exited", extra={"rc": rc})
                 except subprocess.TimeoutExpired:
                     logger.warning("[Perfetto] local process timeout, killing")
                     self._process.kill()
@@ -499,8 +503,7 @@ class PerfettoTraceController(QObject):
                     capture_output=True, text=True, timeout=5,
                 )
                 if check.returncode == 0 and self._trace_device_path in check.stdout:
-                    logger.debug("[Perfetto] trace file exists (attempt %d): %s",
-                                 attempt, check.stdout.strip())
+                    logger.debug("perfetto.trace_file.exists", extra={"attempt": attempt, "ls_out": check.stdout.strip()})
                     break
                 logger.debug("[Perfetto] trace file not ready (attempt %d), waiting 2s...", attempt)
                 time.sleep(2)
@@ -508,26 +511,24 @@ class PerfettoTraceController(QObject):
                 logger.warning("[Perfetto] trace file not found after 5 attempts")
 
             self.progress.emit("Pulling trace file...")
-            logger.debug("[Perfetto] pulling %s → %s", self._trace_device_path, trace_local)
+            logger.debug("perfetto.pull.start", extra={"src": self._trace_device_path, "dest": trace_local})
             result = subprocess.run(
                 adb + ["pull", self._trace_device_path, trace_local],
                 capture_output=True, text=True, timeout=120,
             )
             if result.returncode != 0:
-                logger.error("[Perfetto] pull failed: rc=%d, stderr=%s",
-                             result.returncode, result.stderr.strip())
+                logger.error("perfetto.pull.failed", extra={"rc": result.returncode, "stderr": result.stderr.strip()})
                 raise RuntimeError(
                     f"Failed to pull trace: {result.stderr.strip()}"
                 )
             trace_size = Path(trace_local).stat().st_size if Path(trace_local).exists() else 0
-            logger.info("[Perfetto] binary trace pulled: %s (%d bytes)", trace_local, trace_size)
+            logger.info("perfetto.trace.pulled", extra={"trace_local": trace_local, "bytes": trace_size})
             self.log_message.emit(f"Binary trace: {trace_local}")
 
             # 3. Convert to CSV via trace_processor_shell
             self.progress.emit("Converting to CSV...")
             csv_path = str(Path(save_path).with_suffix(".csv"))
-            logger.debug("[Perfetto] converting: %s → %s (query=%d chars)",
-                         trace_local, csv_path, len(self.FTRACE_QUERY))
+            logger.debug("perfetto.convert.start", extra={"src": trace_local, "dest": csv_path, "query_chars": len(self.FTRACE_QUERY)})
             self.log_message.emit(
                 f"$ {self._tp_shell} -Q '...' {trace_local}"
             )
@@ -540,8 +541,7 @@ class PerfettoTraceController(QObject):
                 capture_output=True, text=True, timeout=120,
             )
             if tp_result.returncode != 0:
-                logger.error("[Perfetto] trace_processor failed: rc=%d\nstderr=%s",
-                             tp_result.returncode, tp_result.stderr[:1000])
+                logger.error("perfetto.trace_processor.failed", extra={"rc": tp_result.returncode, "stderr": tp_result.stderr[:1000]})
                 raise RuntimeError(
                     f"trace_processor_shell failed: {tp_result.stderr.strip()}"
                 )
@@ -549,25 +549,25 @@ class PerfettoTraceController(QObject):
             csv_size = len(tp_result.stdout)
             csv_lines = tp_result.stdout.count("\n")
             Path(csv_path).write_text(tp_result.stdout, encoding="utf-8")
-            logger.info("[Perfetto] CSV saved: %s (%d bytes, ~%d rows)", csv_path, csv_size, csv_lines)
+            logger.info("perfetto.csv.saved", extra={"csv_path": csv_path, "bytes": csv_size, "rows": csv_lines})
             self.log_message.emit(f"CSV saved: {csv_path}")
             self.finished.emit(csv_path)
 
         except Exception as e:
-            logger.error("[Perfetto] stop_trace failed: %s", e, exc_info=True)
+            logger.error("perfetto.stop_trace.failed", extra={"error": str(e)}, exc_info=True)
             self.error.emit(str(e))
         finally:
             self._process = None
 
     def cleanup(self) -> None:
         """Perfetto 프로세스를 정리한다 (idempotent)."""
-        logger.debug("[Perfetto] cleanup: process=%s, tracing=%s", self._process is not None, self._tracing)
+        logger.debug("perfetto.cleanup", extra={"has_process": self._process is not None, "tracing": self._tracing})
         if self._process:
             try:
                 self._process.kill()
                 logger.debug("[Perfetto] cleanup: local process killed")
             except Exception as e:
-                logger.warning("[Perfetto] cleanup: kill failed: %s", e, exc_info=True)
+                logger.warning("perfetto.cleanup.kill_failed", extra={"error": str(e)}, exc_info=True)
             self._process = None
         if self._tracing and self._serial:
             try:
