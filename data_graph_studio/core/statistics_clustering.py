@@ -1,7 +1,9 @@
 """
-Statistical Analysis - Clustering Module
+Statistical Analysis — Clustering Module
 
-클러스터링 관련 클래스를 제공합니다.
+Provides ClusterAnalyzer with K-Means, hierarchical (Ward linkage), and
+DBSCAN implementations built on NumPy and SciPy.  All algorithms operate
+on normalized column data extracted from Polars DataFrames.
 """
 
 import logging
@@ -16,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class ClusterMethod(Enum):
-    """클러스터링 방법"""
+    """Supported clustering algorithms."""
+
     KMEANS = "kmeans"
     HIERARCHICAL = "hierarchical"
     DBSCAN = "dbscan"
@@ -24,7 +27,15 @@ class ClusterMethod(Enum):
 
 @dataclass
 class ClusterResult:
-    """클러스터링 결과"""
+    """Result payload returned by any clustering algorithm.
+
+    labels — integer cluster assignment per sample (-1 means noise for DBSCAN).
+    centers — cluster centroid coordinates (K-Means only).
+    inertia — total within-cluster sum-of-squares (K-Means only).
+    silhouette — mean silhouette coefficient if computed, else None.
+    dendrogram_data — {"linkage": linkage_matrix} for hierarchical results.
+    """
+
     labels: np.ndarray
     n_clusters: int
     method: ClusterMethod
@@ -35,10 +46,11 @@ class ClusterResult:
 
 
 class ClusterAnalyzer:
-    """
-    클러스터 분석기
+    """Clustering analysis engine supporting K-Means, hierarchical, and DBSCAN.
 
-    K-Means, 계층적 클러스터링, DBSCAN 등을 지원합니다.
+    All public methods accept Polars DataFrames and column name lists.
+    Data is normalized (zero-mean, unit-variance) internally before any
+    algorithm runs; NaN values are replaced with 0.0.
     """
 
     def cluster(
@@ -49,18 +61,15 @@ class ClusterAnalyzer:
         n_clusters: int = 3,
         **kwargs
     ) -> ClusterResult:
-        """
-        클러스터링 수행
+        """Run the selected clustering algorithm on the specified columns.
 
-        Args:
-            data: 데이터프레임
-            columns: 클러스터링에 사용할 컬럼
-            method: 클러스터링 방법
-            n_clusters: 클러스터 수 (K-Means, Hierarchical)
-            **kwargs: 추가 파라미터
-
-        Returns:
-            클러스터링 결과
+        Input: data — pl.DataFrame, source dataset
+               columns — List[str], columns to use (missing columns silently skipped)
+               method — ClusterMethod, algorithm to apply (default KMEANS)
+               n_clusters — int, number of clusters for K-Means / hierarchical
+               **kwargs — extra params: eps (float, DBSCAN), min_samples (int, DBSCAN)
+        Output: ClusterResult — labels, n_clusters, method, and algorithm-specific fields
+        Invariants: NaN values replaced with 0.0; data normalized before clustering
         """
         # 데이터 추출 및 정규화
         logger.debug("statistics.cluster", extra={"method": method.value, "n_clusters": n_clusters})
@@ -97,7 +106,14 @@ class ClusterAnalyzer:
         n_clusters: int,
         max_iter: int = 100
     ) -> ClusterResult:
-        """K-Means 클러스터링"""
+        """Run a simplified K-Means++ clustering on pre-normalized data.
+
+        Input: X — np.ndarray shape (n_samples, n_features), normalized
+               n_clusters — int, number of clusters
+               max_iter — int, iteration cap (default 100)
+        Output: ClusterResult with labels, centers, and inertia set
+        Invariants: converges when centers change by less than machine epsilon
+        """
         n_samples = len(X)
 
         # 초기 중심 (K-Means++ 단순화 버전)
@@ -139,7 +155,12 @@ class ClusterAnalyzer:
         X: np.ndarray,
         n_clusters: int
     ) -> ClusterResult:
-        """계층적 클러스터링"""
+        """Run Ward linkage hierarchical clustering on pre-normalized data.
+
+        Input: X — np.ndarray shape (n_samples, n_features), normalized
+               n_clusters — int, number of flat clusters to cut from the dendrogram
+        Output: ClusterResult with labels (0-based) and dendrogram_data["linkage"]
+        """
         # 연결 행렬 계산
         linkage_matrix = hierarchy.linkage(X, method='ward')
 
@@ -159,7 +180,14 @@ class ClusterAnalyzer:
         eps: float,
         min_samples: int
     ) -> ClusterResult:
-        """DBSCAN 클러스터링"""
+        """Run a pure-NumPy DBSCAN on pre-normalized data.
+
+        Input: X — np.ndarray shape (n_samples, n_features), normalized
+               eps — float, neighborhood radius
+               min_samples — int, minimum points to form a core point
+        Output: ClusterResult with labels (-1 = noise) and n_clusters (noise excluded)
+        Invariants: visited array ensures O(n^2) worst case, no sample processed twice
+        """
         n_samples = len(X)
         labels = np.full(n_samples, -1)
         cluster_id = 0
@@ -216,11 +244,14 @@ class ClusterAnalyzer:
         data: pl.DataFrame,
         columns: List[str]
     ) -> List[Dict[str, Any]]:
-        """
-        클러스터별 통계
+        """Compute per-cluster descriptive statistics (center and std deviation).
 
-        Returns:
-            클러스터별 통계 목록
+        Input: result — ClusterResult from a previous cluster() call
+               data — pl.DataFrame, the original (unnormalized) source data
+               columns — List[str], columns to summarize
+        Output: List[Dict[str, Any]] — one dict per cluster with keys:
+                cluster_id (int), size (int), center (List[float]), std (List[float])
+        Invariants: len(output) == result.n_clusters; empty clusters yield empty lists
         """
         X = data.select(columns).to_numpy()
         statistics = []
@@ -245,11 +276,13 @@ class ClusterAnalyzer:
         data: pl.DataFrame,
         columns: List[str]
     ) -> float:
-        """
-        실루엣 점수 계산
+        """Compute the mean silhouette coefficient for the clustering result.
 
-        Returns:
-            실루엣 점수 (-1 ~ 1)
+        Input: result — ClusterResult, must have at least 2 distinct labels
+               data — pl.DataFrame, original source data (unnormalized)
+               columns — List[str], columns used for distance calculation
+        Output: float — mean silhouette score in [-1, 1]; 0.0 if fewer than 2 clusters
+        Invariants: noise points (label == -1) are excluded from neighbor clusters
         """
         X = data.select(columns).to_numpy()
         labels = result.labels
@@ -293,11 +326,14 @@ class ClusterAnalyzer:
         columns: List[str],
         k_range: Tuple[int, int] = (2, 10)
     ) -> Tuple[List[int], List[float]]:
-        """
-        엘보우 방법으로 최적 k 찾기
+        """Find the optimal K for K-Means via the elbow method.
 
-        Returns:
-            (k 값 목록, inertia 값 목록)
+        Runs K-Means for each k in [k_range[0], k_range[1]) and collects inertia.
+        Input: data — pl.DataFrame, source dataset
+               columns — List[str], columns to cluster on
+               k_range — Tuple[int, int], inclusive start, exclusive end (default (2, 10))
+        Output: Tuple[List[int], List[float]] — (k_values, inertia_values) of equal length
+        Invariants: len(k_values) == len(inertia_values); same order as k_range
         """
         k_values = list(range(k_range[0], k_range[1]))
         inertias = []
