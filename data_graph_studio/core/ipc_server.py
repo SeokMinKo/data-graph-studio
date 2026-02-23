@@ -108,7 +108,7 @@ class IpcServer:
             self._loop.call_soon_threadsafe(self._server.close)
         try:
             _PORT_FILE.unlink(missing_ok=True)
-        except Exception:
+        except OSError:
             logger.debug("ipc_server.stop.port_file_unlink_failed", exc_info=True)
 
     def _run_loop(self, ready: threading.Event) -> None:
@@ -155,19 +155,19 @@ class IpcServer:
             response = json.dumps(result, ensure_ascii=False, default=str) + "\n"
             writer.write(response.encode("utf-8"))
             await writer.drain()
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             logger.warning("ipc_server.handle_client_error", extra={"error": str(e)})
             err = json.dumps({IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": str(e)}) + "\n"
             try:
                 writer.write(err.encode("utf-8"))
                 await writer.drain()
-            except Exception:
+            except OSError:
                 logger.debug("ipc_server.handle_client.error_write_failed", exc_info=True)
         finally:
             try:
                 writer.close()
                 await writer.wait_closed()
-            except Exception:
+            except OSError:
                 logger.debug("ipc_server.handle_client.writer_close_failed", exc_info=True)
 
     def _write_port_file(self, port: int) -> None:
