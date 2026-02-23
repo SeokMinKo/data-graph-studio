@@ -190,10 +190,10 @@ class DataQuery:
 
         Output:
             Dict with numeric statistics for the column. Keys include at
-            minimum: ``n``, ``mean``, ``std``, ``min``, ``max``, ``median``,
-            ``null_count``, ``unique_count``. Additional keys (``q1``, ``q3``,
-            ``sum``) are present for numeric columns. Returns ``{}`` if column
-            is absent from both df and lazy_df.
+            minimum: ``count``, ``mean``, ``std``, ``min``, ``max``,
+            ``median``, ``null_count``, ``unique_count``. Additional keys
+            (``q1``, ``q3``, ``sum``) are present for numeric columns.
+            Returns ``{}`` if column is absent from both df and lazy_df.
 
         Raises:
             pl.exceptions.InvalidOperationError: If a numeric aggregation is
@@ -439,8 +439,9 @@ class DataQuery:
             unchanged. Returns None if df is None.
 
         Raises:
-            None. Polars sample errors are unexpected but not caught here;
-            callers should handle pl.exceptions.* if needed.
+            pl.exceptions.InvalidOperationError: May propagate from Polars
+                on invalid sample configurations (e.g., fractional n). Not
+                caught; callers should handle if needed.
 
         Invariants:
             - Output row count <= n.
