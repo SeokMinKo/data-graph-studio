@@ -68,12 +68,6 @@ class DataEngine(DatasetMixin, AnalysisMixin):
         _cache: LRU 캐시 (maxsize=128).
     """
 
-    DEFAULT_CHUNK_SIZE = 100_000
-    LARGE_FILE_THRESHOLD = 100 * 1024 * 1024
-    LAZY_EVAL_THRESHOLD = 1024 * 1024 * 1024
-    MAX_RETRIES = 3
-    RETRY_DELAY_SECONDS = 0.5
-
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
         from .transform_chain import TransformChain
 

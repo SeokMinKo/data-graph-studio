@@ -17,6 +17,7 @@ from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
 from data_graph_studio.core.exceptions import QueryError, ValidationError
+from data_graph_studio.core.constants import DEFAULT_SCHEME_NAME
 
 
 class IFilterApplier(ABC):
@@ -288,14 +289,14 @@ class FilteringManager(Observable, IFilterApplier):
         super().__init__()
 
         self._schemes: Dict[str, FilteringScheme] = {}
-        self._active_scheme: str = "Page"
+        self._active_scheme: str = DEFAULT_SCHEME_NAME
 
         # 기본 Page 스킴 생성
         self._create_default_scheme()
 
     def _create_default_scheme(self) -> None:
         """기본 필터링 스킴 생성"""
-        self._schemes["Page"] = FilteringScheme(name="Page")
+        self._schemes[DEFAULT_SCHEME_NAME] = FilteringScheme(name=DEFAULT_SCHEME_NAME)
 
     @property
     def schemes(self) -> Dict[str, FilteringScheme]:
@@ -361,7 +362,7 @@ class FilteringManager(Observable, IFilterApplier):
             - No-op (no error) if name does not exist (other than "Page").
             - active_scheme is always a valid, existing scheme after the call.
         """
-        if name == "Page":
+        if name == DEFAULT_SCHEME_NAME:
             raise ValidationError(
                 "Cannot remove Page scheme",
                 operation="remove_scheme",
@@ -372,7 +373,7 @@ class FilteringManager(Observable, IFilterApplier):
             del self._schemes[name]
 
             if self._active_scheme == name:
-                self._active_scheme = "Page"
+                self._active_scheme = DEFAULT_SCHEME_NAME
 
             self.emit("scheme_removed", name)
 
@@ -808,5 +809,5 @@ class FilteringManager(Observable, IFilterApplier):
             - After the call, exactly one scheme ("Page") exists and active_scheme == "Page".
         """
         self._schemes.clear()
-        self._active_scheme = "Page"
+        self._active_scheme = DEFAULT_SCHEME_NAME
         self._create_default_scheme()

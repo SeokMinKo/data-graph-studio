@@ -86,7 +86,7 @@ def compute_windowed_profile(
         Profile summary dict or None on failure.
     """
     try:
-        schema = lazy_df.schema
+        schema = lazy_df.collect_schema()
         total_columns = len(schema)
         numeric_cols = sum(1 for dtype in schema.values() if dtype in NUMERIC_DTYPES)
 
