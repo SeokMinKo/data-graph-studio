@@ -218,11 +218,19 @@ class ComparisonManager(Observable):
     # ==================== Dataset CRUD ====================
 
     def get_dataset_state(self, dataset_id: str) -> Optional[DatasetState]:
-        """Return the DatasetState for the given ID, or None if not found."""
+        """Return the DatasetState for a dataset.
+
+        Input: dataset_id — str, the dataset ID to look up
+        Output: Optional[DatasetState] — the matching state, or None if not found
+        """
         return self._dataset_states.get(dataset_id)
 
     def get_dataset_metadata(self, dataset_id: str) -> Optional[DatasetMetadata]:
-        """Return the DatasetMetadata for the given ID, or None if not found."""
+        """Return the DatasetMetadata for a dataset.
+
+        Input: dataset_id — str, the dataset ID to look up
+        Output: Optional[DatasetMetadata] — the matching metadata, or None if not found
+        """
         return self._dataset_metadata.get(dataset_id)
 
     def add_dataset(
@@ -234,7 +242,17 @@ class ComparisonManager(Observable):
         column_count: int = 0,
         memory_bytes: int = 0,
     ) -> DatasetState:
-        """새 데이터셋 추가. 생성된 DatasetState 반환."""
+        """Register a new dataset with metadata and create its initial state.
+
+        Input: dataset_id — str, unique identifier for this dataset
+        Input: name — str, display name; defaults to "Dataset N" where N is the current count + 1
+        Input: file_path — Optional[str], source file path stored in metadata
+        Input: row_count — int, number of rows, stored in metadata
+        Input: column_count — int, number of columns, stored in metadata
+        Input: memory_bytes — int, estimated memory footprint in bytes
+        Output: DatasetState — the newly created state object for this dataset
+        Invariants: dataset_id is added to _dataset_states and _dataset_metadata; appended to comparison_datasets if compare_enabled; "dataset_added" event is emitted; _active_dataset_id is set if this is the first dataset
+        """
         color = DEFAULT_DATASET_COLORS[self._dataset_color_index % len(DEFAULT_DATASET_COLORS)]
         self._dataset_color_index += 1
 
@@ -265,7 +283,12 @@ class ComparisonManager(Observable):
         return state
 
     def remove_dataset(self, dataset_id: str) -> bool:
-        """데이터셋 제거. 성공 여부 반환."""
+        """Remove a dataset from state and metadata.
+
+        Input: dataset_id — str, ID of the dataset to remove
+        Output: bool — True if removed, False if dataset_id was not found
+        Invariants: dataset_id is purged from _dataset_states, _dataset_metadata, and comparison_datasets; if the removed dataset was active, _active_dataset_id advances to the next remaining dataset or becomes None; "dataset_removed" event is emitted
+        """
         if dataset_id not in self._dataset_states:
             return False
 
@@ -288,7 +311,12 @@ class ComparisonManager(Observable):
         return True
 
     def activate_dataset(self, dataset_id: str) -> bool:
-        """데이터셋 활성화. 성공 여부 반환."""
+        """Set a dataset as the active dataset.
+
+        Input: dataset_id — str, ID of the dataset to activate; must exist in _dataset_states
+        Output: bool — True if activated, False if dataset_id is not found
+        Invariants: previously active dataset's is_active flag is set to False; new dataset's is_active flag is set to True; "dataset_activated" event is emitted
+        """
         if dataset_id not in self._dataset_states:
             return False
 
@@ -301,7 +329,13 @@ class ComparisonManager(Observable):
         return True
 
     def update_dataset_metadata(self, dataset_id: str, **kwargs):
-        """데이터셋 메타데이터 업데이트."""
+        """Update arbitrary fields on a dataset's DatasetMetadata.
+
+        Input: dataset_id — str, ID of the target dataset
+        Input: **kwargs — keyword arguments whose names match DatasetMetadata field names; unknown keys are silently skipped via hasattr guard
+        Output: None
+        Invariants: only recognised DatasetMetadata attributes are modified; "dataset_updated" event is emitted if dataset_id is found
+        """
         if dataset_id in self._dataset_metadata:
             metadata = self._dataset_metadata[dataset_id]
             for key, value in kwargs.items():
@@ -310,7 +344,11 @@ class ComparisonManager(Observable):
             self.emit("dataset_updated", dataset_id)
 
     def clear_all_datasets(self):
-        """모든 데이터셋 제거."""
+        """Remove every dataset and reset the color cycle.
+
+        Output: None
+        Invariants: _dataset_states and _dataset_metadata are empty after this call; _dataset_color_index is reset to 0; remove_dataset() is called for each entry, emitting "dataset_removed" per dataset
+        """
         dataset_ids = list(self._dataset_states.keys())
         for did in dataset_ids:
             self.remove_dataset(did)
@@ -319,7 +357,12 @@ class ComparisonManager(Observable):
     # ==================== Comparison Mode & Settings ====================
 
     def set_comparison_mode(self, mode: ComparisonMode):
-        """비교 모드 설정. FR-8: 데이터셋 비교 진입 시 프로파일 비교 해제."""
+        """Set the active comparison mode, clearing any active profile comparison.
+
+        Input: mode — ComparisonMode, the desired comparison mode
+        Output: None
+        Invariants: if profile comparison was active it is cleared (target reset to "dataset", profile IDs cleared); "comparison_mode_changed" is emitted only when the mode actually changes; "comparison_settings_changed" is always emitted when mode or profile state changes
+        """
         was_profile = self._comparison_settings.comparison_target == "profile"
         if was_profile:
             self._comparison_settings.comparison_target = "dataset"
@@ -334,7 +377,12 @@ class ComparisonManager(Observable):
             self.emit("comparison_settings_changed")
 
     def set_comparison_datasets(self, dataset_ids: List[str]):
-        """비교 대상 데이터셋 설정. FR-8: 프로파일 비교 자동 해제."""
+        """Replace the list of datasets included in comparison, clearing profile comparison if active.
+
+        Input: dataset_ids — List[str], desired dataset IDs; IDs not present in _dataset_states are filtered out
+        Output: None
+        Invariants: comparison_datasets contains only valid, currently-loaded IDs after this call; profile comparison target is reset to "dataset" if it was active; "comparison_settings_changed" is emitted
+        """
         if self._comparison_settings.comparison_target == "profile":
             self._comparison_settings.comparison_target = "dataset"
             self._comparison_settings.comparison_profile_ids.clear()
@@ -345,7 +393,12 @@ class ComparisonManager(Observable):
         self.emit("comparison_settings_changed")
 
     def toggle_dataset_comparison(self, dataset_id: str) -> bool:
-        """데이터셋 비교 포함 여부 토글. 변경 후 상태 반환."""
+        """Toggle whether a dataset is included in the active comparison.
+
+        Input: dataset_id — str, ID of the dataset to toggle; must exist in _dataset_metadata
+        Output: bool — the new compare_enabled value after toggling; False if dataset_id is not found
+        Invariants: dataset_id is added to or removed from comparison_datasets to match the new compare_enabled flag; "comparison_settings_changed" is emitted
+        """
         if dataset_id not in self._dataset_metadata:
             return False
 
@@ -363,13 +416,22 @@ class ComparisonManager(Observable):
         return metadata.compare_enabled
 
     def set_dataset_color(self, dataset_id: str, color: str):
-        """데이터셋 색상 설정."""
+        """Update the display color of a dataset.
+
+        Input: dataset_id — str, ID of the target dataset
+        Input: color — str, hex color string (e.g. '#ff7f0e')
+        Output: None
+        Invariants: silently no-ops if dataset_id is not found; "dataset_updated" event is emitted on success
+        """
         if dataset_id in self._dataset_metadata:
             self._dataset_metadata[dataset_id].color = color
             self.emit("dataset_updated", dataset_id)
 
     def get_comparison_colors(self) -> Dict[str, str]:
-        """비교 대상 데이터셋들의 색상 매핑 반환."""
+        """Return a color mapping for all datasets currently included in comparison.
+
+        Output: Dict[str, str] — mapping of dataset_id to hex color string for each ID in comparison_datasets that has metadata; omits IDs whose metadata is missing
+        """
         return {
             did: self._dataset_metadata[did].color
             for did in self._comparison_settings.comparison_datasets
@@ -377,7 +439,12 @@ class ComparisonManager(Observable):
         }
 
     def update_comparison_settings(self, **kwargs):
-        """비교 설정 업데이트."""
+        """Update arbitrary fields on the current ComparisonSettings.
+
+        Input: **kwargs — keyword arguments whose names match ComparisonSettings field names; unknown keys are silently skipped via hasattr guard
+        Output: None
+        Invariants: "comparison_settings_changed" is emitted after applying any provided values
+        """
         for key, value in kwargs.items():
             if hasattr(self._comparison_settings, key):
                 setattr(self._comparison_settings, key, value)
@@ -386,10 +453,12 @@ class ComparisonManager(Observable):
     # ==================== Profile Comparison (PRD §6.1) ====================
 
     def set_profile_comparison(self, dataset_id: str, profile_ids: List[str]):
-        """
-        프로파일 비교 모드 진입.
+        """Enter profile comparison mode for the specified dataset and profiles.
 
-        FR-8: 데이터셋 비교가 활성이면 자동 해제.
+        Input: dataset_id — str, the dataset whose profiles are being compared
+        Input: profile_ids — List[str], IDs of the profiles to compare; at least two are needed for is_profile_comparison_active to return True
+        Output: None
+        Invariants: comparison_target is set to "profile"; existing dataset comparison list is cleared; mode is promoted to SIDE_BY_SIDE if it was SINGLE; "comparison_mode_changed" is emitted when mode changes; "comparison_settings_changed" is always emitted
         """
         self._comparison_settings.comparison_datasets.clear()
         self._comparison_settings.comparison_target = "profile"
@@ -406,7 +475,11 @@ class ComparisonManager(Observable):
         self.emit("comparison_settings_changed")
 
     def clear_profile_comparison(self):
-        """프로파일 비교 모드 종료 → SINGLE 모드 복귀."""
+        """Exit profile comparison mode and return to SINGLE comparison mode.
+
+        Output: None
+        Invariants: comparison_target is reset to "dataset", comparison_profile_ids is cleared, mode is set to SINGLE; "comparison_mode_changed" is emitted if mode changed; "comparison_settings_changed" is emitted if profile comparison was active or mode changed
+        """
         was_active = self.is_profile_comparison_active
 
         self._comparison_settings.comparison_target = "dataset"
@@ -424,7 +497,13 @@ class ComparisonManager(Observable):
     # ==================== Dataset Profiles ====================
 
     def add_graph_setting_to_dataset(self, dataset_id: str, setting: 'GraphSetting') -> bool:
-        """Add a graph setting (profile) to the specified dataset."""
+        """Append a graph setting (profile) to a dataset's profile list.
+
+        Input: dataset_id — str, ID of the target dataset
+        Input: setting — GraphSetting, the profile to append
+        Output: bool — True if appended, False if dataset_id is not found
+        Invariants: setting is appended to state.profiles; "dataset_updated" event is emitted on success
+        """
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
@@ -433,7 +512,13 @@ class ComparisonManager(Observable):
         return True
 
     def remove_graph_setting(self, dataset_id: str, setting_id: str) -> bool:
-        """Remove a graph setting from a dataset by setting ID."""
+        """Remove a graph setting from a dataset by its ID.
+
+        Input: dataset_id — str, ID of the target dataset
+        Input: setting_id — str, ID of the GraphSetting to remove
+        Output: bool — True if a matching setting was found and removed, False if the dataset was not found or the setting_id did not match any profile
+        Invariants: state.profiles is rebuilt without the matched entry; "dataset_updated" event is emitted only when a setting was actually removed
+        """
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
@@ -445,7 +530,14 @@ class ComparisonManager(Observable):
         return False
 
     def rename_graph_setting(self, dataset_id: str, setting_id: str, name: str) -> bool:
-        """Rename a graph setting within a dataset."""
+        """Rename a graph setting within a dataset's profile list.
+
+        Input: dataset_id — str, ID of the target dataset
+        Input: setting_id — str, ID of the GraphSetting to rename
+        Input: name — str, new display name for the setting
+        Output: bool — True if the setting was found and renamed, False if the dataset or setting_id was not found
+        Invariants: the setting is replaced in-place via GraphSetting.with_name(); "dataset_updated" event is emitted on success
+        """
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
@@ -457,6 +549,10 @@ class ComparisonManager(Observable):
         return False
 
     def get_dataset_profiles(self, dataset_id: str) -> List['GraphSetting']:
-        """Return all graph settings (profiles) for the given dataset."""
+        """Return all graph settings (profiles) for a dataset.
+
+        Input: dataset_id — str, the dataset ID to look up
+        Output: List[GraphSetting] — the dataset's profiles list, or an empty list if the dataset is not found
+        """
         state = self._dataset_states.get(dataset_id)
         return state.profiles if state else []

@@ -84,10 +84,11 @@ class DatasetManager:
     # ------------------------------------------------------------------
 
     def set_on_dataset_removing(self, callback: Callable[[str], None]) -> None:
-        """데이터셋 삭제 전 콜백을 설정한다.
+        """Register a callback invoked before a dataset is removed.
 
-        Args:
-            callback: dataset_id를 받는 콜백 함수.
+        Input: callback — Callable[[str], None], receives the dataset_id about to be removed
+        Output: None
+        Invariants: callback is stored and called once per remove_dataset() invocation before deletion
         """
         self._on_dataset_removing = callback
 
@@ -102,16 +103,14 @@ class DatasetManager:
         dataset_id: Optional[str] = None,
         **load_kwargs: Any,
     ) -> Optional[str]:
-        """새 데이터셋을 로드한다.
+        """Load a file from disk and register it as a new dataset.
 
-        Args:
-            path: 파일 경로.
-            name: 표시 이름 (None이면 파일명).
-            dataset_id: 데이터셋 ID (None이면 자동 생성).
-            **load_kwargs: FileLoader.load_file에 전달할 추가 인자.
-
-        Returns:
-            생성된 dataset_id. 실패 시 None.
+        Input: path — str, absolute or relative path to the data file
+        Input: name — Optional[str], display name; defaults to the file's basename
+        Input: dataset_id — Optional[str], explicit ID; auto-generated if None
+        Input: **load_kwargs — forwarded verbatim to FileLoader.load_file
+        Output: Optional[str] — the assigned dataset_id on success, None on failure or when MAX_DATASETS is reached
+        Invariants: on success the dataset is stored in _datasets and _active_dataset_id is set if no other dataset was active; on failure _loader state is restored to its pre-call value
         """
         # MAX_DATASETS 체크
         if len(self._datasets) >= self.MAX_DATASETS:
@@ -170,16 +169,14 @@ class DatasetManager:
         dataset_id: Optional[str] = None,
         source_path: Optional[str] = None,
     ) -> Optional[str]:
-        """DataFrame을 직접 데이터셋으로 등록한다.
+        """Register an in-memory Polars DataFrame as a new dataset without file I/O.
 
-        Args:
-            df: 로드할 polars DataFrame.
-            name: 표시 이름.
-            dataset_id: 데이터셋 ID (None이면 자동 생성).
-            source_path: 원본 파일 경로 (메타데이터용).
-
-        Returns:
-            생성된 dataset_id. 실패 시 None.
+        Input: df — pl.DataFrame, the data to register
+        Input: name — str, display name for the dataset; defaults to "Untitled"
+        Input: dataset_id — Optional[str], explicit ID; auto-generated if None
+        Input: source_path — Optional[str], original file path stored in DataSource metadata; empty string if None
+        Output: Optional[str] — the assigned dataset_id
+        Invariants: dataset is added to _datasets and _active_dataset_id is set if no other dataset was active; a lazy frame is derived from df and stored alongside it
         """
         if dataset_id is None:
             dataset_id = str(uuid.uuid4())[:DATASET_ID_LENGTH]
@@ -207,13 +204,11 @@ class DatasetManager:
         return dataset_id
 
     def remove_dataset(self, dataset_id: str) -> bool:
-        """데이터셋을 제거한다.
+        """Remove a dataset and free its memory.
 
-        Args:
-            dataset_id: 제거할 데이터셋 ID.
-
-        Returns:
-            성공 여부.
+        Input: dataset_id — str, ID of the dataset to remove
+        Output: bool — True if removed, False if dataset_id was not found
+        Invariants: _on_dataset_removing callback is called before deletion; df and lazy_df on the removed DatasetInfo are set to None; gc.collect() is called; if the removed dataset was active, _active_dataset_id advances to the next remaining dataset or becomes None
         """
         if dataset_id not in self._datasets:
             return False
@@ -243,13 +238,11 @@ class DatasetManager:
         return True
 
     def activate_dataset(self, dataset_id: str) -> bool:
-        """데이터셋을 활성화한다.
+        """Set a dataset as the active dataset.
 
-        Args:
-            dataset_id: 활성화할 데이터셋 ID.
-
-        Returns:
-            성공 여부.
+        Input: dataset_id — str, ID of the dataset to activate; must exist in _datasets
+        Output: bool — True if activated, False if dataset_id is not found
+        Invariants: _active_dataset_id equals dataset_id after a successful call
         """
         if dataset_id not in self._datasets:
             return False
@@ -257,32 +250,25 @@ class DatasetManager:
         return True
 
     def list_datasets(self) -> List[DatasetInfo]:
-        """데이터셋 목록을 반환한다.
+        """Return all loaded datasets as an ordered list.
 
-        Returns:
-            DatasetInfo 리스트.
+        Output: List[DatasetInfo] — snapshot of current datasets in insertion order
         """
         return list(self._datasets.values())
 
     def get_dataset(self, dataset_id: str) -> Optional[DatasetInfo]:
-        """특정 데이터셋을 조회한다.
+        """Look up a dataset by ID.
 
-        Args:
-            dataset_id: 데이터셋 ID.
-
-        Returns:
-            DatasetInfo 또는 None.
+        Input: dataset_id — str, the dataset ID to look up
+        Output: Optional[DatasetInfo] — the matching DatasetInfo, or None if not found
         """
         return self._datasets.get(dataset_id)
 
     def get_dataset_df(self, dataset_id: str) -> Optional[pl.DataFrame]:
-        """특정 데이터셋의 DataFrame을 반환한다.
+        """Return the Polars DataFrame for a dataset.
 
-        Args:
-            dataset_id: 데이터셋 ID.
-
-        Returns:
-            DataFrame 또는 None.
+        Input: dataset_id — str, the dataset ID to look up
+        Output: Optional[pl.DataFrame] — the DataFrame, or None if the dataset is not found or has no data
         """
         dataset = self._datasets.get(dataset_id)
         return dataset.df if dataset else None
@@ -292,21 +278,17 @@ class DatasetManager:
     # ------------------------------------------------------------------
 
     def get_total_memory_usage(self) -> int:
-        """전체 데이터셋 메모리 사용량을 반환한다.
+        """Return the combined memory usage of all loaded datasets.
 
-        Returns:
-            바이트 단위 메모리 사용량.
+        Output: int — total bytes used across all datasets, 0 if none are loaded
         """
         return sum(ds.memory_bytes for ds in self._datasets.values())
 
     def can_load_dataset(self, estimated_size: int) -> Tuple[bool, str]:
-        """데이터셋 로드 가능 여부를 확인한다.
+        """Check whether a new dataset of the given size can be loaded.
 
-        Args:
-            estimated_size: 예상 메모리 크기 (bytes).
-
-        Returns:
-            (로드 가능 여부, 메시지) 튜플.
+        Input: estimated_size — int, expected memory footprint in bytes of the prospective dataset
+        Output: Tuple[bool, str] — (True, "") if load is safe; (True, warning_msg) if near the memory ceiling; (False, reason_msg) if MAX_DATASETS or MAX_TOTAL_MEMORY would be exceeded
         """
         if len(self._datasets) >= self.MAX_DATASETS:
             return False, f"최대 데이터셋 수({self.MAX_DATASETS})에 도달했습니다."
@@ -331,27 +313,33 @@ class DatasetManager:
     # ------------------------------------------------------------------
 
     def set_dataset_color(self, dataset_id: str, color: str) -> None:
-        """데이터셋 색상을 설정한다.
+        """Update the display color of a dataset.
 
-        Args:
-            dataset_id: 데이터셋 ID.
-            color: 색상 코드 (예: '#ff0000').
+        Input: dataset_id — str, ID of the target dataset
+        Input: color — str, hex color string (e.g. '#ff0000')
+        Output: None
+        Invariants: silently no-ops if dataset_id is not found; no event is emitted
         """
         if dataset_id in self._datasets:
             self._datasets[dataset_id].color = color
 
     def rename_dataset(self, dataset_id: str, new_name: str) -> None:
-        """데이터셋 이름을 변경한다.
+        """Change the display name of a dataset.
 
-        Args:
-            dataset_id: 데이터셋 ID.
-            new_name: 새 이름.
+        Input: dataset_id — str, ID of the target dataset
+        Input: new_name — str, replacement display name; must be non-empty by convention
+        Output: None
+        Invariants: silently no-ops if dataset_id is not found; no event is emitted
         """
         if dataset_id in self._datasets:
             self._datasets[dataset_id].name = new_name
 
     def clear_all_datasets(self) -> None:
-        """모든 데이터셋을 제거한다."""
+        """Remove every loaded dataset and reset the color cycle.
+
+        Output: None
+        Invariants: _datasets is empty, _active_dataset_id is None, and _color_index is 0 after this call; remove_dataset() (including its callback and gc logic) is called for each dataset
+        """
         for dataset_id in list(self._datasets.keys()):
             self.remove_dataset(dataset_id)
         self._color_index = 0
@@ -361,13 +349,10 @@ class DatasetManager:
     # ------------------------------------------------------------------
 
     def get_common_columns(self, dataset_ids: Optional[List[str]] = None) -> List[str]:
-        """여러 데이터셋의 공통 컬럼을 반환한다.
+        """Return column names present in every specified dataset.
 
-        Args:
-            dataset_ids: 대상 데이터셋 ID 목록 (None이면 전체).
-
-        Returns:
-            공통 컬럼 이름 목록.
+        Input: dataset_ids — Optional[List[str]], IDs of datasets to intersect; defaults to all loaded datasets when None
+        Output: List[str] — column names found in all specified datasets; empty list if no datasets qualify
         """
         if dataset_ids is None:
             dataset_ids = list(self._datasets.keys())
@@ -385,13 +370,10 @@ class DatasetManager:
         return list(common)
 
     def get_numeric_columns(self, dataset_id: str) -> List[str]:
-        """데이터셋의 숫자형 컬럼 목록을 반환한다.
+        """Return the names of integer and float columns in a dataset.
 
-        Args:
-            dataset_id: 데이터셋 ID.
-
-        Returns:
-            숫자형 컬럼 이름 목록.
+        Input: dataset_id — str, ID of the target dataset
+        Output: List[str] — column names whose dtype is one of Int8/16/32/64 or Float32/64; empty list if the dataset is not found or has no data
         """
         dataset = self._datasets.get(dataset_id)
         if dataset is None or dataset.df is None:
@@ -410,14 +392,12 @@ class DatasetManager:
     def load_datasets_parallel(
         self, paths: list, max_workers: int = 4,
     ) -> Dict[str, Any]:
-        """여러 파일을 병렬로 로드한다.
+        """Load multiple files concurrently using a thread pool.
 
-        Args:
-            paths: 파일 경로 목록.
-            max_workers: 최대 워커 수.
-
-        Returns:
-            {path: dataset_id_or_exception} 매핑.
+        Input: paths — list of file path strings to load
+        Input: max_workers — int, maximum number of concurrent threads; defaults to 4
+        Output: Dict[str, Any] — mapping of each path to its dataset_id (str) on success, or a DatasetError instance on failure
+        Invariants: each successful path results in a registered dataset via load_dataset_from_dataframe; failed paths are recorded with an exception but do not abort other loads
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 

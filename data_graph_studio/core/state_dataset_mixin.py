@@ -37,11 +37,11 @@ class DatasetMixin:
     # ==================== Batch Update ====================
 
     def set_undo_stack(self, stack: Optional[UndoStack]) -> None:
-        """
-        Attach an undo stack for recording undoable state mutations.
+        """Attach an undo stack for recording undoable state mutations.
 
-        Args:
-            stack: UndoStack instance to use, or None to disable undo recording.
+        Input: stack — UndoStack or None; pass None to disable undo recording.
+        Output: None
+        Invariants: self._undo_stack is set to the provided value.
         """
         self._undo_stack = stack
 
@@ -54,11 +54,19 @@ class DatasetMixin:
         self._undo_stack.record(cmd)
 
     def begin_batch_update(self):
-        """시그널 일괄 발행을 위한 배치 시작"""
+        """Increment the batch depth, suppressing signal emission until the batch ends.
+
+        Output: None
+        Invariants: self._batch_depth >= 1 after this call; signals are deferred.
+        """
         self._batch_depth += 1
 
     def end_batch_update(self):
-        """배치 종료 시 보류된 시그널 발행"""
+        """Decrement the batch depth and flush any deferred signals when depth reaches zero.
+
+        Output: None — each deferred signal is emitted at most once.
+        Invariants: self._batch_depth >= 0; self._batch_pending_signals is empty when depth == 0.
+        """
         self._batch_depth = max(0, self._batch_depth - 1)
         if self._batch_depth == 0:
             # 보류된 시그널 한 번씩만 발행
@@ -111,76 +119,101 @@ class DatasetMixin:
 
     @property
     def dataset_states(self) -> Dict[str, DatasetState]:
-        """모든 데이터셋 상태"""
+        """Mapping of dataset ID to DatasetState for all loaded datasets."""
         return self.comparison_manager.dataset_states
 
     @property
     def dataset_metadata(self) -> Dict[str, DatasetMetadata]:
-        """모든 데이터셋 메타데이터"""
+        """Mapping of dataset ID to DatasetMetadata for all loaded datasets."""
         return self.comparison_manager.dataset_metadata
 
     @property
     def active_dataset_id(self) -> Optional[str]:
-        """현재 활성 데이터셋 ID"""
+        """ID of the currently active dataset, or None if no dataset is active."""
         return self.comparison_manager.active_dataset_id
 
     @property
     def active_dataset_state(self) -> Optional[DatasetState]:
-        """현재 활성 데이터셋의 상태"""
+        """DatasetState of the currently active dataset, or None if none is active."""
         return self.comparison_manager.active_dataset_state
 
     @property
     def comparison_settings(self) -> ComparisonSettings:
-        """비교 모드 설정"""
+        """Current comparison mode configuration."""
         return self.comparison_manager.comparison_settings
 
     @property
     def comparison_mode(self) -> ComparisonMode:
-        """현재 비교 모드"""
+        """Active comparison mode (SINGLE or MULTI)."""
         return self.comparison_manager.comparison_mode
 
     @property
     def dataset_count(self) -> int:
-        """로드된 데이터셋 수"""
+        """Number of datasets currently loaded."""
         return self.comparison_manager.dataset_count
 
     @property
     def comparison_dataset_ids(self) -> List[str]:
-        """비교 대상 데이터셋 ID 목록"""
+        """Ordered list of dataset IDs selected for multi-dataset comparison."""
         return self.comparison_manager.comparison_dataset_ids
 
     @property
     def is_profile_comparison_active(self) -> bool:
-        """프로파일 비교 모드 활성 여부"""
+        """True if profile comparison mode is currently active."""
         return self.comparison_manager.is_profile_comparison_active
 
     # --- Dataset CRUD ---
 
     def get_dataset_state(self, dataset_id: str) -> Optional[DatasetState]:
-        """특정 데이터셋의 상태 조회"""
+        """Return the DatasetState for a given dataset ID, or None if not found.
+
+        Input: dataset_id — str, must be an existing dataset ID.
+        Output: DatasetState or None.
+        """
         return self.comparison_manager.get_dataset_state(dataset_id)
 
     def get_dataset_metadata(self, dataset_id: str) -> Optional[DatasetMetadata]:
-        """특정 데이터셋의 메타데이터 조회"""
+        """Return the DatasetMetadata for a given dataset ID, or None if not found.
+
+        Input: dataset_id — str, must be an existing dataset ID.
+        Output: DatasetMetadata or None.
+        """
         return self.comparison_manager.get_dataset_metadata(dataset_id)
 
     def add_dataset(self, dataset_id: str, name: str = "", file_path: str = None,
                     row_count: int = 0, column_count: int = 0, memory_bytes: int = 0) -> DatasetState:
-        """새 데이터셋 추가. 생성된 DatasetState 반환."""
+        """Register a new dataset and return its DatasetState.
+
+        Input: dataset_id — str, unique identifier for the dataset.
+               name — str, human-readable label (default "").
+               file_path — str or None, source file path.
+               row_count, column_count, memory_bytes — int, size metadata.
+        Output: DatasetState — the newly created state object.
+        Invariants: dataset_id is present in self.dataset_states after this call.
+        """
         return self.comparison_manager.add_dataset(
             dataset_id, name=name, file_path=file_path,
             row_count=row_count, column_count=column_count, memory_bytes=memory_bytes,
         )
 
     def remove_dataset(self, dataset_id: str) -> bool:
-        """데이터셋 제거"""
+        """Remove a dataset from the application state.
+
+        Input: dataset_id — str, ID of the dataset to remove.
+        Output: bool — True if the dataset was found and removed, False otherwise.
+        Invariants: dataset_id is absent from self.dataset_states after a successful removal.
+        """
         return self.comparison_manager.remove_dataset(dataset_id)
 
     def activate_dataset(self, dataset_id: str) -> bool:
-        """데이터셋 활성화.
+        """Set a dataset as the active one and trigger state synchronisation.
 
-        단일 모드에서는 활성 데이터셋의 상태를 기존 AppState 속성들과 동기화.
-        동기화는 _on_dataset_activated 슬롯에서 처리됨.
+        In SINGLE mode, activating a dataset syncs its persisted state back into
+        the legacy AppState properties via _on_dataset_activated.
+
+        Input: dataset_id — str, ID of an existing dataset.
+        Output: bool — True if activation succeeded, False if dataset not found.
+        Invariants: self.active_dataset_id == dataset_id on success.
         """
         return self.comparison_manager.activate_dataset(dataset_id)
 
@@ -190,113 +223,140 @@ class DatasetMixin:
             self._sync_from_dataset_state(dataset_id)
 
     def update_dataset_metadata(self, dataset_id: str, **kwargs):
-        """데이터셋 메타데이터 업데이트"""
+        """Update metadata fields of an existing dataset.
+
+        Input: dataset_id — str, ID of the target dataset.
+               **kwargs — DatasetMetadata field names and their new values.
+        Output: None
+        """
         self.comparison_manager.update_dataset_metadata(dataset_id, **kwargs)
 
     def clear_all_datasets(self):
-        """모든 데이터셋 제거"""
+        """Remove all datasets from the application state.
+
+        Output: None
+        Invariants: self.dataset_states is empty after this call.
+        """
         self.comparison_manager.clear_all_datasets()
 
     # --- Comparison mode & settings ---
 
     def set_comparison_mode(self, mode: ComparisonMode):
-        """비교 모드 설정"""
+        """Switch the comparison mode between SINGLE and MULTI.
+
+        Input: mode — ComparisonMode enum value.
+        Output: None
+        Invariants: self.comparison_mode == mode after this call.
+        """
         self.comparison_manager.set_comparison_mode(mode)
 
     def set_comparison_datasets(self, dataset_ids: List[str]):
-        """비교 대상 데이터셋 설정"""
+        """Set the full list of datasets used in multi-dataset comparison.
+
+        Input: dataset_ids — List[str], ordered list of dataset IDs to compare.
+        Output: None
+        Invariants: self.comparison_dataset_ids == dataset_ids after this call.
+        """
         self.comparison_manager.set_comparison_datasets(dataset_ids)
 
     def toggle_dataset_comparison(self, dataset_id: str) -> bool:
-        """데이터셋 비교 포함 여부 토글"""
+        """Add or remove a dataset from the active comparison set.
+
+        Input: dataset_id — str, ID of the dataset to toggle.
+        Output: bool — True if the dataset is now included, False if excluded.
+        """
         return self.comparison_manager.toggle_dataset_comparison(dataset_id)
 
     def set_dataset_color(self, dataset_id: str, color: str):
-        """데이터셋 색상 설정"""
+        """Assign a display color to a dataset for use in comparison charts.
+
+        Input: dataset_id — str, ID of the target dataset.
+               color — str, CSS hex color string (e.g. "#1f77b4").
+        Output: None
+        """
         self.comparison_manager.set_dataset_color(dataset_id, color)
 
     def get_comparison_colors(self) -> Dict[str, str]:
-        """비교 대상 데이터셋들의 색상 매핑"""
+        """Return the color mapping for all datasets in the active comparison set.
+
+        Output: Dict[str, str] — dataset ID to hex color string.
+        """
         return self.comparison_manager.get_comparison_colors()
 
     def update_comparison_settings(self, **kwargs):
-        """비교 설정 업데이트"""
+        """Update one or more fields of the active ComparisonSettings.
+
+        Input: **kwargs — ComparisonSettings attribute names and their new values.
+        Output: None
+        """
         self.comparison_manager.update_comparison_settings(**kwargs)
 
     # ==================== Profile Comparison (PRD §6.1) ====================
 
     def set_profile_comparison(self, dataset_id: str, profile_ids: List[str]):
-        """프로파일 비교 모드 진입. FR-8: 데이터셋 비교가 활성이면 자동 해제."""
+        """Enter profile comparison mode for a dataset, comparing the given profiles.
+
+        Per FR-8: any active dataset comparison is automatically cleared on entry.
+
+        Input: dataset_id — str, dataset whose profiles are being compared.
+               profile_ids — List[str], profile IDs to include in the comparison.
+        Output: None
+        Invariants: self.is_profile_comparison_active is True after this call.
+        """
         self.comparison_manager.set_profile_comparison(dataset_id, profile_ids)
 
     def clear_profile_comparison(self):
-        """프로파일 비교 모드 종료 → SINGLE 모드 복귀."""
+        """Exit profile comparison mode and return to SINGLE mode.
+
+        Output: None
+        Invariants: self.is_profile_comparison_active is False after this call.
+        """
         self.comparison_manager.clear_profile_comparison()
 
     # ==================== Dataset Profiles ====================
 
     def add_graph_setting_to_dataset(self, dataset_id: str, setting: 'GraphSetting') -> bool:
-        """
-        Add a GraphSetting to a dataset's profile list.
+        """Add a GraphSetting to a dataset's profile list.
 
-        Args:
-            dataset_id: Target dataset identifier.
-            setting: GraphSetting to add.
-
-        Returns:
-            True if the setting was added successfully, False otherwise.
+        Input: dataset_id — str, target dataset ID.
+               setting — GraphSetting, the setting to add.
+        Output: bool — True if added successfully, False otherwise.
         """
         return self.comparison_manager.add_graph_setting_to_dataset(dataset_id, setting)
 
     def remove_graph_setting(self, dataset_id: str, setting_id: str) -> bool:
-        """
-        Remove a GraphSetting from a dataset's profile list.
+        """Remove a GraphSetting from a dataset's profile list by ID.
 
-        Args:
-            dataset_id: Target dataset identifier.
-            setting_id: ID of the setting to remove.
-
-        Returns:
-            True if the setting was removed, False if not found.
+        Input: dataset_id — str, target dataset ID.
+               setting_id — str, ID of the setting to remove.
+        Output: bool — True if removed, False if not found.
         """
         return self.comparison_manager.remove_graph_setting(dataset_id, setting_id)
 
     def rename_graph_setting(self, dataset_id: str, setting_id: str, name: str) -> bool:
-        """
-        Rename a GraphSetting within a dataset's profile list.
+        """Rename a GraphSetting within a dataset's profile list.
 
-        Args:
-            dataset_id: Target dataset identifier.
-            setting_id: ID of the setting to rename.
-            name: New display name for the setting.
-
-        Returns:
-            True if the rename succeeded, False if the setting was not found.
+        Input: dataset_id — str, target dataset ID.
+               setting_id — str, ID of the setting to rename.
+               name — str, new display name.
+        Output: bool — True if renamed, False if setting not found.
         """
         return self.comparison_manager.rename_graph_setting(dataset_id, setting_id, name)
 
     def get_dataset_profiles(self, dataset_id: str) -> List['GraphSetting']:
-        """
-        Return all saved GraphSettings for a dataset.
+        """Return all saved GraphSettings associated with a dataset.
 
-        Args:
-            dataset_id: Target dataset identifier.
-
-        Returns:
-            List of GraphSetting objects associated with the dataset.
+        Input: dataset_id — str, target dataset ID.
+        Output: List[GraphSetting] — may be empty if none are saved.
         """
         return self.comparison_manager.get_dataset_profiles(dataset_id)
 
     def build_graph_setting_from_state(self, name: str, dataset_id: str = "") -> 'GraphSetting':
-        """
-        Create a GraphSetting snapshot from the current AppState.
+        """Create a GraphSetting snapshot from the current AppState.
 
-        Args:
-            name: Display name for the new setting.
-            dataset_id: Optional dataset ID to associate the setting with.
-
-        Returns:
-            A new GraphSetting populated with the current chart, zone, filter, and sort state.
+        Input: name — str, display name for the new setting.
+               dataset_id — str, optional dataset ID to associate the setting with.
+        Output: GraphSetting — populated with current chart type, zones, filters, and sorts.
         """
         from .profile import GraphSetting
         current = self.get_current_graph_state()
@@ -374,19 +434,13 @@ class DatasetMixin:
         return self._data_loaded
 
     def set_data_loaded(self, loaded: bool, total_rows: int = 0):
-        """
-        Update the data-loaded state and row count.
+        """Update the data-loaded flag and reset row counts.
 
-        Sets _data_loaded and _total_rows/_visible_rows, then emits
-        data_loaded if loaded is True, or data_cleared otherwise.
-
-        Args:
-            loaded: True when data has been loaded, False when cleared.
-            total_rows: Total number of rows in the loaded dataset.
-
-        Emits:
-            data_loaded signal when loaded is True.
-            data_cleared signal when loaded is False.
+        Input: loaded — bool; True when data is present, False when cleared.
+               total_rows — int, total row count in the loaded dataset (default 0).
+        Output: None
+        Emits: data_loaded when loaded is True; data_cleared when False.
+        Invariants: self._total_rows == self._visible_rows == total_rows after this call.
         """
         self._data_loaded = loaded
         self._total_rows = total_rows
@@ -407,11 +461,11 @@ class DatasetMixin:
         return self._visible_rows
 
     def set_visible_rows(self, count: int):
-        """
-        Update the visible row count after filter application.
+        """Update the visible row count after filter application.
 
-        Args:
-            count: Number of rows remaining after filters are applied.
+        Input: count — int, number of rows remaining after all filters are applied.
+        Output: None
+        Invariants: self._visible_rows == count after this call.
         """
         self._visible_rows = count
 
