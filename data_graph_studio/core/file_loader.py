@@ -514,10 +514,14 @@ class FileLoader:
         return self._lazy_df.filter(expr)
 
     def clear(self) -> None:
-        """Reset all loaded data and state to the same condition as a freshly constructed instance.
+        """Reset loaded data, lazy frame, source path, and profile — does NOT reset window settings or warning messages.
 
         Output: None
-        Invariants: _df, _lazy_df, _source, _profile are None; gc.collect() is called
+        Invariants: _df, _lazy_df, _source, _profile are None; _precision_columns is empty;
+                    _progress is a fresh LoadingProgress; _total_rows and _window_start are 0;
+                    _windowed is False; _window_size, _warning_message, _precision_mode,
+                    _progress_callback, _cancel_loading, and _loading_thread are unchanged;
+                    gc.collect() is called
         """
         self._df = None
         self._lazy_df = None
