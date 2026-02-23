@@ -72,6 +72,38 @@ class TestFilter:
         assert len(result) == 2
         assert all(v is None for v in result["x"].to_list())
 
+    def test_ne_filter_excludes_matching_row(self, dq, int_df):
+        result = dq.filter(int_df, "a", "ne", 3)
+        assert len(result) == 4
+        assert 3 not in result["a"].to_list()
+
+    def test_contains_filter_on_string_column(self, dq, mixed_df):
+        result = dq.filter(mixed_df, "name", "contains", "li")
+        # "alice" and "charlie" both contain "li"
+        assert len(result) == 2
+
+    def test_startswith_filter(self, dq, mixed_df):
+        result = dq.filter(mixed_df, "name", "startswith", "a")
+        assert len(result) == 1
+        assert result["name"][0] == "alice"
+
+    def test_endswith_filter(self, dq, mixed_df):
+        result = dq.filter(mixed_df, "name", "endswith", "e")
+        # "alice" and "charlie" end with "e"
+        assert len(result) == 2
+
+    def test_notnull_filter_returns_non_null_rows(self, dq):
+        df = pl.DataFrame({"a": [1, None, 3, None, 5]})
+        result = dq.filter(df, "a", "notnull", None)
+        assert len(result) == 3
+        assert result["a"].null_count() == 0
+
+    def test_gt_filter_returns_values_above_threshold(self, dq):
+        df = pl.DataFrame({"a": [1.0, 2.0, 3.0, 5.0]})
+        result = dq.filter(df, "a", "gt", 2.0)
+        assert len(result) == 2
+        assert all(v > 2.0 for v in result["a"].to_list())
+
 
 # ---------------------------------------------------------------------------
 # TestSort
@@ -89,10 +121,12 @@ class TestSort:
         assert result is not None
         assert result["a"][0] == 5
 
-    def test_sort_multiple_columns(self, dq, mixed_df):
-        result = dq.sort(mixed_df, ["age", "name"])
+    def test_sort_multiple_columns(self, dq):
+        # age intentionally out of order to test sorting
+        df = pl.DataFrame({"name": ["charlie", "alice", "bob"], "age": [35, 25, 30]})
+        result = dq.sort(df, ["age", "name"])
         assert result is not None
-        assert len(result) == len(mixed_df)
+        assert result["age"].to_list() == [25, 30, 35]
 
     def test_none_df_returns_none(self, dq):
         result = dq.sort(None, ["a"])
@@ -150,6 +184,8 @@ class TestGetStatistics:
         assert "count" in result
         assert "mean" in result
         assert "std" in result
+        assert result["count"] == 5
+        assert result["mean"] == pytest.approx(3.0)
 
     def test_missing_column_returns_empty_dict(self, dq, int_df):
         result = dq.get_statistics(int_df, "nonexistent")
@@ -234,6 +270,39 @@ class TestGetUniqueValues:
     def test_missing_column_returns_empty_list(self, dq, int_df):
         result = dq.get_unique_values(int_df, "nonexistent")
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# TestSample
+# ---------------------------------------------------------------------------
+
+
+class TestSample:
+    def test_returns_n_rows_when_df_larger(self, dq, int_df):
+        result = dq.sample(int_df, n=3, seed=42)
+        assert len(result) == 3
+
+    def test_returns_full_df_when_n_gte_len(self, dq, int_df):
+        result = dq.sample(int_df, n=10, seed=42)
+        assert result is int_df  # same object (passthrough)
+
+    def test_none_df_returns_none(self, dq):
+        assert dq.sample(None, n=3) is None
+
+
+# ---------------------------------------------------------------------------
+# TestGetSlice
+# ---------------------------------------------------------------------------
+
+
+class TestGetSlice:
+    def test_returns_correct_rows(self, dq, int_df):
+        result = dq.get_slice(int_df, 1, 3)
+        assert len(result) == 2
+        assert result["a"].to_list() == [2, 3]
+
+    def test_none_df_returns_none(self, dq):
+        assert dq.get_slice(None, 0, 5) is None
 
 
 # ---------------------------------------------------------------------------
