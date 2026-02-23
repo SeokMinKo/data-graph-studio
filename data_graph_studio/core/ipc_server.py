@@ -64,7 +64,7 @@ def remove_port_file() -> None:
 class IpcServer:
     """Asyncio-based TCP IPC server."""
 
-    def __init__(self, message_handler: Callable[[dict], None]):
+    def __init__(self, message_handler: Callable[[dict], object]):
         """
         Args:
             message_handler: Called with parsed JSON dict on each received message.
@@ -128,9 +128,18 @@ class IpcServer:
         try:
             data = await asyncio.wait_for(reader.read(65536), timeout=10.0)
             msg = json.loads(data.decode())
-            self._handler(msg)
+            result = self._handler(msg)
+            response = json.dumps(result, ensure_ascii=False, default=str) + "\n"
+            writer.write(response.encode("utf-8"))
+            await writer.drain()
         except Exception as e:
             logger.warning("ipc_server.handle_client_error", extra={"error": str(e)})
+            err = json.dumps({"status": "error", "error": str(e)}) + "\n"
+            try:
+                writer.write(err.encode("utf-8"))
+                await writer.drain()
+            except Exception:
+                pass
         finally:
             try:
                 writer.close()
@@ -158,16 +167,19 @@ class IPCServer(IpcServer):
         """Register a named command handler (old API)."""
         self._handlers[command] = handler
 
-    def _dispatch(self, msg: dict) -> None:
+    def _dispatch(self, msg: dict) -> object:
+        """Dispatch to the registered handler and return its result."""
         command = msg.get("command", "")
         args = msg.get("args", {})
         if command in self._handlers:
             try:
-                self._handlers[command](**args)
+                return self._handlers[command](**args)
             except Exception as e:
                 logger.warning("ipc_server.dispatch_error", extra={"command": command, "error": str(e)})
+                return {"status": "error", "message": str(e)}
         else:
             logger.debug("ipc_server.unknown_command", extra={"command": command})
+            return {"status": "error", "message": f"unknown command: {command}"}
 
     def start(self, port: int = None) -> bool:  # type: ignore[override]
         """Start the server. Returns True on success (old API)."""
