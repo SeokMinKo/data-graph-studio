@@ -61,3 +61,6 @@ STATISTICS_TIMEOUT: int = 30     # statistics calculations
 
 # --- IPC ---
 IPC_HANDLER_TIMEOUT: int = 30  # max seconds per IPC command handler call
+
+# --- Filter Schemes ---
+DEFAULT_SCHEME_NAME: str = "Page"  # Name of the built-in, protected filtering scheme

@@ -37,7 +37,7 @@ class GraphSetting:
     hover_columns: Tuple[str, ...] = ()
     filters: Tuple = ()
     sorts: Tuple = ()
-    chart_settings: Dict = None
+    chart_settings: Optional[Dict] = None
     include_filters: bool = False
     include_sorts: bool = False
     icon: str = "📊"
@@ -152,7 +152,22 @@ class Profile:
 
     @classmethod
     def create_new(cls, name: str) -> 'Profile':
-        """새 프로파일 생성"""
+        """Create a fresh Profile with a new UUID.
+
+        Input:
+            name: Display name for the profile; may be any non-empty string.
+
+        Output:
+            A new Profile instance with a freshly generated UUID, both timestamps
+            set to the current time, and an empty settings list.
+
+        Raises:
+            None.
+
+        Invariants:
+            - Returned profile.id is never None or empty.
+            - created_at == modified_at immediately after creation.
+        """
         return cls(
             id=str(uuid.uuid4()),
             name=name,
@@ -161,12 +176,41 @@ class Profile:
         )
 
     def add_setting(self, setting: GraphSetting):
-        """설정 추가"""
+        """Append a GraphSetting to this profile.
+
+        Input:
+            setting: The GraphSetting to add; must be a valid GraphSetting instance.
+
+        Output:
+            None. The setting is appended in-place; modified_at is updated.
+
+        Raises:
+            None.
+
+        Invariants:
+            - modified_at is always updated to the current time after a successful add.
+            - The setting appears at the end of self.settings.
+        """
         self.settings.append(setting)
         self.modified_at = time.time()
 
     def remove_setting(self, setting_id: str) -> bool:
-        """설정 제거"""
+        """Remove a setting by ID from this profile.
+
+        Input:
+            setting_id: The UUID of the setting to remove.
+
+        Output:
+            True if the setting was found and removed; False if not found.
+
+        Raises:
+            None.
+
+        Invariants:
+            - If True is returned, the setting no longer appears in self.settings.
+            - If the removed setting was the default, default_setting_id is set to None.
+            - modified_at is updated only when a setting is actually removed.
+        """
         for i, s in enumerate(self.settings):
             if s.id == setting_id:
                 self.settings.pop(i)
@@ -176,22 +220,65 @@ class Profile:
                 return True
         return False
 
-    def get_setting(self, setting_id: str) -> Optional[GraphSetting]:
-        """설정 가져오기"""
+    def get_setting(self, setting_id: str) -> Optional['GraphSetting']:
+        """Look up a setting by its UUID.
+
+        Input:
+            setting_id: The UUID of the setting to retrieve.
+
+        Output:
+            The matching GraphSetting, or None if no setting with that ID exists.
+
+        Raises:
+            None.
+
+        Invariants:
+            - Returned object is the same instance stored in self.settings (not a copy).
+        """
         for s in self.settings:
             if s.id == setting_id:
                 return s
         return None
 
-    def get_setting_by_name(self, name: str) -> Optional[GraphSetting]:
-        """이름으로 설정 가져오기"""
+    def get_setting_by_name(self, name: str) -> Optional['GraphSetting']:
+        """Look up the first setting whose name matches.
+
+        Input:
+            name: The display name to search for (case-sensitive, exact match).
+
+        Output:
+            The first matching GraphSetting, or None if no match exists.
+            If multiple settings share the same name, only the first is returned.
+
+        Raises:
+            None.
+
+        Invariants:
+            - First-match semantics: iteration order of self.settings determines the result.
+        """
         for s in self.settings:
             if s.name == name:
                 return s
         return None
 
     def reorder_settings(self, setting_ids: List[str]):
-        """설정 순서 변경"""
+        """Reorder settings according to the given ID sequence.
+
+        Input:
+            setting_ids: Ordered list of setting UUIDs defining the new sequence.
+                IDs not present in self.settings are silently ignored.
+                Settings whose IDs are absent from setting_ids are dropped.
+
+        Output:
+            None. self.settings is replaced in-place with the new order.
+
+        Raises:
+            None.
+
+        Invariants:
+            - After call, len(self.settings) == len(IDs that matched existing settings).
+            - modified_at is always updated.
+        """
         id_to_setting = {s.id: s for s in self.settings}
         new_settings = []
         for sid in setting_ids:
@@ -201,7 +288,21 @@ class Profile:
         self.modified_at = time.time()
 
     def to_dict(self) -> Dict:
-        """딕셔너리로 변환"""
+        """Serialize this profile to a plain dictionary.
+
+        Input:
+            None.
+
+        Output:
+            Dict with keys: id, name, description, created_at, modified_at,
+            data_schema, settings (list of dicts), default_setting_id, tags, author.
+
+        Raises:
+            None.
+
+        Invariants:
+            - Output is always JSON-serializable (no datetime or custom objects).
+        """
         return {
             'id': self.id,
             'name': self.name,
@@ -217,7 +318,21 @@ class Profile:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'Profile':
-        """딕셔너리에서 복원"""
+        """Deserialize a Profile from a plain dictionary.
+
+        Input:
+            data: Dict produced by to_dict(). Missing keys receive safe defaults
+                (generated UUID for id, current time for timestamps, empty lists/dicts).
+
+        Output:
+            A fully initialized Profile instance with all GraphSettings restored.
+
+        Raises:
+            None. Missing keys are handled with defaults; no KeyError is raised.
+
+        Invariants:
+            - Returned profile.id is never None (defaults to new UUID if absent).
+        """
         profile = cls(
             id=data.get('id', str(uuid.uuid4())),
             name=data.get('name', 'Untitled Profile'),
@@ -237,7 +352,21 @@ class Profile:
         return profile
 
     def to_json(self, indent: int = 2) -> str:
-        """JSON 문자열로 변환"""
+        """Serialize this profile to a JSON string.
+
+        Input:
+            indent: Number of spaces for JSON indentation; defaults to 2.
+
+        Output:
+            JSON string with top-level keys: format_version ('1.0') and profile.
+
+        Raises:
+            None.
+
+        Invariants:
+            - Output is always valid JSON.
+            - Round-trip: Profile.from_json(p.to_json()) produces an equivalent profile.
+        """
         file_data = {
             'format_version': '1.0',
             'profile': self.to_dict()
@@ -246,13 +375,42 @@ class Profile:
 
     @classmethod
     def from_json(cls, json_str: str) -> 'Profile':
-        """JSON에서 복원"""
+        """Deserialize a Profile from a JSON string.
+
+        Input:
+            json_str: A JSON string produced by to_json(), or a raw profile dict
+                wrapped in the format_version envelope.
+
+        Output:
+            A fully initialized Profile instance.
+
+        Raises:
+            json.JSONDecodeError: If json_str is not valid JSON.
+
+        Invariants:
+            - Handles both the versioned envelope format and bare profile dicts.
+        """
         file_data = json.loads(json_str)
         profile_data = file_data.get('profile', file_data)
         return cls.from_dict(profile_data)
 
     def save(self, path: str):
-        """파일로 저장"""
+        """Write this profile to a .dgp file.
+
+        Input:
+            path: File path to write to. The .dgp extension is appended automatically
+                if not already present.
+
+        Output:
+            None. File is written at path; self._path and modified_at are updated.
+
+        Raises:
+            OSError: If the file cannot be created or written (permissions, disk full, etc.).
+
+        Invariants:
+            - File contents are always valid JSON after a successful save.
+            - self._path is updated to the final path (with .dgp extension).
+        """
         if not path.endswith('.dgp'):
             path = path + '.dgp'
 
@@ -264,7 +422,21 @@ class Profile:
 
     @classmethod
     def load(cls, path: str) -> 'Profile':
-        """파일에서 로드"""
+        """Load a Profile from a .dgp file.
+
+        Input:
+            path: Absolute or relative path to a .dgp file.
+
+        Output:
+            A fully initialized Profile instance with _path set to path.
+
+        Raises:
+            OSError: If the file cannot be opened or read.
+            json.JSONDecodeError: If the file contents are not valid JSON.
+
+        Invariants:
+            - Returned profile._path is always set to the path argument.
+        """
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -274,11 +446,22 @@ class Profile:
         return profile
 
     def check_compatibility(self, columns: List[str]) -> Dict[str, List[str]]:
-        """
-        데이터 컬럼과 프로파일 호환성 검사
+        """Check which columns required by this profile are present in a dataset.
 
-        Returns:
-            Dict with 'missing' and 'available' column lists
+        Input:
+            columns: List of column names available in the dataset.
+
+        Output:
+            Dict with two keys:
+            - 'missing': column names required by any setting but absent from columns.
+            - 'available': column names required by any setting and present in columns.
+
+        Raises:
+            None.
+
+        Invariants:
+            - missing ∪ available == all columns referenced across all settings.
+            - missing ∩ available == ∅.
         """
         result = {
             'missing': [],
@@ -355,31 +538,82 @@ class ProfileManager:
 
     @property
     def profiles_dir(self) -> Path:
-        """프로파일 디렉토리"""
+        """Absolute path to the directory where profiles are stored.
+
+        Output:
+            Path object; always an existing directory (created on init if absent).
+        """
         return self._profiles_dir
 
     @property
     def current_profile(self) -> Optional[Profile]:
-        """현재 프로파일"""
+        """The currently loaded Profile, or None if no profile is open.
+
+        Output:
+            Profile instance or None.
+        """
         return self._current
 
     @property
     def is_dirty(self) -> bool:
-        """수정 여부"""
+        """True if the current profile has unsaved changes.
+
+        Output:
+            bool. Always False if current_profile is None.
+        """
         return self._dirty
 
     def new_profile(self, name: str = "New Profile") -> Profile:
-        """새 프로파일 생성"""
+        """Create and activate a new empty profile.
+
+        Input:
+            name: Display name for the new profile; defaults to 'New Profile'.
+
+        Output:
+            The newly created Profile, which is now the current profile.
+
+        Raises:
+            None.
+
+        Invariants:
+            - After call, current_profile is the returned profile.
+            - is_dirty is False after this call.
+        """
         self._current = Profile.create_new(name)
         self._dirty = False
         return self._current
 
     def mark_dirty(self):
-        """수정됨으로 표시"""
+        """Mark the current profile as having unsaved changes.
+
+        Input:
+            None.
+
+        Output:
+            None. Sets is_dirty to True.
+
+        Raises:
+            None.
+        """
         self._dirty = True
 
     def save(self, path: Optional[str] = None):
-        """저장"""
+        """Save the current profile to disk.
+
+        Input:
+            path: Optional file path override. If None, uses the profile's existing
+                _path or a default path in profiles_dir.
+
+        Output:
+            None. Profile is written to disk; is_dirty is set to False.
+
+        Raises:
+            OSError: If the file cannot be created or written.
+
+        Invariants:
+            - is_dirty is False after a successful save.
+            - The saved path is added to recent profiles.
+        """
         if not self._current:
             return
 
@@ -397,7 +631,23 @@ class ProfileManager:
         self._add_recent_profile(path)
 
     def load(self, path: str) -> Profile:
-        """로드"""
+        """Load a profile from disk and set it as the current profile.
+
+        Input:
+            path: Absolute or relative path to a .dgp file.
+
+        Output:
+            The loaded Profile, which is now the current profile.
+
+        Raises:
+            OSError: If the file cannot be read.
+            json.JSONDecodeError: If the file is not valid JSON.
+
+        Invariants:
+            - current_profile is updated to the loaded profile.
+            - is_dirty is False after a successful load.
+            - The path is added to recent profiles.
+        """
         self._current = Profile.load(path)
         self._dirty = False
         self._add_recent_profile(path)
@@ -414,17 +664,46 @@ class ProfileManager:
         self._save_recent_profiles()
 
     def get_recent_profiles(self) -> List[str]:
-        """최근 프로파일 목록"""
+        """Return the list of recently accessed profile file paths.
+
+        Output:
+            List of path strings, most recently used first.
+            Returns [] if no recent profiles exist.
+
+        Raises:
+            None.
+        """
         return self._recent_profiles.copy()
 
     def list_profiles(self) -> List[Path]:
-        """프로파일 디렉토리의 모든 프로파일 목록"""
+        """Return all .dgp files found in the profiles directory.
+
+        Output:
+            Sorted list of Path objects for all .dgp files in profiles_dir.
+            Returns [] if no profiles exist.
+
+        Raises:
+            None.
+        """
         if self._profiles_dir.exists():
             return sorted(self._profiles_dir.glob("*.dgp"))
         return []
 
     def delete_profile(self, path: str) -> bool:
-        """프로파일 삭제"""
+        """Delete a .dgp profile file from disk.
+
+        Input:
+            path: Absolute or relative path to the .dgp file to delete.
+
+        Output:
+            True if the file was deleted; False if the file did not exist.
+
+        Raises:
+            (OSError, PermissionError): If the file exists but cannot be deleted.
+
+        Invariants:
+            - If True is returned, the file no longer exists at path.
+        """
         try:
             if os.path.exists(path):
                 os.remove(path)
@@ -437,7 +716,19 @@ class ProfileManager:
         return False
 
     def close_profile(self) -> bool:
-        """프로파일 닫기"""
+        """Close the currently open profile without saving.
+
+        Output:
+            True if the profile was open and closed successfully.
+            False if the profile has unsaved changes (caller should save first).
+
+        Raises:
+            None.
+
+        Invariants:
+            - If True is returned, current_profile is None and is_dirty is False.
+            - If False is returned due to dirty state, current_profile is unchanged.
+        """
         if self._dirty:
             return False
 
@@ -446,13 +737,40 @@ class ProfileManager:
         return True
 
     def add_setting_to_current(self, setting: GraphSetting):
-        """현재 프로파일에 설정 추가"""
+        """Add a GraphSetting to the current profile.
+
+        Input:
+            setting: The GraphSetting to add.
+
+        Output:
+            None.
+
+        Raises:
+            None. If no profile is currently open, the call is a silent no-op.
+
+        Invariants:
+            - If current_profile is not None, is_dirty is True after a successful add.
+            - If current_profile is None, this method is a no-op.
+        """
         if self._current:
             self._current.add_setting(setting)
             self._dirty = True
 
     def remove_setting_from_current(self, setting_id: str) -> bool:
-        """현재 프로파일에서 설정 제거"""
+        """Remove a setting from the current profile by ID.
+
+        Input:
+            setting_id: UUID of the setting to remove.
+
+        Output:
+            True if removed; False if setting_id not found in current profile.
+
+        Raises:
+            None. Returns False if no profile is currently open.
+
+        Invariants:
+            - If True is returned, setting is no longer in current_profile.settings.
+        """
         if self._current:
             result = self._current.remove_setting(setting_id)
             if result:
