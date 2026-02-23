@@ -244,7 +244,7 @@ class TestRemovingCallback:
         did = _add_df_dataset(manager, "boom")
 
         def bad_callback(ds_id):
-            raise RuntimeError("intentional error")
+            raise KeyError("intentional error")
 
         manager.set_on_dataset_removing(bad_callback)
         result = manager.remove_dataset(did)

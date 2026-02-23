@@ -16,14 +16,13 @@ import os
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, Optional
 
 from data_graph_studio.core.io_abstract import atomic_write, IExportRenderer
 from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.exceptions import ExportError
 
-if TYPE_CHECKING:
-    import polars as pl
+import polars as pl
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +134,7 @@ class ExportWorker:
                 )
         except ExportError as exc:
             self._on_failed(str(exc))
-        except Exception as exc:
+        except (OSError, MemoryError, PermissionError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as exc:
             logger.error("export_worker.run.failed op=%s fmt=%s", self.task, getattr(self.fmt, "value", self.fmt), exc_info=True)
             self._on_failed(str(exc))
 
@@ -289,7 +288,7 @@ class ExportWorker:
                 return
             self._on_progress(50)
             os.rename(tmp_path, self.path)
-        except Exception:
+        except (OSError, MemoryError, PermissionError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
             if os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)
@@ -309,7 +308,7 @@ class ExportWorker:
                 return
             self._on_progress(50)
             os.rename(tmp_path, self.path)
-        except Exception:
+        except (OSError, MemoryError, PermissionError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
             if os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)
