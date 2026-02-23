@@ -4,10 +4,13 @@ Parsing utilities for preview/full loading.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Iterable, List, Optional, Tuple
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from .data_engine import FileType, DelimiterType
 from .parsing import ParsingSettings
@@ -30,6 +33,7 @@ class ParsingEngine:
             if result is not None:
                 encoding = result.encoding
         except Exception:
+            logger.debug("parsing_utils.detect_encoding.charset_normalizer_failed", exc_info=True)
             encoding = None
 
         if not encoding:
@@ -39,6 +43,7 @@ class ParsingEngine:
                 result = chardet.detect(raw)
                 encoding = result.get("encoding")
             except Exception:
+                logger.debug("parsing_utils.detect_encoding.chardet_failed", exc_info=True)
                 encoding = None
 
         if not encoding:

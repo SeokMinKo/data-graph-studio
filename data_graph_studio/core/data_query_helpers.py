@@ -4,9 +4,12 @@ data_query_helpers — Module-level constants and pure helper functions for Data
 Extracted to keep data_query.py concise.  All logic here is stateless.
 """
 
+import logging
 from typing import Any, Dict, List, Optional
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 # Polars numeric dtype set used for statistics checks.
@@ -111,4 +114,5 @@ def compute_windowed_profile(
             'load_time_seconds': 0,
         }
     except Exception:
+        logger.debug("data_query_helpers.profile_summary.failed", exc_info=True)
         return None

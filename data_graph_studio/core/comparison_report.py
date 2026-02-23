@@ -5,11 +5,14 @@ Comparison Report Generator - 비교 리포트 생성기
 """
 
 import json
+import logging
 from datetime import datetime
 from typing import List, Dict, Any
 
 from .data_engine import DataEngine
 from .state import AppState
+
+logger = logging.getLogger(__name__)
 
 
 class ComparisonReport:
@@ -144,6 +147,7 @@ class ComparisonReport:
                 f.write(html)
             return True
         except Exception:
+            logger.error("comparison_report.export_html.failed", extra={"path": file_path}, exc_info=True)
             return False
 
     def _generate_html_report(self, data: Dict[str, Any]) -> str:
@@ -373,6 +377,7 @@ class ComparisonReport:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
             return True
         except Exception:
+            logger.error("comparison_report.export_json.failed", extra={"path": file_path}, exc_info=True)
             return False
 
     def export_csv(self, file_path: str, dataset_ids: List[str] = None) -> bool:
@@ -443,4 +448,5 @@ class ComparisonReport:
 
             return True
         except Exception:
+            logger.error("comparison_report.export_csv.failed", extra={"path": file_path}, exc_info=True)
             return False

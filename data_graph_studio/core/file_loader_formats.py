@@ -105,6 +105,7 @@ def collect_streaming(lazy_df: pl.LazyFrame) -> pl.DataFrame:
     try:
         return lazy_df.collect(engine="streaming")
     except Exception:
+        logger.debug("file_loader_formats.collect_streaming.engine_fallback", exc_info=True)
         return lazy_df.collect()
 
 
@@ -224,6 +225,7 @@ def load_windowed(
     try:
         loader._total_rows = int(loader._lazy_df.select(pl.len()).collect()[0, 0])
     except Exception:
+        logger.warning("file_loader_formats.load_windowed.row_count_failed", exc_info=True)
         loader._total_rows = 0
 
     window_size = min(loader._window_size, loader._total_rows) if loader._total_rows > 0 else loader._window_size

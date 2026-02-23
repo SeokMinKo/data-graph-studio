@@ -2,6 +2,7 @@
 Graph Profiles - 그래프 설정 프로파일 관리
 """
 
+import logging
 import os
 import json
 import time
@@ -11,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 import dataclasses
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -338,6 +341,7 @@ class ProfileManager:
                 with open(recent_file, 'r', encoding='utf-8') as f:
                     self._recent_profiles = json.load(f)
             except Exception:
+                logger.warning("profile.load_recent_profiles.failed", exc_info=True)
                 self._recent_profiles = []
 
     def _save_recent_profiles(self):
@@ -347,7 +351,7 @@ class ProfileManager:
             with open(recent_file, 'w', encoding='utf-8') as f:
                 json.dump(self._recent_profiles, f)
         except Exception:
-            pass
+            logger.warning("profile.save_recent_profiles.failed", exc_info=True)
 
     @property
     def profiles_dir(self) -> Path:
@@ -429,7 +433,7 @@ class ProfileManager:
                     self._save_recent_profiles()
                 return True
         except Exception:
-            pass
+            logger.warning("profile.delete_profile.failed", extra={"path": path}, exc_info=True)
         return False
 
     def close_profile(self) -> bool:

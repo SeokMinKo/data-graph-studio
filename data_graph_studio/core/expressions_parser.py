@@ -6,6 +6,7 @@ Expression Parser - Spotfire 스타일 수식 파서
 Conditional/helper evaluation methods live in expressions_ast_evaluator.py.
 """
 
+import logging
 from typing import List, Dict, Any, Optional, Union, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -13,6 +14,8 @@ import ast
 import re
 import polars as pl
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from data_graph_studio.core.expressions_ast_evaluator import ExpressionEvaluatorHelpers
 
@@ -195,6 +198,7 @@ class ExpressionParser:
             return pl.Series(result)
 
         except Exception:
+            logger.debug("expressions_parser.evaluate_numpy.failed", exc_info=True)
             return pl.Series([None] * len(data))
 
     def _evaluate_aggregate(

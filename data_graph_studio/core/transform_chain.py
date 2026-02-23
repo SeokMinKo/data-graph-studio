@@ -101,7 +101,7 @@ class TransformChain:
                     try:
                         df = df.with_columns(pl.col(col).cast(target, strict=False))
                     except Exception:
-                        pass
+                        logger.debug("transform_chain.apply_step.cast_failed", extra={"col": col, "dtype": dtype_str}, exc_info=True)
 
         elif op == 'drop':
             col = params.get('column')

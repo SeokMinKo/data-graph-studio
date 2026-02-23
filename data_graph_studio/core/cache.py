@@ -76,7 +76,7 @@ class CacheEntry:
         try:
             return sys.getsizeof(obj)
         except Exception:
-            return 64  # 기본값
+            return 64  # default fallback
 
 
 class CacheManager:

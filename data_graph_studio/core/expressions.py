@@ -4,11 +4,14 @@ Advanced Expressions - Spotfire 스타일 수식 엔진
 계산 컬럼, OVER 표현식 (윈도우 함수), 데이터 함수 등을 지원합니다.
 """
 
+import logging
 from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass, field
 import ast
 import polars as pl
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from data_graph_studio.core.expressions_parser import (
     SecurityError, ExpressionType, ValidationResult, ExpressionParser
@@ -176,6 +179,7 @@ class DataFunction:
         except SecurityError:
             raise
         except Exception:
+            logger.debug("expressions.data_function.exec_failed", exc_info=True)
             return None
 
 

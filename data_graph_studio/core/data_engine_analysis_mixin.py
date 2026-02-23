@@ -6,9 +6,12 @@ All methods delegate to self._comparison and self._query / self.df,
 which are initialised by DataEngine.__init__.
 """
 
+import logging
 from typing import Optional, List, Dict, Any
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisMixin(object):
@@ -231,4 +234,5 @@ class AnalysisMixin(object):
             self._virtual_columns.add(name)
             return True
         except Exception:
+            logger.warning("analysis_mixin.add_virtual_column.failed", extra={"name": name}, exc_info=True)
             return False

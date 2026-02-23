@@ -98,7 +98,7 @@ class IpcServer:
         try:
             _PORT_FILE.unlink(missing_ok=True)
         except Exception:
-            pass
+            logger.debug("ipc_server.stop.port_file_unlink_failed", exc_info=True)
 
     def _run_loop(self, ready: threading.Event) -> None:
         asyncio.set_event_loop(self._loop)
@@ -139,13 +139,13 @@ class IpcServer:
                 writer.write(err.encode("utf-8"))
                 await writer.drain()
             except Exception:
-                pass
+                logger.debug("ipc_server.handle_client.error_write_failed", exc_info=True)
         finally:
             try:
                 writer.close()
                 await writer.wait_closed()
             except Exception:
-                pass
+                logger.debug("ipc_server.handle_client.writer_close_failed", exc_info=True)
 
     def _write_port_file(self, port: int) -> None:
         _PORT_FILE.parent.mkdir(parents=True, exist_ok=True)

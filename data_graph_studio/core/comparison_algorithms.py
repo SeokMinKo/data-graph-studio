@@ -46,6 +46,7 @@ def select_test_type(data_a: np.ndarray, data_b: np.ndarray) -> str:
         _, p_b = scipy_stats.shapiro(sample_b) if len(sample_b) >= 3 else (0, 1)
         return "ttest" if p_a >= 0.05 and p_b >= 0.05 else "mannwhitney"
     except Exception:
+        logger.debug("comparison_algorithms.select_test_type.failed", exc_info=True)
         return "ttest"
 
 

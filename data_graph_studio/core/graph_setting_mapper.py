@@ -78,6 +78,7 @@ class GraphSettingMapper:
         try:
             return ChartType(str(chart_type).lower())
         except Exception:
+            logger.debug("graph_setting_mapper.resolve_chart_type.coerce_failed", exc_info=True)
             return state._chart_settings.chart_type
 
     @staticmethod
@@ -159,7 +160,7 @@ class GraphSettingMapper:
                     if hasattr(cs, key):
                         setattr(cs, key, value)
         except Exception:
-            pass
+            logger.error("graph_setting_mapper.to_app_state.apply_failed", exc_info=True)
         try:
             logger.debug("[DEBUG-CRASH] emitting chart_settings_changed")
             state.chart_settings_changed.emit()

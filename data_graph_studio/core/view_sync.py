@@ -8,11 +8,14 @@ No UI-specific panel classes are imported.
 
 from __future__ import annotations
 
+import logging
 import threading
 import weakref
 from typing import Any, Optional, Tuple
 
 from data_graph_studio.core.observable import Observable
+
+logger = logging.getLogger(__name__)
 
 
 class ViewSyncManager(Observable):
@@ -198,7 +201,7 @@ class ViewSyncManager(Observable):
                         sync_y=self._sync_y,
                     )
                 except Exception:
-                    pass  # panel may have been partially destroyed
+                    logger.debug("view_sync.dispatch_range.panel_failed", extra={"panel_id": pid}, exc_info=True)
             self.emit("view_range_synced", source_id, list(x_range), list(y_range))
         finally:
             self._is_syncing = False
@@ -269,7 +272,7 @@ class ViewSyncManager(Observable):
                 try:
                     panel.set_selection(indices)
                 except Exception:
-                    pass
+                    logger.debug("view_sync.dispatch_selection.panel_failed", extra={"panel_id": pid}, exc_info=True)
             self.emit("selection_synced", source_id, list(indices))
         finally:
             self._is_syncing = False
@@ -291,7 +294,7 @@ class ViewSyncManager(Observable):
                 try:
                     panel.set_view_range(None, None, True, True)
                 except Exception:
-                    pass
+                    logger.debug("view_sync.reset_all_views.panel_failed", exc_info=True)
         finally:
             self._is_syncing = False
 
@@ -316,7 +319,7 @@ class ViewSyncManager(Observable):
                 try:
                     panel.highlight_selection(row_indices)
                 except Exception:
-                    pass
+                    logger.debug("view_sync.row_selection.panel_failed", extra={"panel_id": pid}, exc_info=True)
         finally:
             self._is_syncing = False
 

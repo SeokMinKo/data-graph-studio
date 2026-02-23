@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -10,6 +11,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from packaging.version import Version, InvalidVersion
+
+logger = logging.getLogger(__name__)
 
 
 REPO = "SeokMinKo/data-graph-studio"
@@ -30,13 +33,14 @@ def get_current_version() -> str:
         if build_ver and build_ver != "0.0.0":
             return build_ver
     except Exception:
-        pass
+        logger.debug("updater.get_current_version.build_version_unavailable", exc_info=True)
 
     try:
         from importlib.metadata import version
 
         return version("data-graph-studio")
     except Exception:
+        logger.debug("updater.get_current_version.metadata_unavailable", exc_info=True)
         return "0.0.0"
 
 

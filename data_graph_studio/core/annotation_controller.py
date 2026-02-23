@@ -59,6 +59,7 @@ class AnnotationController:
                 ann = Annotation.from_dict(ann_dict)
                 self._annotations[aid] = ann
             except Exception:
+                logger.warning("annotation_controller.restore_state.invalid_entry", extra={"aid": aid}, exc_info=True)
                 continue
 
     # ── CRUD ──────────────────────────────────────────────────

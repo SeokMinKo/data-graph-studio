@@ -13,11 +13,14 @@ Handles:
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Dict, List, Optional, Union
 
 import polars as pl
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class ExpressionEvaluatorHelpers:
@@ -169,6 +172,7 @@ class ExpressionEvaluatorHelpers:
                 else:
                     result.append(False)
             except Exception:
+                logger.debug("expressions_ast_evaluator.evaluate_condition.comparison_failed", exc_info=True)
                 result.append(False)
 
         return result

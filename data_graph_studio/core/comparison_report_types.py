@@ -3,11 +3,14 @@ Comparison-related Report Types
 비교 분석 관련 레포트 타입 정의
 """
 
+import logging
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ReportMetadata",
@@ -99,7 +102,7 @@ class DatasetSummary:
                         }
                         break
                 except Exception:
-                    pass
+                    logger.debug("comparison_report_types.date_range.failed", extra={"col": col}, exc_info=True)
 
         return cls(
             id=id,
@@ -182,10 +185,10 @@ class StatisticalSummary:
                     stats.skewness = float(series.skew()) if hasattr(series, 'skew') else None
                     stats.kurtosis = float(series.kurtosis()) if hasattr(series, 'kurtosis') else None
                 except Exception:
-                    pass
+                    logger.debug("comparison_report_types.skewness_kurtosis.failed", exc_info=True)
 
             except Exception:
-                pass
+                logger.debug("comparison_report_types.numeric_stats.failed", extra={"col": column}, exc_info=True)
 
         return stats
 

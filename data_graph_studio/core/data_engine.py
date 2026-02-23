@@ -337,6 +337,7 @@ class DataEngine(DatasetMixin, AnalysisMixin):
             self._clear_cache()
             return True
         except Exception:
+            logger.warning("data_engine.append_rows.failed, falling back to full reload", extra={"path": str(file_path)}, exc_info=True)
             return self.load_file(file_path, optimize_memory=True)
 
     @staticmethod
@@ -455,6 +456,7 @@ class DataEngine(DatasetMixin, AnalysisMixin):
             ))
             return True
         except Exception:
+            logger.warning("data_engine.cast_column.failed", extra={"col": col_name, "dtype": str(target_dtype)}, exc_info=True)
             return False
 
     # -- State sync (7) -------------------------------------------------------

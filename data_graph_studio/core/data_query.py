@@ -54,6 +54,7 @@ class DataQuery:
         try:
             return self._collect_streaming(df.lazy().filter(ops[operator]))
         except Exception:
+            logger.debug("data_query.filter.streaming_fallback", exc_info=True)
             return df.filter(ops[operator])
 
     def sort(
@@ -68,6 +69,7 @@ class DataQuery:
         try:
             return self._collect_streaming(df.lazy().sort(columns, descending=descending))
         except Exception:
+            logger.debug("data_query.sort.streaming_fallback", exc_info=True)
             return df.sort(columns, descending=descending)
 
     def group_aggregate(
@@ -95,6 +97,7 @@ class DataQuery:
         try:
             return self._collect_streaming(df.lazy().group_by(group_columns).agg(agg_exprs))
         except Exception:
+            logger.debug("data_query.group_aggregate.streaming_fallback", exc_info=True)
             return df.group_by(group_columns).agg(agg_exprs)
 
     def get_statistics(
@@ -283,6 +286,7 @@ class DataQuery:
                 cond = pl.col(col).cast(pl.Utf8).str.contains(query_pattern, literal=literal)
                 conditions.append(cond)
             except Exception:
+                logger.warning("data_query.search.column_skip", extra={"col": col}, exc_info=True)
                 continue
 
         if not conditions:
@@ -332,6 +336,7 @@ class DataQuery:
         try:
             return self._collect_streaming(lf)
         except Exception:
+            logger.debug("data_query.filter_by_map.streaming_fallback", exc_info=True)
             return lf.collect()
 
     def create_index(self, df: pl.DataFrame, column: str) -> Dict[Any, List[int]]:
@@ -389,7 +394,7 @@ class DataQuery:
                 if stats_df is not None and stats_df.height > 0:
                     return stats_df.to_dicts()[0]
             except Exception:
-                pass
+                logger.debug("data_query.windowed_stats.streaming_fallback", exc_info=True)
 
         if df is None or column not in df.columns:
             return {}
@@ -402,4 +407,5 @@ class DataQuery:
         try:
             return lazy_df.collect(engine="streaming")
         except Exception:
+            logger.debug("data_query.collect_streaming.engine_fallback", exc_info=True)
             return lazy_df.collect()

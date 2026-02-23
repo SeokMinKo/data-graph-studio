@@ -8,8 +8,11 @@ serialization, validation, and preset management.
 from __future__ import annotations
 
 import copy
+import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Any
+
+logger = logging.getLogger(__name__)
 
 # Minimum cell dimensions in pixels (FR-1.9)
 MIN_CELL_WIDTH: int = 240
@@ -228,4 +231,5 @@ def validate_layout_json(data: Any) -> DashboardLayout:
             return default_layout()
         return layout
     except Exception:
+        logger.warning("dashboard_layout.deserialize.failed", exc_info=True)
         return default_layout()
