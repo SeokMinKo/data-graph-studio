@@ -55,8 +55,6 @@ class DataQuery:
 
         Raises:
             QueryError: If operator is not one of the supported operator strings.
-            pl.exceptions.InvalidOperationError: If the operator is incompatible
-                with the column dtype (propagated from Polars eager fallback).
 
         Invariants:
             - Result row count <= input row count.
@@ -101,10 +99,7 @@ class DataQuery:
             is None. Row count is always equal to the input row count.
 
         Raises:
-            pl.exceptions.InvalidOperationError: If any column name in columns
-                does not exist in df (propagated from Polars).
-            pl.exceptions.ComputeError: If sort cannot be computed due to
-                internal Polars error.
+            None. Polars errors are caught internally for streaming→eager fallback.
 
         Invariants:
             - Output row count == input row count.
@@ -143,9 +138,7 @@ class DataQuery:
             ``{col}_{func}``. Returns None if df is None.
 
         Raises:
-            pl.exceptions.InvalidOperationError: If any column name is not
-                present in df or is incompatible with the requested function.
-            pl.exceptions.ComputeError: On internal Polars computation failure.
+            None. Polars errors are caught internally for streaming→eager fallback.
 
         Invariants:
             - Output columns include all group_columns plus ``{col}_{func}``
