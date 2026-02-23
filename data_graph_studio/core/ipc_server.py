@@ -17,6 +17,7 @@ from data_graph_studio.core.constants import (
     IPC_DEFAULT_PORT as DEFAULT_PORT,
     IPC_MAX_PORT_ATTEMPTS as MAX_PORT_ATTEMPTS,
 )
+from data_graph_studio.core.ipc_protocol import make_error_response, parse_request
 
 _PORT_FILE = Path.home() / ".dgs" / "ipc_port"
 
@@ -169,8 +170,13 @@ class IPCServer(IpcServer):
 
     def _dispatch(self, msg: dict) -> object:
         """Dispatch to the registered handler and return its result."""
-        command = msg.get("command", "")
-        args = msg.get("args", {})
+        try:
+            req = parse_request(msg)
+        except ValueError as e:
+            logger.warning("ipc_server.invalid_request", extra={"error": str(e)})
+            return make_error_response(str(e))
+        command = req["command"]
+        args = req["args"]
         if command in self._handlers:
             try:
                 return self._handlers[command](**args)
