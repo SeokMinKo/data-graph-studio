@@ -285,7 +285,7 @@ class TraceController:
             def run(self_w):
                 """Parse the ftrace file and emit finished or error signal."""
                 try:
-                    df = parser.parse_raw(file_path, settings)
+                    df = parser.parse(file_path, settings)
                     self_w.finished.emit(df)
                 except Exception as e:
                     self_w.error.emit(str(e))

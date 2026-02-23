@@ -47,6 +47,7 @@ class IPCController:
         server.register_handler('set_chart_type', ui(self._ipc_set_chart_type))
         server.register_handler('set_columns', ui(self._ipc_set_columns))
         server.register_handler('load_file', ui(self._ipc_load_file))
+        server.register_handler('parse_ftrace', ui(self._ipc_parse_ftrace))
         server.register_handler('get_panels', ui(self._ipc_get_panels))
         server.register_handler('get_summary', ui(self._ipc_get_summary))
         server.register_handler('execute', ui(self._ipc_execute))
@@ -219,6 +220,27 @@ class IPCController:
             w._update_summary_from_profile()
             return {'status': 'ok', 'dataset_id': dataset_id}
         return {'status': 'error', 'message': 'Engine failed to load dataset'}
+
+    def _ipc_parse_ftrace(self, file_path: str, converter: str = "blocklayer") -> dict:
+        """Parse an ftrace file with the given converter and load the result as a dataset.
+
+        Args:
+            file_path: Absolute path to the ftrace text file.
+            converter: Converter name (default: "blocklayer").
+
+        Returns:
+            {"status": "ok"} on success, {"status": "error", "message": ...} on failure.
+        """
+        w = self._w
+
+        if not Path(file_path).exists():
+            return {"status": "error", "message": f"File not found: {file_path}"}
+
+        try:
+            w._parse_ftrace_async(file_path, converter)
+            return {"status": "ok"}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
 
     def _ipc_get_panels(self) -> dict:
         """패널 정보 반환"""
