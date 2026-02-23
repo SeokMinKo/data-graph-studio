@@ -543,7 +543,7 @@ class DataEngine(DatasetMixin, AnalysisMixin):
             self.update_dataframe(merged)
             self._clear_cache()
             return True
-        except Exception:
+        except (pl.exceptions.PolarsError, OSError):
             logger.warning("data_engine.append_rows.failed, falling back to full reload", extra={"path": str(file_path)}, exc_info=True)
             return self.load_file(file_path, optimize_memory=True)
 
@@ -980,7 +980,7 @@ class DataEngine(DatasetMixin, AnalysisMixin):
                 timestamp=time.time(),
             ))
             return True
-        except Exception as e:
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, pl.exceptions.SchemaError, TypeError) as e:
             raise QueryError(
                 f"Cannot cast column '{col_name}' to {target_dtype}",
                 operation="cast_column",

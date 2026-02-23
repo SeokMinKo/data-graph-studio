@@ -346,7 +346,7 @@ class ExpressionEngine:
         except ExpressionError as e:
             logger.warning("expression_engine.validate.failed", extra={"error": str(e), "expr": str(expression)[:80]})
             return False, str(e)
-        except Exception as e:
+        except (pl.exceptions.InvalidOperationError, NameError, SyntaxError, TypeError, ValueError) as e:
             logger.warning("expression_engine.validate.failed", extra={"error": str(e), "expr": str(expression)[:80]})
             return False, str(e)
 

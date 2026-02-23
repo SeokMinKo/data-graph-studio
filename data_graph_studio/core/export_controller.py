@@ -224,7 +224,7 @@ class ExportController(Observable):
         except ExportError as e:
             logger.error("export_controller.ipc_chart.failed", extra={"path": path}, exc_info=True)
             return {"status": "error", "message": str(e)}
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError) as e:
             logger.error("export_controller.ipc_chart.unexpected", extra={"path": path}, exc_info=True)
             return {"status": "error", "message": str(e)}
 
@@ -258,7 +258,7 @@ class ExportController(Observable):
         except ExportError as e:
             logger.error("export_controller.ipc_data.failed", extra={"path": path}, exc_info=True)
             return {"status": "error", "message": str(e)}
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError) as e:
             logger.error("export_controller.ipc_data.unexpected", extra={"path": path}, exc_info=True)
             return {"status": "error", "message": str(e)}
 
