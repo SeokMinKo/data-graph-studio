@@ -304,7 +304,17 @@ class TraceController:
             )
             if dataset_id:
                 logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
-                self.w._on_data_loaded()
+                dataset = self.w.engine.get_dataset(dataset_id)
+                if dataset:
+                    self.w.state.add_dataset(
+                        dataset_id=dataset_id,
+                        name=dataset_name,
+                        file_path=file_path,
+                        row_count=len(df),
+                        column_count=len(df.columns),
+                        memory_bytes=df.estimated_size(),
+                    )
+                self.w._on_dataset_activated(dataset_id)
                 self.w._apply_graph_presets(df, converter)
                 self.w.statusBar().showMessage(
                     f"Ftrace: loaded {len(df)} rows from {Path(file_path).name}",

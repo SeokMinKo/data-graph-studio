@@ -266,15 +266,14 @@ def run_avd_qa(
     logger.info("step6: capture screenshots")
     screenshots = []
     try:
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         for target in ["graph_panel", "summary_panel", "table_panel"]:
-            path = str(out_dir / f"{target}_{ts}.png")
             resp = _ipc_send({
                 "command": "capture",
-                "args": {"target": target, "path": path},
+                "args": {"target": target, "output_dir": str(out_dir)},
             })
             if resp.get("status") == "ok":
-                screenshots.append(path)
+                for cap in resp.get("captures", []):
+                    screenshots.append(cap["file"])
 
         target_count = 3  # graph_panel, summary_panel, table_panel
         status = "PASS" if len(screenshots) == target_count else "WARN"
