@@ -155,7 +155,7 @@ class IpcServer:
             response = json.dumps(result, ensure_ascii=False, default=str) + "\n"
             writer.write(response.encode("utf-8"))
             await writer.drain()
-        except (json.JSONDecodeError, OSError) as e:
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
             logger.warning("ipc_server.handle_client_error", extra={"error": str(e)})
             err = json.dumps({IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": str(e)}) + "\n"
             try:
