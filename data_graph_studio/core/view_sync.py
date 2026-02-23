@@ -39,6 +39,12 @@ class ViewSyncManager(Observable):
     THROTTLE_MS = 50
 
     def __init__(self) -> None:
+        """Initialise the sync manager with default settings and empty panel registry.
+
+        Output: None
+        Invariants: sync_x is True, sync_y is False, sync_selection is True on creation;
+                    _panels registry is empty; no timers are running
+        """
         super().__init__()
 
         # --- public sync toggles ---
@@ -111,11 +117,22 @@ class ViewSyncManager(Observable):
     # ------------------------------------------------------------------
 
     def register_panel(self, panel_id: str, panel: Any) -> None:
-        """Register a panel for sync.  Replaces existing panel with same id."""
+        """Register a panel for sync, replacing any existing panel with the same id.
+
+        Input: panel_id — str, unique identifier for the panel
+               panel — Any, panel object that implements set_view_range and set_selection
+        Output: None
+        Invariants: panel is held via weak reference and auto-removed when garbage-collected
+        """
         self._panels[panel_id] = panel
 
     def unregister_panel(self, panel_id: str) -> None:
-        """Explicitly remove a panel.  No-op if not found."""
+        """Explicitly remove a panel from the registry.
+
+        Input: panel_id — str, the id of the panel to remove
+        Output: None
+        Invariants: no-op if panel_id is not found; never raises KeyError
+        """
         try:
             del self._panels[panel_id]
         except KeyError:
@@ -131,12 +148,17 @@ class ViewSyncManager(Observable):
         x_range: list,
         y_range: list,
     ) -> None:
-        """
-        Called when a panel's view range changes.
+        """Propagate a view range change from one panel to all others.
 
-        Uses leading-edge throttle: the *first* event in a window fires
-        immediately; subsequent events within the window are queued and
-        the *last* one fires when the window expires.
+        Uses leading-edge throttle: the first event in each 50 ms window fires
+        immediately; subsequent events in the window are queued and the last one
+        fires when the window expires.
+
+        Input: source_id — str, id of the panel that changed its range
+               x_range — list, new X-axis range [min, max]
+               y_range — list, new Y-axis range [min, max]
+        Output: None
+        Invariants: the source panel is never updated; sync_x and sync_y flags are respected
         """
         if self._is_syncing:
             return  # prevent infinite loop
@@ -216,7 +238,15 @@ class ViewSyncManager(Observable):
         source_id: str,
         indices: list,
     ) -> None:
-        """Called when a panel's data-point selection changes."""
+        """Propagate a data-point selection change from one panel to all others.
+
+        Uses leading-edge throttle identical to on_source_range_changed.
+
+        Input: source_id — str, id of the panel whose selection changed
+               indices — list, selected data-point indices
+        Output: None
+        Invariants: no-op when sync_selection is False; source panel is never updated
+        """
         if self._is_syncing:
             return
 
@@ -284,11 +314,14 @@ class ViewSyncManager(Observable):
     # ------------------------------------------------------------------
 
     def reset_all_views(self) -> None:
-        """
-        Ask every panel to reset to auto-range.
+        """Ask every registered panel to auto-fit its view range.
 
-        Calls ``set_view_range(None, None, True, True)`` — panels should
-        interpret ``None`` ranges as "auto-fit".
+        Calls set_view_range(None, None, True, True) on each panel; None ranges
+        signal "auto-fit" to the panel implementation.
+
+        Output: None
+        Invariants: all panels are called regardless of sync_x/sync_y settings;
+                    panels that raise AttributeError, RuntimeError, or TypeError are silently skipped
         """
         self._is_syncing = True
         try:
@@ -306,10 +339,15 @@ class ViewSyncManager(Observable):
         source_id: str,
         row_indices: list,
     ) -> None:
-        """Called when a panel's row selection (rect/lasso) changes.
+        """Propagate a rect/lasso row selection from one panel to all others.
 
-        Always syncs regardless of sync_x/sync_y settings — row selection
-        is always propagated for visual consistency.
+        Bypasses sync_x/sync_y settings — row selection always propagates for visual
+        consistency across panels.
+
+        Input: source_id — str, id of the panel whose row selection changed
+               row_indices — list, selected row indices
+        Output: None
+        Invariants: source panel is never updated; no throttling applied
         """
         if self._is_syncing:
             return
@@ -328,7 +366,11 @@ class ViewSyncManager(Observable):
             self._is_syncing = False
 
     def clear(self) -> None:
-        """Remove all panels and cancel pending timers."""
+        """Remove all panels and cancel any pending throttle timers.
+
+        Output: None
+        Invariants: panel_count is 0 after return; no background timers are running after return
+        """
         self._panels.clear()
         with self._lock:
             self._pending_range = None
