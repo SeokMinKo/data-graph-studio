@@ -30,7 +30,7 @@ class CaptureService(ICaptureService):
     def register_panel(self, name: str, widget: Any) -> None:
         """Register a named panel widget for capture."""
         self._panels[name] = widget
-        logger.debug("capture_service.panel_registered", extra={"name": name})
+        logger.debug("capture_service.panel_registered", extra={"panel_name": name})
 
     def list_panels(self) -> List[str]:
         """Return list of registered panel names."""
@@ -83,7 +83,7 @@ class CaptureService(ICaptureService):
             return CaptureResult(name=name, file=saved, state=state, summary=summary)
 
         except Exception as exc:
-            logger.warning("capture_service.capture_failed", extra={"name": name, "error": str(exc)})
+            logger.warning("capture_service.capture_failed", extra={"panel_name": name, "error": str(exc)})
             return CaptureResult(name=name, file=file_path, state={}, summary="", error=str(exc))
 
     def _grab_widget(self, widget: Any, file_path: Path) -> Path:
