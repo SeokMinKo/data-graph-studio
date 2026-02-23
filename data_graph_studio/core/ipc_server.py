@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import threading
 from pathlib import Path
 from typing import Callable, Optional
@@ -242,14 +243,12 @@ class IPCClient:
 
     def connect(self) -> bool:
         """Open a TCP connection to the IPC server. Returns True on success."""
-        import socket
-
         try:
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._socket.settimeout(5.0)
             self._socket.connect((self.host, self.port))
             return True
-        except Exception as e:
+        except (OSError, socket.timeout) as e:
             logger.debug("[IPC Client] Connection failed: %s", e)
             return False
 
@@ -276,7 +275,7 @@ class IPCClient:
                     break
 
             return json.loads(response.decode("utf-8").strip())
-        except Exception as e:
+        except (OSError, socket.timeout, UnicodeDecodeError, json.JSONDecodeError) as e:
             return {IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": str(e)}
 
     def __enter__(self):

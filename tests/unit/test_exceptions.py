@@ -273,7 +273,7 @@ class TestFilteringQueryErrorPassthrough:
             manager._apply_single_filter(df, f)
 
     def test_generic_exception_is_wrapped_as_query_error(self, monkeypatch):
-        """Non-QueryError exceptions are wrapped in QueryError at the filter boundary."""
+        """Polars exceptions are wrapped in QueryError at the filter boundary."""
         import polars as pl
         from data_graph_studio.core.filtering import FilteringManager
 
@@ -281,14 +281,14 @@ class TestFilteringQueryErrorPassthrough:
         df = pl.DataFrame({"a": [1, 2, 3]})
         f = self._make_filter()
 
-        def _raise_generic(*args, **kwargs):
-            raise RuntimeError("some polars internal error")
+        def _raise_polars(*args, **kwargs):
+            raise pl.exceptions.InvalidOperationError("some polars internal error")
 
-        monkeypatch.setattr(pl.DataFrame, "filter", _raise_generic)
+        monkeypatch.setattr(pl.DataFrame, "filter", _raise_polars)
 
         with pytest.raises(QueryError, match="Filter execution failed") as exc_info:
             manager._apply_single_filter(df, f)
 
-        assert isinstance(exc_info.value.__cause__, RuntimeError)
+        assert isinstance(exc_info.value.__cause__, pl.exceptions.InvalidOperationError)
         assert exc_info.value.context["column"] == "a"
         assert exc_info.value.context["operator"] == "gt"

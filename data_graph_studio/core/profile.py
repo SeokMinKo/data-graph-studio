@@ -7,7 +7,7 @@ import os
 import json
 import time
 import uuid
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -37,7 +37,7 @@ class GraphSetting:
     hover_columns: Tuple[str, ...] = ()
     filters: Tuple = ()
     sorts: Tuple = ()
-    chart_settings: Optional[Dict] = None
+    chart_settings: Optional[Mapping[str, Any]] = None
     include_filters: bool = False
     include_sorts: bool = False
     icon: str = "📊"
