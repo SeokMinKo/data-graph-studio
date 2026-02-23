@@ -237,11 +237,10 @@ class TestFilteringQueryErrorPassthrough:
         except QueryError:
             raise
         except Exception as e:
-            logger.warning(...)
-            return data
+            raise QueryError(...) from e
 
-    If a QueryError is raised inside data.filter(), it must propagate rather
-    than being swallowed. We test this by monkey-patching polars.DataFrame.filter.
+    QueryError propagates directly; other exceptions are wrapped in QueryError
+    at the filter execution boundary. Both are tested via monkey-patching.
     """
 
     def _make_filter(self):
@@ -273,8 +272,8 @@ class TestFilteringQueryErrorPassthrough:
         with pytest.raises(QueryError, match="injected query error"):
             manager._apply_single_filter(df, f)
 
-    def test_generic_exception_is_swallowed_by_apply_single_filter(self, monkeypatch):
-        """Non-QueryError exceptions are caught and the original data returned."""
+    def test_generic_exception_is_wrapped_as_query_error(self, monkeypatch):
+        """Non-QueryError exceptions are wrapped in QueryError at the filter boundary."""
         import polars as pl
         from data_graph_studio.core.filtering import FilteringManager
 
@@ -287,6 +286,9 @@ class TestFilteringQueryErrorPassthrough:
 
         monkeypatch.setattr(pl.DataFrame, "filter", _raise_generic)
 
-        # Should not raise — returns the original df unchanged
-        result = manager._apply_single_filter(df, f)
-        assert result is df
+        with pytest.raises(QueryError, match="Filter execution failed") as exc_info:
+            manager._apply_single_filter(df, f)
+
+        assert isinstance(exc_info.value.__cause__, RuntimeError)
+        assert exc_info.value.context["column"] == "a"
+        assert exc_info.value.context["operator"] == "gt"

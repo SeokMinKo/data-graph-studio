@@ -419,8 +419,11 @@ class FilteringManager(Observable, IFilterApplier):
         except QueryError:
             raise
         except Exception as e:
-            logger.warning("filtering.apply_filter.skipped", extra={"column": str(f.column), "error": str(e)})
-            return data
+            raise QueryError(
+                "Filter execution failed",
+                operation="_apply_single_filter",
+                context={"column": str(f.column), "operator": str(f.operator.value), "value": str(f.value)},
+            ) from e
 
     def _get_all_filters(self, scheme: FilteringScheme) -> List[Filter]:
         """상속 포함 모든 필터 조회"""
