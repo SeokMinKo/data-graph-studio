@@ -245,7 +245,7 @@ class Project:
         self.modified_at = time.time()
         self._path = path
 
-        logger.debug("project.save", extra={"path": path, "name": self.name})
+        logger.debug("project.save", extra={"path": path, "project_name": self.name})
         with open(path, 'w', encoding='utf-8') as f:
             f.write(self.to_json())
     

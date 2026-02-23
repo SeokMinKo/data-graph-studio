@@ -27,9 +27,8 @@ def test_runner_builds_scenario_list():
 
 def test_runner_connect_returns_none_when_dgs_not_running():
     runner = QARunner(data_dir=Path("/fake"), output_dir=Path("/tmp"))
-    with patch("data_graph_studio.tools.dgs_qa_runner.IPCClient") as MockClient:
-        instance = MockClient.return_value
-        instance.connect.return_value = False
+    with patch("data_graph_studio.tools.dgs_qa_runner._ipc_send") as mock_send:
+        mock_send.side_effect = ConnectionRefusedError("not running")
         result = runner._connect_to_dgs()
     assert result is None
 

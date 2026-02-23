@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from data_graph_studio.core.ipc_server import IPCClient
+from data_graph_studio.core.ipc_server import send_command as _ipc_send
 
 logger = logging.getLogger(__name__)
 
@@ -136,21 +137,25 @@ class QARunner:
     # IPC helpers
     # ------------------------------------------------------------------
 
-    def _connect_to_dgs(self) -> Optional[IPCClient]:
-        """Connect to running DGS via IPC. Returns client or None."""
-        client = IPCClient()
-        if not client.connect():
-            logger.warning("qa_runner.connect_failed")
-            return None
-        self._client = client
-        return client
+    def _connect_to_dgs(self) -> Optional["QARunner"]:
+        """Verify DGS is reachable via IPC. Returns self or None."""
+        try:
+            resp = _ipc_send("ping")
+            if resp == "pong" or (isinstance(resp, dict) and resp.get("status") != "error"):
+                self._reachable = True
+                return self
+        except Exception:
+            pass
+        logger.warning("qa_runner.connect_failed")
+        self._reachable = False
+        return None
 
     def _cmd(self, command: str, **kwargs) -> Optional[Dict]:
-        """Send IPC command, return response dict or None on error."""
-        if self._client is None:
+        """Send IPC command via fresh connection each time (IPC is single-shot per conn)."""
+        if not getattr(self, "_reachable", False):
             return None
         try:
-            return self._client.send_command(command, **kwargs)
+            return _ipc_send(command, **kwargs)
         except Exception as exc:
             logger.warning("qa_runner.cmd_error", extra={"cmd": command, "error": str(exc)})
             return None

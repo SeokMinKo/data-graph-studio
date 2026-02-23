@@ -254,13 +254,13 @@ class DashboardController:
         if self._layout is None:
             logger.warning("dashboard_controller.save_layout.no_layout")
             return None
-        logger.debug("dashboard_controller.save_layout", extra={"name": self._layout.name})
+        logger.debug("dashboard_controller.save_layout", extra={"layout_name": self._layout.name})
         return self._layout.to_dict()
 
     def load_layout(self, data: Dict) -> DashboardLayout:
         """FR-1.4 / ERR-1.3: load layout from dict with validation fallback."""
         self._layout = validate_layout_json(data)
-        logger.debug("dashboard_controller.load_layout", extra={"name": self._layout.name})
+        logger.debug("dashboard_controller.load_layout", extra={"layout_name": self._layout.name})
         return self._layout
 
     # -- undo helpers -------------------------------------------------------

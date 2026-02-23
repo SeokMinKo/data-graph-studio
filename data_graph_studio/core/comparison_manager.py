@@ -259,7 +259,7 @@ class ComparisonManager(Observable):
         if metadata.compare_enabled:
             self._comparison_settings.comparison_datasets.append(dataset_id)
 
-        logger.debug("comparison_manager.add_dataset", extra={"dataset_id": dataset_id, "name": name})
+        logger.debug("comparison_manager.add_dataset", extra={"dataset_id": dataset_id, "dataset_name": name})
         self.emit("dataset_added", dataset_id)
         return state
 
