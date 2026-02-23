@@ -90,8 +90,8 @@ def prepare_parquet_from_csv(
         )
         lf.sink_parquet(parquet_path, compression="zstd")
         return parquet_path
-    except Exception as e:
-        logger.warning("file_loader.parquet_convert_failed", extra={"error": e})
+    except (OSError, PermissionError, MemoryError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as e:
+        logger.warning("file_loader.parquet_convert_failed", extra={"reason": type(e).__name__, "path": str(path)})
         loader._warning_message = "Memory optimization unavailable. File loaded directly (higher memory usage)."
         return None
 
