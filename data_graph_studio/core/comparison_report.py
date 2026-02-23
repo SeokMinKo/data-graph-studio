@@ -147,7 +147,7 @@ class ComparisonReport:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html)
             return True
-        except Exception as e:
+        except (OSError, PermissionError, UnicodeEncodeError) as e:
             raise ExportError(
                 f"HTML 리포트 파일 쓰기 실패: {e}",
                 operation="export_html",
@@ -380,7 +380,7 @@ class ComparisonReport:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
             return True
-        except Exception as e:
+        except (OSError, PermissionError, UnicodeEncodeError) as e:
             raise ExportError(
                 f"JSON 리포트 파일 쓰기 실패: {e}",
                 operation="export_json",
@@ -401,7 +401,7 @@ class ComparisonReport:
                 self._write_csv_rows(csv.writer(f), data)
 
             return True
-        except Exception as e:
+        except (OSError, PermissionError, UnicodeEncodeError) as e:
             raise ExportError(
                 f"CSV 리포트 파일 쓰기 실패: {e}",
                 operation="export_csv",

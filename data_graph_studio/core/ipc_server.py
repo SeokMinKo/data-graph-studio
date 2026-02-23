@@ -203,7 +203,7 @@ class IPCServer(IpcServer):
         if command in self._handlers:
             try:
                 return self._handlers[command](**args)
-            except Exception as e:
+            except (TypeError, ValueError, RuntimeError, AttributeError) as e:
                 logger.warning("ipc_server.dispatch_error", extra={"command": command, "error": str(e)})
                 return {IPC_KEY_STATUS: IPC_STATUS_ERROR, IPC_KEY_MESSAGE: str(e)}
         else:

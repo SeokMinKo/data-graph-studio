@@ -202,7 +202,7 @@ def atomic_write(path: str, data: bytes) -> None:
             os.fsync(f.fileno())
 
         os.rename(tmp_path, path)
-    except Exception:
+    except (OSError, IOError, PermissionError):
         # 실패 시 임시 파일 정리
         if os.path.exists(tmp_path):
             try:

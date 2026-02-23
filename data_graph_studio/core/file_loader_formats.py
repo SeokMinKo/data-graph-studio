@@ -185,7 +185,7 @@ def load_file_internal(
             logger.info("file_loader.file_loaded", extra={"row_count": loaded_rows, "column_count": len(loader._df.columns)})
         get_metrics().increment("file.loaded")
         return True
-    except Exception as e:
+    except (ValueError, OSError, UnicodeDecodeError, pl.exceptions.InvalidOperationError) as e:
         logger.error("file_loader.file_load_failed", extra={"error": e}, exc_info=True)
         loader._update_progress(status="error", error_message=str(e))
         gc.collect()
