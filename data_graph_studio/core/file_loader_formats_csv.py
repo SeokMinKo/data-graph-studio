@@ -16,6 +16,7 @@ import polars as pl
 
 from .types import DelimiterType
 from .etl_helpers import HAS_ETL_PARSER
+from .exceptions import DataLoadError
 
 if TYPE_CHECKING:
     from .file_loader import FileLoader
@@ -192,8 +193,20 @@ def load_etl(
                 return df
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
-            raise ValueError("ETL 파일 변환 실패")
+            raise DataLoadError(
+                "ETL 파일 변환 실패",
+                operation="load_etl",
+                context={"path": path, "system": system},
+            )
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            raise ValueError(f"ETL 변환 오류: {e}")
+            raise DataLoadError(
+                f"ETL 변환 오류: {e}",
+                operation="load_etl",
+                context={"path": path, "system": system},
+            ) from e
 
-    raise ValueError(f"ETL 바이너리 파일을 파싱할 수 없습니다 (시스템: {system})")
+    raise DataLoadError(
+        f"ETL 바이너리 파일을 파싱할 수 없습니다 (시스템: {system})",
+        operation="load_etl",
+        context={"path": path, "system": system},
+    )
