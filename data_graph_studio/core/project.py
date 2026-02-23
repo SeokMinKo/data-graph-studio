@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class DataSourceRef:
-    """데이터 소스 참조"""
+    """Reference to a single data source file used by a Project."""
     path: str
     file_type: str
     encoding: str = "utf-8"
@@ -28,7 +28,7 @@ class DataSourceRef:
 
     @property
     def is_absolute(self) -> bool:
-        """절대 경로 여부"""
+        """Return True if the stored path is absolute (POSIX or Windows drive-letter form)."""
         if os.path.isabs(self.path):
             return True
         # Windows drive letter paths (e.g., C:/foo or C:\foo)
@@ -37,7 +37,11 @@ class DataSourceRef:
         return False
 
     def resolve(self, base_dir: str) -> str:
-        """상대 경로를 절대 경로로 변환"""
+        """Resolve the stored path to an absolute path relative to base_dir.
+
+        Input: base_dir — str, directory of the .dgs project file.
+        Output: str — absolute file path; returns self.path unchanged if already absolute.
+        """
         if self.is_absolute:
             return self.path
         return os.path.join(base_dir, self.path)
@@ -76,7 +80,7 @@ class DataSourceRef:
 
 @dataclass
 class ComparisonState:
-    """비교 상태 저장"""
+    """Persisted snapshot of multi-dataset comparison settings for a Project."""
     mode: str = "single"  # single, overlay, side_by_side, difference
     comparison_datasets: List[str] = field(default_factory=list)
     key_column: Optional[str] = None
@@ -107,7 +111,7 @@ class ComparisonState:
 
 @dataclass
 class Project:
-    """프로젝트"""
+    """Top-level container for all data sources, state, and settings in a .dgs project file."""
     name: str
     version: str = "1.1"  # Version bump for multi-dataset support
     author: str = ""
@@ -143,7 +147,10 @@ class Project:
     _path: Optional[str] = None
 
     def to_dict(self) -> Dict:
-        """딕셔너리로 변환"""
+        """Serialize this Project to a JSON-compatible dictionary.
+
+        Output: Dict — all project fields including nested data sources and comparison state.
+        """
         return {
             'name': self.name,
             'version': self.version,
@@ -163,7 +170,12 @@ class Project:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'Project':
-        """딕셔너리에서 복원"""
+        """Deserialize a Project from a dictionary, migrating legacy single-source format if needed.
+
+        Input: data — Dict, as produced by to_dict() or loaded from a .dgs file.
+        Output: Project — fully populated instance; data_sources always has at least one entry
+                when data_source is present.
+        """
         project = cls(
             name=data['name'],
             version=data.get('version', '1.0'),
@@ -199,14 +211,30 @@ class Project:
         return project
 
     def add_data_source(self, source: DataSourceRef):
-        """데이터 소스 추가"""
+        """Append a DataSourceRef to the project's data source list.
+
+        If this is the first data source, it is also stored in the legacy data_source field
+        for backward compatibility.
+
+        Input: source — DataSourceRef to add.
+        Output: None
+        Invariants: source is present in self.data_sources after this call.
+        """
         self.data_sources.append(source)
         # 첫 번째면 레거시 호환성을 위해 data_source에도 설정
         if len(self.data_sources) == 1:
             self.data_source = source
 
     def remove_data_source(self, dataset_id: str) -> bool:
-        """데이터 소스 제거"""
+        """Remove a DataSourceRef by its dataset_id.
+
+        If the removed entry was the legacy data_source, the legacy field is updated
+        to the first remaining source, or None if none remain.
+
+        Input: dataset_id — str, dataset_id of the source to remove.
+        Output: bool — True if a matching source was found and removed, False otherwise.
+        Invariants: no DataSourceRef with dataset_id==dataset_id remains in self.data_sources.
+        """
         for i, ds in enumerate(self.data_sources):
             if ds.dataset_id == dataset_id:
                 self.data_sources.pop(i)
@@ -216,28 +244,49 @@ class Project:
         return False
 
     def get_data_source(self, dataset_id: str) -> Optional[DataSourceRef]:
-        """데이터 소스 가져오기"""
+        """Return the DataSourceRef for a given dataset_id, or None if not found.
+
+        Input: dataset_id — str, ID to look up.
+        Output: DataSourceRef or None.
+        """
         for ds in self.data_sources:
             if ds.dataset_id == dataset_id:
                 return ds
         return None
 
     def get_all_data_sources(self) -> List[DataSourceRef]:
-        """모든 데이터 소스 반환"""
+        """Return a shallow copy of all registered DataSourceRef entries."""
         return self.data_sources.copy()
     
     def to_json(self, indent: int = 2) -> str:
-        """JSON 문자열로 변환"""
+        """Serialize this Project to a JSON string.
+
+        Input: indent — int, indentation level for pretty-printing (default 2).
+        Output: str — UTF-8-safe JSON representation of the project.
+        """
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
     
     @classmethod
     def from_json(cls, json_str: str) -> 'Project':
-        """JSON에서 복원"""
+        """Deserialize a Project from a JSON string.
+
+        Input: json_str — str, JSON produced by to_json().
+        Output: Project — fully populated instance.
+        Raises: json.JSONDecodeError — if json_str is not valid JSON.
+        """
         data = json.loads(json_str)
         return cls.from_dict(data)
     
     def save(self, path: str):
-        """파일로 저장"""
+        """Serialize and write this Project to a .dgs file.
+
+        Appends the .dgs extension if not already present, updates modified_at,
+        and stores the path in self._path.
+
+        Input: path — str, destination file path (with or without .dgs extension).
+        Output: None
+        Raises: OSError — if the file cannot be written.
+        """
         # .dgs 확장자 보장
         if not path.endswith('.dgs'):
             path = path + '.dgs'
@@ -251,7 +300,13 @@ class Project:
     
     @classmethod
     def load(cls, path: str) -> 'Project':
-        """파일에서 로드"""
+        """Load a Project from a .dgs file on disk.
+
+        Input: path — str, path to an existing .dgs file.
+        Output: Project — deserialized instance with _path set to path.
+        Raises: OSError — if the file cannot be read.
+                json.JSONDecodeError — if the file content is not valid JSON.
+        """
         logger.debug("project.load", extra={"path": path})
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -262,7 +317,12 @@ class Project:
         return project
     
     def validate(self) -> List[str]:
-        """유효성 검사"""
+        """Check that all referenced data source files exist on disk.
+
+        Resolves relative paths against the project file's directory when _path is set.
+
+        Output: List[str] — human-readable error messages; empty list means valid.
+        """
         errors = []
 
         # 모든 데이터 소스 검증
@@ -290,7 +350,7 @@ class Project:
 
 
 class ProjectManager:
-    """프로젝트 매니저"""
+    """Manages the lifecycle of a single active Project — create, save, load, and recent files."""
     
     MAX_RECENT_FILES = 10
     
@@ -302,26 +362,38 @@ class ProjectManager:
     
     @property
     def current_project(self) -> Optional[Project]:
-        """현재 프로젝트"""
+        """The currently open Project, or None if no project is active."""
         return self._current
     
     @property
     def is_dirty(self) -> bool:
-        """수정 여부"""
+        """True if the current project has unsaved changes."""
         return self._dirty
     
     def new_project(self, name: str = "Untitled") -> Project:
-        """새 프로젝트 생성"""
+        """Create a fresh Project and set it as the current project.
+
+        Input: name — str, display name for the new project (default "Untitled").
+        Output: Project — the newly created, clean project.
+        Invariants: self.is_dirty is False after this call.
+        """
         self._current = Project(name=name)
         self._dirty = False
         return self._current
     
     def mark_dirty(self):
-        """수정됨으로 표시"""
+        """Mark the current project as having unsaved changes."""
         self._dirty = True
     
     def save(self, path: Optional[str] = None):
-        """저장"""
+        """Save the current project to disk and clear the dirty flag.
+
+        Input: path — str or None; falls back to the project's existing _path if None.
+        Output: None
+        Raises: ValueError — if no path is available.
+                OSError — if the file cannot be written.
+        Invariants: self.is_dirty is False and path is in self._recent_files on success.
+        """
         if not self._current:
             logger.warning("project_manager.save.no_project")
             return
@@ -339,7 +411,12 @@ class ProjectManager:
         self._add_recent_file(path)
     
     def load(self, path: str) -> Project:
-        """로드"""
+        """Load a project from a .dgs file and set it as the current project.
+
+        Input: path — str, path to an existing .dgs file.
+        Output: Project — the loaded project.
+        Invariants: self.is_dirty is False and path is in self._recent_files after this call.
+        """
         logger.debug("project_manager.load", extra={"path": path})
         self._current = Project.load(path)
         self._dirty = False
@@ -347,7 +424,12 @@ class ProjectManager:
         return self._current
     
     def _add_recent_file(self, path: str):
-        """최근 파일 추가"""
+        """Insert path at the front of the recent files list, capped at MAX_RECENT_FILES.
+
+        Input: path — str, file path to record as most recently used.
+        Output: None
+        Invariants: path is at index 0 of self._recent_files; list length <= MAX_RECENT_FILES.
+        """
         # 이미 있으면 제거
         if path in self._recent_files:
             self._recent_files.remove(path)
@@ -359,15 +441,21 @@ class ProjectManager:
         self._recent_files = self._recent_files[:self.MAX_RECENT_FILES]
     
     def get_recent_files(self) -> List[str]:
-        """최근 파일 목록"""
+        """Return a copy of the recent files list, most recently used first."""
         return self._recent_files.copy()
     
     def clear_recent_files(self):
-        """최근 파일 클리어"""
+        """Clear the list of recently opened files."""
         self._recent_files.clear()
     
     def get_autosave_path(self) -> Optional[str]:
-        """자동 저장 경로"""
+        """Return the autosave file path, creating the directory if needed.
+
+        Uses self._autosave_path if set; otherwise defaults to
+        ~/.data-graph-studio/autosave/autosave.dgs.
+
+        Output: str — absolute path to the autosave file.
+        """
         if self._autosave_path:
             return self._autosave_path
         
@@ -379,7 +467,10 @@ class ProjectManager:
         return os.path.join(autosave_dir, 'autosave.dgs')
     
     def autosave(self):
-        """자동 저장"""
+        """Save the current project to the autosave path if a project is active.
+
+        Output: None — no-op if there is no current project or autosave path is unavailable.
+        """
         if not self._current:
             return
         
@@ -388,13 +479,21 @@ class ProjectManager:
             self._current.save(path)
     
     def recover_autosave(self, path: str) -> Optional[Project]:
-        """자동 저장에서 복구"""
+        """Load a project from an autosave file if it exists.
+
+        Input: path — str, path to the autosave file to attempt recovery from.
+        Output: Project if the file exists and parses successfully, else None.
+        """
         if os.path.exists(path):
             return Project.load(path)
         return None
     
     def close_project(self) -> bool:
-        """프로젝트 닫기"""
+        """Close the current project if there are no unsaved changes.
+
+        Output: bool — True if the project was closed, False if it has unsaved changes.
+        Invariants: self.current_project is None on success.
+        """
         if self._dirty:
             logger.warning("project_manager.close_project.unsaved_changes")
             return False

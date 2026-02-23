@@ -202,21 +202,27 @@ class ColumnZoneMixin:
         self.emit("value_zone_changed")
 
     def remove_value_column_by_name(self, name: str):
-        """Remove value column by name."""
+        """Remove all Value Zone columns whose name matches the given string.
+
+        Input: name — str, column name to remove; all matching entries are dropped.
+        Output: None
+        Invariants: no ValueColumn with name==name remains in self._value_columns.
+        Emits: value_zone_changed signal.
+        """
         self._value_columns = [v for v in self._value_columns if v.name != name]
         self._reorder_values()
         self.emit("value_zone_changed")
 
     def get_primary_values(self) -> List[ValueColumn]:
-        """Primary 축에 할당된 값 컬럼 목록"""
+        """Return Value Zone columns assigned to the primary (left) Y axis."""
         return [v for v in self._value_columns if not v.use_secondary_axis]
 
     def get_secondary_values(self) -> List[ValueColumn]:
-        """Secondary 축에 할당된 값 컬럼 목록"""
+        """Return Value Zone columns assigned to the secondary (right) Y axis."""
         return [v for v in self._value_columns if v.use_secondary_axis]
 
     def has_secondary_axis(self) -> bool:
-        """Secondary 축 존재 여부"""
+        """Return True if at least one Value Zone column is assigned to the secondary axis."""
         return any(v.use_secondary_axis for v in self._value_columns)
 
     # ==================== Hover Zone ====================
@@ -227,19 +233,33 @@ class ColumnZoneMixin:
         return self._hover_columns
 
     def add_hover_column(self, name: str):
-        """Add column to hover display"""
+        """Add a column to the hover tooltip, ignoring duplicates.
+
+        Input: name — str, column name to add.
+        Output: None
+        Emits: hover_zone_changed signal if name was not already present.
+        """
         if name not in self._hover_columns:
             self._hover_columns.append(name)
             self.emit("hover_zone_changed")
 
     def remove_hover_column(self, name: str):
-        """Remove column from hover display"""
+        """Remove a column from the hover tooltip by name.
+
+        Input: name — str, column name to remove. No-op if not present.
+        Output: None
+        Emits: hover_zone_changed signal if name was present.
+        """
         if name in self._hover_columns:
             self._hover_columns.remove(name)
             self.emit("hover_zone_changed")
 
     def clear_hover_columns(self):
-        """Clear all hover columns"""
+        """Remove all columns from the hover tooltip zone.
+
+        Output: None
+        Emits: hover_zone_changed signal.
+        """
         self._hover_columns.clear()
         self.emit("hover_zone_changed")
 
