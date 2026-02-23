@@ -22,7 +22,7 @@ class FormulaAstEvaluator:
     Input: col_map — Dict[str, str], maps formula identifiers to DataFrame column names
     Output: pl.Series or scalar value produced by evaluating the expression
     Raises: FormulaError — for unknown identifiers, unsupported operators, or unknown functions
-    Invariants: df is not modified; col_map keys must match column names in df
+    Invariants: df is not modified; col_map values must be valid column names in df (keys are safe Python identifiers)
     """
 
     # ── Public entry point ────────────────────────────────────

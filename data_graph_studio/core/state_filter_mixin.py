@@ -146,7 +146,7 @@ class FilterSortMixin:
         Output: None
         Raises: nothing — silently no-ops if index is out of range
         Invariants: filter_changed is emitted only when the toggle actually occurs;
-                    FilterCondition.enabled is flipped in-place before the snapshot is taken
+                    the before snapshot is taken prior to flipping so undo() restores the pre-toggle state
         """
         if not (0 <= index < len(self._filters)):
             return
