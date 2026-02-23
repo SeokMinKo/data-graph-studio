@@ -69,7 +69,7 @@ def _run_with_timeout(fn, timeout_s: float, operation: str):
     def _target():
         try:
             result[0] = fn()
-        except Exception as e:
+        except (OSError, UnicodeDecodeError, ValueError) as e:
             exc[0] = e
 
     t = threading.Thread(target=_target, daemon=True)

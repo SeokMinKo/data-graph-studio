@@ -246,8 +246,8 @@ class TimeSeriesAnalyzer:
                 "critical_values": critical_values
             }
 
-        except Exception as e:
-            logger.warning("statistics.stationarity_test.failed", extra={"error": str(e)})
+        except (ValueError, TypeError, ArithmeticError) as e:
+            logger.warning("statistics.stationarity_test.failed", extra={"error": str(e)}, exc_info=True)
             return {
                 "statistic": 0,
                 "p_value": 1.0,

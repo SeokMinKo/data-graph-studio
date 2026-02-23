@@ -235,7 +235,7 @@ class AnalysisMixin(object):
             self.update_dataframe(new_df)
             self._virtual_columns.add(name)
             return True
-        except Exception as e:
+        except (pl.exceptions.PolarsError, ValueError, TypeError) as e:
             raise QueryError(
                 f"Cannot add virtual column '{name}'",
                 operation="add_virtual_column",

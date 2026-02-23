@@ -32,14 +32,14 @@ def get_current_version() -> str:
 
         if build_ver and build_ver != "0.0.0":
             return build_ver
-    except Exception:
+    except OSError:
         logger.debug("updater.get_current_version.build_version_unavailable", exc_info=True)
 
     try:
         from importlib.metadata import version
 
         return version("data-graph-studio")
-    except Exception:
+    except OSError:
         logger.debug("updater.get_current_version.metadata_unavailable", exc_info=True)
         return "0.0.0"
 

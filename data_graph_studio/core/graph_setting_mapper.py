@@ -78,7 +78,7 @@ class GraphSettingMapper:
             return chart_type
         try:
             return ChartType(str(chart_type).lower())
-        except Exception:
+        except (TypeError, AttributeError, ValueError, KeyError):
             logger.debug("graph_setting_mapper.resolve_chart_type.coerce_failed", exc_info=True)
             return state._chart_settings.chart_type
 
@@ -167,15 +167,15 @@ class GraphSettingMapper:
                 context={"setting_name": getattr(setting, "name", "")},
             ) from e
         try:
-            logger.debug("[DEBUG-CRASH] emitting chart_settings_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "chart_settings_changed"})
             state.chart_settings_changed.emit()
-            logger.debug("[DEBUG-CRASH] emitting value_zone_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "value_zone_changed"})
             state.value_zone_changed.emit()
-            logger.debug("[DEBUG-CRASH] emitting group_zone_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "group_zone_changed"})
             state.group_zone_changed.emit()
-            logger.debug("[DEBUG-CRASH] emitting hover_zone_changed")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "hover_zone_changed"})
             state.hover_zone_changed.emit()
-            logger.debug("[DEBUG-CRASH] all signals emitted OK")
+            logger.warning("graph_setting_mapper.event", extra={"signal": "all_signals_emitted_ok"})
         except (RuntimeError, AttributeError, TypeError) as e:
             logger.error("graph_setting_mapper.signal_emit_failed", extra={"error": e}, exc_info=True)
         finally:

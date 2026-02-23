@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 logger = logging.getLogger(__name__)
 
 from .annotation import Annotation, MAX_ANNOTATION_TEXT_LENGTH
+from .exceptions import ValidationError
 
 # UndoManager는 다른 에이전트가 구현 중 — optional import
 try:
@@ -58,7 +59,7 @@ class AnnotationController:
             try:
                 ann = Annotation.from_dict(ann_dict)
                 self._annotations[aid] = ann
-            except Exception:
+            except (ValidationError, TypeError, ValueError):
                 logger.warning("annotation_controller.restore_state.invalid_entry", extra={"aid": aid}, exc_info=True)
                 continue
 

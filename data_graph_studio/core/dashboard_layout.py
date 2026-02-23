@@ -230,6 +230,6 @@ def validate_layout_json(data: Any) -> DashboardLayout:
         if not layout.validate():
             return default_layout()
         return layout
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         logger.warning("dashboard_layout.deserialize.failed", exc_info=True)
         return default_layout()

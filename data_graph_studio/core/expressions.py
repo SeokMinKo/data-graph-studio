@@ -219,7 +219,7 @@ class DataFunction:
             return local_vars.get('result')
         except SecurityError:
             raise
-        except Exception:
+        except (NameError, SyntaxError, TypeError, ValueError, ZeroDivisionError):
             logger.debug("expressions.data_function.exec_failed", exc_info=True)
             return None
 

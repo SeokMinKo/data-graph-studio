@@ -113,6 +113,6 @@ def compute_windowed_profile(
             'memory_bytes': 0,
             'load_time_seconds': 0,
         }
-    except Exception:
+    except (pl.exceptions.PolarsError, RuntimeError, ValueError, TypeError):
         logger.debug("data_query_helpers.profile_summary.failed", exc_info=True)
         return None

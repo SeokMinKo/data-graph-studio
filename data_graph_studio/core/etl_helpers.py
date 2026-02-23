@@ -200,7 +200,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
     try:
         with open(path, 'rb') as f:
             raw_data = f.read()
-    except Exception as e:
+    except (pl.exceptions.InvalidOperationError, ValueError, TypeError) as e:
         raise DataLoadError(
             f"ETL 파일 읽기 실패: {e}",
             operation="parse_etl_binary",
@@ -218,7 +218,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
     try:
         reader = build_from_stream(raw_data)
         reader.parse(collector)
-    except Exception as e:
+    except (pl.exceptions.InvalidOperationError, ValueError, TypeError) as e:
         raise DataLoadError(
             f"ETL 바이너리 파싱 실패: {e}",
             operation="parse_etl_binary",

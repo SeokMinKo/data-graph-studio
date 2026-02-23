@@ -184,7 +184,7 @@ class FileWatcher(Observable):
                 if lines:
                     header = lines[0]
                     row_count = len(lines) - 1  # subtract header
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 logger.warning("file_watcher.read_row_count_failed", extra={"path": file_path, "error": e})
 
         # Create entry
@@ -498,7 +498,7 @@ class FileWatcher(Observable):
             self._schedule_debounce(path, "deleted")
             self._entries.pop(path, None)
             return
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             logger.warning("file_watcher.read_error", extra={"path": path, "error": e})
             self._apply_backoff(path)
             return

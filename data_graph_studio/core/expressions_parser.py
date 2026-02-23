@@ -241,7 +241,7 @@ class ExpressionParser:
                 return pl.Series([result] * len(data))
             return pl.Series(result)
 
-        except Exception:
+        except (SyntaxError, ValueError, TypeError):
             logger.debug("expressions_parser.evaluate_numpy.failed", exc_info=True)
             return pl.Series([None] * len(data))
 
