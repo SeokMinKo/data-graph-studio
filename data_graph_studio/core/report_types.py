@@ -9,6 +9,7 @@ from datetime import datetime
 import json
 import polars as pl
 
+from data_graph_studio.core.constants import DEFAULT_CHART_DPI
 from data_graph_studio.core.report_enums import (
     ReportFormat,
     ReportTheme,
@@ -149,7 +150,7 @@ class ReportOptions:
     # 차트 옵션
     chart_format: ChartImageFormat = ChartImageFormat.PNG
     interactive_charts: bool = False  # HTML만
-    chart_dpi: int = 150
+    chart_dpi: int = DEFAULT_CHART_DPI
     chart_width: int = 800
     chart_height: int = 600
     include_chart_statistics: bool = True  # 차트별 통계 포함 여부

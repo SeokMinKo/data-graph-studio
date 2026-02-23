@@ -25,7 +25,21 @@ from .types import (
     DataSource, PrecisionMode,
 )
 from .exceptions import DataLoadError
-from .constants import FILE_ENCODING_DETECT_TIMEOUT
+from .constants import (
+    FILE_ENCODING_DETECT_TIMEOUT,
+    DEFAULT_DELIMITER,
+    DEFAULT_ENCODING,
+    DELIMITER_SAMPLE_LINES,
+    ENCODING_SAMPLE_SIZE,
+    PARQUET_CONVERT_THRESHOLD,
+    WINDOWED_LOAD_THRESHOLD,
+    DEFAULT_WINDOW_SIZE,
+    FILE_LOADER_CHUNK_SIZE,
+    FILE_LOADER_LARGE_FILE_THRESHOLD,
+    LAZY_EVAL_THRESHOLD,
+    FILE_LOADER_MAX_RETRIES,
+    FILE_LOADER_RETRY_DELAY_SECONDS,
+)
 
 from .file_loader_formats import (
     is_binary_etl as _is_binary_etl,
@@ -40,16 +54,7 @@ from .file_loader_formats import (
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Module-level constants
-# ---------------------------------------------------------------------------
-DEFAULT_DELIMITER = ','
-DEFAULT_ENCODING = 'utf-8'
-DELIMITER_SAMPLE_LINES = 10
-ENCODING_SAMPLE_SIZE = 65536  # 64KB sample — enough for encoding detection, safe on multi-GB files
-PARQUET_CONVERT_THRESHOLD = 500 * 1024 * 1024   # 500 MB
-WINDOWED_LOAD_THRESHOLD = 300 * 1024 * 1024     # 300 MB
-DEFAULT_WINDOW_SIZE = 200_000
+# Module-level constants are imported from .constants (see import block above).
 
 
 def _run_with_timeout(fn, timeout_s: float, operation: str):
@@ -132,12 +137,12 @@ class FileLoader:
         _progress: 로딩 진행 상태.
         _cancel_loading: 로딩 취소 플래그."""
 
-    # 클래스 상수 — DataEngine에서 이관
-    DEFAULT_CHUNK_SIZE = 100_000
-    LARGE_FILE_THRESHOLD = 100 * 1024 * 1024
-    LAZY_EVAL_THRESHOLD = 1024 * 1024 * 1024
-    MAX_RETRIES = 3
-    RETRY_DELAY_SECONDS = 0.5
+    # Class-level constants — sourced from constants.py
+    DEFAULT_CHUNK_SIZE = FILE_LOADER_CHUNK_SIZE
+    LARGE_FILE_THRESHOLD = FILE_LOADER_LARGE_FILE_THRESHOLD
+    LAZY_EVAL_THRESHOLD = LAZY_EVAL_THRESHOLD
+    MAX_RETRIES = FILE_LOADER_MAX_RETRIES
+    RETRY_DELAY_SECONDS = FILE_LOADER_RETRY_DELAY_SECONDS
 
     PRECISION_SENSITIVE_PATTERNS = [
         r'price', r'amount', r'rate', r'ratio', r'percent',
