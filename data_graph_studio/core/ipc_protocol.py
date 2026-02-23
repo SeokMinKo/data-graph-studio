@@ -16,6 +16,7 @@ from .constants import (
     IPC_STATUS_OK,
     IPC_STATUS_ERROR,
 )
+from .exceptions import ConfigError
 
 
 class IpcRequest(TypedDict):
@@ -36,13 +37,15 @@ def parse_request(data: dict[str, Any]) -> IpcRequest:
     """Validate and parse a raw dict into an IpcRequest.
 
     Raises:
-        ValueError: if "command" key is missing or not a string.
+        ConfigError: if "command" key is missing or not a string.
     """
     if IPC_KEY_COMMAND not in data:
-        raise ValueError("IPC request missing required 'command' key")
+        raise ConfigError("IPC request missing required 'command' key", operation="parse_request", context={"keys": list(data.keys())})
     if not isinstance(data[IPC_KEY_COMMAND], str):
-        raise ValueError(
-            f"IPC 'command' must be str, got {type(data[IPC_KEY_COMMAND]).__name__}"
+        raise ConfigError(
+            f"IPC 'command' must be str, got {type(data[IPC_KEY_COMMAND]).__name__}",
+            operation="parse_request",
+            context={"command_type": type(data[IPC_KEY_COMMAND]).__name__},
         )
     return IpcRequest(
         command=data[IPC_KEY_COMMAND],

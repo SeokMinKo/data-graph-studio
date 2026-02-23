@@ -18,6 +18,7 @@ from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
 from data_graph_studio.core.exceptions import QueryError, ValidationError
 from data_graph_studio.core.constants import DEFAULT_SCHEME_NAME
+from data_graph_studio.core.types import ColumnName
 
 
 class IFilterApplier(ABC):
@@ -418,7 +419,7 @@ class FilteringManager(Observable, IFilterApplier):
     def add_filter(
         self,
         scheme_name: str,
-        column: str,
+        column: ColumnName,
         operator: FilterOperator,
         value: Any,
         filter_type: FilterType = FilterType.NUMERIC,
@@ -527,7 +528,7 @@ class FilteringManager(Observable, IFilterApplier):
     def add_range_filter(
         self,
         scheme_name: str,
-        column: str,
+        column: ColumnName,
         min_value: Any,
         max_value: Any
     ) -> None:
@@ -559,7 +560,7 @@ class FilteringManager(Observable, IFilterApplier):
     def add_checkbox_filter(
         self,
         scheme_name: str,
-        column: str,
+        column: ColumnName,
         selected_values: List[Any]
     ) -> None:
         """Add an IN_LIST filter for checkbox-style multi-value selection.
@@ -589,7 +590,7 @@ class FilteringManager(Observable, IFilterApplier):
     def update_checkbox_filter(
         self,
         scheme_name: str,
-        column: str,
+        column: ColumnName,
         selected_values: List[Any]
     ) -> None:
         """Update the value of an existing checkbox (IN_LIST) filter, or add a new one if absent.
@@ -628,7 +629,7 @@ class FilteringManager(Observable, IFilterApplier):
     def add_text_search_filter(
         self,
         scheme_name: str,
-        column: str,
+        column: ColumnName,
         search_text: str,
         case_sensitive: bool = True
     ) -> None:

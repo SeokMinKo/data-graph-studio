@@ -190,4 +190,8 @@ class TransformChain:
         return list(self._steps)
 
     def __len__(self) -> int:
+        """Return the number of transform steps in the chain.
+
+        Output: int — count of steps currently held in self._steps
+        """
         return len(self._steps)

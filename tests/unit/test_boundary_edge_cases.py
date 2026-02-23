@@ -634,13 +634,15 @@ class TestIpcProtocolEdgeCases:
         assert r["message"] == ""
 
     def test_parse_request_non_string_command_raises(self):
-        """Non-string command (e.g., int) raises ValueError."""
-        with pytest.raises(ValueError):
+        """Non-string command (e.g., int) raises ConfigError."""
+        from data_graph_studio.core.exceptions import ConfigError
+        with pytest.raises(ConfigError):
             parse_request({"command": 123, "args": {}})
 
     def test_parse_request_missing_command_raises(self):
-        """Missing 'command' key raises ValueError."""
-        with pytest.raises(ValueError):
+        """Missing 'command' key raises ConfigError."""
+        from data_graph_studio.core.exceptions import ConfigError
+        with pytest.raises(ConfigError):
             parse_request({"args": {"key": "val"}})
 
 

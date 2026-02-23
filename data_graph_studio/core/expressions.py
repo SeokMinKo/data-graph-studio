@@ -106,6 +106,11 @@ class CalculatedColumn:
     data_type: Optional[str] = None
 
     def __post_init__(self):
+        """Initialise the internal ExpressionParser after dataclass construction.
+
+        Output: None
+        Invariants: self._parser is a ready-to-use ExpressionParser instance after this call
+        """
         self._parser = ExpressionParser()
 
     def apply(self, data: pl.DataFrame) -> pl.DataFrame:
