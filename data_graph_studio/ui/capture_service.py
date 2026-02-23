@@ -48,7 +48,9 @@ class CaptureService(ICaptureService):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if request.target == "all":
-            targets = list(self._panels.keys()) + ["window"]
+            targets = list(self._panels.keys())
+            if "window" in self._panels:
+                targets.append("window")
         elif request.target == "window":
             targets = ["window"]
         else:
@@ -65,7 +67,7 @@ class CaptureService(ICaptureService):
 
     def _capture_one(self, name: str, output_dir: Path, fmt: str) -> CaptureResult:
         """Capture a single panel by name."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         file_path = output_dir / f"{name}_{timestamp}.{fmt}"
 
         try:

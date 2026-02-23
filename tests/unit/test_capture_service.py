@@ -62,3 +62,38 @@ def test_state_includes_data_loaded():
         results = svc.capture(CaptureRequest(target="graph_panel", output_dir=Path("/tmp")))
 
     assert results[0].state.get("data_loaded") is True
+
+
+def test_capture_all_skips_window_when_not_registered(tmp_path):
+    """target='all' should not crash when no window widget is registered."""
+    svc = CaptureService()
+    mock_widget = MagicMock()
+    svc.register_panel("graph_panel", mock_widget)
+
+    with patch.object(svc, "_grab_widget", return_value=tmp_path / "graph.png"):
+        results = svc.capture(CaptureRequest(target="all", output_dir=tmp_path))
+
+    names = [r.name for r in results]
+    assert "graph_panel" in names
+    assert "window" not in names  # window not registered → should not appear
+
+
+def test_capture_filenames_are_unique_for_rapid_captures(tmp_path):
+    """Rapid successive captures must produce unique filenames."""
+    svc = CaptureService()
+    mock_widget = MagicMock()
+    svc.register_panel("graph_panel", mock_widget)
+
+    paths_seen = set()
+
+    def fake_grab(widget, file_path):
+        paths_seen.add(str(file_path))
+        return file_path
+
+    with patch.object(svc, "_grab_widget", side_effect=fake_grab):
+        req = CaptureRequest(target="graph_panel", output_dir=tmp_path)
+        svc.capture(req)
+        svc.capture(req)
+        svc.capture(req)
+
+    assert len(paths_seen) == 3, f"Expected 3 unique paths, got {len(paths_seen)}: {paths_seen}"
