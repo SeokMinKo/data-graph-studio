@@ -45,10 +45,9 @@ def _adb(serial: str, *args: str, timeout: int = 30) -> subprocess.CompletedProc
 
 
 def _adb_shell(serial: str, shell_cmd: str, timeout: int = 30) -> subprocess.CompletedProcess:
-    """Run a shell command on the device (tries with and without root)."""
-    # Try root first (AVDs support root by default)
+    """Run a shell command on the device (tries with root, falls back if su unavailable)."""
     result = _adb(serial, "shell", "su", "0", shell_cmd, timeout=timeout)
-    if result.returncode != 0:
+    if result.returncode != 0 and "not found" in result.stderr.lower():
         result = _adb(serial, "shell", shell_cmd, timeout=timeout)
     return result
 
@@ -82,13 +81,17 @@ def enable_block_tracing(serial: str, tracefs: str) -> None:
     _adb_shell(serial, f"echo > {tracefs}/trace")
     _adb_shell(serial, f"echo nop > {tracefs}/current_tracer")
 
-    # Enable block events
+    # Enable block events (best-effort with warning)
     for event in _BLOCK_EVENTS:
         path = f"{tracefs}/events/{event}/enable"
-        _adb_shell(serial, f"echo 1 > {path}")
+        r = _adb_shell(serial, f"echo 1 > {path}")
+        if r.returncode != 0:
+            logger.warning("could not enable %s: %s", event, r.stderr.strip())
 
-    # Start tracing
-    _adb_shell(serial, f"echo 1 > {tracefs}/tracing_on")
+    # Start tracing (load-bearing — raise if this fails)
+    r = _adb_shell(serial, f"echo 1 > {tracefs}/tracing_on")
+    if r.returncode != 0:
+        raise RuntimeError(f"Failed to enable tracing on {serial}: {r.stderr.strip()}")
     logger.info("block tracing enabled on %s", serial)
 
 

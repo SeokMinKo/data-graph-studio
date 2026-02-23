@@ -77,3 +77,29 @@ def test_capture_block_trace_full_flow(tmp_path):
     # adb must have been called multiple times (setup + workload + pull)
     assert mock_run.call_count >= 3
     assert out_path == str(tmp_path / "trace.txt")
+
+
+def test_capture_block_trace_disables_tracing_on_error(tmp_path):
+    """capture_block_trace() calls disable_block_tracing even when workload fails."""
+    from data_graph_studio.tools.avd_tracer import capture_block_trace
+
+    def side_effect(cmd, *args, **kwargs):
+        m = MagicMock()
+        m.returncode = 0
+        m.stdout = "ok"
+        m.stderr = ""
+        return m
+
+    with patch("subprocess.run", side_effect=side_effect), \
+         patch("data_graph_studio.tools.avd_tracer.run_io_workload",
+               side_effect=RuntimeError("workload failed")) as mock_workload, \
+         patch("data_graph_studio.tools.avd_tracer.disable_block_tracing") as mock_disable:
+        with pytest.raises(RuntimeError, match="workload failed"):
+            capture_block_trace(
+                "emulator-5554",
+                output_path=str(tmp_path / "trace.txt"),
+                duration_sec=0,
+                block_count=64,
+            )
+
+    mock_disable.assert_called_once()
