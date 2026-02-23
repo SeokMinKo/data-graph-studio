@@ -55,5 +55,9 @@ MEMORY_WARNING_THRESHOLD: float = 0.9  # Warn when projected usage exceeds this 
 FILE_ENCODING_DETECT_TIMEOUT: int = 10   # encoding/delimiter sniff
 FILE_LOAD_TIMEOUT: int = 120             # full file load
 
+# --- Operation timeouts (seconds) ---
+COMPARISON_TIMEOUT: int = 60     # comparison_engine heavy operations
+STATISTICS_TIMEOUT: int = 30     # statistics calculations
+
 # --- IPC ---
 IPC_HANDLER_TIMEOUT: int = 30  # max seconds per IPC command handler call

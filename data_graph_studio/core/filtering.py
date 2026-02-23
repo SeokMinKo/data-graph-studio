@@ -91,12 +91,24 @@ class Filter:
     case_sensitive: bool = True  # 텍스트 검색 시 대소문자 구분
 
     def to_expression(self) -> Optional[pl.Expr]:
-        """
-        Convert this filter to a Polars boolean expression.
+        """Convert this filter to a Polars boolean expression.
 
-        Returns:
-            Polars filter expression, or None when the filter is disabled
-            or the operator requires a value of an unsupported type.
+        Input:
+            None (uses self.column, self.operator, self.value, self.enabled,
+            self.case_sensitive).
+
+        Output:
+            Polars filter expression (pl.Expr) that evaluates to a boolean Series,
+            or None when the filter is disabled or the operator is not registered in
+            the filter dispatch table.
+
+        Raises:
+            None
+
+        Invariants:
+            - Returns None (not an error) when enabled is False.
+            - Expression references self.column by name; applying it to a DataFrame
+              that lacks the column will raise an error at eval time.
         """
         if not self.enabled:
             return None
@@ -120,36 +132,133 @@ class FilteringScheme:
     inherit_from: Optional[str] = None  # 상속받을 스킴
 
     def add_filter(self, filter_obj: Filter) -> None:
-        """필터 추가"""
+        """Append a Filter to this scheme's filter list.
+
+        Input:
+            filter_obj: A fully constructed Filter instance to add.
+
+        Output:
+            None. Side effect: filter_obj is appended to self.filters.
+
+        Raises:
+            None
+
+        Invariants:
+            - len(self.filters) increases by exactly 1.
+        """
         self.filters.append(filter_obj)
 
     def remove_filter(self, index: int) -> None:
-        """필터 제거"""
+        """Remove the filter at the given index from this scheme.
+
+        Input:
+            index: Zero-based integer index of the filter to remove (0 <= index < len(filters)).
+
+        Output:
+            None. Side effect: filter at index is removed from self.filters.
+
+        Raises:
+            None
+
+        Invariants:
+            - No-op if index is out of bounds.
+            - len(self.filters) decreases by at most 1.
+        """
         if 0 <= index < len(self.filters):
             self.filters.pop(index)
 
     def clear(self) -> None:
-        """모든 필터 클리어"""
+        """Remove all filters from this scheme.
+
+        Input:
+            None
+
+        Output:
+            None. Side effect: self.filters is emptied.
+
+        Raises:
+            None
+
+        Invariants:
+            - len(self.filters) == 0 after the call.
+        """
         self.filters.clear()
 
     def get_enabled_filters(self) -> List[Filter]:
-        """활성화된 필터만 반환"""
+        """Return only the filters that are currently enabled.
+
+        Input:
+            None
+
+        Output:
+            List of Filter objects where enabled is True. May be empty.
+
+        Raises:
+            None
+
+        Invariants:
+            - Result is a subset of self.filters.
+            - Does not modify self.filters.
+        """
         return [f for f in self.filters if f.enabled]
 
     @property
     def has_active_filters(self) -> bool:
-        """활성 필터 존재 여부"""
+        """Return whether any enabled filter exists on this scheme.
+
+        Input:
+            self: FilteringScheme instance.
+
+        Output:
+            True if any enabled filter exists, False otherwise.
+
+        Raises:
+            None
+
+        Invariants:
+            - Result is True iff len(get_enabled_filters()) > 0.
+        """
         return any(f.enabled for f in self.filters)
 
     def get_filter_by_column(self, column: str) -> Optional[Filter]:
-        """컬럼으로 필터 조회"""
+        """Return the first filter targeting the given column, or None if not found.
+
+        Input:
+            column: Column name string to look up; exact match required.
+
+        Output:
+            First matching Filter object, or None.
+
+        Raises:
+            None
+
+        Invariants:
+            - Does not modify self.filters.
+        """
         for f in self.filters:
             if f.column == column:
                 return f
         return None
 
     def update_filter_by_column(self, column: str, **kwargs) -> bool:
-        """컬럼으로 필터 업데이트"""
+        """Update attributes on the first filter that targets the given column.
+
+        Input:
+            column: Column name string to identify the filter to update.
+            **kwargs: Attribute name/value pairs to set on the matching Filter
+                (e.g., value=10, enabled=False). Only existing Filter attributes
+                are updated; unknown keys are silently ignored.
+
+        Output:
+            True if a matching filter was found and updated, False otherwise.
+
+        Raises:
+            None
+
+        Invariants:
+            - At most one filter is updated (the first match).
+            - No filters are added or removed.
+        """
         for f in self.filters:
             if f.column == column:
                 self._apply_kwargs_to_filter(f, kwargs)
@@ -203,18 +312,22 @@ class FilteringManager(Observable, IFilterApplier):
         name: str,
         inherit_from: Optional[str] = None
     ) -> FilteringScheme:
-        """
-        새 필터링 스킴 생성
+        """Create and register a new filtering scheme.
 
-        Args:
-            name: 스킴 이름
-            inherit_from: 상속받을 스킴 이름
+        Input:
+            name: Non-empty unique name for the new scheme; must not already exist.
+            inherit_from: Optional name of an existing scheme whose filters this scheme
+                inherits at apply time (default None — no inheritance).
 
-        Returns:
-            생성된 FilteringScheme
+        Output:
+            The newly created FilteringScheme instance.
 
         Raises:
-            ValueError: 이미 존재하는 스킴 이름
+            ValidationError: if a scheme with the given name already exists.
+
+        Invariants:
+            - Emits "scheme_created" event with name after successful creation.
+            - Scheme is immediately accessible via self._schemes[name].
         """
         if name in self._schemes:
             raise ValidationError(
@@ -231,14 +344,22 @@ class FilteringManager(Observable, IFilterApplier):
         return scheme
 
     def remove_scheme(self, name: str) -> None:
-        """
-        스킴 제거
+        """Remove the named scheme from the manager.
 
-        Args:
-            name: 스킴 이름
+        Input:
+            name: Name of the scheme to remove; must not be "Page".
+
+        Output:
+            None. Side effect: scheme is deleted; if it was the active scheme,
+            the active scheme reverts to "Page".
 
         Raises:
-            ValueError: Page 스킴은 제거 불가
+            ValidationError: if name is "Page" (the default scheme is protected).
+
+        Invariants:
+            - Emits "scheme_removed" event after successful removal.
+            - No-op (no error) if name does not exist (other than "Page").
+            - active_scheme is always a valid, existing scheme after the call.
         """
         if name == "Page":
             raise ValidationError(
@@ -256,7 +377,21 @@ class FilteringManager(Observable, IFilterApplier):
             self.emit("scheme_removed", name)
 
     def set_active_scheme(self, name: str) -> None:
-        """활성 스킴 변경"""
+        """Set the named scheme as the currently active scheme.
+
+        Input:
+            name: Name of an existing scheme to activate.
+
+        Output:
+            None.
+
+        Raises:
+            None
+
+        Invariants:
+            - No-op if name does not exist in _schemes.
+            - active_scheme == name after the call when name exists.
+        """
         if name in self._schemes:
             self._active_scheme = name
 
@@ -270,17 +405,26 @@ class FilteringManager(Observable, IFilterApplier):
         enabled: bool = True,
         case_sensitive: bool = True
     ) -> None:
-        """
-        필터 추가
+        """Add a new filter to the named scheme.
 
-        Args:
-            scheme_name: 스킴 이름
-            column: 컬럼 이름
-            operator: 연산자
-            value: 필터 값
-            filter_type: 필터 타입
-            enabled: 활성화 여부
-            case_sensitive: 대소문자 구분 (텍스트)
+        Input:
+            scheme_name: Name of an existing scheme to add the filter to.
+            column: DataFrame column name the filter targets.
+            operator: FilterOperator enum value specifying the comparison operation.
+            value: Filter value; type must be compatible with the column dtype and operator.
+            filter_type: FilterType classification for UI purposes (default NUMERIC).
+            enabled: Whether the filter is active immediately (default True).
+            case_sensitive: Case sensitivity for text operators (default True).
+
+        Output:
+            None. Side effect: new Filter is appended to the scheme; "filter_changed"
+            event is emitted.
+
+        Raises:
+            KeyError: if scheme_name does not exist.
+
+        Invariants:
+            - Emits "filter_changed" event with scheme_name after successful addition.
         """
         if scheme_name not in self._schemes:
             raise KeyError(f"Scheme '{scheme_name}' not found")
@@ -298,13 +442,42 @@ class FilteringManager(Observable, IFilterApplier):
         self.emit("filter_changed", scheme_name)
 
     def remove_filter(self, scheme_name: str, index: int) -> None:
-        """필터 제거"""
+        """Remove the filter at the given index from the named scheme.
+
+        Input:
+            scheme_name: Name of an existing scheme.
+            index: Zero-based index of the filter to remove.
+
+        Output:
+            None. Side effect: filter removed; "filter_changed" event emitted.
+
+        Raises:
+            None
+
+        Invariants:
+            - No-op if scheme_name does not exist.
+            - No-op if index is out of bounds (delegated to FilteringScheme.remove_filter).
+        """
         if scheme_name in self._schemes:
             self._schemes[scheme_name].remove_filter(index)
             self.emit("filter_changed", scheme_name)
 
     def toggle_filter(self, scheme_name: str, index: int) -> None:
-        """필터 토글"""
+        """Toggle the enabled state of the filter at the given index in the named scheme.
+
+        Input:
+            scheme_name: Name of an existing scheme.
+            index: Zero-based index of the filter to toggle (0 <= index < len(filters)).
+
+        Output:
+            None. Side effect: filter.enabled is flipped; "filter_changed" event emitted.
+
+        Raises:
+            None
+
+        Invariants:
+            - No-op if scheme_name does not exist or index is out of bounds.
+        """
         if scheme_name in self._schemes:
             filters = self._schemes[scheme_name].filters
             if 0 <= index < len(filters):
@@ -312,7 +485,21 @@ class FilteringManager(Observable, IFilterApplier):
                 self.emit("filter_changed", scheme_name)
 
     def clear_filters(self, scheme_name: str) -> None:
-        """스킴의 모든 필터 클리어"""
+        """Remove all filters from the named scheme.
+
+        Input:
+            scheme_name: Name of an existing scheme.
+
+        Output:
+            None. Side effect: all filters removed; "filter_changed" event emitted.
+
+        Raises:
+            None
+
+        Invariants:
+            - No-op if scheme_name does not exist.
+            - len(scheme.filters) == 0 after the call when scheme exists.
+        """
         if scheme_name in self._schemes:
             self._schemes[scheme_name].clear()
             self.emit("filter_changed", scheme_name)
@@ -324,7 +511,23 @@ class FilteringManager(Observable, IFilterApplier):
         min_value: Any,
         max_value: Any
     ) -> None:
-        """범위 필터 추가 (슬라이더용)"""
+        """Add a BETWEEN range filter to the named scheme (convenience wrapper for add_filter).
+
+        Input:
+            scheme_name: Name of an existing scheme.
+            column: DataFrame column name to filter on.
+            min_value: Inclusive lower bound of the range.
+            max_value: Inclusive upper bound of the range.
+
+        Output:
+            None. Side effect: BETWEEN filter appended; "filter_changed" event emitted.
+
+        Raises:
+            KeyError: if scheme_name does not exist.
+
+        Invariants:
+            - Equivalent to calling add_filter with operator=BETWEEN, value=(min_value, max_value).
+        """
         self.add_filter(
             scheme_name=scheme_name,
             column=column,
@@ -339,7 +542,22 @@ class FilteringManager(Observable, IFilterApplier):
         column: str,
         selected_values: List[Any]
     ) -> None:
-        """체크박스 필터 추가"""
+        """Add an IN_LIST filter for checkbox-style multi-value selection.
+
+        Input:
+            scheme_name: Name of an existing scheme.
+            column: DataFrame column name to filter on.
+            selected_values: Non-empty list of allowed values; rows matching any value pass.
+
+        Output:
+            None. Side effect: IN_LIST filter appended; "filter_changed" event emitted.
+
+        Raises:
+            KeyError: if scheme_name does not exist.
+
+        Invariants:
+            - Equivalent to calling add_filter with operator=IN_LIST, filter_type=CHECKBOX.
+        """
         self.add_filter(
             scheme_name=scheme_name,
             column=column,
@@ -354,7 +572,24 @@ class FilteringManager(Observable, IFilterApplier):
         column: str,
         selected_values: List[Any]
     ) -> None:
-        """체크박스 필터 업데이트"""
+        """Update the value of an existing checkbox (IN_LIST) filter, or add a new one if absent.
+
+        Input:
+            scheme_name: Name of an existing scheme.
+            column: DataFrame column name of the checkbox filter to update.
+            selected_values: New list of allowed values to set on the filter.
+
+        Output:
+            None. Side effect: matching filter's value is updated and "filter_changed" event
+            emitted, or a new checkbox filter is added if none exists.
+
+        Raises:
+            None
+
+        Invariants:
+            - No-op if scheme_name does not exist.
+            - At most one filter is updated (the first CHECKBOX filter matching column).
+        """
         if scheme_name not in self._schemes:
             return
 
@@ -377,7 +612,23 @@ class FilteringManager(Observable, IFilterApplier):
         search_text: str,
         case_sensitive: bool = True
     ) -> None:
-        """텍스트 검색 필터 추가"""
+        """Add a CONTAINS text-search filter to the named scheme.
+
+        Input:
+            scheme_name: Name of an existing scheme.
+            column: DataFrame column name (string dtype) to search in.
+            search_text: Substring to search for; empty string matches all rows.
+            case_sensitive: Whether the search is case-sensitive (default True).
+
+        Output:
+            None. Side effect: CONTAINS filter appended; "filter_changed" event emitted.
+
+        Raises:
+            KeyError: if scheme_name does not exist.
+
+        Invariants:
+            - Equivalent to calling add_filter with operator=CONTAINS, filter_type=TEXT_SEARCH.
+        """
         self.add_filter(
             scheme_name=scheme_name,
             column=column,
@@ -392,15 +643,24 @@ class FilteringManager(Observable, IFilterApplier):
         scheme_name: str,
         data: pl.DataFrame
     ) -> pl.DataFrame:
-        """
-        필터 적용
+        """Apply all enabled filters from the named scheme (including inherited schemes) to a DataFrame.
 
-        Args:
-            scheme_name: 스킴 이름
-            data: 원본 데이터프레임
+        Input:
+            scheme_name: Name of an existing scheme whose filters to apply.
+            data: pl.DataFrame to filter; must not be None.
 
-        Returns:
-            필터링된 데이터프레임
+        Output:
+            Filtered pl.DataFrame with the same columns. Returns data unchanged if
+            scheme_name does not exist or the scheme has no enabled filters.
+
+        Raises:
+            QueryError: if any single filter fails to evaluate (e.g., type mismatch).
+
+        Invariants:
+            - Result row count <= input row count.
+            - Column set is unchanged.
+            - Operation is timed via MetricsCollector.timed_operation("filter.apply").
+            - "filter.applied" counter is incremented after successful application.
         """
         with get_metrics().timed_operation("filter.apply"):
             if scheme_name not in self._schemes:
@@ -471,7 +731,23 @@ class FilteringManager(Observable, IFilterApplier):
         scheme_name: str,
         data: pl.DataFrame
     ) -> Set[int]:
-        """필터된 행의 인덱스 집합 반환"""
+        """Return the set of row indices that pass all filters in the named scheme.
+
+        Input:
+            scheme_name: Name of an existing scheme to evaluate.
+            data: pl.DataFrame to filter; must not be None.
+
+        Output:
+            Set of zero-based integer row indices for rows that pass all enabled filters.
+            If scheme_name does not exist, returns the full set of indices (no filtering).
+
+        Raises:
+            QueryError: if any filter fails to evaluate.
+
+        Invariants:
+            - Result is a subset of {0, 1, ..., len(data) - 1}.
+            - Equivalent to {i for i, row in enumerate(data) if all filters pass}.
+        """
         if scheme_name not in self._schemes:
             return set(range(len(data)))
 
@@ -482,15 +758,55 @@ class FilteringManager(Observable, IFilterApplier):
         return indices
 
     def get_scheme_names(self) -> List[str]:
-        """스킴 이름 목록"""
+        """Return the list of all registered scheme names.
+
+        Input:
+            None
+
+        Output:
+            List of scheme name strings in insertion order.
+
+        Raises:
+            None
+
+        Invariants:
+            - Always contains at least "Page".
+            - Does not modify manager state.
+        """
         return list(self._schemes.keys())
 
     def get_scheme(self, name: str) -> Optional[FilteringScheme]:
-        """스킴 조회"""
+        """Look up and return a scheme by name.
+
+        Input:
+            name: Name of the scheme to retrieve.
+
+        Output:
+            FilteringScheme instance if name exists, or None.
+
+        Raises:
+            None
+
+        Invariants:
+            - Does not modify manager state.
+        """
         return self._schemes.get(name)
 
     def reset(self) -> None:
-        """전체 초기화"""
+        """Reset the manager to its initial state: clear all schemes and recreate the default "Page" scheme.
+
+        Input:
+            None
+
+        Output:
+            None. Side effect: all schemes and filters are removed; a fresh "Page" scheme is created.
+
+        Raises:
+            None
+
+        Invariants:
+            - After the call, exactly one scheme ("Page") exists and active_scheme == "Page".
+        """
         self._schemes.clear()
         self._active_scheme = "Page"
         self._create_default_scheme()
