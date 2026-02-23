@@ -2192,9 +2192,6 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
             return self.grouped_model.get_group_data()
         return []
     
-    # ==================== Filter & Column Handlers ====================
-    # (methods extracted to _TableColumnMixin)
-
     # ==================== Table View Mode ====================
 
     def _on_table_view_mode_changed(self):
@@ -2283,18 +2280,10 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
             # Show all data
             self._apply_filters_and_update()
     
-    # ==================== Windowed Loading ====================
-    # (methods extracted to _TableWindowMixin)
-
     # ==================== F2: Edit Mode ====================
 
     def _on_edit_toggle(self, checked: bool):
         self.table_model.set_editable(checked)
-
-    # ==================== F5: Column Type Conversion ====================
-    # ==================== F3: Conditional Formatting ====================
-    # ==================== F7: Freeze Columns ====================
-    # (methods extracted to _TableColumnMixin)
 
     # ==================== Drag & Drop ====================
     
