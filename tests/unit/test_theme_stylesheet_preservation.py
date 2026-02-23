@@ -6,6 +6,8 @@ These tests must PASS against the unmodified theme.py. They act as a behavioral
 contract: if the refactor changes what generate_stylesheet() produces, these fail.
 """
 
+import pytest
+
 from data_graph_studio.ui.theme import ThemeManager
 
 # Selectors sampled at ~35-line intervals across the 282 selector lines in the
@@ -21,79 +23,75 @@ EXPECTED_SELECTORS = [
     "#placeholder",                       # generic placeholder
 ]
 
+# Top dark-mode background colors — verified absent from light output.
+DARK_MODE_COLORS = ("#1E293B", "#334155", "#374151")
+
+# Qt widget class names that must appear in any valid Qt stylesheet.
+EXPECTED_QT_MARKERS = ("QMainWindow", "QWidget")
+
+
+@pytest.fixture
+def dark_mgr():
+    mgr = ThemeManager()
+    mgr.set_theme("dark")
+    return mgr
+
+
+@pytest.fixture
+def light_mgr():
+    mgr = ThemeManager()
+    mgr.set_theme("light")
+    return mgr
+
 
 class TestGenerateStylesheetPreservation:
     """Verify generate_stylesheet() output shape for both light and dark modes."""
 
-    def test_light_stylesheet_is_non_empty_string(self):
-        mgr = ThemeManager()
-        mgr.set_theme("light")
-        result = mgr.generate_stylesheet()
+    def test_light_stylesheet_is_non_empty_string(self, light_mgr):
+        result = light_mgr.generate_stylesheet()
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_dark_stylesheet_is_non_empty_string(self):
-        mgr = ThemeManager()
-        mgr.set_theme("dark")
-        result = mgr.generate_stylesheet()
+    def test_dark_stylesheet_is_non_empty_string(self, dark_mgr):
+        result = dark_mgr.generate_stylesheet()
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_stylesheet_contains_qt_markers(self):
+    def test_stylesheet_contains_qt_markers(self, dark_mgr):
         """Output must reference known Qt widget classes — confirms it's a real Qt stylesheet."""
-        mgr = ThemeManager()
-        mgr.set_theme("dark")
-        result = mgr.generate_stylesheet()
-        # Qt stylesheet identifiers that must be present
-        assert "QMainWindow" in result
-        assert "QWidget" in result
+        result = dark_mgr.generate_stylesheet()
+        for marker in EXPECTED_QT_MARKERS:
+            assert marker in result
 
-    def test_light_and_dark_stylesheets_differ(self):
+    def test_light_and_dark_stylesheets_differ(self, light_mgr, dark_mgr):
         """Light and dark themes must produce distinct output."""
-        mgr = ThemeManager()
+        assert light_mgr.generate_stylesheet() != dark_mgr.generate_stylesheet()
 
-        mgr.set_theme("light")
-        light_css = mgr.generate_stylesheet()
-
-        mgr.set_theme("dark")
-        dark_css = mgr.generate_stylesheet()
-
-        assert light_css != dark_css
-
-    def test_stylesheet_is_deterministic(self):
+    def test_stylesheet_is_deterministic(self, dark_mgr):
         """Calling generate_stylesheet() twice with the same theme yields the same result."""
-        mgr = ThemeManager()
-        mgr.set_theme("dark")
-        assert mgr.generate_stylesheet() == mgr.generate_stylesheet()
+        assert dark_mgr.generate_stylesheet() == dark_mgr.generate_stylesheet()
 
-    def test_stylesheet_minimum_length(self):
+    def test_stylesheet_minimum_length(self, dark_mgr):
         """Stylesheet must meet a minimum character count — a dropped sub-file would shrink it noticeably."""
-        mgr = ThemeManager()
-        mgr.set_theme("dark")
-        css = mgr.generate_stylesheet()
+        css = dark_mgr.generate_stylesheet()
         assert len(css) > 40_000, (
             f"Stylesheet too short ({len(css)} chars) — a sub-file may have been dropped"
         )
 
-    def test_stylesheet_covers_key_sections(self):
+    def test_stylesheet_covers_key_sections(self, dark_mgr):
         """Spot-check selectors sampled from across the file to catch silent section drops."""
-        mgr = ThemeManager()
-        mgr.set_theme("dark")
-        css = mgr.generate_stylesheet()
+        css = dark_mgr.generate_stylesheet()
         for sel in EXPECTED_SELECTORS:
             assert sel in css, f"Missing section: {sel}"
 
-    def test_dark_stylesheet_contains_dark_colors(self):
-        """Dark mode must include dark background colors that are absent from light mode."""
-        mgr = ThemeManager()
-
-        mgr.set_theme("dark")
-        dark_css = mgr.generate_stylesheet()
-
-        mgr.set_theme("light")
-        light_css = mgr.generate_stylesheet()
-
-        # Top dark-mode colors (#1E293B, #334155, #374151) verified absent from light output
-        for color in ("#1E293B", "#334155", "#374151"):
+    def test_dark_stylesheet_contains_dark_colors(self, dark_mgr):
+        """Dark mode stylesheet must include dark background colors."""
+        dark_css = dark_mgr.generate_stylesheet()
+        for color in DARK_MODE_COLORS:
             assert color in dark_css, f"Dark color {color} missing from dark stylesheet"
+
+    def test_dark_colors_absent_from_light_stylesheet(self, light_mgr):
+        """Dark mode background colors must not appear in light mode output."""
+        light_css = light_mgr.generate_stylesheet()
+        for color in DARK_MODE_COLORS:
             assert color not in light_css, f"Dark color {color} unexpectedly found in light stylesheet"
