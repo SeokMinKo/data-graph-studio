@@ -5,10 +5,13 @@ Manages the IPC server and all _ipc_* handler methods.
 
 from __future__ import annotations
 
+import concurrent.futures
 import os
 import logging
+import queue
+import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from ...core.state import ChartType, AggregationType, ComparisonMode
 
@@ -17,12 +20,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 
 class IPCController:
     """IPC 서버 관리 컨트롤러"""
 
     def __init__(self, window: 'MainWindow'):
         self._w = window
+        self._work_queue: queue.SimpleQueue = queue.SimpleQueue()
 
     def setup(self):
         """IPC 서버 설정 - 외부 프로세스에서 앱 제어 가능"""
@@ -32,52 +38,95 @@ class IPCController:
 
         server = self._w._ipc_server
 
-        # 핸들러 등록
-        server.register_handler('ping', lambda: 'pong')
-        server.register_handler('get_state', self._ipc_get_state)
-        server.register_handler('get_data_info', self._ipc_get_data_info)
-        server.register_handler('set_chart_type', self._ipc_set_chart_type)
-        server.register_handler('set_columns', self._ipc_set_columns)
-        server.register_handler('load_file', self._ipc_load_file)
-        server.register_handler('get_panels', self._ipc_get_panels)
-        server.register_handler('get_summary', self._ipc_get_summary)
-        server.register_handler('execute', self._ipc_execute)
+        # 핸들러 등록 — all Qt-touching handlers wrapped with _ui()
+        # to ensure they execute on the main thread (IPC runs in background thread)
+        ui = self._ui
+        server.register_handler('ping', lambda: 'pong')  # pure data, no Qt
+        server.register_handler('get_state', ui(self._ipc_get_state))
+        server.register_handler('get_data_info', ui(self._ipc_get_data_info))
+        server.register_handler('set_chart_type', ui(self._ipc_set_chart_type))
+        server.register_handler('set_columns', ui(self._ipc_set_columns))
+        server.register_handler('load_file', ui(self._ipc_load_file))
+        server.register_handler('get_panels', ui(self._ipc_get_panels))
+        server.register_handler('get_summary', ui(self._ipc_get_summary))
+        server.register_handler('execute', ui(self._ipc_execute))
 
         # Zone control handlers
-        server.register_handler('set_x_column', self._ipc_set_x_column)
-        server.register_handler('set_value_columns', self._ipc_set_value_columns)
-        server.register_handler('set_group_columns', self._ipc_set_group_columns)
-        server.register_handler('set_hover_columns', self._ipc_set_hover_columns)
-        server.register_handler('clear_all_zones', self._ipc_clear_all_zones)
-        server.register_handler('get_zones', self._ipc_get_zones)
+        server.register_handler('set_x_column', ui(self._ipc_set_x_column))
+        server.register_handler('set_value_columns', ui(self._ipc_set_value_columns))
+        server.register_handler('set_group_columns', ui(self._ipc_set_group_columns))
+        server.register_handler('set_hover_columns', ui(self._ipc_set_hover_columns))
+        server.register_handler('clear_all_zones', ui(self._ipc_clear_all_zones))
+        server.register_handler('get_zones', ui(self._ipc_get_zones))
 
         # UI control handlers
-        server.register_handler('set_theme', self._ipc_set_theme)
-        server.register_handler('refresh', self._ipc_refresh)
-        server.register_handler('get_screenshot', self._ipc_get_screenshot)
-        server.register_handler('set_agg', self._ipc_set_agg)
+        server.register_handler('set_theme', ui(self._ipc_set_theme))
+        server.register_handler('refresh', ui(self._ipc_refresh))
+        server.register_handler('get_screenshot', ui(self._ipc_get_screenshot))
+        server.register_handler('set_agg', ui(self._ipc_set_agg))
 
         # Profile comparison handlers
-        server.register_handler('list_profiles', self._ipc_list_profiles)
-        server.register_handler('create_profile', self._ipc_create_profile)
-        server.register_handler('apply_profile', self._ipc_apply_profile)
-        server.register_handler('delete_profile', self._ipc_delete_profile)
-        server.register_handler('duplicate_profile', self._ipc_duplicate_profile)
-        server.register_handler('start_profile_comparison', self._ipc_start_profile_comparison)
-        server.register_handler('stop_profile_comparison', self._ipc_stop_profile_comparison)
-        server.register_handler('get_profile_comparison_state', self._ipc_get_profile_comparison_state)
-        server.register_handler('set_comparison_sync', self._ipc_set_comparison_sync)
+        server.register_handler('list_profiles', ui(self._ipc_list_profiles))
+        server.register_handler('create_profile', ui(self._ipc_create_profile))
+        server.register_handler('apply_profile', ui(self._ipc_apply_profile))
+        server.register_handler('delete_profile', ui(self._ipc_delete_profile))
+        server.register_handler('duplicate_profile', ui(self._ipc_duplicate_profile))
+        server.register_handler('start_profile_comparison', ui(self._ipc_start_profile_comparison))
+        server.register_handler('stop_profile_comparison', ui(self._ipc_stop_profile_comparison))
+        server.register_handler('get_profile_comparison_state', ui(self._ipc_get_profile_comparison_state))
+        server.register_handler('set_comparison_sync', ui(self._ipc_set_comparison_sync))
 
         # Panel capture handler
         self._setup_capture_service()
-        server.register_handler('capture', self._ipc_capture)
+        server.register_handler('capture', ui(self._ipc_capture))
 
         # Filter handlers
-        server.register_handler('apply_filter', self._ipc_apply_filter)
-        server.register_handler('clear_filters', self._ipc_clear_filters)
+        server.register_handler('apply_filter', ui(self._ipc_apply_filter))
+        server.register_handler('clear_filters', ui(self._ipc_clear_filters))
 
         # 서버 시작
         server.start()
+
+        # Main-thread pump: drain IPC work items on every Qt event loop tick
+        from PySide6.QtCore import QTimer
+        self._pump_timer = QTimer(self._w)
+        self._pump_timer.timeout.connect(self._pump_work_queue)
+        self._pump_timer.start(5)
+
+    # ------------------------------------------------------------------
+    # Main-thread dispatcher
+    # ------------------------------------------------------------------
+
+    def _main_thread(self, fn: Callable[[], _T], timeout: float = 30.0) -> _T:
+        """Execute fn on the Qt main thread and return its result.
+
+        When called from the main thread (e.g., tests), fn runs directly.
+        When called from the IPC background thread, the call is queued and
+        this method blocks until the main-thread pump drains it.
+        """
+        if threading.current_thread() is threading.main_thread():
+            return fn()
+        fut: concurrent.futures.Future = concurrent.futures.Future()
+        self._work_queue.put((fn, fut))
+        return fut.result(timeout=timeout)
+
+    def _pump_work_queue(self) -> None:
+        """Called by QTimer on the main thread — drain pending IPC work."""
+        try:
+            while True:
+                fn, fut = self._work_queue.get_nowait()
+                try:
+                    fut.set_result(fn())
+                except Exception as exc:
+                    fut.set_exception(exc)
+        except queue.Empty:
+            pass
+
+    def _ui(self, fn: Callable) -> Callable:
+        """Wrap an IPC handler to execute on the Qt main thread."""
+        def wrapper(*args, **kwargs):
+            return self._main_thread(lambda: fn(*args, **kwargs))
+        return wrapper
 
     def _setup_capture_service(self) -> None:
         """Initialise CaptureService and register known panel widgets."""

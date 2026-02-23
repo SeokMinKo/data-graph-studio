@@ -126,7 +126,13 @@ class QARunner:
     def _run_scenario(self, dataset_name: str, stem: str, scenario: Dict) -> QAResult:
         resp = self._cmd(scenario["cmd"], **scenario["kwargs"])
         shot = self._capture(stem, scenario["name"]) if scenario["post_capture"] else Path("/dev/null")
-        status = "pass" if resp and resp.get("status") == "ok" else "warn"
+        # Handlers may return bool (legacy), dict, or None — normalise to pass/warn
+        if isinstance(resp, bool):
+            status = "pass" if resp else "warn"
+        elif isinstance(resp, dict):
+            status = "pass" if resp.get("status") == "ok" else "warn"
+        else:
+            status = "warn" if resp is None else "pass"
         return QAResult(
             dataset=dataset_name, scenario=scenario["name"],
             status=status, screenshot=shot,
