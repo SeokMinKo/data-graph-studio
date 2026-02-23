@@ -20,11 +20,13 @@ GITHUB_API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
 
 
 def get_current_version() -> str:
-    """Best-effort current app version.
+    """Return the current application version using best-effort discovery.
 
     Priority:
     1) data_graph_studio._build_version.__version__ (CI-injected; works in PyInstaller)
     2) importlib.metadata.version("data-graph-studio")
+
+    Output: str — version string (e.g. "1.2.3"), or "0.0.0" when neither source is available
     """
 
     try:
@@ -64,9 +66,13 @@ def _parse_version(v: str) -> Optional[Version]:
 
 
 def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -> Optional[UpdateInfo]:
-    """Check GitHub latest release and find Windows installer + checksum asset.
+    """Fetch the latest GitHub release and locate the Windows installer and SHA-256 checksum assets.
 
-    Returns UpdateInfo if compatible assets exist, else None.
+    Input: expected_asset_prefix — str, installer asset name prefix to match (default "DataGraphStudio-Setup-")
+    Output: UpdateInfo | None — populated UpdateInfo when both installer and checksum assets are found,
+                                 None when either is missing or the release has no matching assets
+    Raises: urllib.error.URLError — on network failure or HTTP error from the GitHub API
+            json.JSONDecodeError — when the API response body is not valid JSON
     """
 
     req = urllib.request.Request(
@@ -124,7 +130,13 @@ def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -
 
 
 def is_update_available(current_version: str, latest_version: str) -> bool:
-    """Return True if latest_version is newer than current_version."""
+    """Return True if latest_version is semantically newer than current_version.
+
+    Input: current_version — str, installed version string (e.g. "1.0.0")
+           latest_version — str, release version string to compare against
+    Output: bool — True when latest > current per PEP 440 ordering; False when either
+                   version string is invalid or latest is not newer
+    """
     cur = _parse_version(current_version)
     lat = _parse_version(latest_version)
     if not cur or not lat:
@@ -133,7 +145,13 @@ def is_update_available(current_version: str, latest_version: str) -> bool:
 
 
 def download_asset(url: str, filename: str) -> str:
-    """Download asset to temp dir and return full path."""
+    """Download a release asset to a temporary directory and return its full path.
+
+    Input: url — str, direct download URL for the asset
+           filename — str, filename to use when writing to the temp directory
+    Output: str — absolute path to the downloaded file in a newly created temp directory
+    Raises: urllib.error.URLError — on network failure during download
+    """
     tmp_dir = tempfile.mkdtemp(prefix="dgs-update-")
     out_path = os.path.join(tmp_dir, filename)
     with urllib.request.urlopen(url, timeout=60) as resp:
@@ -143,7 +161,11 @@ def download_asset(url: str, filename: str) -> str:
 
 
 def read_sha256_file(path: str) -> str:
-    """Parse a .sha256 file content like: '<hash>  <filename>'"""
+    """Parse the hex hash from a .sha256 file formatted as '<hash>  <filename>'.
+
+    Input: path — str, absolute path to the .sha256 checksum file
+    Output: str — lowercase hex hash token from the first line, or "" when the file is empty
+    """
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         line = f.readline().strip()
     if not line:
@@ -153,7 +175,12 @@ def read_sha256_file(path: str) -> str:
 
 
 def sha256sum(path: str) -> str:
-    """Compute and return the lowercase hex SHA-256 digest of the file at path."""
+    """Compute the SHA-256 digest of a file by reading it in 1 MiB chunks.
+
+    Input: path — str, absolute path to the file to hash
+    Output: str — lowercase hex SHA-256 digest of the file contents
+    Raises: OSError — when the file cannot be opened or read
+    """
     import hashlib
 
     h = hashlib.sha256()
@@ -164,10 +191,13 @@ def sha256sum(path: str) -> str:
 
 
 def run_windows_installer(installer_path: str, silent: bool = True) -> None:
-    """Run installer and exit current app.
+    """Launch the Windows installer detached from the current process and return immediately.
 
-    Note: truly seamless background updates on Windows are complex.
-    This uses an installer-based flow (Inno Setup compatible).
+    No-op on non-Windows platforms. Uses an Inno Setup compatible flag set when silent=True.
+
+    Input: installer_path — str, absolute path to the .exe installer file
+           silent — bool, when True passes /VERYSILENT /NORESTART to the installer (default True)
+    Output: None
     """
 
     if sys.platform != "win32":

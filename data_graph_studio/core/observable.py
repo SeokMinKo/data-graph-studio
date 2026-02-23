@@ -28,22 +28,45 @@ class Observable:
     """
 
     def __init__(self) -> None:
+        """Initialize the Observable with an empty listener registry.
+
+        Output: None
+        Invariants: self._listeners is always a defaultdict(list)
+        """
         self._listeners: dict[str, list[Callable]] = defaultdict(list)
 
     def subscribe(self, event: str, handler: Callable) -> None:
-        """Register handler for event. Noop if already registered."""
+        """Register handler for event. Noop if already registered.
+
+        Input: event — str, event name to listen for
+               handler — Callable, function to invoke when the event fires
+        Output: None
+        Invariants: a given handler is registered at most once per event
+        """
         if handler not in self._listeners[event]:
             self._listeners[event].append(handler)
 
     def unsubscribe(self, event: str, handler: Callable) -> None:
-        """Remove handler. Noop if not registered."""
+        """Remove handler. Noop if not registered.
+
+        Input: event — str, event name the handler was registered under
+               handler — Callable, the handler to remove
+        Output: None
+        """
         try:
             self._listeners[event].remove(handler)
         except ValueError:
             pass
 
     def emit(self, event: str, *args: Any, **kwargs: Any) -> None:
-        """Fire all handlers for event. Errors in handlers are logged, not raised."""
+        """Fire all handlers for event. Errors in handlers are logged, not raised.
+
+        Input: event — str, event name to dispatch
+               *args — positional arguments forwarded to each handler
+               **kwargs — keyword arguments forwarded to each handler
+        Output: None
+        Invariants: handler exceptions are caught and logged; they never propagate to callers
+        """
         for handler in list(self._listeners.get(event, [])):
             try:
                 handler(*args, **kwargs)

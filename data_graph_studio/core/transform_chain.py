@@ -26,6 +26,11 @@ class TransformChain:
     """변환 체인: 순서 기록, undo, 직렬화, lineage 제공."""
 
     def __init__(self):
+        """Initialize an empty TransformChain with no recorded steps.
+
+        Output: None
+        Invariants: self._steps is always a list
+        """
         self._steps: List[TransformStep] = []
 
     # ------------------------------------------------------------------
@@ -33,17 +38,28 @@ class TransformChain:
     # ------------------------------------------------------------------
 
     def add(self, step: TransformStep) -> None:
-        """변환 단계를 추가한다."""
+        """Append a transform step to the end of the chain.
+
+        Input: step — TransformStep, the step to append
+        Output: None
+        """
         self._steps.append(step)
 
     def undo_last(self) -> Optional[TransformStep]:
-        """마지막 변환을 제거하고 반환한다."""
+        """Remove and return the most recently added transform step.
+
+        Output: TransformStep | None — the removed step, or None when the chain is empty
+        """
         if self._steps:
             return self._steps.pop()
         return None
 
     def clear(self) -> None:
-        """모든 단계를 제거한다."""
+        """Remove all transform steps from the chain.
+
+        Output: None
+        Invariants: len(self) == 0 after this call
+        """
         self._steps.clear()
 
     # ------------------------------------------------------------------
@@ -51,7 +67,12 @@ class TransformChain:
     # ------------------------------------------------------------------
 
     def apply(self, df: pl.DataFrame) -> pl.DataFrame:
-        """모든 단계를 순서대로 적용한다."""
+        """Apply all recorded transform steps to df in order and return the result.
+
+        Input: df — pl.DataFrame, the source DataFrame to transform
+        Output: pl.DataFrame — new DataFrame after all steps are applied in sequence;
+                               identical to input when the chain is empty
+        """
         for step in self._steps:
             df = self._apply_step(df, step)
         return df
@@ -121,12 +142,19 @@ class TransformChain:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> List[Dict[str, Any]]:
-        """직렬화."""
+        """Serialize all steps to a list of dicts for persistence or transfer.
+
+        Output: List[Dict[str, Any]] — ordered list of asdict representations of each TransformStep
+        """
         return [asdict(s) for s in self._steps]
 
     @classmethod
     def from_dict(cls, data: List[Dict[str, Any]]) -> 'TransformChain':
-        """역직렬화."""
+        """Reconstruct a TransformChain from a list of step dicts produced by to_dict.
+
+        Input: data — List[Dict[str, Any]], ordered list of serialized TransformStep dicts
+        Output: TransformChain — new instance with all steps restored in original order
+        """
         chain = cls()
         for d in data:
             chain.add(TransformStep(**d))
@@ -137,7 +165,10 @@ class TransformChain:
     # ------------------------------------------------------------------
 
     def get_lineage(self) -> List[Dict[str, Any]]:
-        """전체 변환 이력 반환."""
+        """Return the full transformation lineage as an ordered list of step metadata dicts.
+
+        Output: List[Dict[str, Any]] — each dict contains step index, name, op, params, and timestamp
+        """
         return [
             {
                 'step': i,
@@ -151,7 +182,11 @@ class TransformChain:
 
     @property
     def steps(self) -> List[TransformStep]:
-        """Return a copy of the ordered list of transform steps."""
+        """Return a snapshot copy of the ordered transform step list.
+
+        Output: List[TransformStep] — copy of internal steps; mutating the returned list
+                                       does not affect the chain
+        """
         return list(self._steps)
 
     def __len__(self) -> int:

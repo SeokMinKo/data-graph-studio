@@ -29,7 +29,11 @@ class ChartStatisticsConfig:
     decimal_places: int = 2
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize this statistics config to a JSON-compatible dictionary."""
+        """Serialize this statistics config to a JSON-compatible dictionary.
+
+        Output: Dict[str, Any] — dict with enabled_statistics (list of str values),
+                                   show_in_report (bool), decimal_places (int)
+        """
         return {
             "enabled_statistics": [s.value for s in self.enabled_statistics],
             "show_in_report": self.show_in_report,
@@ -38,7 +42,12 @@ class ChartStatisticsConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ChartStatisticsConfig":
-        """Deserialize a ChartStatisticsConfig from a dictionary produced by to_dict."""
+        """Deserialize a ChartStatisticsConfig from a dictionary produced by to_dict.
+
+        Input: data — Dict[str, Any], dict with keys enabled_statistics, show_in_report,
+                      decimal_places; missing keys fall back to defaults
+        Output: ChartStatisticsConfig — reconstructed instance
+        """
         return cls(
             enabled_statistics=[StatisticType(s) for s in data.get("enabled_statistics", [])],
             show_in_report=data.get("show_in_report", True),
@@ -53,18 +62,31 @@ class ChartStatistics:
     statistics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize these chart statistics to a JSON-compatible dictionary."""
+        """Serialize these chart statistics to a JSON-compatible dictionary.
+
+        Output: Dict[str, Any] — dict with chart_type (str) and statistics (dict of key→value)
+        """
         return {
             "chart_type": self.chart_type,
             "statistics": self.statistics,
         }
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Return the statistic value for key, or default if not present."""
+        """Return the statistic value for key, or default if not present.
+
+        Input: key — str, statistic name to look up
+               default — Any, value to return when key is absent (default None)
+        Output: Any — stored statistic value or the provided default
+        """
         return self.statistics.get(key, default)
 
     def set(self, key: str, value: Any):
-        """Set a statistic value by key."""
+        """Set or overwrite a statistic value by key.
+
+        Input: key — str, statistic name to store
+               value — Any, the value to associate with key
+        Output: None
+        """
         self.statistics[key] = value
 
 
@@ -113,7 +135,12 @@ DEFAULT_CHART_STATISTICS: Dict[str, List[StatisticType]] = {
 
 
 def get_default_statistics_for_chart(chart_type: str) -> List[StatisticType]:
-    """차트 타입에 대한 기본 통계 목록 반환"""
+    """Return the default list of statistics for the given chart type.
+
+    Input: chart_type — str, chart type name (e.g. "bar", "line", "scatter"); case-insensitive
+    Output: List[StatisticType] — ordered list of default statistics for the chart type;
+                                   falls back to [COUNT, MEAN, MIN, MAX] for unknown types
+    """
     return DEFAULT_CHART_STATISTICS.get(chart_type.lower(), [
         StatisticType.COUNT, StatisticType.MEAN, StatisticType.MIN, StatisticType.MAX
     ])
@@ -140,7 +167,11 @@ class ChartData:
     statistics_config: Optional[ChartStatisticsConfig] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환 (이미지 바이트 제외)"""
+        """Serialize this ChartData to a JSON-compatible dictionary, excluding raw image bytes.
+
+        Output: Dict[str, Any] — all scalar fields plus image_base64 (str | None) and nested
+                                   to_dict results for statistics and statistics_config when present
+        """
         return {
             "id": self.id,
             "chart_type": self.chart_type,
@@ -159,17 +190,35 @@ class ChartData:
         }
 
     def set_image(self, image_bytes: bytes, format: str = "png"):
-        """이미지 설정 및 Base64 인코딩"""
+        """Store raw image bytes and compute their Base64 representation.
+
+        Input: image_bytes — bytes, raw image data (e.g. PNG or SVG content)
+               format — str, image format label stored in image_format (default "png")
+        Output: None
+        Invariants: after this call image_bytes, image_format, and image_base64 are all set
+        """
         self.image_bytes = image_bytes
         self.image_format = format
         self.image_base64 = base64.b64encode(image_bytes).decode('utf-8')
 
     def set_statistics(self, statistics: ChartStatistics):
-        """통계 설정"""
+        """Attach a ChartStatistics object to this chart data.
+
+        Input: statistics — ChartStatistics, computed statistics to associate with this chart
+        Output: None
+        """
         self.statistics = statistics
 
     def get_statistics_for_display(self) -> Dict[str, Any]:
-        """표시용 통계 반환 (설정된 통계만)"""
+        """Return the statistics subset appropriate for display, respecting user configuration.
+
+        When statistics_config.enabled_statistics is set, only those statistics are included.
+        When not configured, falls back to the chart type's default statistic list.
+        Only statistics with non-None values are included in the result.
+
+        Output: Dict[str, Any] — mapping of statistic value string to computed value;
+                                   empty dict when no statistics are attached
+        """
         if not self.statistics:
             return {}
 

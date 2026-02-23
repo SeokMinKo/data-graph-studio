@@ -21,7 +21,12 @@ class StructuredFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format a log record as a flat key=value string."""
+        """Format a log record as a flat key=value string.
+
+        Input: record — logging.LogRecord, the record to format
+        Output: str — space-joined key=value pairs starting with ts, level, logger, msg;
+                      followed by any extra fields; exc info appended when present
+        """
         record.message = record.getMessage()
         ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(record.created))
         parts = [

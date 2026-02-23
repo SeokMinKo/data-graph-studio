@@ -39,6 +39,14 @@ class ProfileComparisonController(Observable):
         controller: ProfileController,
         state: AppState,
     ):
+        """Initialize the controller and wire up profile lifecycle subscriptions.
+
+        Input: store — ProfileStore, used to look up GraphSetting objects by ID
+               controller — ProfileController, source of profile_deleted/profile_renamed events
+               state — AppState, where comparison state is persisted
+        Output: None
+        Invariants: comparison is inactive at construction; controller events are subscribed
+        """
         super().__init__()
         self._store = store
         self._controller = controller
@@ -63,9 +71,17 @@ class ProfileComparisonController(Observable):
         profile_ids: List[str],
         mode: ComparisonMode = ComparisonMode.SIDE_BY_SIDE,
     ) -> bool:
-        """Start a profile comparison.
+        """Validate and activate a profile comparison, updating AppState and emitting events.
 
-        Returns ``False`` and emits ``error_occurred`` when validation fails.
+        Saves the currently active profile before proceeding. Validation checks:
+        at least 2 profiles, all profiles exist and belong to the same dataset,
+        OVERLAY/DIFFERENCE modes require a shared X column, DIFFERENCE requires exactly 2 profiles.
+
+        Input: dataset_id — str, the dataset the profiles belong to
+               profile_ids — List[str], IDs of profiles to compare (min 2)
+               mode — ComparisonMode, requested comparison mode (default SIDE_BY_SIDE)
+        Output: bool — True when comparison activated; False when any validation fails
+        Invariants: on failure, comparison state is unchanged and error_occurred is emitted
         """
         # Save current active profile before comparing
         # (so chart_type and other changes are persisted)
@@ -123,7 +139,11 @@ class ProfileComparisonController(Observable):
         return True
 
     def stop_comparison(self) -> None:
-        """FR-9: exit comparison mode."""
+        """Exit comparison mode, clearing all comparison state and emitting comparison_ended.
+
+        Output: None
+        Invariants: no-op when comparison is not currently active
+        """
         if not self._active:
             return
 
@@ -136,9 +156,15 @@ class ProfileComparisonController(Observable):
         self.emit("comparison_ended")
 
     def change_mode(self, mode: ComparisonMode) -> bool:
-        """Change comparison mode while active.
+        """Switch the comparison mode while a comparison is already active.
 
-        Returns ``False`` and emits ``error_occurred`` on validation failure.
+        Switching to SINGLE is equivalent to calling stop_comparison. OVERLAY/DIFFERENCE
+        modes are validated against the current profile set.
+
+        Input: mode — ComparisonMode, the new comparison mode to apply
+        Output: bool — True when mode changed or comparison stopped; False when inactive
+                       or validation fails
+        Invariants: on failure, current mode is unchanged and error_occurred is emitted
         """
         if not self._active:
             return False
@@ -202,20 +228,33 @@ class ProfileComparisonController(Observable):
 
     @property
     def is_active(self) -> bool:
-        """Return True when profile comparison is active."""
+        """Return True when a profile comparison session is currently active.
+
+        Output: bool — True if start_comparison succeeded and stop_comparison has not been called
+        """
         return self._active
 
     @property
     def current_profiles(self) -> List[str]:
-        """Return a copy of the currently compared profile ID list."""
+        """Return a snapshot copy of the profile IDs currently in the comparison.
+
+        Output: List[str] — copy of internal profile ID list; empty when not active
+        """
         return list(self._profile_ids)
 
     @property
     def current_mode(self) -> ComparisonMode:
-        """Return the active comparison mode."""
+        """Return the currently active comparison mode.
+
+        Output: ComparisonMode — SINGLE when no comparison is active, otherwise the mode set by
+                                  start_comparison or change_mode
+        """
         return self._current_mode
 
     @property
     def dataset_id(self) -> str:
-        """Return the dataset ID used for the current comparison."""
+        """Return the dataset ID associated with the current comparison.
+
+        Output: str — dataset_id passed to start_comparison; empty string when not active
+        """
         return self._dataset_id
