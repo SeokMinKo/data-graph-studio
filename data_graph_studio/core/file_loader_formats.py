@@ -1,11 +1,9 @@
-"""
-file_loader_formats — 파일 형식별 로딩 헬퍼 모음.
+"""file_loader_formats — format-specific loading helpers extracted from FileLoader.
 
-FileLoader 클래스에서 추출된 포맷 특화 함수들을 담는다.
-각 함수는 독립 함수로 정의되며, 인스턴스 상태가 필요한 경우
-첫 번째 인자로 FileLoader 인스턴스(loader)를 받는다.
+Each function is a standalone helper. When instance state is needed, the first
+argument is the FileLoader instance (``loader``).
 
-포맷별 구현은 하위 모듈에 위치한다:
+Format implementations live in sub-modules:
   - file_loader_formats_csv   : CSV / TSV / TXT / ETL
   - file_loader_formats_binary: Excel / Parquet / JSON
 """
@@ -48,13 +46,22 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def is_binary_etl(path: str) -> bool:
-    """ETL 파일이 바이너리인지 확인한다."""
+    """Return True if the ETL file at path is binary rather than plain text.
+
+    Input: path — str, absolute or relative filesystem path to the ETL file
+    Output: bool — True when the file starts with a binary magic signature
+    """
     from .etl_helpers import is_binary_etl as _is_binary_etl
     return _is_binary_etl(path)
 
 
 def parse_etl_binary(path: str) -> pl.DataFrame:
-    """etl-parser로 바이너리 ETL 파일을 파싱한다."""
+    """Parse a binary ETL file using the etl-parser library and return a DataFrame.
+
+    Input: path — str, path to a binary ETL file
+    Output: pl.DataFrame — parsed tabular data from the ETL binary format
+    Raises: DataLoadError — when etl-parser is unavailable or the file is malformed
+    """
     from .etl_helpers import parse_etl_binary as _parse_etl_binary
     return _parse_etl_binary(path)
 
@@ -72,7 +79,25 @@ def prepare_parquet_from_csv(
     skip_rows: int,
     comment_char: Optional[str],
 ) -> Optional[str]:
-    """CSV를 Parquet으로 변환한다. 성공 시 parquet 경로, 실패 시 None."""
+    """Convert a CSV file to a Parquet cache file and return the cache path.
+
+    Skips conversion when a fresh cache already exists (parquet mtime >= csv mtime
+    and file size > 0). On any I/O or memory failure the warning is stored on
+    loader._warning_message and None is returned so the caller can fall back to
+    direct CSV loading.
+
+    Input:
+        loader — FileLoader, provides _update_progress and _warning_message
+        path — str, absolute path to the source CSV file
+        encoding — str, character encoding of the CSV (e.g. "utf-8")
+        delimiter — str, field separator character
+        has_header — bool, whether the first non-skipped row is a header
+        skip_rows — int, number of rows to skip before reading
+        comment_char — Optional[str], line prefix that marks comment rows
+    Output: Optional[str] — parquet cache path on success, None on failure
+    Invariants: the returned path, when not None, is a readable Parquet file
+        whose content matches the CSV at path
+    """
     parquet_path = f"{path}.parquet"
     try:
         if os.path.exists(parquet_path):
@@ -101,7 +126,12 @@ def prepare_parquet_from_csv(
 # ---------------------------------------------------------------------------
 
 def collect_streaming(lazy_df: pl.LazyFrame) -> pl.DataFrame:
-    """LazyFrame을 streaming 모드로 수집한다."""
+    """Collect a LazyFrame using the streaming engine, falling back to default on error.
+
+    Input: lazy_df — pl.LazyFrame, the lazy query to materialize
+    Output: pl.DataFrame — the collected result
+    Invariants: always returns a DataFrame; never raises on streaming failure
+    """
     try:
         return lazy_df.collect(engine="streaming")
     except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError, MemoryError, OSError) as e:
@@ -115,7 +145,14 @@ def load_window_from_lazy(
     window_start: int,
     window_size: int,
 ) -> pl.DataFrame:
-    """LazyFrame에서 window 구간만 로드한다."""
+    """Collect a row-range slice from a LazyFrame.
+
+    Input:
+        lazy_df — pl.LazyFrame, source query
+        window_start — int, zero-based index of the first row to include; >= 0
+        window_size — int, maximum number of rows to return; > 0
+    Output: pl.DataFrame — rows [window_start, window_start + window_size)
+    """
     return collect_streaming(lazy_df.slice(window_start, window_size))
 
 
@@ -141,7 +178,34 @@ def load_file_internal(
     process_filter: Optional[List[str]] = None,
     sample_n: Optional[int] = None,
 ) -> bool:
-    """실제 파일 로드를 수행한다. 성공 여부를 반환한다."""
+    """Orchestrate the full file-load pipeline and return True on success.
+
+    Chooses windowed or eager loading based on file size, then applies
+    post-load transforms (column exclusion, process filter, sampling, memory
+    optimization, profiling). Progress events are emitted to loader throughout.
+    Exceptions are caught internally; the caller receives a bool result.
+
+    Input:
+        loader — FileLoader, owns state (_df, _lazy_df, _windowed, etc.)
+        path — str, absolute path to the file to load
+        file_type — FileType, the format enum value
+        encoding — str, character encoding
+        delimiter — str, field separator (CSV/TXT/ETL)
+        delimiter_type — DelimiterType, how the delimiter is interpreted
+        regex_pattern — Optional[str], regex used when delimiter_type is REGEX
+        has_header — bool, whether the first data row is a header
+        skip_rows — int, rows to skip before reading; >= 0
+        comment_char — Optional[str], single-character comment prefix
+        sheet_name — Optional[str], Excel sheet name or index
+        chunk_size — Optional[int], reserved for future chunked loading
+        optimize_memory — bool, whether to downcast column dtypes after load
+        excluded_columns — Optional[List[str]], column names to drop
+        process_filter — Optional[List[str]], ETL process names to keep
+        sample_n — Optional[int], cap the loaded rows to this count via random sample
+    Output: bool — True when data was loaded into loader._df; False on
+        cancellation, missing data, or exception
+    Invariants: loader._df is None when False is returned
+    """
     start_time = time.time()
     loader._warning_message = None
 
@@ -207,7 +271,24 @@ def load_windowed(
     comment_char: Optional[str],
     excluded_columns: Optional[List[str]],
 ) -> None:
-    """Set up lazy scan and load first window for large CSV/TSV/Parquet files."""
+    """Set up lazy scan and load first window for large CSV/TSV/Parquet files.
+
+    Stores the LazyFrame in loader._lazy_df, counts total rows, loads the first
+    window into loader._df, and sets loader._windowed = True when the file
+    exceeds one window. Row count failures are logged and suppressed.
+
+    Input:
+        loader — FileLoader, receives _lazy_df, _total_rows, _df, _windowed
+        path — str, absolute path to the file
+        file_type — FileType, one of CSV, TSV, or PARQUET
+        encoding — str, character encoding for text formats
+        delimiter — str, field separator (CSV only)
+        has_header — bool, whether the first row is a header
+        skip_rows — int, rows to skip before data; >= 0
+        comment_char — Optional[str], single-character comment line prefix
+        excluded_columns — Optional[List[str]], columns to drop from the lazy scan
+    Invariants: loader._df contains the first window after this call returns
+    """
     if file_type in (FileType.CSV, FileType.TSV):
         sep = delimiter if file_type == FileType.CSV else "\t"
         lazy_df = pl.scan_csv(
@@ -252,7 +333,26 @@ def load_eager(
     comment_char: Optional[str],
     sheet_name: Optional[str],
 ) -> None:
-    """Load the full file eagerly using the appropriate loader."""
+    """Load the full file eagerly using the appropriate format-specific loader.
+
+    Dispatches to load_csv, load_text, load_etl, load_excel, load_parquet, or
+    load_json based on file_type and stores the result in loader._df.
+
+    Input:
+        loader — FileLoader, receives _df after loading
+        path — str, absolute path to the file
+        file_type — FileType, determines which loader is called
+        encoding — str, character encoding for text-based formats
+        delimiter — str, field separator character
+        delimiter_type — DelimiterType, interpretation mode for the delimiter
+        regex_pattern — Optional[str], regex split pattern when delimiter_type is REGEX
+        has_header — bool, whether the first row is a column header
+        skip_rows — int, rows to skip at the start of the file; >= 0
+        comment_char — Optional[str], single-character prefix for comment lines
+        sheet_name — Optional[str], Excel sheet name; None selects the first sheet
+    Raises: DataLoadError — when file_type is not recognized
+    Invariants: loader._df is set to a non-None DataFrame on success
+    """
     if file_type == FileType.CSV:
         loader._df = load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
     elif file_type == FileType.TSV:
@@ -289,7 +389,21 @@ def apply_post_load_transforms(
     optimize_memory: bool,
     start_time: float,
 ) -> None:
-    """Apply column exclusion, process filter, sampling, and memory optimization."""
+    """Apply column exclusion, process filtering, sampling, memory optimization, and profiling.
+
+    Mutates loader._df in place through a sequence of optional transforms.
+    Each step is skipped when its controlling argument is None/False or when
+    loader._df is None. Progress events are emitted for optimizing and profiling.
+
+    Input:
+        loader — FileLoader, owns _df and provides _update_progress
+        excluded_columns — Optional[List[str]], columns to drop (skipped in windowed mode)
+        process_filter — Optional[List[str]], ETL process names to keep
+        sample_n — Optional[int], max rows after random sampling with seed=42
+        optimize_memory — bool, whether to downcast dtypes via optimize_memory_df
+        start_time — float, epoch time when loading began (used to compute load_time)
+    Invariants: loader._profile is set when loader._df is not None after transforms
+    """
     if excluded_columns and loader._df is not None and not loader._windowed:
         cols_to_drop = [c for c in excluded_columns if c in loader._df.columns]
         if cols_to_drop:
@@ -318,7 +432,23 @@ def apply_post_load_transforms(
 # ---------------------------------------------------------------------------
 
 def optimize_memory_df(loader: "FileLoader", df: pl.DataFrame) -> pl.DataFrame:
-    """메모리를 최적화한다 (with_columns 패턴으로 피크 메모리 절감)."""
+    """Downcast column dtypes to minimize memory usage and return the optimized DataFrame.
+
+    Integer columns are narrowed to the smallest signed type that fits their
+    value range (Int8 → Int16 → Int32). Float64 columns are cast to Float32
+    unless precision mode is HIGH or SCIENTIFIC, or the column is flagged as
+    precision-sensitive. String columns with < 50% unique values are converted
+    to Categorical. All casts are applied in a single with_columns call to
+    minimize peak memory during transformation.
+
+    Input:
+        loader — FileLoader, consulted for _precision_mode and
+            _is_precision_sensitive_column
+        df — pl.DataFrame, the frame to optimize; not mutated in-place
+    Output: pl.DataFrame — new frame with downcasted column types
+    Invariants: column names and row count are unchanged; values are preserved
+        within the target type range
+    """
     cast_exprs = []
 
     for col in df.columns:
@@ -357,7 +487,21 @@ def optimize_memory_df(loader: "FileLoader", df: pl.DataFrame) -> pl.DataFrame:
 
 
 def create_profile(df: pl.DataFrame, load_time: float) -> "DataProfile":
-    """데이터 프로파일을 생성한다."""
+    """Build a DataProfile describing the structure and statistics of a DataFrame.
+
+    Iterates over all columns to collect dtype, null count, unique count,
+    numeric/temporal/categorical flags, min/max for numeric columns, and up to
+    five sample values. Estimated memory size is recorded per column and for
+    the whole frame.
+
+    Input:
+        df — pl.DataFrame, the loaded data to profile
+        load_time — float, elapsed seconds from load start to now
+    Output: DataProfile — immutable snapshot of df's shape, column metadata,
+        and load timing
+    Invariants: returned profile reflects the state of df at call time;
+        len(profile.columns) == len(df.columns)
+    """
     columns = []
     for col in df.columns:
         series = df[col]
