@@ -1,4 +1,7 @@
+import os
+import tempfile
 from unittest.mock import MagicMock
+
 from data_graph_studio.ui.controllers.ipc_controller import IPCController
 
 
@@ -32,3 +35,39 @@ def test_ipc_apply_filter_returns_error_on_exception():
     result = ctrl._ipc_apply_filter(column="nope", op="eq", value="x")
     assert result["status"] == "error"
     assert "bad column" in result["message"]
+
+
+def test_ipc_load_file_returns_status_ok_on_success():
+    ctrl = _make_controller()
+    ctrl._w.engine.load_dataset.return_value = "dataset-abc"
+    ctrl._w.engine.get_dataset.return_value = MagicMock(
+        name="sales", row_count=10, column_count=3, memory_bytes=1024
+    )
+
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        f.write(b"a,b,c\n1,2,3\n")
+        path = f.name
+
+    try:
+        result = ctrl._ipc_load_file(path)
+    finally:
+        os.unlink(path)
+
+    assert result["status"] == "ok"
+    assert result["dataset_id"] == "dataset-abc"
+
+
+def test_ipc_load_file_returns_status_error_when_engine_fails():
+    ctrl = _make_controller()
+    ctrl._w.engine.load_dataset.return_value = None
+
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        f.write(b"a,b\n1,2\n")
+        path = f.name
+
+    try:
+        result = ctrl._ipc_load_file(path)
+    finally:
+        os.unlink(path)
+
+    assert result["status"] == "error"

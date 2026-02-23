@@ -217,8 +217,8 @@ class IPCController:
             w.table_panel.set_data(w.engine.df)
             w._on_dataset_activated(dataset_id)
             w._update_summary_from_profile()
-            return {'success': True, 'dataset_id': dataset_id}
-        return {'success': False}
+            return {'status': 'ok', 'dataset_id': dataset_id}
+        return {'status': 'error', 'message': 'Engine failed to load dataset'}
 
     def _ipc_get_panels(self) -> dict:
         """패널 정보 반환"""
