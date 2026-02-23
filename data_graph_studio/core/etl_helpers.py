@@ -26,13 +26,12 @@ except ImportError:
 
 
 def is_binary_etl(path: str) -> bool:
-    """ETL 파일이 바이너리인지 확인한다.
+    """Determine whether an ETL file uses a binary encoding by sampling its first 512 bytes.
 
-    Args:
-        path: 파일 경로.
-
-    Returns:
-        바이너리이면 True.
+    Input: path — str, path to the ETL file to inspect.
+    Output: bool — True if the file is binary (many null bytes or non-printable chars);
+            False if it appears to be text or cannot be read.
+    Invariants: does not modify the file; safe to call on any file type.
     """
     try:
         with open(path, 'rb') as f:
@@ -110,17 +109,14 @@ def _build_etl_dataframe(all_events: List[Dict[str, Any]]) -> pl.DataFrame:
 
 
 def parse_etl_binary(path: str) -> pl.DataFrame:
-    """etl-parser로 바이너리 ETL 파일을 파싱한다.
+    """Parse a binary Windows ETL file using etl-parser and return it as a Polars DataFrame.
 
-    Args:
-        path: ETL 파일 경로.
-
-    Returns:
-        파싱된 DataFrame.
-
-    Raises:
-        ImportError: etl-parser 미설치.
-        DataLoadError: 파싱 실패 또는 빈 결과.
+    Input: path — str, path to a valid binary ETL file.
+    Output: pl.DataFrame — parsed events with columns for Timestamp, EventType, ProcessID,
+            ThreadID, and additional ETW-specific fields; null-only columns are dropped.
+    Raises: ImportError — if etl-parser is not installed;
+            DataLoadError — on read failure, empty file, or no parseable events.
+    Invariants: all numeric ETL columns are cast to Int64; Timestamp to Datetime('us').
     """
     if not HAS_ETL_PARSER:
         raise ImportError("etl-parser 라이브러리가 설치되지 않았습니다.")

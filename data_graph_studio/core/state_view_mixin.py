@@ -30,14 +30,12 @@ class ViewSettingsMixin:
         return self._chart_settings
 
     def set_chart_type(self, chart_type: ChartType):
-        """
-        Change the active chart type and record an undo entry.
+        """Change the active chart type and record an undo entry.
 
-        Args:
-            chart_type: ChartType enum value to apply.
-
-        Emits:
-            chart_settings_changed signal.
+        Input: chart_type — ChartType enum value to apply.
+        Output: None
+        Invariants: an undo entry is pushed only when the value actually changes.
+        Emits: chart_settings_changed.
         """
         before = copy.deepcopy(self._chart_settings)
         self._chart_settings.chart_type = chart_type
@@ -64,18 +62,16 @@ class ViewSettingsMixin:
             )
 
     def update_chart_settings(self, **kwargs):
-        """
-        Update one or more chart settings fields and record an undo entry.
+        """Update one or more ChartSettings fields and record an undo entry.
 
-        Only fields that exist on ChartSettings and whose values differ from the
-        current state are applied. No-op if nothing changed.
+        Only fields that exist on ChartSettings and whose values differ are applied.
+        No-op if nothing changed.
 
-        Args:
-            **kwargs: ChartSettings attribute names and their new values
-                (e.g. line_width=3, y_log_scale=True).
-
-        Emits:
-            chart_settings_changed signal if any field changed.
+        Input: **kwargs — ChartSettings attribute names and new values
+               (e.g. line_width=3, y_log_scale=True).
+        Output: None
+        Invariants: an undo entry is pushed only when at least one field changes.
+        Emits: chart_settings_changed if any field changed.
         """
         before = copy.deepcopy(self._chart_settings)
         changed = False
@@ -116,14 +112,12 @@ class ViewSettingsMixin:
         return self._tool_mode
 
     def set_tool_mode(self, mode: ToolMode):
-        """
-        Set the active chart tool mode.
+        """Set the active chart interaction tool mode.
 
-        Args:
-            mode: ToolMode enum value to activate.
-
-        Emits:
-            tool_mode_changed signal.
+        Input: mode — ToolMode enum value to activate.
+        Output: None
+        Invariants: self.tool_mode == mode after this call.
+        Emits: tool_mode_changed.
         """
         self._tool_mode = mode
         self.emit("tool_mode_changed")
@@ -197,15 +191,12 @@ class ViewSettingsMixin:
         return self._layout_ratios
 
     def set_layout_ratio(self, section: str, ratio: float):
-        """
-        Set the height ratio for a layout section, redistributing the remainder.
+        """Set the height ratio for a layout section, redistributing the remainder evenly.
 
-        The difference between the old and new ratio is spread evenly across all
-        other sections to keep the total at 1.0.
-
-        Args:
-            section: Layout section key — one of 'summary', 'graph', or 'table'.
-            ratio: New ratio for the section. Ignored if the section key is unknown.
+        Input: section — str, one of 'summary', 'graph', or 'table'; ratio — float, new
+               proportion for that section.
+        Output: None — no-op if section key is unknown.
+        Invariants: sum of all _layout_ratios remains 1.0 after this call.
         """
         if section in self._layout_ratios:
             # 비율 조정 (합이 1이 되도록)
@@ -221,20 +212,18 @@ class ViewSettingsMixin:
     # ==================== Column Order ====================
 
     def set_column_order(self, order: List[str]):
-        """
-        Set the display order of table columns.
+        """Set the display order of table columns.
 
-        Args:
-            order: Full list of column names in the desired display order.
+        Input: order — List[str], full list of column names in the desired display order.
+        Output: None
+        Invariants: self._column_order == order after this call.
         """
         self._column_order = order
 
     def get_column_order(self) -> List[str]:
-        """
-        Return the current column display order.
+        """Return the current column display order.
 
-        Returns:
-            List of column names in display order.
+        Output: List[str] — column names in display order as set by set_column_order.
         """
         return self._column_order
 
@@ -244,23 +233,37 @@ class ViewSettingsMixin:
         return frozenset(self._hidden_columns)
 
     def hide_column(self, column: str):
-        """Hide a specific column."""
+        """Add column to the hidden set so it is excluded from the table view.
+
+        Input: column — str, column name to hide.
+        Output: None
+        Invariants: column is in self._hidden_columns after this call.
+        """
         self._hidden_columns.add(column)
 
     def unhide_column(self, column: str):
-        """Unhide a specific column."""
+        """Remove column from the hidden set so it reappears in the table view.
+
+        Input: column — str, column name to unhide; no-op if not hidden.
+        Output: None
+        Invariants: column is not in self._hidden_columns after this call.
+        """
         self._hidden_columns.discard(column)
 
     def is_column_hidden(self, column: str) -> bool:
-        """Check if a column is hidden."""
+        """Return True if column is currently in the hidden set.
+
+        Input: column — str, column name to check.
+        Output: bool — True if hidden, False if visible.
+        """
         return column in self._hidden_columns
 
     def toggle_column_visibility(self, column: str):
-        """
-        Toggle whether a column is hidden in the table view.
+        """Toggle whether a column is hidden in the table view.
 
-        Args:
-            column: Column name to show if hidden, or hide if visible.
+        Input: column — str, column name to show if currently hidden, or hide if visible.
+        Output: None
+        Invariants: column visibility flips on each call.
         """
         if column in self._hidden_columns:
             self._hidden_columns.remove(column)
@@ -268,11 +271,10 @@ class ViewSettingsMixin:
             self._hidden_columns.add(column)
 
     def get_visible_columns(self) -> List[str]:
-        """
-        Return the ordered list of columns that are not hidden.
+        """Return the ordered list of columns that are not hidden.
 
-        Returns:
-            Column names from _column_order that are not in _hidden_columns.
+        Output: List[str] — column names from _column_order that are not in _hidden_columns,
+                preserving the display order set by set_column_order.
         """
         return [c for c in self._column_order if c not in self._hidden_columns]
 

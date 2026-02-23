@@ -48,16 +48,21 @@ class ICaptureService(ABC):
 
     @abstractmethod
     def capture(self, request: CaptureRequest) -> List[CaptureResult]:
-        """
-        Capture one or more panels.
+        """Capture one or more panels according to the request spec.
 
-        Inputs: CaptureRequest with target + output_dir
-        Outputs: List of CaptureResult (one per panel captured)
-        Raises: ValueError if target is invalid
+        Input: request — CaptureRequest with target panel name (or "all"/"window"),
+               output_dir, and format.
+        Output: List[CaptureResult] — one entry per panel captured; CaptureResult.error
+                is None on success or a description string on failure.
+        Raises: ValueError — if request.target is not in VALID_TARGETS.
         """
         ...
 
     @abstractmethod
     def list_panels(self) -> List[str]:
-        """Return list of currently registered panel names."""
+        """Return the list of currently registered panel names available for capture.
+
+        Output: List[str] — panel name strings; subset of VALID_TARGETS.
+        Invariants: does not modify service state.
+        """
         ...

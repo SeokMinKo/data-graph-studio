@@ -190,12 +190,13 @@ class SelectionState:
         self.highlighted_rows.clear()
 
     def select(self, rows: List[int], add: bool = False):
-        """
-        Add rows to the selection set.
+        """Add rows to the selection set.
 
-        Args:
-            rows: Row indices to select. Must be non-negative.
-            add: If True, add to existing selection. If False, replace it.
+        Input: rows — List[int], row indices to select (must be non-negative integers);
+               add — bool; if True merges with existing selection, if False replaces it.
+        Output: None
+        Raises: ValidationError — if any row index is not a non-negative integer.
+        Invariants: all elements of rows are present in selected_rows after this call.
         """
         invalid = [r for r in rows if not isinstance(r, int) or r < 0]
         if invalid:
@@ -209,11 +210,12 @@ class SelectionState:
         self.selected_rows.update(rows)
 
     def deselect(self, rows: List[int]):
-        """
-        Remove rows from the selection set.
+        """Remove rows from the selection set.
 
-        Args:
-            rows: Row indices to deselect.
+        Input: rows — List[int], row indices to deselect (must be non-negative integers).
+        Output: None
+        Raises: ValidationError — if any row index is not a non-negative integer.
+        Invariants: no element of rows remains in selected_rows after this call.
         """
         invalid = [r for r in rows if not isinstance(r, int) or r < 0]
         if invalid:
@@ -225,11 +227,11 @@ class SelectionState:
         self.selected_rows.difference_update(rows)
 
     def toggle(self, row: int):
-        """
-        Toggle selection state of a single row.
+        """Toggle the selection state of a single row.
 
-        Args:
-            row: Row index to toggle.
+        Input: row — int, row index to toggle (non-negative).
+        Output: None
+        Invariants: if row was selected it is deselected, and vice versa.
         """
         if row in self.selected_rows:
             self.selected_rows.remove(row)

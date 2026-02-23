@@ -1017,12 +1017,19 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
     @property
     def lineage(self) -> List[Dict[str, Any]]:
-        """전체 변환 이력."""
+        """Return the full ordered list of transform steps applied since the last clear.
+
+        Output: List[Dict[str, Any]] — each entry is a serialised TransformStep snapshot.
+        Invariants: length equals the number of successful cast/drop/add operations recorded.
+        """
         return self._transform_chain.get_lineage()
 
     @property
     def transform_chain(self):
-        """TransformChain 인스턴스."""
+        """Return the TransformChain instance that records all column transform steps.
+
+        Output: TransformChain — live reference; mutate with caution.
+        """
         return self._transform_chain
 
     # -- clear ----------------------------------------------------------------

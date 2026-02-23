@@ -25,15 +25,12 @@ class ColumnZoneMixin:
         return self._group_columns
 
     def add_group_column(self, name: str, index: int = -1):
-        """
-        Add a column to the Group Zone, ignoring duplicates.
+        """Add a column to the Group Zone, ignoring duplicates.
 
-        Args:
-            name: Column name to add.
-            index: Position to insert at. -1 appends to the end.
-
-        Emits:
-            group_zone_changed signal.
+        Input: name — str, column name to add; index — int, insertion position (-1 appends).
+        Output: None
+        Invariants: no duplicate names in _group_columns; order values are contiguous after call.
+        Emits: group_zone_changed.
         """
         # 중복 방지
         if any(g.name == name for g in self._group_columns):
@@ -49,29 +46,26 @@ class ColumnZoneMixin:
         self.emit("group_zone_changed")
 
     def remove_group_column(self, name: str):
-        """
-        Remove a column from the Group Zone by name.
+        """Remove a column from the Group Zone by name.
 
-        Args:
-            name: Column name to remove. No-op if not present.
-
-        Emits:
-            group_zone_changed signal.
+        Input: name — str, column name to remove; no-op if not present.
+        Output: None
+        Invariants: after call no GroupColumn with name==name remains; order values re-indexed.
+        Emits: group_zone_changed.
         """
         self._group_columns = [g for g in self._group_columns if g.name != name]
         self._reorder_groups()
         self.emit("group_zone_changed")
 
     def reorder_group_columns(self, new_order: List[str]):
-        """
-        Reorder Group Zone columns to match the given name sequence.
+        """Reorder Group Zone columns to match the given name sequence.
 
-        Args:
-            new_order: Column names in the desired order. Names not present in
-                the current group columns are silently ignored.
-
-        Emits:
-            group_zone_changed signal.
+        Input: new_order — List[str], column names in the desired order; names absent
+               from the current group columns are silently ignored.
+        Output: None
+        Invariants: _group_columns contains only names present in both new_order and the
+                    prior group zone; order values are re-indexed to be contiguous.
+        Emits: group_zone_changed.
         """
         name_to_col = {g.name: g for g in self._group_columns}
         self._group_columns = [name_to_col[name] for name in new_order if name in name_to_col]
@@ -83,11 +77,11 @@ class ColumnZoneMixin:
             g.order = i
 
     def clear_group_zone(self):
-        """
-        Remove all columns from the Group Zone.
+        """Remove all columns from the Group Zone.
 
-        Emits:
-            group_zone_changed signal.
+        Output: None
+        Invariants: _group_columns is empty after this call.
+        Emits: group_zone_changed.
         """
         self._group_columns.clear()
         self.emit("group_zone_changed")
@@ -105,18 +99,16 @@ class ColumnZoneMixin:
         aggregation: AggregationType = AggregationType.SUM,
         index: int = -1
     ):
-        """
-        Add a column to the Value Zone with automatic color assignment.
+        """Add a column to the Value Zone with automatic color assignment.
 
-        Duplicate column names are allowed when combined with different aggregations.
+        Duplicate column names are allowed when paired with different aggregations.
 
-        Args:
-            name: Column name to add.
-            aggregation: Aggregation function to apply. Defaults to SUM.
-            index: Position to insert at. -1 appends to the end.
-
-        Emits:
-            value_zone_changed signal.
+        Input: name — str, column name to add; aggregation — AggregationType (default SUM);
+               index — int, insertion position (-1 appends to end).
+        Output: None
+        Invariants: color is auto-assigned from a 10-color palette cycling by position;
+                    order values are contiguous after insertion.
+        Emits: value_zone_changed.
         """
         # 중복 허용 (같은 컬럼 다른 집계)
         col = ValueColumn(
@@ -139,14 +131,12 @@ class ColumnZoneMixin:
         self.emit("value_zone_changed")
 
     def remove_value_column(self, index: int):
-        """
-        Remove a Value Zone column by list index.
+        """Remove a Value Zone column by zero-based list index.
 
-        Args:
-            index: Zero-based index of the column to remove. No-op if out of range.
-
-        Emits:
-            value_zone_changed signal.
+        Input: index — int, zero-based position to remove; no-op if out of range.
+        Output: None
+        Invariants: order values are re-indexed to be contiguous after removal.
+        Emits: value_zone_changed (only when a column was actually removed).
         """
         if 0 <= index < len(self._value_columns):
             self._value_columns.pop(index)
@@ -161,20 +151,15 @@ class ColumnZoneMixin:
         use_secondary_axis: Optional[bool] = None,
         formula: Optional[str] = None
     ):
-        """
-        Update properties of an existing Value Zone column.
+        """Update properties of an existing Value Zone column by index.
 
         Only non-None arguments are applied. No-op if the index is out of range.
 
-        Args:
-            index: Zero-based index of the column to update.
-            aggregation: New aggregation function, or None to leave unchanged.
-            color: New hex color string, or None to leave unchanged.
-            use_secondary_axis: Assign to secondary Y axis if True, or None to leave unchanged.
-            formula: Y-value formula expression (e.g. "y*2"), or None to leave unchanged.
-
-        Emits:
-            value_zone_changed signal if any property was updated.
+        Input: index — int, zero-based column position; aggregation — AggregationType or None;
+               color — hex color string or None; use_secondary_axis — bool or None;
+               formula — expression string or None.
+        Output: None
+        Emits: value_zone_changed if any property was updated and index is in range.
         """
         if 0 <= index < len(self._value_columns):
             if aggregation is not None:
@@ -192,11 +177,11 @@ class ColumnZoneMixin:
             v.order = i
 
     def clear_value_zone(self):
-        """
-        Remove all columns from the Value Zone.
+        """Remove all columns from the Value Zone.
 
-        Emits:
-            value_zone_changed signal.
+        Output: None
+        Invariants: _value_columns is empty after this call.
+        Emits: value_zone_changed.
         """
         self._value_columns.clear()
         self.emit("value_zone_changed")
@@ -271,14 +256,12 @@ class ColumnZoneMixin:
         return self._x_column
 
     def set_x_column(self, name: Optional[str]):
-        """
-        Set the X axis column.
+        """Set the X axis column.
 
-        Args:
-            name: Column name to use for the X axis, or None to clear.
-
-        Emits:
-            chart_settings_changed signal.
+        Input: name — str, column name for the X axis, or None to clear.
+        Output: None
+        Invariants: self.x_column == name after this call.
+        Emits: chart_settings_changed.
         """
         self._x_column = name
         self.emit("chart_settings_changed")

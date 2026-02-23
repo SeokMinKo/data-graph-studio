@@ -83,15 +83,13 @@ class StreamingController(Observable):
     # ── Public API ────────────────────────────────────────────
 
     def start(self, file_path: str, mode: str = "tail") -> bool:
-        """
-        Start streaming for a file.
+        """Start streaming for a file, stopping any existing watcher first.
 
-        Args:
-            file_path: Path to the file to stream
-            mode: "tail" (append-only) or "reload" (full change)
-
-        Returns:
-            True if started successfully.
+        Input: file_path — str, readable file path to monitor;
+               mode — str, "tail" (append-only) or "reload" (full change detection).
+        Output: bool — True if the watcher was created and started successfully; False if
+                FileWatcher.watch() returned False.
+        Invariants: state transitions to "live" on True; watcher is cleaned up on False.
         """
         if self._state == "live":
             self.stop()
@@ -119,7 +117,11 @@ class StreamingController(Observable):
         return True
 
     def stop(self) -> None:
-        """Stop streaming. ERR-2.4: FileWatcher 즉시 해제."""
+        """Stop streaming and release the FileWatcher immediately (ERR-2.4).
+
+        Output: None
+        Invariants: state transitions to "off"; _watcher is None; _current_path is None.
+        """
         if self._watcher:
             self._watcher.shutdown()
             self._watcher = None
@@ -127,27 +129,50 @@ class StreamingController(Observable):
         self._set_state("off")
 
     def pause(self) -> None:
-        """Pause streaming (keep watcher but don't emit events)."""
+        """Pause streaming — keep the watcher alive but suppress data_updated events.
+
+        Output: None
+        Invariants: state transitions to "paused" only when currently "live"; no-op otherwise.
+        """
         if self._state == "live":
             self._set_state("paused")
 
     def resume(self) -> None:
-        """Resume streaming from paused state."""
+        """Resume streaming from a paused state, allowing data_updated events to flow again.
+
+        Output: None
+        Invariants: state transitions to "live" only when currently "paused"; no-op otherwise.
+        """
         if self._state == "paused":
             self._set_state("live")
 
     def set_poll_interval(self, ms: int) -> None:
-        """Set polling interval."""
+        """Set the file polling interval in milliseconds.
+
+        Input: ms — int, polling period in milliseconds (> 0).
+        Output: None
+        Invariants: if a watcher is active it is updated immediately; takes effect on
+                    the next poll cycle.
+        """
         self._poll_interval_ms = ms
         if self._watcher:
             self._watcher.set_interval(ms)
 
     def set_follow_tail(self, enabled: bool) -> None:
-        """Enable/disable follow tail (auto-scroll to end)."""
+        """Enable or disable follow-tail mode (auto-scroll to the end of the file).
+
+        Input: enabled — bool; True to enable auto-scroll, False to disable.
+        Output: None
+        Invariants: self.follow_tail == enabled after this call.
+        """
         self._follow_tail = enabled
 
     def shutdown(self) -> None:
-        """Full shutdown — PRD Section 10.6 step 1."""
+        """Perform a full shutdown per PRD Section 10.6 step 1, delegating to stop().
+
+        Output: None
+        Invariants: equivalent to calling stop(); state is "off" after this call.
+        """
         self.stop()
 
     # ── Internal ──────────────────────────────────────────────
