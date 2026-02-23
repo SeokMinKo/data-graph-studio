@@ -11,7 +11,10 @@ Attributes accessed on ``self`` (from GraphPanel):
     _active_filter
 """
 
+import logging
 from typing import Dict, List, Any
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import polars as pl
@@ -135,6 +138,7 @@ class GridChartMixin:
             try:
                 facet_df = working_df.filter(pl.col(split_by).cast(pl.Utf8) == str(split_val))
             except Exception:
+                logger.warning("grid_renderer.facet_filter.cast_error", exc_info=True)
                 facet_df = working_df.filter(pl.col(split_by) == split_val)
 
             if len(facet_df) == 0:
@@ -274,5 +278,4 @@ class GridChartMixin:
                     cell.getViewBox().setYLink(main_vb)
 
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to sync grid axes: {e}")
+            logger.warning(f"Failed to sync grid axes: {e}", exc_info=True)

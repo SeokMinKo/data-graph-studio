@@ -127,7 +127,7 @@ class ExpandedChartDialog(QDialog):
                     text_item.setPos(bin_edges[0], max(hist) * 0.9)
                     self.plot_widget.addItem(text_item)
             except Exception as e:
-                logger.error("graph_widgets.histogram_error", extra={"error": str(e)})
+                logger.error("graph_widgets.histogram_error", extra={"error": str(e)}, exc_info=True)
 
     def plot_pie_chart(self, labels: list, values: list, title: str, colors: list = None):
         """Plot pie chart"""
@@ -158,6 +158,7 @@ class ExpandedChartDialog(QDialog):
                 self.plot_widget.hideAxis('bottom')
                 self.plot_widget.hideAxis('left')
             except Exception:
+                logger.warning("graph_widgets.pie_chart.piechartitem.error", exc_info=True)
                 x_positions = np.arange(len(labels))
                 bars = pg.BarGraphItem(
                     x=x_positions,
@@ -182,7 +183,7 @@ class ExpandedChartDialog(QDialog):
                 y0 -= (total * 0.01)
 
         except Exception as e:
-            logger.error("graph_widgets.pie_chart_error", extra={"error": str(e)})
+            logger.error("graph_widgets.pie_chart_error", extra={"error": str(e)}, exc_info=True)
 
     def plot_percentile(self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)):
         """Plot percentile graph"""
@@ -232,7 +233,7 @@ class ExpandedChartDialog(QDialog):
             self.plot_widget.addItem(text_item)
 
         except Exception as e:
-            logger.error("graph_widgets.percentile_error", extra={"error": str(e)})
+            logger.error("graph_widgets.percentile_error", extra={"error": str(e)}, exc_info=True)
 
 
 class ClickablePlotWidget(pg.PlotWidget):
@@ -497,4 +498,5 @@ class FormattedAxisItem(pg.AxisItem):
             return f"{prefix}{result}{suffix}"
 
         except Exception:
+            logger.warning("graph_widgets.format_value.error", exc_info=True)
             return f"{value:.2f}"

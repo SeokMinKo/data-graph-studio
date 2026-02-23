@@ -4,6 +4,7 @@ Graph Setup Step - Step 2 of New Project Wizard
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import List, Optional
 
@@ -26,6 +27,8 @@ from PySide6.QtWidgets import (
 )
 
 from data_graph_studio.core.profile import GraphSetting
+
+logger = logging.getLogger(__name__)
 
 
 class ExpandedPreviewDialog(QDialog):
@@ -340,6 +343,7 @@ class GraphSetupStep(QWizardPage):
                 plot_widget.hideAxis('bottom')
                 plot_widget.hideAxis('left')
             except Exception:
+                logger.warning("graph_setup_step.update_preview.pie_error", exc_info=True)
                 indices = np.arange(len(y_data))
                 plot_widget.plot(indices, y_data, pen=None, symbol='o')
             return
@@ -390,7 +394,9 @@ class GraphSetupStep(QWizardPage):
                     return np.arange(len(raw), dtype=float)
                 return result
             except Exception:
+                logger.warning("graph_setup_step.extract_series.numeric_error", exc_info=True)
                 return np.arange(len(raw), dtype=float)
         except Exception:
+            logger.warning("graph_setup_step.extract_series.error", exc_info=True)
             return None
         return None

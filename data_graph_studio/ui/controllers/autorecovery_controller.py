@@ -45,7 +45,7 @@ class AutorecoveryController:
                     from PySide6.QtCore import QTimer as _QTimer
                     _QTimer.singleShot(500, self.w._prompt_recovery)
             except Exception:
-                pass
+                logger.warning("autorecovery_controller.init.autosave_check.error", exc_info=True)
 
         # Autosave timer
         self.w._autosave_timer = QTimer(self.w)
@@ -94,6 +94,7 @@ class AutorecoveryController:
                 try:
                     self.w._restore_autosave()
                 except Exception as exc:
+                    logger.exception("autorecovery_controller.restore_autosave.error")
                     # Backup failed autosave then remove
                     bak_path = self.w._autosave_path + ".bak"
                     try:
@@ -116,7 +117,7 @@ class AutorecoveryController:
                 except OSError:
                     pass
         except Exception:
-            pass
+            logger.warning("autorecovery_controller.prompt_recovery.error", exc_info=True)
 
 
     def _autosave_session(self):
@@ -140,7 +141,7 @@ class AutorecoveryController:
                     try:
                         profiles.append(gs.to_dict())
                     except Exception:
-                        pass
+                        logger.warning("autorecovery_controller.autosave.serialize_profile.error", exc_info=True)
 
             payload = {
                 "version": 2,
@@ -155,7 +156,7 @@ class AutorecoveryController:
             with open(self.w._autosave_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
         except Exception:
-            pass
+            logger.warning("autorecovery_controller.autosave_session.error", exc_info=True)
 
 
     def _restore_autosave(self):
@@ -164,6 +165,7 @@ class AutorecoveryController:
             with open(self.w._autosave_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
+            logger.exception("autorecovery_controller.restore_autosave.read_error")
             return
 
         datasets = data.get("datasets", [])
@@ -245,7 +247,7 @@ class AutorecoveryController:
                 if gs.dataset_id in loaded_ids:
                     self.w.profile_store.add(gs)
             except Exception:
-                pass
+                logger.warning("autorecovery_controller.restore.profile.error", exc_info=True)
 
         # Restore graph settings
         graph_state = data.get("graph_state", {})
@@ -329,6 +331,6 @@ class AutorecoveryController:
                     secondary_y_label=cs.get('secondary_y_label', self.w.state.chart_settings.secondary_y_label),
                 )
         except Exception:
-            pass
+            logger.warning("autorecovery_controller.restore.graph_state.error", exc_info=True)
 
 

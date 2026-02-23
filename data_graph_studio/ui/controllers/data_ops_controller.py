@@ -55,6 +55,7 @@ class DataOpsController:
                 else:
                     self.w.statusBar().showMessage("Failed to load clipboard data", 5000)
             except Exception as e:
+                logger.exception("data_ops_controller.paste_clipboard.error")
                 self.w.statusBar().showMessage(f"Paste error: {e}", 5000)
         else:
             self.w.statusBar().showMessage(message, 3000)
@@ -197,7 +198,7 @@ class DataOpsController:
                 try:
                     self.w.state.set_column_order(self.w.engine.columns)
                 except Exception:
-                    pass
+                    logger.warning("data_ops_controller.apply_df.set_column_order.error", exc_info=True)
 
                 self.w.table_panel.set_data(df)
 
@@ -208,7 +209,7 @@ class DataOpsController:
                             self.w.engine.columns, self.w.engine
                         )
                 except Exception:
-                    pass
+                    logger.warning("data_ops_controller.apply_df.set_columns.error", exc_info=True)
 
                 self.w.graph_panel.refresh()
 

@@ -198,8 +198,8 @@ class ViewActionsController:
             settings = QSettings("Godol", "DataGraphStudio")
             settings.setValue("appearance/theme", theme_id)
         except Exception:
-            pass
-        
+            logger.warning("view_actions_controller.persist_theme.error", exc_info=True)
+
         self.w.statusbar.showMessage(f"Theme changed to {theme_id.title()}", 3000)
 
 
@@ -490,7 +490,7 @@ class ViewActionsController:
             cs = cell.col_span if cell else 1
             self.w._dashboard_panel.replace_spinner(row, col, mini, rs, cs)
         except Exception as e:
-            logger.debug("view_actions_controller.mini_graph_render_failed", extra={"error": e})
+            logger.debug("view_actions_controller.mini_graph_render_failed", extra={"error": e}, exc_info=True)
             # Fallback: just refresh the panel
             layout = self.w._dashboard_controller.current_layout
             if layout and self.w._dashboard_panel:

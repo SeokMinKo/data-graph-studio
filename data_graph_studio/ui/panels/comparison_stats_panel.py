@@ -5,10 +5,13 @@ Comparison Statistics Panel - 비교 통계 패널
 통계 검정 (t-test, correlation, p-value) 포함
 """
 
+import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
     QComboBox, QPushButton, QTabWidget, QTextEdit, QFileDialog
 )
+
+logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
@@ -825,6 +828,7 @@ class ComparisonStatsPanel(QWidget):
                         row_data.append(item.text() if item else "")
                     writer.writerow(row_data)
         except Exception as e:
+            logger.exception("comparison_stats_panel.export_table_csv.error")
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Export Error", f"Failed to export CSV:\n{e}")
 
@@ -854,6 +858,7 @@ class ComparisonStatsPanel(QWidget):
                         row = [self._last_diff_df[col][i] for col in columns]
                         writer.writerow(row)
             except Exception as e:
+                logger.exception("comparison_stats_panel.export_diff_csv.error")
                 from PySide6.QtWidgets import QMessageBox
                 QMessageBox.warning(self, "Export Error", f"Failed to export CSV:\n{e}")
         elif self.diff_table.rowCount() > 0:

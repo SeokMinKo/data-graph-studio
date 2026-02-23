@@ -362,7 +362,7 @@ class ParsingStep(QWizardPage):
                 if idx >= 0:
                     self.encoding_combo.setCurrentIndex(idx)
             except Exception:
-                pass
+                logger.warning("parsing_step.detect_encoding.error", exc_info=True)
 
         # Delimiter
         if saved_delimiter >= 0:
@@ -417,6 +417,7 @@ class ParsingStep(QWizardPage):
                         break
                     self._raw_lines.append(line.rstrip('\n\r'))
         except Exception as e:
+            logger.exception("parsing_step.load_raw_preview.error")
             self._raw_lines = [f"Error reading file: {e}"]
             self._raw_load_error = True
 
@@ -471,6 +472,7 @@ class ParsingStep(QWizardPage):
             return csv_lines
 
         except Exception as e:
+            logger.exception("parsing_step.load_binary_etl_preview.error")
             return [
                 "# Binary ETL file - parsing failed",
                 f"# 파싱 오류: {e}",
@@ -658,6 +660,7 @@ class ParsingStep(QWizardPage):
         try:
             self._preview_df = pd.DataFrame(data, columns=headers)
         except Exception:
+            logger.warning("parsing_step.build_preview_df.error", exc_info=True)
             self._preview_df = pd.DataFrame()
         self._parsing_success = True
         self._save_settings_to_qsettings()

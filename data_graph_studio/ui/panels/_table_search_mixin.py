@@ -1,10 +1,13 @@
 """Search and filter behavior for TablePanel."""
 from __future__ import annotations
+import logging
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass  # avoid circular imports
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 class _TableSearchMixin:
@@ -119,6 +122,7 @@ class _TableSearchMixin:
                     filtered_df = filtered_df.filter(col.str.contains(str(f.value)))
             except Exception as e:
                 # UX 10: Show filter error to user instead of print
+                logger.warning("table_search_mixin.apply_filters.filter_error", exc_info=True)
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(

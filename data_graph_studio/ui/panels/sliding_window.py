@@ -2,8 +2,11 @@
 Sliding Window Widget - 데이터 범위 탐색용 미니맵
 """
 
+import logging
 import numpy as np
 from PySide6.QtWidgets import QWidget
+
+logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont
 
@@ -183,7 +186,7 @@ class SlidingWindowWidget(QWidget):
                     y = plot_rect.bottom() - (i + 1) * bar_height
                     painter.drawRect(int(x), int(y), int(bar_width), int(bar_height - 1))
         except Exception:
-            pass
+            logger.warning("sliding_window.draw_histogram.error", exc_info=True)
 
     def _draw_window_region(self, painter, plot_rect):
         """Draw the sliding window region"""

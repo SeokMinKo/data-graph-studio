@@ -1157,7 +1157,7 @@ class DrawingManager:
             elif drawing_type == 'text':
                 return TextDrawing.from_dict(data)
         except Exception as e:
-            logger.error("drawing.deserialize_error", extra={"error": str(e)})
+            logger.error("drawing.deserialize_error", extra={"error": str(e)}, exc_info=True)
             return None
 
         return None

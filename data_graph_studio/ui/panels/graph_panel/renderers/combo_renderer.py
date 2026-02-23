@@ -10,9 +10,12 @@ Attributes accessed on ``self`` (from GraphPanel):
     _apply_y_formula (method)
 """
 
+import logging
 from typing import Dict, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 import pyqtgraph as pg
 from PySide6.QtGui import QColor
 
@@ -293,7 +296,7 @@ class ComboChartMixin:
                                 pct_vals = np.percentile(clean, pct_list)
                                 pcts_by_col[vc.name] = {f"P{p}": float(v) for p, v in zip(pct_list, pct_vals)}
                         except Exception:
-                            pass
+                            logger.warning("combo_renderer.update_stats.percentiles.error", exc_info=True)
                     self.stat_panel.update_multi_y_stats(stats_by_col, pcts_by_col)
                 else:
                     stats = self.engine.get_statistics(valid_cols[0].name)

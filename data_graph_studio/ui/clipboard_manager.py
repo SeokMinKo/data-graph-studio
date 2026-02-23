@@ -142,7 +142,7 @@ class ClipboardManager:
             return df
             
         except Exception as e:
-            logger.error("clipboard HTML parse error", extra={"error": str(e)})
+            logger.error("clipboard HTML parse error", extra={"error": str(e)}, exc_info=True)
             return None
     
     @staticmethod
@@ -199,7 +199,7 @@ class ClipboardManager:
             return df
             
         except Exception as e:
-            logger.error("clipboard text parse error", extra={"error": str(e)})
+            logger.error("clipboard text parse error", extra={"error": str(e)}, exc_info=True)
             return None
     
     @staticmethod
@@ -216,7 +216,7 @@ class ClipboardManager:
                     else:
                         df = df.with_columns(numeric.alias(col))
             except Exception:
-                pass
+                logger.warning("clipboard.auto_convert_types.column_error", exc_info=True)
         return df
     
     @staticmethod

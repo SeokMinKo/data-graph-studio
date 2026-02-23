@@ -173,7 +173,7 @@ class AdbTraceController(QObject):
                     f"echo 0 > {self._sysfs_path}/events/{event}/enable",
                 )
             except Exception as e:
-                logger.warning("[AdbTrace] failed to disable event %s: %s", event, e)
+                logger.warning("[AdbTrace] failed to disable event %s: %s", event, e, exc_info=True)
 
     def cleanup(self) -> None:
         """트레이싱 상태를 정리한다 (idempotent)."""
@@ -190,7 +190,7 @@ class AdbTraceController(QObject):
                 self._tracing = False
                 logger.info("[AdbTrace] cleanup: tracing stopped")
         except Exception as e:
-            logger.warning("[AdbTrace] cleanup: failed to stop tracing: %s", e)
+            logger.warning("[AdbTrace] cleanup: failed to stop tracing: %s", e, exc_info=True)
         self._disable_events()
 
 
@@ -345,7 +345,7 @@ class PerfettoTraceController(QObject):
                 logger.info("Downloaded trace_processor to %s (%d bytes)", dest, len(data))
                 return str(dest)
             except Exception as e:
-                logger.warning("Failed to download from %s: %s", url, e)
+                logger.warning("Failed to download from %s: %s", url, e, exc_info=True)
                 last_error = e
                 dest.unlink(missing_ok=True)
                 continue
@@ -567,7 +567,7 @@ class PerfettoTraceController(QObject):
                 self._process.kill()
                 logger.debug("[Perfetto] cleanup: local process killed")
             except Exception as e:
-                logger.warning("[Perfetto] cleanup: kill failed: %s", e)
+                logger.warning("[Perfetto] cleanup: kill failed: %s", e, exc_info=True)
             self._process = None
         if self._tracing and self._serial:
             try:
@@ -583,7 +583,7 @@ class PerfettoTraceController(QObject):
                         capture_output=True, text=True, timeout=5,
                     )
             except Exception:
-                pass
+                logger.warning("[Perfetto] cleanup: adb kill failed", exc_info=True)
             self._tracing = False
 
 

@@ -1,6 +1,9 @@
 """PivotTableDialog - F9 pivot table creation dialog."""
 
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 import polars as pl
 
@@ -79,6 +82,7 @@ class PivotTableDialog(QDialog):
             )
             self.result_model.set_dataframe(self._result_df)
         except Exception as e:
+            logger.exception("pivot_table_dialog.compute_pivot.error")
             QMessageBox.warning(self, "Pivot Error", str(e))
 
     def get_result(self) -> Optional[pl.DataFrame]:

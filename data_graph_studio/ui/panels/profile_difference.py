@@ -7,7 +7,10 @@ Requires exactly 2 profiles with the same X column.
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -389,6 +392,7 @@ class ProfileDifferenceRenderer(QWidget):
             else:
                 x_data = np.arange(len(df))
         except Exception:
+            logger.warning("profile_difference.render.x_data.error", exc_info=True)
             x_data = np.arange(len(df))
 
         from .profile_overlay import ProfileOverlayRenderer
@@ -398,6 +402,7 @@ class ProfileDifferenceRenderer(QWidget):
         try:
             y_baseline = df[y_col_baseline].to_numpy() if y_col_baseline and y_col_baseline in df else None
         except Exception:
+            logger.warning("profile_difference.render.y_baseline.error", exc_info=True)
             y_baseline = None
 
         if y_baseline is None:
@@ -449,6 +454,7 @@ class ProfileDifferenceRenderer(QWidget):
             try:
                 y_other = df[y_col_other].to_numpy() if y_col_other and y_col_other in df else None
             except Exception:
+                logger.warning("profile_difference.render.y_other.error", exc_info=True)
                 y_other = None
 
             if y_other is None:

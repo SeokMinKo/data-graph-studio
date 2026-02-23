@@ -277,6 +277,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         try:
             info = check_github_latest()
         except Exception as e:
+            logger.warning("help_controller.check_update.error", exc_info=True)
             if force_ui:
                 QMessageBox.information(self, "Updates", f"Update check failed:\n{e}")
             return
@@ -320,6 +321,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             run_windows_installer(installer_path, silent=True)
             self.w.close()
         except Exception as e:
+            logger.exception("help_controller.run_installer.error")
             QMessageBox.warning(self, "Updates", f"Update failed:\n{e}")
 
 

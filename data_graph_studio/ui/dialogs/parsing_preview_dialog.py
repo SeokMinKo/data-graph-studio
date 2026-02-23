@@ -2,6 +2,7 @@
 Parsing Preview Dialog - 파일 파싱 미리보기 및 설정
 """
 
+import logging
 import os
 import re
 import subprocess
@@ -21,6 +22,8 @@ from PySide6.QtGui import QColor
 
 from ...core.data_engine import FileType, DelimiterType
 from ...core.parsing import ParsingSettings
+
+logger = logging.getLogger(__name__)
 
 
 class ETLConverterThread(QThread):
@@ -79,6 +82,7 @@ class ETLConverterThread(QThread):
                 "tracerpt command not found.\n"
                 "This command requires Windows and admin privileges.")
         except Exception as e:
+            logger.exception("parsing_preview_dialog.etl_converter.error")
             self.finished.emit(False, "", f"ETL conversion error: {e}")
 
 
@@ -162,6 +166,7 @@ class ParsingPreviewDialog(QDialog):
             # If null bytes present or >5% non-printable, it's binary
             return null_count > 0 or (non_printable / max(len(header), 1)) > 0.05
         except Exception:
+            logger.warning("parsing_preview_dialog.is_binary_etl.error", exc_info=True)
             return False
     
     def _setup_ui(self):
@@ -602,6 +607,7 @@ class ParsingPreviewDialog(QDialog):
                 self.raw_text.setText('\n'.join(display_lines))
 
         except Exception as e:
+            logger.exception("parsing_preview_dialog.load_raw_preview.error")
             self._raw_lines = [f"Error reading file: {e}"]
             if hasattr(self, 'raw_text'):
                 self.raw_text.setText(f"Error reading file: {e}")
@@ -669,6 +675,7 @@ class ParsingPreviewDialog(QDialog):
             self._schedule_update()
 
         except Exception as e:
+            logger.exception("parsing_preview_dialog.load_etl_preview.error")
             if hasattr(self, 'raw_text'):
                 self.raw_text.setText(f"Error reading converted ETL: {e}")
 
@@ -837,6 +844,7 @@ class ParsingPreviewDialog(QDialog):
                 try:
                     fields = re.split(delimiter, line)
                 except Exception:
+                    logger.warning("parsing_preview_dialog.parse_line.regex_error", exc_info=True)
                     fields = [line]
             elif delimiter_type == DelimiterType.SPACE or delimiter == " ":
                 fields = line.split()

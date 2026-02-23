@@ -57,6 +57,7 @@ def _normalize_key_string(key_str: str) -> str:
         seq = QKeySequence(key_str)
         return seq.toString()
     except Exception:
+        logger.warning("shortcut_controller.normalize_key_string.error", exc_info=True)
         return key_str
 
 
@@ -382,13 +383,14 @@ class ShortcutController:
                     os.fsync(f.fileno())
                 os.replace(tmp_path, self._config_path)
             except Exception:
+                logger.warning("shortcut_controller.save_config.atomic_write.error", exc_info=True)
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
                 raise
 
             return True
         except Exception as e:
-            logger.error("shortcut_controller.save_config_failed", extra={"error": e})
+            logger.error("shortcut_controller.save_config_failed", extra={"error": e}, exc_info=True)
             return False
 
     def load_config(self) -> bool:
@@ -422,6 +424,6 @@ class ShortcutController:
             self._manager.reset_all()
             return False
         except Exception as e:
-            logger.error("shortcut_controller.load_config_failed", extra={"error": e})
+            logger.error("shortcut_controller.load_config_failed", extra={"error": e}, exc_info=True)
             self._manager.reset_all()
             return False

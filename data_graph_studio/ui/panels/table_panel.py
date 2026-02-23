@@ -386,6 +386,7 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
         try:
             view_mode = self.table_view_mode_combo.currentData()
         except Exception:
+            logger.warning("table_panel.update_table.view_mode.error", exc_info=True)
             view_mode = None
 
         # "Source Raw" means: ignore table-level filters/marking/search and show engine.df as-is.
@@ -422,7 +423,7 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
                 self.expand_btn.setEnabled(True)
                 self.collapse_btn.setEnabled(True)
             except Exception:
-                pass
+                logger.warning("table_panel.update_table.expand_btn.error", exc_info=True)
         else:
             # Row-level table view
             self.table_model.set_dataframe(df)
@@ -433,7 +434,7 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
                 self.expand_btn.setEnabled(False)
                 self.collapse_btn.setEnabled(False)
             except Exception:
-                pass
+                logger.warning("table_panel.update_table.collapse_btn.error", exc_info=True)
 
             # 데이터가 잘렸는지 표시
             actual_rows = self.table_model.get_actual_row_count()
@@ -628,6 +629,7 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
         try:
             mode = self.table_view_mode_combo.currentData()
         except Exception:
+            logger.warning("table_panel.on_view_mode_changed.error", exc_info=True)
             mode = None
 
         # Grouped mode only makes sense when Group By is configured.

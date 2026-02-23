@@ -200,6 +200,7 @@ class ExportUIController:
             rows = len(self.w.engine.df)
             self.w.statusbar.showMessage(f"✓ {rows:,} rows copied to clipboard", 3000)
         except Exception as e:
+            logger.exception("export_ui_controller.copy_tsv.error")
             self.w.statusbar.showMessage(f"⚠ Copy failed: {e}", 5000)
 
     # ============================================================
@@ -303,7 +304,7 @@ class ExportUIController:
                     pass
                 return image
         except Exception as e:
-            logger.warning("export_ui_controller.graph_image_capture_failed", extra={"error": e})
+            logger.warning("export_ui_controller.graph_image_capture_failed", extra={"error": e}, exc_info=True)
         return None
 
     # ============================================================

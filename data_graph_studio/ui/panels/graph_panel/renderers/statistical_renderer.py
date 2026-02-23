@@ -10,9 +10,12 @@ Attributes accessed on ``self`` (from GraphPanel):
     _render_box_plot (self-referential within the mixin)
 """
 
+import logging
 from typing import Dict, List
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 import pyqtgraph as pg
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -212,6 +215,7 @@ class StatisticalChartMixin:
             try:
                 density = chart.calculate_density(df, cat_col, y_col, include_box=True)
             except Exception:
+                logger.warning("statistical_renderer.render_violin.kde_categorical.error", exc_info=True)
                 # Fallback to box plot if KDE fails
                 self._render_box_plot(df, cat_col, y_col, options, colors)
                 return
@@ -237,6 +241,7 @@ class StatisticalChartMixin:
                     'q3': float(np.percentile(y_data, 75)),
                 }}
             except Exception:
+                logger.warning("statistical_renderer.render_violin.kde_single.error", exc_info=True)
                 self._render_box_plot(df, cat_col, y_col, options, colors)
                 return
 
@@ -332,6 +337,7 @@ class StatisticalChartMixin:
                 agg_str = self.state.value_columns[0].aggregation.value
             matrix, row_labels, col_labels = chart.create_matrix(df, row_col, col_col, y_col, agg=agg_str)
         except Exception as e:
+            logger.exception("statistical_renderer.render_heatmap.create_matrix.error")
             pw.setTitle(f"Heatmap error: {e}")
             return
 

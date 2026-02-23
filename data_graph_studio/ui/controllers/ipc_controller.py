@@ -123,6 +123,7 @@ class IPCController:
                 try:
                     fut.set_result(fn())
                 except Exception as exc:
+                    logger.error("ipc_controller.work_queue.task_error", exc_info=True)
                     fut.set_exception(exc)
         except queue.Empty:
             pass
@@ -246,6 +247,7 @@ class IPCController:
             w._parse_ftrace_async(file_path, converter)
             return {"status": "ok"}
         except Exception as exc:
+            logger.exception("ipc_controller.load_ftrace.error")
             return {"status": "error", "message": str(exc)}
 
     def _ipc_get_panels(self) -> dict:
@@ -323,6 +325,7 @@ class IPCController:
                 w.state.set_x_column(column)
             return {"success": True, "x_column": w.state.x_column}
         except Exception as e:
+            logger.error("ipc_controller.set_x_column.error", exc_info=True)
             raise ValueError(f"Failed to set x column: {e}")
 
     def _ipc_set_value_columns(self, columns: list) -> dict:
@@ -344,6 +347,7 @@ class IPCController:
                 "value_columns": [vc.name for vc in w.state.value_columns],
             }
         except Exception as e:
+            logger.error("ipc_controller.set_value_columns.error", exc_info=True)
             raise ValueError(f"Failed to set value columns: {e}")
 
     def _ipc_set_group_columns(self, columns: list) -> dict:
@@ -365,6 +369,7 @@ class IPCController:
                 "group_columns": [gc.name for gc in w.state.group_columns],
             }
         except Exception as e:
+            logger.error("ipc_controller.set_group_columns.error", exc_info=True)
             raise ValueError(f"Failed to set group columns: {e}")
 
     def _ipc_set_hover_columns(self, columns: list) -> dict:
@@ -386,6 +391,7 @@ class IPCController:
                 "hover_columns": list(w.state.hover_columns),
             }
         except Exception as e:
+            logger.error("ipc_controller.set_hover_columns.error", exc_info=True)
             raise ValueError(f"Failed to set hover columns: {e}")
 
     def _ipc_clear_all_zones(self) -> dict:
@@ -398,6 +404,7 @@ class IPCController:
             w.state.clear_hover_columns()
             return {"success": True}
         except Exception as e:
+            logger.error("ipc_controller.clear_zones.error", exc_info=True)
             raise ValueError(f"Failed to clear zones: {e}")
 
     def _ipc_get_zones(self) -> dict:
@@ -431,6 +438,7 @@ class IPCController:
             self._w.graph_panel.refresh()
             return {"success": True}
         except Exception as e:
+            logger.error("ipc_controller.refresh.error", exc_info=True)
             raise ValueError(f"Failed to refresh: {e}")
 
     def _ipc_get_screenshot(self, path: str = "/tmp/dgs_screenshot.png") -> dict:
@@ -445,6 +453,7 @@ class IPCController:
                 "height": pixmap.height(),
             }
         except Exception as e:
+            logger.error("ipc_controller.screenshot.error", exc_info=True)
             raise ValueError(f"Failed to take screenshot: {e}")
 
     def _ipc_set_agg(self, agg1: str, agg2: str = None) -> dict:
@@ -470,6 +479,7 @@ class IPCController:
                 ],
             }
         except Exception as e:
+            logger.error("ipc_controller.set_agg.error", exc_info=True)
             raise ValueError(f"Failed to set aggregation: {e}")
 
     # ==================== IPC Profile Comparison Handlers ====================
@@ -607,6 +617,7 @@ class IPCController:
             self._w.state.add_filter(column, op, value)
             return {"status": "ok", "column": column, "op": op, "value": value}
         except Exception as exc:
+            logger.exception("ipc_controller.add_filter.error")
             return {"status": "error", "message": str(exc)}
 
     def _ipc_clear_filters(self) -> dict:
@@ -619,6 +630,7 @@ class IPCController:
             self._w.state.clear_filters()
             return {"status": "ok"}
         except Exception as exc:
+            logger.exception("ipc_controller.clear_filters.error")
             return {"status": "error", "message": str(exc)}
 
     # ==================== IPC Capture Handler ====================

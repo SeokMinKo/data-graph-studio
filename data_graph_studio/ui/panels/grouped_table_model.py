@@ -247,6 +247,7 @@ class GroupedTableModel(QAbstractItemModel):
             grouped = self._df.group_by(self._group_columns).agg(agg_exprs).sort(self._group_columns)
         except Exception:
             # 실패 시 기본 방식
+            logger.warning("grouped_table_model.build_groups_fast.group_by.error", exc_info=True)
             self._build_group_recursive(
                 self._root,
                 self._group_columns,
@@ -403,6 +404,7 @@ class GroupedTableModel(QAbstractItemModel):
                 else:
                     node.aggregates[col] = subset[col].sum()
             except Exception:
+                logger.warning("grouped_table_model.build_group_recursive.aggregate.error", exc_info=True)
                 node.aggregates[col] = None
     
     def _get_all_rows(self, node: GroupNode) -> List[int]:
@@ -628,7 +630,7 @@ class GroupedTableModel(QAbstractItemModel):
 
                 node.rows = row_indices
         except Exception as e:
-            logger.error("grouped_table_model.load_node_rows_error", extra={"error": str(e)})
+            logger.error("grouped_table_model.load_node_rows_error", extra={"error": str(e)}, exc_info=True)
             node.rows = []
     
     def expand_all(self):

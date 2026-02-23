@@ -2,10 +2,13 @@
 Profile Bar - 프로파일 설정 바 UI
 """
 
+import logging
 from PySide6.QtWidgets import (
     QWidget, QFrame, QHBoxLayout, QVBoxLayout, QLabel,
     QPushButton, QComboBox, QScrollArea, QMenu, QToolButton, QMessageBox, QFileDialog, QInputDialog
 )
+
+logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal, QMimeData
 from PySide6.QtGui import QDrag, QMouseEvent, QAction
 
@@ -441,6 +444,7 @@ class ProfileBar(QFrame):
                 profile = self._profile_manager.load(path)
                 self._state.set_profile(profile)
             except Exception as e:
+                logger.exception("profile_bar.on_profile_selected.error")
                 QMessageBox.warning(
                     self,
                     "Load Profile Error",
@@ -466,6 +470,7 @@ class ProfileBar(QFrame):
                         self._profile_combo.setCurrentIndex(i)
                         break
             except Exception as e:
+                logger.exception("profile_bar.on_load_profile.error")
                 QMessageBox.critical(
                     self,
                     "Load Profile Error",
@@ -501,6 +506,7 @@ class ProfileBar(QFrame):
                     "Profile saved successfully."
                 )
             except Exception as e:
+                logger.exception("profile_bar.on_save_profile.error")
                 QMessageBox.critical(
                     self,
                     "Save Profile Error",

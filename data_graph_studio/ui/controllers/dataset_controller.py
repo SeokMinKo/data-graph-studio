@@ -234,7 +234,7 @@ class DatasetController:
                 if w.state.active_dataset_id:
                     w.state._sync_to_dataset_state(w.state.active_dataset_id)
             except Exception:
-                pass
+                logger.warning("dataset_controller.activate.sync_state.error", exc_info=True)
 
             if w.engine.activate_dataset(target_id):
                 w.state.activate_dataset(target_id)
@@ -289,6 +289,7 @@ class DatasetController:
         try:
             dataset_info = w.engine.get_dataset(dataset_id)
         except Exception:
+            logger.warning("dataset_controller.remove_dataset.get_dataset.error", exc_info=True)
             dataset_info = None
 
         # Memory safety: for large datasets, prefer reload-based undo (no DF snapshot)
@@ -310,7 +311,7 @@ class DatasetController:
                 import copy
                 meta_snapshot = copy.deepcopy(metadata)
         except Exception:
-            pass
+            logger.warning("dataset_controller.remove_dataset.state_snapshot.error", exc_info=True)
 
         prev_active = w.engine.active_dataset_id
 
@@ -335,6 +336,7 @@ class DatasetController:
                 try:
                     w.engine._datasets[dataset_id] = dataset_info
                 except Exception:
+                    logger.exception("dataset_controller.restore.set_dataset.error")
                     return
             else:
                 # Reload-based undo (large dataset)
@@ -344,6 +346,7 @@ class DatasetController:
                 try:
                     w.engine.load_dataset(file_path, name=getattr(meta_snapshot, "name", name), dataset_id=dataset_id)
                 except Exception:
+                    logger.exception("dataset_controller.restore.reload_dataset.error")
                     return
 
             # Restore AppState dataset entries
@@ -357,7 +360,7 @@ class DatasetController:
                 w.state.dataset_added.emit(dataset_id)
                 w.state.dataset_updated.emit(dataset_id)
             except Exception:
-                pass
+                logger.exception("dataset_controller.restore.state_update.error")
 
             # Activate previous dataset (or restored one)
             target = prev_active or dataset_id

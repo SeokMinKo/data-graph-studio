@@ -85,7 +85,7 @@ class CaptureService(ICaptureService):
             return CaptureResult(name=name, file=saved, state=state, summary=summary)
 
         except Exception as exc:
-            logger.warning("capture_service.capture_failed", extra={"panel_name": name, "error": str(exc)})
+            logger.warning("capture_service.capture_failed", extra={"panel_name": name, "error": str(exc)}, exc_info=True)
             return CaptureResult(name=name, file=file_path, state={}, summary="", error=str(exc))
 
     def _grab_widget(self, widget: Any, file_path: Path) -> Path:

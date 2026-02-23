@@ -222,6 +222,7 @@ class TraceController:
                         ).drop("ts")
                     self_w.finished.emit(df)
                 except Exception as e:
+                    logger.exception("trace_controller.csv_worker.error")
                     self_w.error.emit(str(e))
 
         logger.debug("[Logger] _load_csv_async: %s", csv_path)
@@ -288,6 +289,7 @@ class TraceController:
                     df = parser.parse(file_path, settings)
                     self_w.finished.emit(df)
                 except Exception as e:
+                    logger.exception("trace_controller.parse_worker.ftrace.error")
                     self_w.error.emit(str(e))
 
         logger.debug("[Logger] _parse_ftrace_async: %s, converter=%s", file_path, converter)
@@ -378,6 +380,7 @@ class TraceController:
                     df_b = parser.parse(path_b, settings)
                     self_w.finished.emit(df_a, df_b)
                 except Exception as e:
+                    logger.exception("trace_controller.parse_worker.compare.error")
                     self_w.error.emit(str(e))
 
         progress_dlg = QProgressDialog("Parsing trace files...", "Cancel", 0, 0, self.w)

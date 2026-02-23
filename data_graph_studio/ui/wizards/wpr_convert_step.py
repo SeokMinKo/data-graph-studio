@@ -53,6 +53,7 @@ class _ConvertWorker(QThread):
                 return
             self.finished_signal.emit(True, "")
         except Exception as e:  # pragma: no cover - subprocess failure
+            logger.exception("wpr_convert_step.run.error")
             self.finished_signal.emit(False, str(e))
 
 

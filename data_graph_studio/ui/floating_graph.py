@@ -2,6 +2,7 @@
 Floating Graph Window - 독립된 그래프 창
 """
 
+import logging
 import uuid
 from typing import Optional, Dict
 from PySide6.QtWidgets import (
@@ -12,6 +13,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
 
 from ..core.state import AppState
+
+logger = logging.getLogger(__name__)
 from ..core.data_engine import DataEngine
 from ..core.profile import GraphSetting
 from .adapters.app_state_adapter import AppStateAdapter
@@ -144,6 +147,7 @@ class FloatingGraphWindow(QDialog):
 
         except Exception as e:
             # 그래프 패널 생성 실패 시 플레이스홀더 표시
+            logger.exception("floating_graph.create_graph_panel.error")
             placeholder = QLabel(f"Failed to create graph: {e}")
             placeholder.setAlignment(Qt.AlignCenter)
             placeholder.setObjectName("errorLabel")
@@ -193,6 +197,7 @@ class FloatingGraphWindow(QDialog):
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
             except Exception as e:
+                logger.exception("floating_graph.copy.error")
                 self._status_label.setText(f"Copy failed: {e}")
 
     def _on_export(self):

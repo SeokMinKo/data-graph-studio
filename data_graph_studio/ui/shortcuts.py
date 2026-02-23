@@ -2,11 +2,14 @@
 Keyboard Shortcuts Manager
 """
 
+import logging
 from typing import Dict, List, Optional, Callable, Union
 from dataclasses import dataclass
 from enum import Enum
 
 from PySide6.QtGui import QKeySequence
+
+logger = logging.getLogger(__name__)
 
 
 class ShortcutCategory(Enum):
@@ -48,7 +51,7 @@ class Shortcut:
                 self.keys = QKeySequence(self.keys)
         except Exception:
             # QApplication 없을 때 실패할 수 있음
-            pass
+            logger.warning("shortcuts.convert_keys.failed", exc_info=True)
     
     def reset(self):
         """기본값으로 초기화"""

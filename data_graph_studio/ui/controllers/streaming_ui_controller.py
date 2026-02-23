@@ -199,6 +199,7 @@ class StreamingUIController:
                 try:
                     self.w.engine.append_rows(file_path, new_row_count)
                 except Exception:
+                    logger.warning("streaming_ui_controller.append_rows_failed.fallback_to_reload", exc_info=True)
                     self.w.engine.load_file(file_path, optimize_memory=True)
             else:
                 self.w.engine.load_file(file_path, optimize_memory=True)

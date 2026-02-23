@@ -2,9 +2,12 @@
 StatPanel - Statistics Panel with 2x2 Grid Layout
 """
 
+import logging
 from typing import Optional, Dict, Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -243,7 +246,7 @@ class StatPanel(QFrame):
                     self.x_hist_widget.plot(bins, hist, stepMode="center", fillLevel=0,
                                             brush=(100, 100, 200, 100))
             except Exception:
-                pass
+                logger.warning("stat_panel.update_x_histogram.error", exc_info=True)
 
     def _update_y_histogram(self):
         self.y_hist_widget.clear()
@@ -266,7 +269,7 @@ class StatPanel(QFrame):
                     )
                     self.y_hist_widget.addItem(bar_item)
             except Exception:
-                pass
+                logger.warning("stat_panel.update_y_histogram.error", exc_info=True)
 
     def _render_pie(self, labels: list, values: list, colors: list):
         """Render pie chart in the mini widget"""
@@ -282,6 +285,7 @@ class StatPanel(QFrame):
             self.pie_widget.hideAxis('bottom')
             self.pie_widget.hideAxis('left')
         except Exception:
+            logger.warning("stat_panel.render_pie.piechartitem.error", exc_info=True)
             # Fallback: bar chart
             x = np.arange(len(labels))
             bars = pg.BarGraphItem(
@@ -324,7 +328,7 @@ class StatPanel(QFrame):
                         # Store for expansion
                         self.pie_widget.set_pie_data(labels, values, "Y Value Distribution by Quartile", colors)
                 except Exception:
-                    pass
+                    logger.warning("stat_panel.update_pie_chart.quartile.error", exc_info=True)
             return
 
         try:
@@ -342,7 +346,7 @@ class StatPanel(QFrame):
             # Store for expansion
             self.pie_widget.set_pie_data(labels, values, "Y Groupby Aggregation", colors)
         except Exception:
-            pass
+            logger.warning("stat_panel.update_pie_chart.group.error", exc_info=True)
 
     def _update_percentile_chart(self):
         """Update the percentile line chart"""
@@ -373,7 +377,7 @@ class StatPanel(QFrame):
                 clean_y, "Y Values Percentile Distribution", (148, 103, 189)
             )
         except Exception:
-            pass
+            logger.warning("stat_panel.update_percentile_chart.error", exc_info=True)
     
     def update_histograms(self, x_data: Optional[np.ndarray], y_data: Optional[np.ndarray],
                           group_data: Optional[Dict[str, float]] = None):

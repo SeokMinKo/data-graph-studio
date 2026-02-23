@@ -58,6 +58,7 @@ class ProfileUIController:
                 w.state.set_profile(profile)
                 w.statusbar.showMessage(f"Loaded profile: {profile.name}", 3000)
             except Exception as e:
+                logger.exception("profile_ui_controller.load_profile.error")
                 QMessageBox.critical(w, "Load Profile Error", f"Failed to load profile: {e}")
 
     def _on_save_profile_menu(self):
@@ -80,6 +81,7 @@ class ProfileUIController:
                 w.state.profile_saved.emit()
                 w.statusbar.showMessage(f"Profile saved: {profile.name}", 3000)
             except Exception as e:
+                logger.exception("profile_ui_controller.save_profile.error")
                 QMessageBox.critical(w, "Save Profile Error", f"Failed to save profile: {e}")
 
     # ==================== Profile Actions (ProfileBar) ====================
@@ -419,6 +421,7 @@ class ProfileUIController:
                 w.profile_model.refresh()
             w.statusbar.showMessage(f"Profile loaded: {gs.name}", 3000)
         except Exception as e:
+            logger.exception("profile_ui_controller.open_profile_file.error")
             QMessageBox.warning(w, "Open Profile", f"Failed to load profile:\n{e}")
 
     def _on_save_profile_file(self):
@@ -439,6 +442,7 @@ class ProfileUIController:
                 json.dump(gs.to_dict(), f, indent=2, ensure_ascii=False)
             w.statusbar.showMessage(f"Profile saved: {path}", 3000)
         except Exception as e:
+            logger.exception("profile_ui_controller.save_profile_file.error")
             QMessageBox.warning(w, "Save Profile", f"Failed to save profile:\n{e}")
 
     def _on_save_profile_file_as(self):
@@ -465,6 +469,7 @@ class ProfileUIController:
             w._last_profile_path = file_path
             w.statusbar.showMessage(f"Profile saved: {file_path}", 3000)
         except Exception as e:
+            logger.exception("profile_ui_controller.save_profile_file_as.error")
             QMessageBox.warning(w, "Save Profile As", f"Failed to save profile:\n{e}")
 
     def _on_save_profile_bundle_as(self):
@@ -500,6 +505,7 @@ class ProfileUIController:
                 json.dump(bundle, f, indent=2, ensure_ascii=False)
             w.statusbar.showMessage(f"Profile bundle saved: {file_path} ({len(unique)} profiles)", 3000)
         except Exception as e:
+            logger.exception("profile_ui_controller.save_profile_bundle.error")
             QMessageBox.warning(w, "Save Profile Bundle", f"Failed to save bundle:\n{e}")
 
     # ==================== Project I/O ====================
@@ -582,6 +588,7 @@ class ProfileUIController:
             ds_count = len(project.data_sources)
             w.statusbar.showMessage(f"Project saved: {path} ({ds_count} datasets, {len(unique)} profiles)", 3000)
         except Exception as e:
+            logger.exception("profile_ui_controller.save_project.error")
             QMessageBox.warning(w, "Save Project", f"Failed to save project:\n{e}")
 
     # ==================== Summary ====================
@@ -681,6 +688,6 @@ class ProfileUIController:
                         'columns': y_col_names,
                     }
         except Exception:
-            pass
+            logger.warning("profile_ui_controller.update_summary.error", exc_info=True)
 
         w.state.update_summary(stats)

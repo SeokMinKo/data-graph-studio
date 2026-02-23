@@ -251,12 +251,12 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                     self._schedule_style_refresh()
                     return
         except Exception:
-            pass
+            _lg.warning("graph_panel.on_options_changed.snapshot_diff.error", exc_info=True)
 
         try:
             self._last_options_snapshot = self.options_panel.get_chart_options()
         except Exception:
-            pass
+            _lg.warning("graph_panel.on_options_changed.get_chart_options.error", exc_info=True)
         self._schedule_refresh()
 
     def _schedule_refresh(self, *args):
@@ -309,13 +309,13 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                         c.setAlphaF(fill_opacity)
                         item.setBrush(pg.mkBrush(c))
             except Exception:
-                pass
+                _lg.warning("graph_panel.style_refresh.fill_opacity.error", exc_info=True)
 
         for item in scatter_items:
             try:
                 item.setSize(marker_size)
             except Exception:
-                pass
+                _lg.warning("graph_panel.style_refresh.marker_size.error", exc_info=True)
 
     def _on_grid_view_changed(self):
         """Handle Grid View settings change."""
@@ -497,7 +497,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
         try:
             self._do_refresh()
         except Exception as e:
-            _lg.error(f"graph_panel.refresh() error: {e}")
+            _lg.error(f"graph_panel.refresh() error: {e}", exc_info=True)
         finally:
             self.main_graph.setUpdatesEnabled(True)
             self._refreshing = False
@@ -598,7 +598,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                         x_is_categorical = True
                         self._x_axis.set_categorical(x_categorical_labels)
             except Exception:
-                pass
+                _lg.warning("graph_panel.do_refresh.categorical_x.error", exc_info=True)
 
         # Build group masks early (needed for combo chart too)
         groups = None
@@ -728,6 +728,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                                         matched = np.arange(0, len(x_group), step)[:len(x_group_sampled)]
                                     group_sampled_orig = group_orig_indices[matched]
                                 except Exception:
+                                    _lg.warning("graph_panel.do_refresh.group_sampled_orig.error", exc_info=True)
                                     group_sampled_orig = group_orig_indices[:len(x_group_sampled)]
                             else:
                                 x_group_sampled, y_group_sampled = x_group, y_group
@@ -809,6 +810,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                     step = max(1, len(x_data) // max(1, len(x_sampled)))
                     self._sampled_original_indices = np.arange(0, len(x_data), step)[:len(x_sampled)]
             except Exception:
+                _lg.warning("graph_panel.do_refresh.sampled_indices.error", exc_info=True)
                 self._sampled_original_indices = None
         else:
             self._sampled_original_indices = None
@@ -886,6 +888,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                 if all(v == 0.0 for v in group_data.values()):
                     group_data = None
             except Exception:
+                _lg.warning("graph_panel.do_refresh.group_data.error", exc_info=True)
                 group_data = None
 
         self.stat_panel.update_histograms(x_sampled, y_sampled, group_data)
@@ -900,7 +903,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                 if len(clean_y) > 0:
                     stats['Y-Diff'] = float(np.max(clean_y) - np.min(clean_y))
             except Exception:
-                pass
+                _lg.warning("graph_panel.do_refresh.stats_diff.error", exc_info=True)
 
             percentiles = {}
             try:
@@ -910,6 +913,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                     pct_vals = np.percentile(clean_y, pct_list)
                     percentiles = {f"P{p}": float(v) for p, v in zip(pct_list, pct_vals)}
             except Exception:
+                _lg.warning("graph_panel.do_refresh.percentiles.error", exc_info=True)
                 percentiles = {}
 
             group_counts = {}
@@ -921,6 +925,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                         group_counts[group_name] = int(np.sum(~np.isnan(group_y)))
                         group_sums[group_name] = float(np.nansum(group_y))
                 except Exception:
+                    _lg.warning("graph_panel.do_refresh.group_counts.error", exc_info=True)
                     group_counts = {}
                     group_sums = {}
 
@@ -967,7 +972,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
             self._show_formula_error(str(e))
             return y_data
         except Exception as e:
-            _lg.warning(f"Error applying formula '{formula}': {e}")
+            _lg.warning(f"Error applying formula '{formula}': {e}", exc_info=True)
             self._show_formula_error(str(e))
             return y_data
 
@@ -986,7 +991,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
                     self.options_panel.chart_type_combo.setCurrentIndex(idx)
                     self.options_panel.chart_type_combo.blockSignals(False)
         except Exception:
-            pass
+            _lg.warning("graph_panel.on_chart_settings_changed.sync_combo.error", exc_info=True)
         self.refresh()
 
     def _on_selection_changed(self):
@@ -1075,7 +1080,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
             self.stat_panel.update_histograms(selected_x, selected_y)
 
         except Exception as e:
-            _lg.error("graph_panel.update_stats_error", extra={"error": str(e)})
+            _lg.error("graph_panel.update_stats_error", extra={"error": str(e)}, exc_info=True)
 
     def _build_group_masks(self, df_override=None) -> Dict[str, np.ndarray]:
         if not self.state.group_columns or not self.engine.is_loaded:
@@ -1137,6 +1142,7 @@ class GraphPanel(ComboChartMixin, StatisticalChartMixin, GridChartMixin, Drawing
             self.main_graph.setXRange(x_min - x_pad, x_max + x_pad, padding=0)
             self.main_graph.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
         except Exception:
+            _lg.warning("graph_panel.autofit.error", exc_info=True)
             self.main_graph.autoRange()
 
     def export_image(self, path: str):

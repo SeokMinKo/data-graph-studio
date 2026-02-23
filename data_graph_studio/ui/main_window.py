@@ -457,7 +457,7 @@ class MainWindow(QMainWindow):
                         view_menu.addAction(toggle_action)
                     break
         except Exception:
-            pass
+            logger.warning("main_window.setup_history_panel_menu.error", exc_info=True)
 
     def _on_undo_stack_changed(self):
         # Update history UI
@@ -750,7 +750,7 @@ class MainWindow(QMainWindow):
                 f"Available: {sys_mem['available_gb']:.1f} GB"
             )
         except Exception as e:
-            logger.debug("main_window.memory_status_update_failed", extra={"error": e})
+            logger.debug("main_window.memory_status_update_failed", extra={"error": e}, exc_info=True)
     
     def _connect_signals(self):
         """시그널 연결"""
@@ -895,6 +895,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, parser.name, str(e))
             return
         except Exception as e:
+            logger.exception("main_window.parse_file.error")
             QMessageBox.critical(self, parser.name, f"Parse failed:\n{e}")
             return
 
@@ -1021,7 +1022,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'graph_panel') and self.engine.is_loaded:
                 self.graph_panel.autofit()
         except Exception as e:
-            logger.debug("main_window.autofit_failed", extra={"error": e})
+            logger.debug("main_window.autofit_failed", extra={"error": e}, exc_info=True)
 
     def _setup_quick_switch_shortcuts(self):
         """Alt+1~9로 현재 데이터셋의 n번째 프로파일로 즉시 전환"""
@@ -1554,8 +1555,10 @@ class MainWindow(QMainWindow):
                         os.remove(temp_path)
                         
                 except Exception as e:
+                    logger.exception("main_window.copy_graph_image.export.error")
                     self.statusBar().showMessage(f"Export error: {e}", 3000)
         except Exception as e:
+            logger.exception("main_window.copy_graph_image.error")
             self.statusBar().showMessage(f"Copy error: {e}", 3000)
     
     def _copy_selection_to_clipboard(self):
@@ -1588,6 +1591,7 @@ class MainWindow(QMainWindow):
             
             self.statusBar().showMessage("No selection to copy", 3000)
         except Exception as e:
+            logger.exception("main_window.copy_selection_to_clipboard.error")
             self.statusBar().showMessage(f"Copy error: {e}", 3000)
 
     # ==================== New Menu Actions ====================
@@ -1746,7 +1750,7 @@ class MainWindow(QMainWindow):
             plot_widget = self.graph_panel._plot_widget
             plot_widget.plot(x_line, y_line, pen=pen, name=f"Fit: {eq}")
         except Exception:
-            pass
+            logger.warning("main_window.curve_fit.plot.error", exc_info=True)
 
         self.statusbar.showMessage(f"Curve fit: {eq} (R²={result.r_squared:.4f})", 5000)
 
@@ -1840,6 +1844,7 @@ class MainWindow(QMainWindow):
                     self.engine.df.write_csv(current_path)
                 self.statusbar.showMessage(f"Data saved to {current_path}", 3000)
             except Exception as e:
+                logger.exception("main_window.save_data.error")
                 QMessageBox.warning(self, "Save Data", f"Failed to save: {e}")
         else:
             self._on_save_data_as()
@@ -1865,6 +1870,7 @@ class MainWindow(QMainWindow):
                 self.engine._current_file_path = file_path
                 self.statusbar.showMessage(f"Data saved to {file_path}", 3000)
             except Exception as e:
+                logger.exception("main_window.save_data_as.error")
                 QMessageBox.warning(self, "Save Data As", f"Failed to save: {e}")
 
     def _on_import_data(self):
@@ -1956,6 +1962,7 @@ class MainWindow(QMainWindow):
                     )
                     self.statusbar.showMessage(f"Column '{column}' removed", 3000)
                 except Exception as e:
+                    logger.exception("main_window.remove_field.error")
                     QMessageBox.warning(self, "Remove Field", f"Failed to remove column: {e}")
 
     # ============================================================

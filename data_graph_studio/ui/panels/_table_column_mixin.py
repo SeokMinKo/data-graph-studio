@@ -1,7 +1,10 @@
 """Column operations behavior for TablePanel."""
 from __future__ import annotations
 
+import logging
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import QMessageBox, QDialog
 
@@ -83,6 +86,7 @@ class _TableColumnMixin:
             self._update_table_model(self.engine.df)
             self.graph_panel.refresh() if hasattr(self, 'graph_panel') else None
         except Exception as e:
+            logger.exception("table_column_mixin.exclude_column.error")
             QMessageBox.warning(self, "Exclude Column", f"Failed to exclude column: {e}")
 
     def _on_column_action(self, action: str):
@@ -158,6 +162,7 @@ class _TableColumnMixin:
             else:
                 QMessageBox.warning(self, "Type Conversion", f"Failed to convert '{column_name}' to {target_type}")
         except Exception as e:
+            logger.exception("table_column_mixin.convert_column_type.error")
             QMessageBox.warning(self, "Type Conversion", f"Error: {e}")
 
     # ==================== F3: Conditional Formatting ====================

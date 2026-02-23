@@ -6,7 +6,10 @@ Search + ListBox UI pattern for Y-Axis, Group By, Hover, and Filter sections.
 
 from __future__ import annotations
 
+import logging
 from typing import List, Dict, Set, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -835,6 +838,7 @@ class DataTab(QWidget):
                 return
             unique_vals = [str(v) for v in df[col].drop_nulls().unique().sort().to_list()[:500]]
         except Exception:
+            logger.warning("data_tab.load_filter_unique_vals.error", exc_info=True)
             unique_vals = []
 
         self._filter_unique_vals = unique_vals

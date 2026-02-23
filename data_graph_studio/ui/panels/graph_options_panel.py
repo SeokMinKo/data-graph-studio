@@ -4,7 +4,10 @@ GraphOptionsPanel - Compact Graph Options Panel
 
 from __future__ import annotations
 
+import logging
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -795,6 +798,7 @@ class GraphOptionsPanel(QFrame):
         try:
             recs = engine.recommend_chart_type(x_col, y_cols, group_cols)
         except Exception as e:
+            logger.exception("graph_options_panel.recommend_chart.error")
             QMessageBox.warning(self, "Chart Recommendation", f"추천 실패: {e}")
             return
 

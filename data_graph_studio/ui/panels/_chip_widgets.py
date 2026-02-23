@@ -1,7 +1,10 @@
 """Chip widgets and drag-and-drop helpers for zone panels."""
 
+import logging
 from typing import Optional, Dict, Any
 import json
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -25,7 +28,7 @@ def _parse_drag_payload(mime_data: QMimeData) -> Dict[str, Any]:
             if isinstance(data, dict):
                 payload.update(data)
         except Exception:
-            pass
+            logger.warning("chip_widgets.parse_drag_payload.error", exc_info=True)
     if not payload.get("name") and mime_data.hasText():
         payload["name"] = mime_data.text()
     return payload

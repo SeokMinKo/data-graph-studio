@@ -2,8 +2,11 @@
 Theme - Modern Light/Dark Mode with Glassmorphism and Soft UI
 """
 
+import logging
 from typing import Dict, List
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -441,6 +444,7 @@ class ThemeManager:
                 is_dark = self._detect_system_dark_mode()
             except Exception:
                 # ERR-6.1: 감지 실패 → light 폴백
+                logger.warning("theme.detect_system_dark_mode.failed", exc_info=True)
                 is_dark = False
 
             if is_dark:
@@ -529,4 +533,4 @@ class ThemeManager:
                 try:
                     self._themes[theme_id] = Theme.from_dict(theme_data)
                 except Exception:
-                    pass  # ERR-6.2: 손상 무시
+                    logger.warning("theme.from_dict.custom_theme.parse_error", exc_info=True)  # ERR-6.2: 손상 무시

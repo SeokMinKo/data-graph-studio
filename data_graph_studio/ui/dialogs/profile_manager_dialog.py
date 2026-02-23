@@ -2,6 +2,7 @@
 Profile Manager Dialog - 프로파일 관리 다이얼로그
 """
 
+import logging
 from typing import Optional
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -10,6 +11,8 @@ from PySide6.QtWidgets import (
     QToolButton, QScrollArea
 )
 from PySide6.QtCore import Qt, Signal
+
+logger = logging.getLogger(__name__)
 
 from ...core.profile import Profile, GraphSetting, ProfileManager
 
@@ -260,6 +263,7 @@ class ProfileManagerDialog(QDialog):
                 item.setData(Qt.UserRole + 1, str(profile_path))  # 경로 저장
                 self._profile_list.addItem(item)
             except Exception:
+                logger.warning("profile_manager_dialog.refresh_profiles.parse_error", exc_info=True)
                 continue
 
     def _on_profile_selected(self, current: QListWidgetItem, previous: QListWidgetItem):
@@ -339,6 +343,7 @@ class ProfileManagerDialog(QDialog):
                     f"Profile '{profile.name}' imported successfully."
                 )
             except Exception as e:
+                logger.exception("profile_manager_dialog.import_profile.error")
                 QMessageBox.critical(
                     self,
                     "Import Error",
@@ -365,6 +370,7 @@ class ProfileManagerDialog(QDialog):
                     "Profile exported successfully."
                 )
             except Exception as e:
+                logger.exception("profile_manager_dialog.export_profile.error")
                 QMessageBox.critical(
                     self,
                     "Export Error",

@@ -341,7 +341,7 @@ class FileLoadingController:
                 self._load_file(file_path)
         except Exception as e:
             # If preview fails, just load directly
-            logger.warning("file_loading_controller.preview_failed", extra={"path": file_path, "error": e})
+            logger.warning("file_loading_controller.preview_failed", extra={"path": file_path, "error": e}, exc_info=True)
             self._load_file(file_path)
 
     def _check_large_file_warning(self, file_path: str) -> bool:
@@ -469,6 +469,7 @@ class FileLoadingController:
                 proc_mem = MemoryMonitor.get_process_memory()
                 mem_str = MemoryMonitor.format_memory(proc_mem['rss_mb'])
             except Exception:
+                logger.warning("file_loading_controller.progress.memory_check.error", exc_info=True)
                 mem_str = "--"
 
             eta_str = ""
@@ -604,7 +605,7 @@ class FileLoadingController:
                     gs = GraphSetting.from_dict(profile_dict)
                     w.profile_store.add(gs)
                 except Exception as e:
-                    logger.warning("file_loading_controller.restore_profile_failed", extra={"error": e})
+                    logger.warning("file_loading_controller.restore_profile_failed", extra={"error": e}, exc_info=True)
 
             w._last_project_path = file_path
             w.statusbar.showMessage(f"Project loaded: {file_path} ({loaded_count} datasets, {len(project.profiles)} profiles)", 3000)
@@ -613,6 +614,7 @@ class FileLoadingController:
                 w._on_data_loaded()
 
         except Exception as e:
+            logger.exception("file_loading_controller.load_project_file.error")
             QMessageBox.critical(
                 w, "Load Project Error",
                 f"Failed to load project file:\n{e}"
@@ -696,6 +698,7 @@ class FileLoadingController:
                 else:
                     w.statusBar().showMessage("Failed to load clipboard data", 5000)
             except Exception as e:
+                logger.exception("file_loading_controller.paste_clipboard.error")
                 w.statusBar().showMessage(f"Paste error: {e}", 5000)
         else:
             w.statusBar().showMessage(message, 3000)
@@ -754,7 +757,7 @@ class FileLoadingController:
                 with open(recent_file_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
         except Exception:
-            pass
+            logger.warning("file_loading_controller.get_recent_files.error", exc_info=True)
         return {'files': [], 'pinned': []}
 
     def _get_recent_files(self) -> List[str]:
@@ -777,7 +780,7 @@ class FileLoadingController:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             self._update_recent_files_menu()
         except Exception as e:
-            logger.debug("file_loading_controller.pin_recent_file_failed", extra={"error": e})
+            logger.debug("file_loading_controller.pin_recent_file_failed", extra={"error": e}, exc_info=True)
 
     def _add_to_recent_files(self, file_path: str):
         """최근 파일에 추가"""
@@ -799,7 +802,7 @@ class FileLoadingController:
 
             self._update_recent_files_menu()
         except Exception as e:
-            logger.debug("file_loading_controller.add_recent_file_failed", extra={"error": e})
+            logger.debug("file_loading_controller.add_recent_file_failed", extra={"error": e}, exc_info=True)
 
     def _open_recent_file(self, file_path: str):
         """최근 파일 열기"""
@@ -818,7 +821,7 @@ class FileLoadingController:
             self._update_recent_files_menu()
             self._w.statusbar.showMessage("Recent files cleared", 3000)
         except Exception as e:
-            logger.debug("file_loading_controller.clear_recent_files_failed", extra={"error": e})
+            logger.debug("file_loading_controller.clear_recent_files_failed", extra={"error": e}, exc_info=True)
 
     # ==================== File Watch ====================
 
@@ -906,6 +909,7 @@ class FileLoadingController:
             else:
                 w.statusbar.showMessage("Failed to load URL data", 5000)
         except Exception as e:
+            logger.exception("file_loading_controller.import_url.error")
             QMessageBox.warning(w, "URL Import Error", f"Failed to import from URL:\n{e}")
             w.statusbar.showMessage("URL import failed", 3000)
 
@@ -995,6 +999,7 @@ class FileLoadingController:
                     w.engine.df.write_csv(current_path)
                 w.statusbar.showMessage(f"Data saved to {current_path}", 3000)
             except Exception as e:
+                logger.exception("file_loading_controller.save_data.error")
                 QMessageBox.warning(w, "Save Data", f"Failed to save: {e}")
         else:
             self._on_save_data_as()
@@ -1021,6 +1026,7 @@ class FileLoadingController:
                 w.engine._current_file_path = file_path
                 w.statusbar.showMessage(f"Data saved to {file_path}", 3000)
             except Exception as e:
+                logger.exception("file_loading_controller.save_data_as.error")
                 QMessageBox.warning(w, "Save Data As", f"Failed to save: {e}")
 
     def _on_import_data(self):

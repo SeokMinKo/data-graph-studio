@@ -4,6 +4,7 @@ Dataset Manager Panel - 멀티 데이터셋 관리 패널
 데이터셋 추가, 제거, 전환, 비교 설정 UI
 """
 
+import logging
 from typing import List, Dict
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -12,6 +13,8 @@ from PySide6.QtWidgets import (
     QMessageBox, QSizePolicy, QGroupBox,
     QToolButton, QFileDialog, QTreeWidget, QTreeWidgetItem
 )
+
+logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap, QAction
 
@@ -606,6 +609,7 @@ class DatasetManagerPanel(QWidget):
                 self.state.add_graph_setting_to_dataset(self.state.active_dataset_id, setting)
             self._update_tree()
         except Exception as e:
+            logger.exception("dataset_manager_panel.load_profile.error")
             QMessageBox.warning(self, "Load Profile", f"Failed to load profile: {e}")
 
     def _on_widget_removed(self, dataset_id: str):

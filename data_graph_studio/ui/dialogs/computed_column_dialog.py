@@ -130,6 +130,7 @@ class ComputeWorker(QThread):
         except (FormulaError, FormulaSecurityError, FormulaColumnError, FormulaTypeError) as e:
             self.error.emit(str(e))
         except Exception as e:
+            logger.exception("computed_column_dialog.compute_worker.error")
             self.error.emit(f"Unexpected error: {e}")
 
 
@@ -348,6 +349,7 @@ class ComputedColumnDialog(QDialog):
         except ZeroDivisionError:
             self._show_error("0으로 나누기")
         except Exception as e:
+            logger.exception("computed_column_dialog.preview.error")
             self._show_error(str(e))
 
     def _clear_error(self):

@@ -5,6 +5,7 @@ Side-by-Side Layout - 병렬 비교 레이아웃
 스크롤/줌 동기화 지원 (ViewSyncManager 사용)
 """
 
+import logging
 from typing import Optional, List, Dict, TYPE_CHECKING
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -18,6 +19,8 @@ from ...core.data_engine import DataEngine
 from ...core.state import AppState
 from ...core.view_sync import ViewSyncManager
 from ..adapters.app_state_adapter import AppStateAdapter
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.profile import GraphSetting
@@ -104,6 +107,7 @@ class MiniGraphWidget(QWidget):
         try:
             return self.state.chart_settings.chart_type.value
         except Exception:
+            logger.warning("side_by_side.effective_chart_type.error", exc_info=True)
             return "line"
 
     @property
@@ -120,6 +124,7 @@ class MiniGraphWidget(QWidget):
                     result[attr] = getattr(cs, attr)
             return result
         except Exception:
+            logger.warning("side_by_side.effective_chart_settings.error", exc_info=True)
             return {}
 
     @property
@@ -248,7 +253,7 @@ class MiniGraphWidget(QWidget):
                         stats_layout.addWidget(QLabel(f"Min: {series.min():.2f}"))
                         stats_layout.addWidget(QLabel(f"Max: {series.max():.2f}"))
                     except Exception:
-                        pass
+                        logger.warning("side_by_side.build_stat_header.series_stats.error", exc_info=True)
 
         stats_layout.addStretch()
         layout.addWidget(stats_frame)
@@ -297,6 +302,7 @@ class MiniGraphWidget(QWidget):
             try:
                 x_data_full = df[x_col].to_numpy()
             except Exception:
+                logger.warning("side_by_side.plot_data.x_to_numpy.error", exc_info=True)
                 x_data_full = np.arange(len(df))
         else:
             x_data_full = np.arange(len(df))
@@ -337,11 +343,12 @@ class MiniGraphWidget(QWidget):
             try:
                 self._plot_y_data_dict[yc] = df[yc].to_numpy()
             except Exception:
-                pass
+                logger.warning("side_by_side.plot_data.y_to_numpy.error", exc_info=True)
         # Backward compat: _plot_y_data = first Y column
         try:
             self._plot_y_data = df[y_col_names[0]].to_numpy()
         except Exception:
+            logger.warning("side_by_side.plot_data.first_y_to_numpy.error", exc_info=True)
             self._plot_y_data = None
 
         try:
@@ -363,6 +370,7 @@ class MiniGraphWidget(QWidget):
             try:
                 y_data = df[y_col].to_numpy()
             except Exception:
+                logger.warning("side_by_side.plot_data.y_col_to_numpy.error", exc_info=True)
                 continue
 
             pen_color = y_col_colors.get(y_col) or self.COLOR_PALETTE[color_idx % len(self.COLOR_PALETTE)]
@@ -375,6 +383,7 @@ class MiniGraphWidget(QWidget):
         try:
             groups = df[grp_col].unique()
         except Exception:
+            logger.warning("side_by_side.plot_grouped.get_groups.error", exc_info=True)
             return
 
         color_idx = 0
@@ -395,6 +404,7 @@ class MiniGraphWidget(QWidget):
                 try:
                     y_grp = df[y_col].to_numpy()[indices]
                 except Exception:
+                    logger.warning("side_by_side.plot_grouped.y_grp.error", exc_info=True)
                     continue
 
                 x_sampled, y_sampled = self._sample(x_grp, y_grp, np)
@@ -408,6 +418,7 @@ class MiniGraphWidget(QWidget):
         try:
             cs = self.effective_chart_settings
         except Exception:
+            logger.warning("side_by_side.get_style.error", exc_info=True)
             cs = {}
         def _num(key, default):
             v = cs.get(key, default)
@@ -439,7 +450,7 @@ class MiniGraphWidget(QWidget):
                     pen_color.setAlphaF(opacity)
                     brush_color.setAlphaF(opacity)
                 except Exception:
-                    pass
+                    logger.warning("side_by_side.render_series.set_alpha.error", exc_info=True)
 
             if chart_type == "scatter":
                 scatter = pg.ScatterPlotItem(
@@ -479,7 +490,7 @@ class MiniGraphWidget(QWidget):
                     )
                     self.plot_widget.addItem(scatter)
         except Exception:
-            pass
+            logger.exception("side_by_side.render_series.error")
 
     def _sample(self, x_data, y_data, np, max_points: int = None):
         """Downsample arrays based on profile/state sampling settings."""
@@ -521,7 +532,7 @@ class MiniGraphWidget(QWidget):
             if bg:
                 return bg if isinstance(bg, str) else bg.name() if hasattr(bg, 'name') else str(bg)
         except Exception:
-            pass
+            logger.warning("side_by_side.bg_color.state_settings.error", exc_info=True)
 
         # 3. Theme-aware default (dark theme)
         return '#1E293B'
@@ -681,10 +692,11 @@ class MiniGraphWidget(QWidget):
                         y_mask = (y_arr >= y_min) & (y_arr <= y_max)
                         combined_mask |= (x_mask & y_mask)
                     except Exception:
-                        pass
+                        logger.warning("side_by_side.rect_selection.y_mask.error", exc_info=True)
 
                 row_indices = np.where(combined_mask)[0].tolist()
             except Exception:
+                logger.warning("side_by_side.rect_selection.error", exc_info=True)
                 row_indices = []
 
         # Highlight locally
@@ -753,7 +765,7 @@ class MiniGraphWidget(QWidget):
             self.plot_widget.addItem(scatter)
             self._highlight_scatter = scatter
         except Exception:
-            pass
+            logger.warning("side_by_side.highlight_selection.error", exc_info=True)
 
     def refresh(self):
         """새로고침 — clear and replot (safe re-render)."""
@@ -764,7 +776,7 @@ class MiniGraphWidget(QWidget):
                 color = metadata.color if metadata else '#1f77b4'
                 self._plot_data(color)
         except Exception:
-            pass
+            logger.exception("side_by_side.refresh.error")
 
     # ------------------------------------------------------------------
     # ViewSyncManager duck-typing interface

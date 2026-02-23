@@ -156,6 +156,7 @@ class PolarsTableModel(QAbstractTableModel):
             self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
             return True
         except Exception:
+            logger.exception("polars_table_model.setData.error")
             return False
 
     def set_editable(self, editable: bool):
@@ -268,6 +269,7 @@ class PolarsTableModel(QAbstractTableModel):
             self._column_cache[col] = col_data
             self._column_cache.move_to_end(col)
         except Exception:
+            logger.warning("polars_table_model.fill_column_cache.error", exc_info=True)
             self._column_cache[col] = []
 
         # LRU eviction
@@ -309,6 +311,7 @@ class PolarsTableModel(QAbstractTableModel):
                         tooltip += f"<br>Min: {series.min()}<br>Max: {series.max()}<br>Mean: {series.mean():.2f}"
                     return tooltip
                 except Exception:
+                    logger.warning("polars_table_model.headerData.tooltip.error", exc_info=True)
                     return col_name
         return None
 
@@ -354,7 +357,7 @@ class PolarsTableModel(QAbstractTableModel):
                     if series.dtype.is_numeric():
                         fmt.set_range(float(series.min()), float(series.max()))
                 except Exception:
-                    pass
+                    logger.warning("polars_table_model.update_conditional_format_ranges.error", exc_info=True)
 
     # ==================== 정렬 기능 ====================
 
@@ -405,7 +408,7 @@ class PolarsTableModel(QAbstractTableModel):
 
         except Exception as e:
             # 정렬 실패 시 원본 유지
-            logger.error("table_panel.sort_error", extra={"error": str(e)})
+            logger.error("table_panel.sort_error", extra={"error": str(e)}, exc_info=True)
             self._df = self._original_df
             self._sort_column = None
             self._sort_order = None
@@ -445,7 +448,7 @@ class PolarsTableModel(QAbstractTableModel):
             self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
             self._row_count = self._loaded_rows
         except Exception as e:
-            logger.error("table_panel.multi_sort_error", extra={"error": str(e)})
+            logger.error("table_panel.multi_sort_error", extra={"error": str(e)}, exc_info=True)
             self._df = self._original_df
             self._sort_columns = []
         self.endResetModel()

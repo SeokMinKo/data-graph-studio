@@ -67,7 +67,7 @@ class MainGraph(pg.PlotWidget):
                 self.legend.GraphicsItemFlag.ItemIsMovable, True
             )
         except Exception:
-            pass
+            logger.warning("main_graph.init.legend_movable.error", exc_info=True)
 
         self._plot_items = []
         self._scatter_items = []
@@ -163,7 +163,7 @@ class MainGraph(pg.PlotWidget):
         try:
             self.plotItem.vb.setMenuEnabled(False)
         except Exception:
-            pass
+            logger.warning("main_graph.init.disable_menu.error", exc_info=True)
 
         self._grid_visible = True
 
@@ -180,13 +180,13 @@ class MainGraph(pg.PlotWidget):
                 self.useOpenGL(True)
                 self._opengl_enabled = True
             except Exception as e:
-                logger.error("main_graph.opengl_enable_error", extra={"error": str(e)})
+                logger.error("main_graph.opengl_enable_error", extra={"error": str(e)}, exc_info=True)
         elif not enable and self._opengl_enabled:
             try:
                 self.useOpenGL(False)
                 self._opengl_enabled = False
             except Exception:
-                pass
+                logger.warning("main_graph.opengl_disable.error", exc_info=True)
 
     def update_sampling_status(
         self,
@@ -764,6 +764,7 @@ class MainGraph(pg.PlotWidget):
         try:
             self.getViewBox().autoRange(padding=0.05)
         except Exception:
+            logger.warning("main_graph.render_complete.autorange.error", exc_info=True)
             self.autoRange()
 
     def _update_legend_settings(self, settings: Dict):
@@ -789,6 +790,7 @@ class MainGraph(pg.PlotWidget):
         try:
             self.getViewBox().autoRange(padding=0.05)
         except Exception:
+            logger.warning("main_graph.reset_view.autorange.error", exc_info=True)
             self.autoRange()
         self.setLogMode(x=False, y=False)
 
@@ -822,6 +824,7 @@ class MainGraph(pg.PlotWidget):
             self.setXRange(x_min - x_pad, x_max + x_pad, padding=0)
             self.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
         except Exception:
+            logger.warning("main_graph.fit_to_selection.error", exc_info=True)
             self.reset_view()
 
     def _find_graph_panel(self):
@@ -839,7 +842,7 @@ class MainGraph(pg.PlotWidget):
         try:
             self.legend.anchor((1, 0), (1, 0), offset=(-10, 10))
         except Exception:
-            pass
+            logger.warning("main_graph.reset_legend_position.error", exc_info=True)
 
     def _toggle_grid(self):
         self._grid_visible = not getattr(self, '_grid_visible', True)
@@ -856,7 +859,7 @@ class MainGraph(pg.PlotWidget):
             pix = self.grab()
             QApplication.clipboard().setPixmap(pix)
         except Exception:
-            pass
+            logger.exception("main_graph.copy_plot_image.error")
 
     def _export_plot_image(self):
         """Save current plot as an image file."""
@@ -873,7 +876,7 @@ class MainGraph(pg.PlotWidget):
             pix = self.grab()
             pix.save(path)
         except Exception:
-            pass
+            logger.exception("main_graph.export_plot_image.error")
 
     def _export_plot_data_csv(self):
         """Export currently plotted data to CSV (best-effort)."""
@@ -914,7 +917,7 @@ class MainGraph(pg.PlotWidget):
                 for i in range(n):
                     w.writerow([self._data_x[i], self._data_y[i]])
         except Exception:
-            pass
+            logger.exception("main_graph.export_plot_data_csv.error")
 
     def contextMenuEvent(self, event):
         """Custom right-click menu (replace pyqtgraph default)."""
@@ -1009,7 +1012,7 @@ class MainGraph(pg.PlotWidget):
                 if dlg.exec() == QDialog.Accepted:
                     self.set_drawing_style(dlg.get_style())
             except Exception:
-                pass
+                logger.exception("main_graph.open_style_dialog.error")
         style_act.triggered.connect(_open_style)
         draw_menu.addAction(style_act)
 
@@ -1500,6 +1503,7 @@ class MainGraph(pg.PlotWidget):
                 else:
                     self._hide_tooltip()
             except Exception:
+                logger.warning("main_graph.on_mouse_moved.multi_series_hover.error", exc_info=True)
                 self._hide_tooltip()
             return
 
@@ -1530,6 +1534,7 @@ class MainGraph(pg.PlotWidget):
             else:
                 self._hide_tooltip()
         except Exception:
+            logger.warning("main_graph.on_mouse_moved.single_series_hover.error", exc_info=True)
             self._hide_tooltip()
 
     def _show_tooltip(
@@ -1719,7 +1724,7 @@ class MainGraph(pg.PlotWidget):
         try:
             pen.setCosmetic(True)
         except Exception:
-            pass
+            logger.warning("main_graph.drawing_preview.set_cosmetic.error", exc_info=True)
 
         if self.state.tool_mode in (ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW):
             # Line/Arrow preview (arrow head is drawn on final object)
@@ -2016,7 +2021,7 @@ class MainGraph(pg.PlotWidget):
             self.addItem(r2_text)
             self._trendline_items.append(r2_text)
         except Exception:
-            pass
+            logger.exception("main_graph.draw_trendline.error")
 
     def clear_trendlines(self):
         """Remove all trendlines."""

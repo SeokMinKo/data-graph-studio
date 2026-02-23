@@ -8,7 +8,10 @@ for pan/zoom/selection synchronization.
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -158,7 +161,7 @@ class ProfileSideBySideLayout(QWidget):
             try:
                 panel.autofit()
             except Exception:
-                pass
+                logger.warning("profile_side_by_side.autofit.panel.error", exc_info=True)
 
     def set_tool_mode(self, mode) -> None:
         """Propagate tool mode to all MiniGraphWidget panels.
@@ -170,7 +173,7 @@ class ProfileSideBySideLayout(QWidget):
             try:
                 panel.set_tool_mode(mode)
             except Exception:
-                pass
+                logger.warning("profile_side_by_side.set_tool_mode.panel.error", exc_info=True)
 
     # ------------------------------------------------------------------
     # Public API
@@ -187,7 +190,7 @@ class ProfileSideBySideLayout(QWidget):
             try:
                 panel.refresh()
             except Exception:
-                pass
+                logger.warning("profile_side_by_side.refresh.panel.error", exc_info=True)
 
     def on_profile_deleted(self, profile_id: str) -> None:
         """FR-10: remove panel, exit if <2 remain."""

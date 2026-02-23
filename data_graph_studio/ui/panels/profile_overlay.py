@@ -7,7 +7,10 @@ Supports dual-axis, mixed chart_type handling, downsampling, and interactive leg
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -261,7 +264,7 @@ class ProfileOverlayRenderer(QWidget):
                 else:
                     label_item.setOpacity(0.3)
         except Exception:
-            pass
+            logger.warning("profile_overlay.on_legend_clicked.error", exc_info=True)
 
     def _install_legend_click_handlers(self):
         """Install click event handlers on legend items."""
@@ -280,7 +283,7 @@ class ProfileOverlayRenderer(QWidget):
                 label.setCursor(Qt.PointingHandCursor)
                 sample.setCursor(Qt.PointingHandCursor)
         except Exception:
-            pass
+            logger.warning("profile_overlay.install_legend_click_handlers.error", exc_info=True)
 
     def set_profiles(self, profile_ids: List[str]) -> None:
         """Set which profiles to overlay."""
@@ -341,7 +344,7 @@ class ProfileOverlayRenderer(QWidget):
                 if parsed.null_count() < len(parsed):
                     return parsed.dt.timestamp("ms").to_numpy().astype(np.float64)
             except Exception:
-                pass
+                logger.warning("profile_overlay.coerce_x.strptime.error", exc_info=True)
             # Fallback: integer index
             return np.arange(len(x_data), dtype=np.float64)
 
@@ -369,7 +372,7 @@ class ProfileOverlayRenderer(QWidget):
             try:
                 self._plot_widget.scene().removeItem(self._secondary_vb)
             except Exception:
-                pass
+                logger.warning("profile_overlay.render.remove_secondary_vb.error", exc_info=True)
             self._secondary_vb = None
 
         # Resolve profiles
@@ -426,6 +429,7 @@ class ProfileOverlayRenderer(QWidget):
             else:
                 x_data = np.arange(len(df))
         except Exception:
+            logger.warning("profile_overlay.render.x_data.error", exc_info=True)
             x_data = np.arange(len(df))
 
         # Coerce non-numeric X data (e.g., date strings) to numeric
@@ -450,6 +454,7 @@ class ProfileOverlayRenderer(QWidget):
                 else:
                     y_data = None
             except Exception:
+                logger.warning("profile_overlay.render.y_data.error", exc_info=True)
                 y_data = None
             if y_data is None:
                 continue
