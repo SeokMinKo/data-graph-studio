@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
+from data_graph_studio.core.exceptions import QueryError
 
 
 class IFilterApplier(ABC):
@@ -415,6 +416,8 @@ class FilteringManager(Observable, IFilterApplier):
             return data
         try:
             return data.filter(expr)
+        except QueryError:
+            raise
         except Exception as e:
             logger.warning("filtering.apply_filter.skipped", extra={"column": str(f.column), "error": str(e)})
             return data

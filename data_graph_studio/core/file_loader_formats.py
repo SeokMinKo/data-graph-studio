@@ -22,6 +22,7 @@ import polars as pl
 from .types import FileType, DelimiterType, PrecisionMode, DataProfile, ColumnInfo
 from .etl_helpers import HAS_ETL_PARSER
 from .metrics import get_metrics
+from .exceptions import DataLoadError
 
 # Format-specific helpers (re-exported for backward compatibility)
 from .file_loader_formats_csv import (

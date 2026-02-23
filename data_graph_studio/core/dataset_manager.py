@@ -19,6 +19,7 @@ import polars as pl
 from .constants import DATASET_ID_LENGTH, MEMORY_WARNING_THRESHOLD
 from .types import DatasetInfo, DataSource
 from .file_loader import FileLoader
+from .exceptions import DatasetError
 
 logger = logging.getLogger(__name__)
 
@@ -221,8 +222,10 @@ class DatasetManager:
         if self._on_dataset_removing is not None:
             try:
                 self._on_dataset_removing(dataset_id)
-            except Exception as e:
+            except DatasetError as e:
                 logger.warning("dataset_manager.removing_callback_error", extra={"error": e})
+            except Exception as e:
+                logger.warning("dataset_manager.removing_callback_error.unexpected", extra={"error": e}, exc_info=True)
 
         dataset = self._datasets[dataset_id]
         dataset.df = None
@@ -437,8 +440,11 @@ class DatasetManager:
                         df, name=Path(path).name, source_path=path,
                     )
                     results[path] = did
-                except Exception as e:
+                except DatasetError as e:
                     results[path] = e
-                    logger.error("dataset_manager.parallel_load_failed", extra={"path": path, "error": e})
+                    logger.error("dataset_manager.parallel_load_failed", extra={"path": path, "error": e}, exc_info=True)
+                except Exception as e:
+                    results[path] = DatasetError(str(e), operation="parallel_load", context={"path": path})
+                    logger.error("dataset_manager.parallel_load_failed.unexpected", extra={"path": path, "error": e}, exc_info=True)
 
         return results

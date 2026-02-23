@@ -10,6 +10,15 @@ from .formula_parser import (
     FormulaTypeError,
 )
 from .column_dependency_graph import ColumnDependencyGraph, CycleDetectedError
+from .exceptions import (
+    DGSError,
+    DataLoadError,
+    QueryError,
+    ExportError,
+    ValidationError,
+    DatasetError,
+    ConfigError,
+)
 
 __all__ = [
     "DataEngine", "DataSource", "LoadingProgress",
@@ -17,4 +26,6 @@ __all__ = [
     "FormulaParser", "FormulaError", "FormulaSecurityError",
     "FormulaColumnError", "FormulaTypeError",
     "ColumnDependencyGraph", "CycleDetectedError",
+    "DGSError", "DataLoadError", "QueryError", "ExportError",
+    "ValidationError", "DatasetError", "ConfigError",
 ]

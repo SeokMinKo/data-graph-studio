@@ -27,6 +27,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from data_graph_studio.core.io_abstract import IExportRenderer
 from data_graph_studio.core.observable import Observable
+from data_graph_studio.core.exceptions import ExportError
 from data_graph_studio.core.export_workers import (
     ExportFormat,
     ExportOptions,
@@ -220,7 +221,11 @@ class ExportController(Observable):
         try:
             self.export_chart_sync(image, path, fmt, opts)
             return {"status": "ok", "message": f"Exported chart to {path}"}
+        except ExportError as e:
+            logger.error("export_controller.ipc_chart.failed", extra={"path": path}, exc_info=True)
+            return {"status": "error", "message": str(e)}
         except Exception as e:
+            logger.error("export_controller.ipc_chart.unexpected", extra={"path": path}, exc_info=True)
             return {"status": "error", "message": str(e)}
 
     def handle_ipc_export_data(self, params: Dict[str, Any]) -> Dict[str, str]:
@@ -250,7 +255,11 @@ class ExportController(Observable):
         try:
             self.export_data_sync(df, path, fmt)
             return {"status": "ok", "message": f"Exported data to {path}"}
+        except ExportError as e:
+            logger.error("export_controller.ipc_data.failed", extra={"path": path}, exc_info=True)
+            return {"status": "error", "message": str(e)}
         except Exception as e:
+            logger.error("export_controller.ipc_data.unexpected", extra={"path": path}, exc_info=True)
             return {"status": "error", "message": str(e)}
 
     def handle_ipc_export_dashboard(self, params: Dict[str, Any]) -> Dict[str, str]:

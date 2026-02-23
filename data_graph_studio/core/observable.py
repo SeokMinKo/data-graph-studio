@@ -55,4 +55,5 @@ class Observable:
                         "handler": handler.__qualname__,
                         "error": str(exc),
                     },
+                    exc_info=True,
                 )

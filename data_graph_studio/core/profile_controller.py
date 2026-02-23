@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import replace
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .graph_setting_mapper import GraphSettingMapper
 from .observable import Observable
 from .profile import GraphSetting
 from .profile_store import ProfileStore
 from .state import AppState
+from .exceptions import ConfigError
 
 
 class ProfileController(Observable):
@@ -43,6 +47,9 @@ class ProfileController(Observable):
             GraphSettingMapper.to_app_state(setting, self._state)
             self.emit("profile_created", setting.id)
             return setting.id
+        except ConfigError as exc:  # pragma: no cover - defensive
+            self.emit("error_occurred", str(exc))
+            return None
         except Exception as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return None
@@ -142,6 +149,9 @@ class ProfileController(Observable):
         try:
             self._store.export_async(setting, path)
             return True
+        except ConfigError as exc:  # pragma: no cover - defensive
+            self.emit("error_occurred", str(exc))
+            return False
         except Exception as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return False
@@ -160,7 +170,11 @@ class ProfileController(Observable):
             self._store.add(setting)
             self.emit("profile_created", setting.id)
             return setting.id
+        except ConfigError as exc:
+            self.emit("error_occurred", str(exc))
+            return None
         except Exception as exc:
+            logger.error("profile_controller.import_profile.failed", exc_info=True)
             self.emit("error_occurred", str(exc))
             return None
 
