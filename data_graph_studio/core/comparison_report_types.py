@@ -1,6 +1,8 @@
-"""
-Comparison-related Report Types
-비교 분석 관련 레포트 타입 정의
+"""comparison_report_types — data structures for comparison analysis reports.
+
+Defines immutable-style dataclasses used by the comparison engine to represent
+dataset metadata, statistical summaries, hypothesis test results, and row-level
+difference analyses. All types expose a to_dict() method for serialization.
 """
 
 import logging
@@ -23,7 +25,20 @@ __all__ = [
 
 @dataclass
 class ReportMetadata:
-    """레포트 메타데이터"""
+    """Authoring and display metadata attached to a comparison report.
+
+    Input:
+        title — str, primary report heading; required
+        subtitle — Optional[str], secondary heading shown below the title
+        author — Optional[str], display name of the report creator
+        created_at — datetime, report generation time; defaults to now
+        version — str, schema version string; defaults to "1.0"
+        description — Optional[str], free-text report description
+        tags — List[str], searchable keyword labels; defaults to []
+        logo_path — Optional[str], filesystem path to a logo image
+        logo_base64 — Optional[str], base64-encoded logo for self-contained HTML export
+    """
+
     title: str
     subtitle: Optional[str] = None
     author: Optional[str] = None
@@ -35,7 +50,11 @@ class ReportMetadata:
     logo_base64: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this metadata to a JSON-compatible dictionary.
+
+        Output: Dict[str, Any] — all fields as primitives; created_at is
+            ISO 8601 string; logo_base64 is excluded
+        """
         return {
             "title": self.title,
             "subtitle": self.subtitle,
@@ -50,7 +69,22 @@ class ReportMetadata:
 
 @dataclass
 class DatasetSummary:
-    """데이터셋 요약 정보"""
+    """Shape, type, and quality snapshot for one dataset in a comparison.
+
+    Input:
+        id — str, unique identifier matching the dataset registry key
+        name — str, human-readable display name
+        file_path — Optional[str], source file path if loaded from disk
+        row_count — int, number of rows; >= 0
+        column_count — int, number of columns; >= 0
+        columns — List[str], ordered column names
+        column_types — Dict[str, str], column name → Polars dtype string
+        date_range — Optional[Dict[str, str]], first temporal column's min/max dates
+        memory_bytes — int, estimated in-memory size in bytes
+        color — str, hex color used in charts; defaults to "#1f77b4"
+        missing_values — Dict[str, int], column name → null count for non-zero counts
+    """
+
     id: str
     name: str
     file_path: Optional[str] = None
@@ -64,7 +98,10 @@ class DatasetSummary:
     missing_values: Dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this summary to a JSON-compatible dictionary via dataclasses.asdict.
+
+        Output: Dict[str, Any] — all fields recursively converted to primitives
+        """
         return asdict(self)
 
     @classmethod
@@ -76,18 +113,31 @@ class DatasetSummary:
         file_path: Optional[str] = None,
         color: str = "#1f77b4"
     ) -> "DatasetSummary":
-        """Polars DataFrame에서 생성"""
+        """Construct a DatasetSummary by inspecting a Polars DataFrame.
+
+        Computes column types, non-zero null counts, and the date range of the
+        first temporal column found. Date range failures are logged and suppressed.
+
+        Input:
+            df — pl.DataFrame, the dataset to summarize
+            id — str, identifier for the dataset in the registry
+            name — str, display name
+            file_path — Optional[str], original file path for provenance
+            color — str, hex chart color; defaults to "#1f77b4"
+        Output: DatasetSummary — fully populated summary reflecting df at call time
+        Invariants: row_count == len(df); column_count == len(df.columns)
+        """
         columns = df.columns
         column_types = {col: str(df[col].dtype) for col in columns}
 
-        # 결측값 계산
+        # Missing value counts (only non-zero entries stored)
         missing_values = {}
         for col in columns:
             null_count = df[col].null_count()
             if null_count > 0:
                 missing_values[col] = null_count
 
-        # 날짜 범위 계산 (날짜 컬럼이 있는 경우)
+        # Date range from the first temporal column
         date_range = None
         for col in columns:
             if df[col].dtype in [pl.Date, pl.Datetime]:
@@ -121,7 +171,23 @@ class DatasetSummary:
 
 @dataclass
 class StatisticalSummary:
-    """통계 요약"""
+    """Descriptive statistics for one column of one dataset.
+
+    Numeric columns carry the full set of statistics; non-numeric columns
+    carry only count and null_count. All optional fields default to None
+    when not applicable or when computation fails.
+
+    Input:
+        column — str, column name
+        dataset_id — str, owning dataset identifier; defaults to ""
+        dataset_name — str, owning dataset display name; defaults to ""
+        count — int, total row count including nulls
+        null_count — int, number of null values
+        sum, mean, median, std, variance, min, max — Optional[float], basic stats
+        q1, q3, iqr — Optional[float], quartile and interquartile range
+        skewness, kurtosis — Optional[float], shape statistics
+    """
+
     column: str
     dataset_id: str = ""
     dataset_name: str = ""
@@ -141,7 +207,11 @@ class StatisticalSummary:
     kurtosis: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this summary to a JSON-compatible dictionary via dataclasses.asdict.
+
+        Output: Dict[str, Any] — all fields recursively converted to primitives;
+            None values are preserved
+        """
         return asdict(self)
 
     @classmethod
@@ -152,7 +222,20 @@ class StatisticalSummary:
         dataset_id: str = "",
         dataset_name: str = ""
     ) -> "StatisticalSummary":
-        """Polars Series에서 생성"""
+        """Compute a StatisticalSummary from a Polars Series.
+
+        Numeric series get full descriptive stats including quartiles, skewness,
+        and kurtosis. Non-numeric series get only count and null_count. Failures
+        in individual stat computations are caught and logged at DEBUG level.
+
+        Input:
+            series — pl.Series, the column data to summarize
+            column — str, column name for labeling
+            dataset_id — str, owning dataset identifier; defaults to ""
+            dataset_name — str, owning dataset display name; defaults to ""
+        Output: StatisticalSummary — populated with all computable statistics
+        Invariants: count == len(series); null_count == series.null_count()
+        """
         stats = StatisticalSummary(
             column=column,
             dataset_id=dataset_id,
@@ -161,7 +244,7 @@ class StatisticalSummary:
             null_count=series.null_count()
         )
 
-        # 수치형 컬럼인 경우 통계 계산
+        # Full stats for numeric columns only
         if series.dtype.is_numeric():
             try:
                 stats.sum = float(series.sum()) if series.sum() is not None else None
@@ -195,7 +278,25 @@ class StatisticalSummary:
 
 @dataclass
 class ComparisonResult:
-    """비교 분석 결과"""
+    """Outcome of a statistical hypothesis test comparing two datasets on one column.
+
+    Input:
+        dataset_a_id — str, identifier of the first dataset
+        dataset_a_name — str, display name of the first dataset
+        dataset_b_id — str, identifier of the second dataset
+        dataset_b_name — str, display name of the second dataset
+        column — str, column on which the test was run
+        test_type — str, name of the statistical test (e.g. "t-test", "Mann-Whitney U")
+        test_statistic — float, computed test statistic value
+        p_value — float, probability of the observed result under the null hypothesis
+        effect_size — Optional[float], magnitude of difference (e.g. Cohen's d)
+        effect_size_interpretation — str, human label for effect_size ("small", "large", …)
+        significant — bool, True when p_value is below the chosen alpha
+        significance_level — str, APA star notation: "", "*", "**", or "***"
+        interpretation — str, plain-English conclusion for the report
+        confidence_interval — Optional[tuple], (lower, upper) bounds of the CI
+    """
+
     dataset_a_id: str
     dataset_a_name: str
     dataset_b_id: str
@@ -212,14 +313,24 @@ class ComparisonResult:
     confidence_interval: Optional[tuple] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this result to a JSON-compatible dictionary.
+
+        confidence_interval is converted from tuple to list for JSON safety.
+
+        Output: Dict[str, Any] — all fields as primitives; confidence_interval
+            is a list or absent when None
+        """
         result = asdict(self)
         if self.confidence_interval:
             result["confidence_interval"] = list(self.confidence_interval)
         return result
 
     def get_significance_symbol(self) -> str:
-        """유의수준 기호 반환"""
+        """Return the APA significance star notation for the stored p_value.
+
+        Output: str — "***" for p < 0.001, "**" for p < 0.01,
+            "*" for p < 0.05, "" otherwise
+        """
         if self.p_value < 0.001:
             return "***"
         elif self.p_value < 0.01:
@@ -231,7 +342,31 @@ class ComparisonResult:
 
 @dataclass
 class DifferenceAnalysis:
-    """차이 분석 결과"""
+    """Row-level difference breakdown between two datasets joined on a key column.
+
+    Counts how many matched rows have a positive (A > B), negative (A < B), or
+    neutral (A == B) value difference, and surfaces the top diverging records.
+
+    Input:
+        dataset_a_id — str, identifier of the first dataset
+        dataset_a_name — str, display name of the first dataset
+        dataset_b_id — str, identifier of the second dataset
+        dataset_b_name — str, display name of the second dataset
+        key_column — str, join key used to match rows across datasets
+        value_column — str, numeric column whose values are compared
+        total_records — int, total rows in the join result
+        matched_records — int, rows where both datasets have a value
+        positive_count — int, matched rows where A > B
+        negative_count — int, matched rows where A < B
+        neutral_count — int, matched rows where A == B
+        positive_percentage — float, positive_count / matched_records * 100
+        negative_percentage — float, negative_count / matched_records * 100
+        neutral_percentage — float, neutral_count / matched_records * 100
+        total_difference — float, sum of (A - B) across all matched rows
+        mean_difference — float, average (A - B) across matched rows
+        top_differences — List[Dict[str, Any]], records with the largest absolute differences
+    """
+
     dataset_a_id: str
     dataset_a_name: str
     dataset_b_id: str
@@ -251,5 +386,8 @@ class DifferenceAnalysis:
     top_differences: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """Serialize this analysis to a JSON-compatible dictionary via dataclasses.asdict.
+
+        Output: Dict[str, Any] — all fields recursively converted to primitives
+        """
         return asdict(self)

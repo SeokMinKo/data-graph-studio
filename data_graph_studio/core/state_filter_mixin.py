@@ -17,26 +17,38 @@ from .undo_manager import UndoCommand, UndoActionType
 
 
 class FilterSortMixin:
-    """Mixin providing filter and sort management capabilities to AppState."""
+    """Mixin providing filter and sort management capabilities to AppState.
+
+    All mutating methods record an undo/redo command via self._push_undo
+    and emit the corresponding signal via self.emit.
+
+    Requires the host class to provide:
+        self._filters — List[FilterCondition]
+        self._sorts — List[SortCondition]
+        self._undo_paused — int, pauses undo recording when > 0
+        self._push_undo(cmd) — records an UndoCommand on the undo stack
+        self.emit(signal_name) — fires an Observable signal
+    """
 
     # ==================== Filters ====================
 
     @property
     def filters(self) -> List[FilterCondition]:
-        """List of active filter conditions applied to the dataset."""
+        """List of active filter conditions applied to the dataset.
+
+        Output: List[FilterCondition] — may be empty; order matches insertion order
+        """
         return self._filters
 
     def add_filter(self, column: str, operator: str, value: Any):
-        """
-        Append a new filter condition and record an undo entry.
+        """Append a new filter condition and record an undo entry.
 
-        Args:
-            column: Column name to filter on.
-            operator: Comparison operator (e.g. "eq", "ne", "gt", "lt", "contains").
-            value: Value to compare against.
-
-        Emits:
-            filter_changed signal.
+        Input: column — str, column name to filter on
+        Input: operator — str, comparison operator (e.g. "eq", "ne", "gt", "lt", "contains")
+        Input: value — Any, value to compare against; type must be compatible with the column dtype
+        Output: None
+        Raises: nothing
+        Invariants: filter is appended at the end of self._filters; filter_changed is emitted
         """
         before = copy.deepcopy(self._filters)
         self._filters.append(FilterCondition(column, operator, value))
@@ -62,14 +74,12 @@ class FilterSortMixin:
         )
 
     def remove_filter(self, index: int):
-        """
-        Remove a filter condition by index and record an undo entry.
+        """Remove a filter condition by index and record an undo entry.
 
-        Args:
-            index: Zero-based index of the filter to remove. No-op if out of range.
-
-        Emits:
-            filter_changed signal.
+        Input: index — int, zero-based index of the filter to remove
+        Output: None
+        Raises: nothing — silently no-ops if index is out of range
+        Invariants: filter_changed is emitted only when a filter is actually removed
         """
         if not (0 <= index < len(self._filters)):
             return
@@ -98,13 +108,11 @@ class FilterSortMixin:
         )
 
     def clear_filters(self):
-        """
-        Remove all filter conditions and record an undo entry.
+        """Remove all filter conditions and record an undo entry.
 
-        No-op if there are no active filters.
-
-        Emits:
-            filter_changed signal.
+        Output: None
+        Raises: nothing
+        Invariants: no-op if self._filters is already empty; filter_changed is emitted on change
         """
         if not self._filters:
             return
@@ -132,14 +140,13 @@ class FilterSortMixin:
         )
 
     def toggle_filter(self, index: int):
-        """
-        Toggle the enabled state of a filter condition and record an undo entry.
+        """Toggle the enabled state of a filter condition and record an undo entry.
 
-        Args:
-            index: Zero-based index of the filter to toggle. No-op if out of range.
-
-        Emits:
-            filter_changed signal.
+        Input: index — int, zero-based index of the filter to toggle
+        Output: None
+        Raises: nothing — silently no-ops if index is out of range
+        Invariants: filter_changed is emitted only when the toggle actually occurs;
+                    the before snapshot is taken prior to flipping so undo() restores the pre-toggle state
         """
         if not (0 <= index < len(self._filters)):
             return
@@ -170,29 +177,31 @@ class FilterSortMixin:
 
     @property
     def sorts(self) -> List[SortCondition]:
-        """List of active sort conditions applied to the dataset."""
+        """List of active sort conditions applied to the dataset.
+
+        Output: List[SortCondition] — may be empty; order determines sort priority
+        """
         return self._sorts
 
     def set_sort(self, column: str, descending: bool = False, add: bool = False):
-        """
-        Set a sort condition on a column and record an undo entry.
+        """Set a sort condition on a column, replacing or adding to existing sorts.
 
-        Any existing sort on the same column is removed before adding the new one.
+        Any existing sort on the same column is removed before the new one is added.
 
-        Args:
-            column: Column name to sort by.
-            descending: Sort in descending order if True, ascending if False.
-            add: If True, add to existing sorts. If False, replace all sorts.
-
-        Emits:
-            sort_changed signal.
+        Input: column — str, column name to sort by
+        Input: descending — bool, True for descending order, False for ascending
+        Input: add — bool, True to append to existing sorts; False to replace all
+        Output: None
+        Raises: nothing
+        Invariants: sort_changed is emitted only when the sort list actually changes;
+                    existing sort on the same column is always removed before re-adding
         """
         before = copy.deepcopy(self._sorts)
 
         if not add:
             self._sorts.clear()
 
-        # 기존 정렬 제거
+        # Remove existing sort on the same column before re-adding
         self._sorts = [s for s in self._sorts if s.column != column]
         self._sorts.append(SortCondition(column, descending))
         self.emit("sort_changed")
@@ -218,13 +227,11 @@ class FilterSortMixin:
             )
 
     def clear_sorts(self):
-        """
-        Remove all sort conditions and record an undo entry.
+        """Remove all sort conditions and record an undo entry.
 
-        No-op if there are no active sorts.
-
-        Emits:
-            sort_changed signal.
+        Output: None
+        Raises: nothing
+        Invariants: no-op if self._sorts is already empty; sort_changed is emitted on change
         """
         before = copy.deepcopy(self._sorts)
         if not self._sorts:

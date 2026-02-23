@@ -54,7 +54,19 @@ class UndoActionType(Enum):
 
 @dataclass
 class UndoCommand:
-    """Executable command for undo/redo."""
+    """Executable command for undo/redo.
+
+    Holds a paired do/undo callable along with metadata used for logging and
+    history display. Instances are created by callers and passed to UndoStack.push
+    or UndoStack.record.
+
+    Input:
+        action_type — UndoActionType, category used in history UI
+        description — str, human-readable summary of the operation
+        do — Callable[[], None], applies the state change
+        undo — Callable[[], None], reverses the state change
+        timestamp — float, epoch time of creation; defaults to time.time()
+    """
 
     action_type: UndoActionType
     description: str
@@ -77,6 +89,15 @@ class UndoStack:
     """
 
     def __init__(self, max_depth: int = UNDO_MAX_DEPTH, on_changed: Optional[Callable[[], None]] = None):
+        """Initialize an empty undo stack.
+
+        Input:
+            max_depth — int, maximum number of commands retained; oldest entries
+                are evicted when exceeded; defaults to UNDO_MAX_DEPTH
+            on_changed — Optional[Callable[[], None]], called after every
+                structural change to the stack (push, record, undo, redo, clear)
+        Invariants: _index == 0 and _commands is empty after construction
+        """
         self.max_depth = max_depth
         self._commands: List[UndoCommand] = []
         self._index: int = 0
@@ -92,33 +113,57 @@ class UndoStack:
 
     @property
     def index(self) -> int:
-        """Return the current position in the undo stack."""
+        """Return the current position in the undo stack.
+
+        Output: int — number of applied commands; equals len(commands) when
+            nothing has been undone
+        """
         return self._index
 
     @property
     def commands(self) -> List[UndoCommand]:
-        """Return a copy of the recorded command list."""
+        """Return a copy of the recorded command list.
+
+        Output: List[UndoCommand] — snapshot of all recorded commands in
+            chronological order; safe to iterate without affecting the stack
+        """
         return list(self._commands)
 
     def can_undo(self) -> bool:
-        """Return True if there is a command available to undo."""
+        """Return True if there is a command available to undo.
+
+        Output: bool — True when _index > 0
+        """
         return self._index > 0
 
     def can_redo(self) -> bool:
-        """Return True if there is a command available to redo."""
+        """Return True if there is a command available to redo.
+
+        Output: bool — True when _index < len(_commands)
+        """
         return self._index < len(self._commands)
 
     # ── Mutation ──────────────────────────────────────────────
 
     def clear(self) -> None:
-        """Clear all recorded commands and reset the index."""
+        """Clear all recorded commands and reset the index to zero.
+
+        Triggers the on_changed callback. Compound state is not affected.
+        Invariants: can_undo() == False and can_redo() == False after this call
+        """
         self._commands.clear()
         self._index = 0
         self._emit_changed()
 
     @contextmanager
     def pause(self):
-        """Context manager that temporarily suspends recording new commands."""
+        """Context manager that temporarily suspends recording new commands.
+
+        Re-entrant: multiple nested pause() calls are reference-counted.
+        Commands pushed or recorded while paused are executed but not stored.
+        Invariants: _paused returns to its prior value when the block exits,
+            even on exception
+        """
         self._paused += 1
         try:
             yield
@@ -126,7 +171,17 @@ class UndoStack:
             self._paused = max(0, self._paused - 1)
 
     def push(self, cmd: UndoCommand) -> None:
-        """Execute cmd.do() and record it in the timeline."""
+        """Execute cmd.do() and record it in the timeline.
+
+        If a compound group is active, the command is executed immediately and
+        buffered for the compound entry. If the stack is paused, the command
+        executes but is not recorded. Otherwise, any commands ahead of the
+        current index are discarded before recording the new command.
+
+        Input: cmd — UndoCommand, the command to execute and record
+        Invariants: cmd.do() is always called exactly once; on_changed fires
+            after a successful record
+        """
         if self._compound_active:
             # Execute now, buffer for compound
             if self._paused:
@@ -151,7 +206,15 @@ class UndoStack:
         self._record(cmd)
 
     def record(self, cmd: UndoCommand) -> None:
-        """Record a command that has already been applied (do NOT execute)."""
+        """Record a command that has already been applied (do NOT execute).
+
+        Use this when the state change was applied outside the undo system and
+        only the undo callback needs to be registered. Ignored when paused.
+        Buffered when a compound group is active.
+
+        Input: cmd — UndoCommand, a command whose do() has already been called
+        Invariants: cmd.do() is never called by this method
+        """
         if self._paused:
             return
 
@@ -170,7 +233,14 @@ class UndoStack:
         self._emit_changed()
 
     def undo(self) -> Optional[UndoCommand]:
-        """Undo the most recent command and return it, or None if nothing to undo."""
+        """Undo the most recent command and return it, or None if nothing to undo.
+
+        Decrements the index, calls cmd.undo() inside a pause block to prevent
+        re-recording, then fires on_changed.
+
+        Output: Optional[UndoCommand] — the command that was undone, or None
+        Invariants: _index decrements by 1 on success; state is reversed by cmd.undo()
+        """
         if not self.can_undo():
             logger.debug("undo_manager.undo.nothing_to_undo")
             return None
@@ -183,7 +253,14 @@ class UndoStack:
         return cmd
 
     def redo(self) -> Optional[UndoCommand]:
-        """Re-apply the next command in the timeline and return it, or None if nothing to redo."""
+        """Re-apply the next command in the timeline and return it, or None if nothing to redo.
+
+        Calls cmd.do() inside a pause block to prevent re-recording, then
+        increments the index and fires on_changed.
+
+        Output: Optional[UndoCommand] — the command that was re-applied, or None
+        Invariants: _index increments by 1 on success; state is re-applied by cmd.do()
+        """
         if not self.can_redo():
             logger.debug("undo_manager.redo.nothing_to_redo")
             return None
@@ -198,7 +275,15 @@ class UndoStack:
     # ── Internal ──────────────────────────────────────────────
 
     def begin_compound(self, description: str) -> None:
-        """Start accumulating multiple commands into a single compound undo entry."""
+        """Start accumulating multiple commands into a single compound undo entry.
+
+        Subsequent push() and record() calls are buffered until end_compound()
+        is called. Re-entrant calls are ignored (first caller owns the group).
+
+        Input: description — str, label for the combined command shown in history UI
+        Invariants: _compound_active is True after this call unless it was
+            already True
+        """
         if self._compound_active:
             return
         self._compound_active = True
@@ -206,7 +291,16 @@ class UndoStack:
         self._compound_buffer.clear()
 
     def end_compound(self) -> None:
-        """Finish the compound group and record it as one undoable command."""
+        """Finish the compound group and record it as one undoable command.
+
+        Combines all buffered commands into a single UndoCommand whose do()
+        replays them in order and whose undo() reverses them. The compound
+        is recorded via record() (not push()) since constituent commands were
+        already executed during buffering. No-ops when the buffer is empty.
+
+        Invariants: _compound_active is False after this call; all buffered
+            commands are cleared regardless of buffer size
+        """
         if not self._compound_active:
             return
         self._compound_active = False

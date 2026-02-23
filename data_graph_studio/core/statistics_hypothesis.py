@@ -1,7 +1,7 @@
 """
 Statistical Analysis - Hypothesis Testing Module
 
-가설 검정 관련 클래스를 제공합니다.
+Provides hypothesis test types, result dataclass, and tester class.
 """
 
 import logging
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class HypothesisTest(Enum):
-    """가설 검정 유형"""
+    """Enumeration of supported statistical hypothesis test types."""
     T_TEST_ONE_SAMPLE = "t_test_one_sample"
     T_TEST_TWO_SAMPLE = "t_test_two_sample"
     PAIRED_T_TEST = "paired_t_test"
@@ -28,7 +28,16 @@ class HypothesisTest(Enum):
 
 @dataclass
 class HypothesisTestResult:
-    """가설 검정 결과"""
+    """Immutable result container for a single hypothesis test.
+
+    Fields:
+        test_type — HypothesisTest, the test that produced this result
+        statistic — float, the test statistic value (t, F, chi2, U, H, or W)
+        p_value — float, two-tailed p-value in [0, 1]
+        degrees_of_freedom — int or None, degrees of freedom where applicable
+        effect_size — float or None, standardised effect size (Cohen's d, eta², Cramér's V, r)
+        confidence_interval — (float, float) or None, 95% CI where computed
+    """
     test_type: HypothesisTest
     statistic: float
     p_value: float
@@ -38,11 +47,17 @@ class HypothesisTestResult:
 
     @property
     def is_significant(self) -> bool:
-        """유의수준 0.05에서 유의한지"""
+        """Return True when p_value < 0.05 (alpha = 0.05 significance level).
+
+        Output: bool — True if the result is statistically significant at alpha=0.05
+        """
         return self.p_value < 0.05
 
     def get_summary(self) -> str:
-        """결과 요약"""
+        """Return a human-readable multi-line summary of the test result.
+
+        Output: str — formatted lines showing test type, statistic, p-value, and significance
+        """
         return (
             f"Test: {self.test_type.value}\n"
             f"Statistic: {self.statistic:.4f}\n"
@@ -52,10 +67,10 @@ class HypothesisTestResult:
 
 
 class HypothesisTester:
-    """
-    가설 검정기
+    """Runs statistical hypothesis tests and returns structured results.
 
-    다양한 통계적 가설 검정을 수행합니다.
+    All methods are stateless — each call is independent.
+    Effect sizes are computed alongside the test statistic where standard.
     """
 
     def t_test_one_sample(
@@ -63,10 +78,14 @@ class HypothesisTester:
         sample: np.ndarray,
         population_mean: float
     ) -> HypothesisTestResult:
-        """
-        단일 표본 t-검정
+        """Run a one-sample t-test against a known population mean.
 
-        H0: 표본 평균 = 모집단 평균
+        H0: sample mean equals population_mean.
+
+        Input: sample — np.ndarray, 1-D array of observations (n >= 2)
+        Input: population_mean — float, the hypothesised population mean
+        Output: HypothesisTestResult with test_type=T_TEST_ONE_SAMPLE, df=n-1
+        Raises: ValueError — if sample has fewer than 2 observations (scipy raises)
         """
         statistic, p_value = stats.ttest_1samp(sample, population_mean)
 
@@ -83,14 +102,20 @@ class HypothesisTester:
         sample2: np.ndarray,
         equal_var: bool = True
     ) -> HypothesisTestResult:
-        """
-        독립 표본 t-검정
+        """Run an independent two-sample t-test with optional Welch correction.
 
-        H0: 두 표본의 평균이 같다
+        H0: mean of sample1 equals mean of sample2.
+        Effect size is Cohen's d using pooled standard deviation.
+
+        Input: sample1 — np.ndarray, first group observations
+        Input: sample2 — np.ndarray, second group observations
+        Input: equal_var — bool, True for Student's t-test, False for Welch's t-test
+        Output: HypothesisTestResult with test_type=T_TEST_TWO_SAMPLE, df=n1+n2-2, effect_size=Cohen's d
+        Raises: ValueError — if either sample is empty (scipy raises)
         """
         statistic, p_value = stats.ttest_ind(sample1, sample2, equal_var=equal_var)
 
-        # Cohen's d 효과 크기
+        # Cohen's d effect size
         pooled_std = np.sqrt(
             ((len(sample1) - 1) * np.var(sample1) + (len(sample2) - 1) * np.var(sample2))
             / (len(sample1) + len(sample2) - 2)
@@ -110,14 +135,19 @@ class HypothesisTester:
         before: np.ndarray,
         after: np.ndarray
     ) -> HypothesisTestResult:
-        """
-        대응 표본 t-검정
+        """Run a paired-sample t-test for matched before/after observations.
 
-        H0: 처리 전후 차이가 없다
+        H0: mean difference between after and before is zero.
+        Effect size is Cohen's d for paired samples (mean diff / std diff).
+
+        Input: before — np.ndarray, pre-treatment observations
+        Input: after — np.ndarray, post-treatment observations (same length as before)
+        Output: HypothesisTestResult with test_type=PAIRED_T_TEST, df=n-1, effect_size=Cohen's d
+        Raises: ValueError — if arrays have different lengths or fewer than 2 pairs
         """
         statistic, p_value = stats.ttest_rel(before, after)
 
-        # 효과 크기 (Cohen's d for paired samples)
+        # Effect size (Cohen's d for paired samples)
         diff = after - before
         effect_size = np.mean(diff) / np.std(diff) if np.std(diff) != 0 else 0
 
@@ -133,20 +163,24 @@ class HypothesisTester:
         self,
         groups: List[np.ndarray]
     ) -> HypothesisTestResult:
-        """
-        일원 분산분석
+        """Run a one-way ANOVA across two or more independent groups.
 
-        H0: 모든 그룹의 평균이 같다
+        H0: all group means are equal.
+        Effect size is eta-squared (proportion of variance explained by group membership).
+
+        Input: groups — List[np.ndarray], each array contains observations for one group (>= 2 groups)
+        Output: HypothesisTestResult with test_type=ANOVA_ONE_WAY, df=k-1, effect_size=eta²
+        Raises: ValueError — if fewer than 2 groups are provided
         """
         statistic, p_value = stats.f_oneway(*groups)
 
-        # 자유도
+        # Degrees of freedom (between-groups)
         k = len(groups)
         n = sum(len(g) for g in groups)
         df_between = k - 1
         n - k
 
-        # Eta squared 효과 크기
+        # Eta squared effect size
         grand_mean = np.mean([np.mean(g) for g in groups])
         ss_between = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in groups)
         ss_total = sum(np.sum((g - grand_mean)**2) for g in groups)
@@ -164,14 +198,18 @@ class HypothesisTester:
         self,
         observed: np.ndarray
     ) -> HypothesisTestResult:
-        """
-        카이제곱 독립성 검정
+        """Run a chi-square test of independence on a contingency table.
 
-        H0: 변수들이 독립이다
+        H0: the variables forming the rows and columns are independent.
+        Effect size is Cramér's V.
+
+        Input: observed — np.ndarray shape (r, c), observed frequency contingency table
+        Output: HypothesisTestResult with test_type=CHI_SQUARE, df=dof from scipy, effect_size=Cramér's V
+        Raises: ValueError — if any expected cell frequency is zero
         """
         chi2, p_value, dof, expected = stats.chi2_contingency(observed)
 
-        # Cramér's V 효과 크기
+        # Cramér's V effect size
         n = np.sum(observed)
         min_dim = min(observed.shape) - 1
         cramers_v = np.sqrt(chi2 / (n * min_dim)) if n * min_dim > 0 else 0
@@ -188,12 +226,17 @@ class HypothesisTester:
         self,
         sample: np.ndarray
     ) -> HypothesisTestResult:
-        """
-        정규성 검정 (Shapiro-Wilk)
+        """Run a Shapiro-Wilk normality test.
 
-        H0: 데이터가 정규분포를 따른다
+        H0: the data are drawn from a normal distribution.
+        Samples larger than 5000 are randomly subsampled to 5000.
+
+        Input: sample — np.ndarray, 1-D array of observations (n >= 3)
+        Output: HypothesisTestResult with test_type=NORMALITY, no effect_size
+        Raises: ValueError — if sample has fewer than 3 observations (scipy raises)
+        Invariants: input sample is not mutated; subsampling uses random.choice without replacement
         """
-        # 샘플 크기 제한 (Shapiro-Wilk는 5000개까지)
+        # Sample size limit (Shapiro-Wilk supports up to 5000)
         if len(sample) > 5000:
             sample = np.random.choice(sample, 5000, replace=False)
 
@@ -210,14 +253,19 @@ class HypothesisTester:
         sample1: np.ndarray,
         sample2: np.ndarray
     ) -> HypothesisTestResult:
-        """
-        만-휘트니 U 검정 (비모수)
+        """Run a Mann-Whitney U non-parametric two-sample test.
 
-        H0: 두 그룹의 분포가 같다
+        H0: the two groups have the same distribution.
+        Effect size is rank-biserial correlation r = 1 - 2U/(n1*n2).
+
+        Input: sample1 — np.ndarray, first group observations
+        Input: sample2 — np.ndarray, second group observations
+        Output: HypothesisTestResult with test_type=MANN_WHITNEY_U, effect_size=rank-biserial r
+        Raises: ValueError — if either sample is empty
         """
         statistic, p_value = stats.mannwhitneyu(sample1, sample2, alternative='two-sided')
 
-        # 효과 크기 (rank-biserial correlation)
+        # Effect size (rank-biserial correlation)
         n1, n2 = len(sample1), len(sample2)
         effect_size = 1 - (2 * statistic) / (n1 * n2)
 
@@ -232,10 +280,14 @@ class HypothesisTester:
         self,
         groups: List[np.ndarray]
     ) -> HypothesisTestResult:
-        """
-        크루스칼-왈리스 검정 (비모수 ANOVA)
+        """Run a Kruskal-Wallis non-parametric one-way ANOVA.
 
-        H0: 모든 그룹의 분포가 같다
+        H0: all groups have the same distribution.
+        Non-parametric alternative to one-way ANOVA; does not assume normality.
+
+        Input: groups — List[np.ndarray], each array contains observations for one group (>= 2 groups)
+        Output: HypothesisTestResult with test_type=KRUSKAL_WALLIS, df=k-1, no effect_size
+        Raises: ValueError — if fewer than 2 groups are provided
         """
         statistic, p_value = stats.kruskal(*groups)
 
