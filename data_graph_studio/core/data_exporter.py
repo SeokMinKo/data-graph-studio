@@ -9,6 +9,8 @@ from typing import Optional, List
 
 import polars as pl
 
+from .exceptions import ExportError
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,10 +31,14 @@ class DataExporter:
             selected_rows: 선택된 행 인덱스 목록 (None이면 전체).
 
         Raises:
-            ValueError: df가 None인 경우.
+            ExportError: df가 None인 경우.
         """
         if df is None:
-            raise ValueError("No DataFrame to export")
+            raise ExportError(
+                "No DataFrame to export",
+                operation="export_csv",
+                context={"path": path},
+            )
 
         target = df[selected_rows] if selected_rows is not None else df
         target.write_csv(path)
@@ -52,10 +58,14 @@ class DataExporter:
             selected_rows: 선택된 행 인덱스 목록 (None이면 전체).
 
         Raises:
-            ValueError: df가 None인 경우.
+            ExportError: df가 None인 경우.
         """
         if df is None:
-            raise ValueError("No DataFrame to export")
+            raise ExportError(
+                "No DataFrame to export",
+                operation="export_excel",
+                context={"path": path},
+            )
 
         target = df[selected_rows] if selected_rows is not None else df
         target.write_excel(path)
@@ -75,10 +85,14 @@ class DataExporter:
             selected_rows: 선택된 행 인덱스 목록 (None이면 전체).
 
         Raises:
-            ValueError: df가 None인 경우.
+            ExportError: df가 None인 경우.
         """
         if df is None:
-            raise ValueError("No DataFrame to export")
+            raise ExportError(
+                "No DataFrame to export",
+                operation="export_parquet",
+                context={"path": path},
+            )
 
         target = df[selected_rows] if selected_rows is not None else df
         target.write_parquet(path)

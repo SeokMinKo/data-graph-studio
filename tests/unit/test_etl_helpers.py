@@ -182,3 +182,22 @@ class TestBuildEtlDataframe:
         df = _build_etl_dataframe(events)
         assert 'Extra' in df.columns
         assert df.height == 2
+
+
+# ---------------------------------------------------------------------------
+# parse_etl_binary — DataLoadError on read/parse failure
+# ---------------------------------------------------------------------------
+
+class TestParseEtlBinaryDataLoadError:
+    def test_nonexistent_path_raises_data_load_error(self, tmp_path):
+        """parse_etl_binary raises DataLoadError (not ValueError) when the file cannot be read."""
+        import pytest
+        from data_graph_studio.core.exceptions import DataLoadError
+        from data_graph_studio.core.etl_helpers import parse_etl_binary, HAS_ETL_PARSER
+
+        if not HAS_ETL_PARSER:
+            pytest.skip("etl-parser not installed")
+
+        nonexistent = str(tmp_path / "does_not_exist.etl")
+        with pytest.raises(DataLoadError):
+            parse_etl_binary(nonexistent)

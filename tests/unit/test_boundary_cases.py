@@ -182,25 +182,34 @@ class TestFilterSingleRow:
 class TestFilterNaNHandling:
     """NaN values in numeric columns are handled without crashing."""
 
-    def test_gt_filter_nan_polars_behavior(self):
-        """Document actual Polars NaN comparison behavior.
+    def test_gt_filter_excludes_nan_rows(self):
+        """NaN rows must NOT appear in gt/lt/ge/le filter results.
 
-        KNOWN QUIRK: In Polars, NaN is treated as greater than all finite
-        numbers (consistent with IEEE 754 total ordering but different from
-        SQL semantics). As a result, NaN > 0.0 evaluates to True in Polars,
-        meaning the NaN row PASSES a > 0.0 filter.
-
-        This is a documented behavioral note, not something we fix here.
-        See: https://docs.pola.rs/user-guide/expressions/missing-data/
+        Polars treats NaN as greater than all finite numbers (IEEE 754 total
+        ordering), so without explicit exclusion NaN rows silently pass range
+        filters. The fix chains `& ~col.is_nan()` for float columns when a
+        range operator (gt/ge/lt/le) is applied.
         """
         fm = _make_fm()
-        df = pl.DataFrame({"x": [1.0, float("nan"), 3.0]})
-        fm.add_filter("Page", "x", FilterOperator.GREATER_THAN, 0.0)
+        df = pl.DataFrame({"val": [1.0, float("nan"), 5.0, 10.0]})
+        fm.add_filter("Page", "val", FilterOperator.GREATER_THAN, 0.0)
         result = _apply(fm, df)
-        # Polars: NaN > any_finite == True, so all 3 rows pass the filter
-        # BUG NOTE: Users expecting NaN to be excluded from numeric comparisons
-        # will get surprising results. The filter silently passes NaN rows.
-        assert len(result) == 3  # NaN included — Polars total-order behavior
+        assert result["val"].is_nan().sum() == 0
+        assert len(result) == 3  # 1.0, 5.0, 10.0 — NaN excluded
+
+    @pytest.mark.parametrize("op", [
+        FilterOperator.GREATER_THAN,
+        FilterOperator.GREATER_THAN_OR_EQUALS,
+        FilterOperator.LESS_THAN,
+        FilterOperator.LESS_THAN_OR_EQUALS,
+    ])
+    def test_range_operators_exclude_nan(self, op):
+        """All four range operators exclude NaN rows for float columns."""
+        fm = _make_fm()
+        df = pl.DataFrame({"x": [float("nan"), 5.0]})
+        fm.add_filter("Page", "x", op, 3.0)
+        result = _apply(fm, df)
+        assert result["x"].is_nan().sum() == 0
 
     def test_eq_filter_does_not_match_nan(self):
         """NaN != NaN — equality filter should not match a NaN row."""

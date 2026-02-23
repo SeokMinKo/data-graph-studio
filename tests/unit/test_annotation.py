@@ -362,18 +362,20 @@ class TestAnnotationTextLimit:
         assert len(ann.text) == 200
 
     def test_text_201_chars_raises(self):
-        """201자 → ValueError 발생"""
+        """201자 → ValidationError 발생"""
+        from data_graph_studio.core.exceptions import ValidationError
         text = "A" * 201
-        with pytest.raises(ValueError, match="200"):
+        with pytest.raises(ValidationError, match="200"):
             make_annotation(text=text)
 
     def test_add_annotation_with_long_text_raises(self):
         """컨트롤러에서 200자 초과 주석 추가 시 차단"""
         from data_graph_studio.core.annotation_controller import AnnotationController
+        from data_graph_studio.core.exceptions import ValidationError
 
         ctrl = AnnotationController()
         text = "B" * 201
-        with pytest.raises(ValueError, match="200"):
+        with pytest.raises(ValidationError, match="200"):
             ctrl.add(make_annotation(text=text))
 
     def test_edit_annotation_with_long_text_raises(self):

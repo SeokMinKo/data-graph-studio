@@ -54,15 +54,17 @@ def test_filter_changed_event_fires_on_clear():
 def test_cannot_remove_page_scheme():
     """Page scheme cannot be removed."""
     from data_graph_studio.core.filtering import FilteringManager
+    from data_graph_studio.core.exceptions import ValidationError
     fm = FilteringManager()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         fm.remove_scheme("Page")
 
 
 def test_create_duplicate_scheme_raises():
-    """Creating a scheme that already exists raises ValueError."""
+    """Creating a scheme that already exists raises ValidationError."""
     from data_graph_studio.core.filtering import FilteringManager
+    from data_graph_studio.core.exceptions import ValidationError
     fm = FilteringManager()
     fm.create_scheme("Dup")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         fm.create_scheme("Dup")

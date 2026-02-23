@@ -52,6 +52,15 @@ class MetricsCollector:
         """Context manager to time a block."""
         return TimerContext(self, name)
 
+    def timed_operation(self, name: str) -> "TimedOperationContext":
+        """Context manager that times a block, increments a call counter, and tracks errors.
+
+        On enter: increments ``{name}.count``.
+        On exit: records elapsed duration via ``record_duration``.
+        On exception: increments ``{name}.error`` (exception is never suppressed).
+        """
+        return TimedOperationContext(self, name)
+
     def snapshot(self) -> Dict:
         """Return a snapshot of current metrics."""
         with self._lock:
@@ -99,6 +108,34 @@ class TimerContext:
         if self._start is not None:
             elapsed_ms = (time.perf_counter() - self._start) * 1000
             self._collector.record_duration(self._name, elapsed_ms)
+
+
+class TimedOperationContext:
+    """Context manager that times a block, counts calls, and tracks errors.
+
+    - Increments ``{name}.count`` on entry.
+    - Records duration in milliseconds on exit.
+    - Increments ``{name}.error`` if an exception propagates.
+    - Never suppresses exceptions.
+    """
+
+    def __init__(self, collector: MetricsCollector, name: str):
+        self._collector = collector
+        self._name = name
+        self._start: Optional[float] = None
+
+    def __enter__(self) -> "TimedOperationContext":
+        self._collector.increment(f"{self._name}.count")
+        self._start = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        if self._start is not None:
+            elapsed_ms = (time.perf_counter() - self._start) * 1000
+            self._collector.record_duration(self._name, elapsed_ms)
+        if exc_type is not None:
+            self._collector.increment(f"{self._name}.error")
+        return False
 
 
 # Global singleton

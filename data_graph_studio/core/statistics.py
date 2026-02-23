@@ -95,31 +95,32 @@ class DescriptiveStatistics(IStatisticsAnalyzer):
         Returns:
             통계량 딕셔너리
         """
-        values = values[~np.isnan(values)]
+        with get_metrics().timed_operation("statistics.calculate"):
+            values = values[~np.isnan(values)]
 
-        if len(values) == 0:
-            logger.warning("statistics.calculate.empty_values")
-            return {}
+            if len(values) == 0:
+                logger.warning("statistics.calculate.empty_values")
+                return {}
 
-        get_metrics().increment("statistics.calculated")
-        logger.debug("statistics.calculate", extra={"n": len(values)})
-        q1, median, q3 = np.percentile(values, [25, 50, 75])
+            get_metrics().increment("statistics.calculated")
+            logger.debug("statistics.calculate", extra={"n": len(values)})
+            q1, median, q3 = np.percentile(values, [25, 50, 75])
 
-        return {
-            "mean": float(np.mean(values)),
-            "median": float(median),
-            "std": float(np.std(values)),
-            "var": float(np.var(values)),
-            "min": float(np.min(values)),
-            "max": float(np.max(values)),
-            "q1": float(q1),
-            "q3": float(q3),
-            "iqr": float(q3 - q1),
-            "skewness": float(stats.skew(values)),
-            "kurtosis": float(stats.kurtosis(values)),
-            "n": len(values),
-            "se": float(np.std(values) / np.sqrt(len(values)))  # 표준 오차
-        }
+            return {
+                "mean": float(np.mean(values)),
+                "median": float(median),
+                "std": float(np.std(values)),
+                "var": float(np.var(values)),
+                "min": float(np.min(values)),
+                "max": float(np.max(values)),
+                "q1": float(q1),
+                "q3": float(q3),
+                "iqr": float(q3 - q1),
+                "skewness": float(stats.skew(values)),
+                "kurtosis": float(stats.kurtosis(values)),
+                "n": len(values),
+                "se": float(np.std(values) / np.sqrt(len(values)))  # 표준 오차
+            }
 
     def confidence_interval(
         self,

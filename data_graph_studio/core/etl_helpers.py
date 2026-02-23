@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 
 import polars as pl
 
+from .exceptions import DataLoadError
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -115,7 +117,7 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
 
     Raises:
         ImportError: etl-parser 미설치.
-        ValueError: 파싱 실패 또는 빈 결과.
+        DataLoadError: 파싱 실패 또는 빈 결과.
     """
     if not HAS_ETL_PARSER:
         raise ImportError("etl-parser 라이브러리가 설치되지 않았습니다.")
@@ -194,20 +196,36 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
         with open(path, 'rb') as f:
             raw_data = f.read()
     except Exception as e:
-        raise ValueError(f"ETL 파일 읽기 실패: {e}")
+        raise DataLoadError(
+            f"ETL 파일 읽기 실패: {e}",
+            operation="parse_etl_binary",
+            context={"path": path},
+        ) from e
 
     if not raw_data:
-        raise ValueError("ETL 파일이 비어 있습니다.")
+        raise DataLoadError(
+            "ETL 파일이 비어 있습니다.",
+            operation="parse_etl_binary",
+            context={"path": path},
+        )
 
     collector = _EtlEventCollector()
     try:
         reader = build_from_stream(raw_data)
         reader.parse(collector)
     except Exception as e:
-        raise ValueError(f"ETL 바이너리 파싱 실패: {e}")
+        raise DataLoadError(
+            f"ETL 바이너리 파싱 실패: {e}",
+            operation="parse_etl_binary",
+            context={"path": path},
+        ) from e
 
     all_events = collector.events + collector.etw_events
     if not all_events:
-        raise ValueError("ETL 파일에서 파싱 가능한 이벤트를 찾지 못했습니다.")
+        raise DataLoadError(
+            "ETL 파일에서 파싱 가능한 이벤트를 찾지 못했습니다.",
+            operation="parse_etl_binary",
+            context={"path": path},
+        )
 
     return _build_etl_dataframe(all_events)

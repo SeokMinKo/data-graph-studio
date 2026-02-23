@@ -145,7 +145,7 @@ def load_file_internal(
     loader._warning_message = None
 
     try:
-        with get_metrics().timer("file.load_duration"):
+        with get_metrics().timed_operation("file.load"):
             encoding = loader._normalize_encoding(encoding)
             file_size = os.path.getsize(path)
             loader._windowed = False
@@ -268,7 +268,11 @@ def load_eager(
     elif file_type == FileType.JSON:
         loader._df = load_json(path)
     else:
-        raise ValueError(f"Unsupported file type: {file_type}")
+        raise DataLoadError(
+            f"Unsupported file type: {file_type}",
+            operation="load_eager",
+            context={"file_type": str(file_type)},
+        )
 
 
 # ---------------------------------------------------------------------------

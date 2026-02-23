@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
-from data_graph_studio.core.exceptions import QueryError
+from data_graph_studio.core.exceptions import QueryError, ValidationError
 
 
 class IFilterApplier(ABC):
@@ -217,7 +217,11 @@ class FilteringManager(Observable, IFilterApplier):
             ValueError: 이미 존재하는 스킴 이름
         """
         if name in self._schemes:
-            raise ValueError(f"Scheme '{name}' already exists")
+            raise ValidationError(
+                f"Scheme '{name}' already exists",
+                operation="create_scheme",
+                context={"name": name},
+            )
 
         scheme = FilteringScheme(name=name, inherit_from=inherit_from)
         self._schemes[name] = scheme
@@ -237,7 +241,11 @@ class FilteringManager(Observable, IFilterApplier):
             ValueError: Page 스킴은 제거 불가
         """
         if name == "Page":
-            raise ValueError("Cannot remove Page scheme")
+            raise ValidationError(
+                "Cannot remove Page scheme",
+                operation="remove_scheme",
+                context={"name": name},
+            )
 
         if name in self._schemes:
             del self._schemes[name]
@@ -394,28 +402,47 @@ class FilteringManager(Observable, IFilterApplier):
         Returns:
             필터링된 데이터프레임
         """
-        if scheme_name not in self._schemes:
-            return data
+        with get_metrics().timed_operation("filter.apply"):
+            if scheme_name not in self._schemes:
+                return data
 
-        scheme = self._schemes[scheme_name]
+            scheme = self._schemes[scheme_name]
 
-        # 상속된 스킴의 필터도 적용
-        all_filters = self._get_all_filters(scheme)
+            # 상속된 스킴의 필터도 적용
+            all_filters = self._get_all_filters(scheme)
 
-        result = data
-        for f in all_filters:
-            if f.enabled:
-                result = self._apply_single_filter(result, f)
+            result = data
+            for f in all_filters:
+                if f.enabled:
+                    result = self._apply_single_filter(result, f)
 
-        get_metrics().increment("filter.applied")
-        return result
+            get_metrics().increment("filter.applied")
+            return result
+
+    _RANGE_OPERATORS = frozenset({
+        FilterOperator.GREATER_THAN,
+        FilterOperator.GREATER_THAN_OR_EQUALS,
+        FilterOperator.LESS_THAN,
+        FilterOperator.LESS_THAN_OR_EQUALS,
+    })
 
     def _apply_single_filter(self, data: pl.DataFrame, f: Filter) -> pl.DataFrame:
         expr = f.to_expression()
         if expr is None:
             return data
         try:
-            return data.filter(expr)
+            result = data.filter(expr)
+            # Exclude NaN rows for float columns with range operators.
+            # Polars treats NaN as greater than all finite values (IEEE 754
+            # total ordering), so NaN rows silently pass gt/ge filters.
+            # We explicitly remove them for consistent SQL-like semantics.
+            if (
+                f.operator in self._RANGE_OPERATORS
+                and f.column in result.columns
+                and result[f.column].dtype.is_float()
+            ):
+                result = result.filter(~pl.col(f.column).is_nan())
+            return result
         except QueryError:
             raise
         except Exception as e:

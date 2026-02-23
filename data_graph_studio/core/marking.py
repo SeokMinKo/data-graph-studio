@@ -9,6 +9,7 @@ from typing import Dict, Set, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 from data_graph_studio.core.observable import Observable
+from data_graph_studio.core.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,11 @@ class MarkingManager(Observable):
             ValueError: 이미 존재하는 마킹 이름
         """
         if name in self._markings:
-            raise ValueError(f"Marking '{name}' already exists")
+            raise ValidationError(
+                f"Marking '{name}' already exists",
+                operation="create_marking",
+                context={"name": name},
+            )
 
         if color is None:
             color = self.DEFAULT_COLORS[self._color_index % len(self.DEFAULT_COLORS)]
@@ -208,7 +213,11 @@ class MarkingManager(Observable):
             KeyError: 존재하지 않는 마킹
         """
         if name == "Main":
-            raise ValueError("Cannot remove Main marking")
+            raise ValidationError(
+                "Cannot remove Main marking",
+                operation="remove_marking",
+                context={"name": name},
+            )
 
         if name not in self._markings:
             raise KeyError(f"Marking '{name}' not found")

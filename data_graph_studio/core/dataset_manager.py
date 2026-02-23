@@ -427,7 +427,11 @@ class DatasetManager:
             loader = FileLoader(self._loader._precision_mode)
             success = loader.load_file(p)
             if not success:
-                raise RuntimeError(f"Failed to load {p}")
+                raise DatasetError(
+                    f"Failed to load {p}",
+                    operation="_load_single",
+                    context={"path": str(p)},
+                )
             return loader._df
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

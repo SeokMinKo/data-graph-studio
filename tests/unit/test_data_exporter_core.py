@@ -19,6 +19,7 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.data_exporter import DataExporter
+from data_graph_studio.core.exceptions import ExportError
 
 
 @pytest.fixture()
@@ -85,9 +86,9 @@ class TestExportCsv:
         assert loaded.shape[0] == 2
         assert loaded["name"].to_list() == ["Alice", "Carol"]
 
-    def test_csv_none_df_raises_value_error(self, exporter, tmp_path):
+    def test_csv_none_df_raises_export_error(self, exporter, tmp_path):
         path = str(tmp_path / "bad.csv")
-        with pytest.raises(ValueError, match="No DataFrame"):
+        with pytest.raises(ExportError, match="No DataFrame"):
             exporter.export_csv(None, path)
 
 
@@ -116,9 +117,9 @@ class TestExportExcel:
         # File must exist and be non-empty
         assert os.path.getsize(path) > 0
 
-    def test_excel_none_df_raises_value_error(self, exporter, tmp_path):
+    def test_excel_none_df_raises_export_error(self, exporter, tmp_path):
         path = str(tmp_path / "bad.xlsx")
-        with pytest.raises(ValueError, match="No DataFrame"):
+        with pytest.raises(ExportError, match="No DataFrame"):
             exporter.export_excel(None, path)
 
 
@@ -156,7 +157,7 @@ class TestExportParquet:
         loaded = pl.read_parquet(path)
         assert loaded.shape == (0, 1)
 
-    def test_parquet_none_df_raises_value_error(self, exporter, tmp_path):
+    def test_parquet_none_df_raises_export_error(self, exporter, tmp_path):
         path = str(tmp_path / "bad.parquet")
-        with pytest.raises(ValueError, match="No DataFrame"):
+        with pytest.raises(ExportError, match="No DataFrame"):
             exporter.export_parquet(None, path)

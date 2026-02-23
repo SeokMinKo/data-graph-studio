@@ -49,7 +49,12 @@ class DataQuery:
 
         ops = build_filter_ops(column, value)
         if operator not in ops:
-            raise ValueError(f"Unknown operator: {operator}")
+            from data_graph_studio.core.exceptions import QueryError
+            raise QueryError(
+                f"Unknown operator: {operator}",
+                operation="filter",
+                context={"operator": operator, "column": column},
+            )
 
         try:
             return self._collect_streaming(df.lazy().filter(ops[operator]))

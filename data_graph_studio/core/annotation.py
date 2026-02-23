@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
 from data_graph_studio.core.constants import MAX_ANNOTATION_TEXT_LENGTH
+from data_graph_studio.core.exceptions import ValidationError
 
 
 @dataclass
@@ -49,9 +50,11 @@ class Annotation:
 
     def __post_init__(self):
         if len(self.text) > MAX_ANNOTATION_TEXT_LENGTH:
-            raise ValueError(
+            raise ValidationError(
                 f"Annotation text exceeds {MAX_ANNOTATION_TEXT_LENGTH} characters "
-                f"(got {len(self.text)})"
+                f"(got {len(self.text)})",
+                operation="Annotation.__post_init__",
+                context={"text_length": len(self.text), "max_length": MAX_ANNOTATION_TEXT_LENGTH},
             )
 
     def to_dict(self) -> Dict[str, Any]:

@@ -40,7 +40,8 @@ except ImportError:
 from .constants import LRU_CACHE_MAXSIZE
 from .data_engine_dataset_mixin import DatasetMixin
 from .data_engine_analysis_mixin import AnalysisMixin
-from .exceptions import QueryError
+from .exceptions import QueryError, ValidationError
+from .metrics import get_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,11 @@ class DataEngine(DatasetMixin, AnalysisMixin):
     def drop_column(self, col_name: str) -> None:
         """컬럼 삭제 (dataset sync + cache clear)."""
         if not isinstance(col_name, str) or not col_name.strip():
-            raise ValueError(f"column name must be a non-empty string, got {col_name!r}")
+            raise ValidationError(
+                f"column name must be a non-empty string, got {col_name!r}",
+                operation="drop_column",
+                context={"col_name": col_name},
+            )
         if self.df is None or col_name not in self.df.columns:
             return
         new_df = self.df.drop(col_name)
@@ -308,7 +313,8 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
     def collect_lazy(self, limit=None, optimize_memory=True):
         """Collect the current LazyFrame into a DataFrame, optionally limiting rows."""
-        return self._loader.collect_lazy(limit, optimize_memory)
+        with get_metrics().timed_operation("engine.collect_lazy"):
+            return self._loader.collect_lazy(limit, optimize_memory)
 
     def query_lazy(self, expr):
         """Apply a Polars expression to the current LazyFrame and return the filtered LazyFrame."""
@@ -319,8 +325,9 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
     def load_file(self, path: str, **kwargs) -> bool:
         """Load a file into the engine, clearing cache first."""
-        self._clear_cache()
-        return self._loader.load_file(path, **kwargs)
+        with get_metrics().timed_operation("engine.load_file"):
+            self._clear_cache()
+            return self._loader.load_file(path, **kwargs)
 
     def append_rows(self, file_path: str, new_row_count: int) -> bool:
         """Incrementally append new rows from the end of a file; falls back to full reload on error."""

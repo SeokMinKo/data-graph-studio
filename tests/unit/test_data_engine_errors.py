@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.data_engine import DataEngine
-from data_graph_studio.core.exceptions import DataLoadError, QueryError
+from data_graph_studio.core.exceptions import DataLoadError, QueryError, ValidationError
 
 
 # ---------------------------------------------------------------------------
@@ -77,20 +77,20 @@ class TestDropColumnNonExistent:
 
 
 # ---------------------------------------------------------------------------
-# drop_column — invalid name raises ValueError
+# drop_column — invalid name raises ValidationError
 # ---------------------------------------------------------------------------
 
 class TestDropColumnInvalidName:
-    def test_drop_empty_string_raises_value_error(self):
-        """drop_column('') raises ValueError per implementation contract."""
+    def test_drop_empty_string_raises_validation_error(self):
+        """drop_column('') raises ValidationError per implementation contract."""
         engine = _engine_with_df()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             engine.drop_column("")
 
-    def test_drop_whitespace_string_raises_value_error(self):
-        """drop_column('   ') raises ValueError — whitespace-only is invalid."""
+    def test_drop_whitespace_string_raises_validation_error(self):
+        """drop_column('   ') raises ValidationError — whitespace-only is invalid."""
         engine = _engine_with_df()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             engine.drop_column("   ")
 
 
