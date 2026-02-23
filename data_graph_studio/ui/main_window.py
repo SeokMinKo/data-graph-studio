@@ -21,6 +21,7 @@ from ..core.annotation_controller import AnnotationController
 from .controllers.shortcut_controller import ShortcutController
 from ..core.export_controller import ExportController
 from .adapters.export_controller_adapter import ExportControllerAdapter
+from .renderers.qt_export_renderer import QtExportRenderer
 from ..core.parsing import ParsingSettings
 from ..core.profile_store import ProfileStore
 from ..core.profile_controller import ProfileController
@@ -138,7 +139,7 @@ class MainWindow(_MainWindowIpcMixin, _MainWindowActionsMixin, _MainWindowEvents
         self._shortcut_controller.load_config()
 
         # Feature 4: Export
-        self._export_controller = ExportController()
+        self._export_controller = ExportController(renderer=QtExportRenderer())
         self._export_controller_adapter = ExportControllerAdapter(self._export_controller, parent=self)
 
         # Loading thread

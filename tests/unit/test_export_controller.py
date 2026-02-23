@@ -84,6 +84,13 @@ from data_graph_studio.core.export_controller import (
     ExportWorker,
 )
 from data_graph_studio.core.io_abstract import atomic_write, RealFileSystem
+from data_graph_studio.ui.renderers.qt_export_renderer import QtExportRenderer
+
+
+@pytest.fixture(scope="session")
+def qt_renderer():
+    """Provide a QtExportRenderer for chart export tests."""
+    return QtExportRenderer()
 
 
 # ===========================================================================
@@ -93,10 +100,10 @@ from data_graph_studio.core.io_abstract import atomic_write, RealFileSystem
 class TestPNGExport:
     """UT-4.1: PNG export produces a valid file."""
 
-    def test_export_png_creates_file(self, tmp_dir, sample_qimage):
+    def test_export_png_creates_file(self, tmp_dir, sample_qimage, qt_renderer):
         """PNG export should create a .png file at the requested path."""
         out_path = str(tmp_dir / "chart.png")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -109,11 +116,11 @@ class TestPNGExport:
             magic = f.read(8)
         assert magic[:4] == b"\x89PNG"
 
-    def test_export_png_custom_resolution(self, tmp_dir, sample_qimage):
+    def test_export_png_custom_resolution(self, tmp_dir, sample_qimage, qt_renderer):
         """PNG export with custom resolution (1920×1080)."""
         out_path = str(tmp_dir / "chart_hd.png")
         opts = ExportOptions(width=1920, height=1080)
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -126,11 +133,11 @@ class TestPNGExport:
         assert result_img.width() == 1920
         assert result_img.height() == 1080
 
-    def test_export_png_4k_resolution(self, tmp_dir, sample_qimage):
+    def test_export_png_4k_resolution(self, tmp_dir, sample_qimage, qt_renderer):
         """PNG export with 4K resolution (3840×2160)."""
         out_path = str(tmp_dir / "chart_4k.png")
         opts = ExportOptions(width=3840, height=2160)
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -142,13 +149,13 @@ class TestPNGExport:
         assert result_img.width() == 3840
         assert result_img.height() == 2160
 
-    def test_export_png_transparent_background(self, tmp_dir):
+    def test_export_png_transparent_background(self, tmp_dir, qt_renderer):
         """PNG export with transparent background."""
         img = QImage(100, 100, QImage.Format_ARGB32)
         img.fill(Qt.transparent)
         out_path = str(tmp_dir / "transparent.png")
         opts = ExportOptions(background="transparent")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(image=img, path=out_path, fmt=ExportFormat.PNG, options=opts)
         assert os.path.exists(out_path)
 
@@ -160,10 +167,10 @@ class TestPNGExport:
 class TestSVGExport:
     """UT-4.2: SVG export produces a valid file."""
 
-    def test_export_svg_creates_file(self, tmp_dir, sample_qimage):
+    def test_export_svg_creates_file(self, tmp_dir, sample_qimage, qt_renderer):
         """SVG export should create a .svg file."""
         out_path = str(tmp_dir / "chart.svg")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -173,11 +180,11 @@ class TestSVGExport:
         content = Path(out_path).read_text(encoding="utf-8")
         assert "<svg" in content.lower()
 
-    def test_export_svg_is_valid_xml(self, tmp_dir, sample_qimage):
+    def test_export_svg_is_valid_xml(self, tmp_dir, sample_qimage, qt_renderer):
         """SVG output should be well-formed XML."""
         import xml.etree.ElementTree as ET
         out_path = str(tmp_dir / "chart_valid.svg")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -195,10 +202,10 @@ class TestSVGExport:
 class TestPDFExport:
     """UT-4.3: PDF export produces a valid file."""
 
-    def test_export_pdf_creates_file(self, tmp_dir, sample_qimage):
+    def test_export_pdf_creates_file(self, tmp_dir, sample_qimage, qt_renderer):
         """PDF export should create a .pdf file."""
         out_path = str(tmp_dir / "chart.pdf")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -211,11 +218,11 @@ class TestPDFExport:
             magic = f.read(5)
         assert magic == b"%PDF-"
 
-    def test_export_pdf_a4_size(self, tmp_dir, sample_qimage):
+    def test_export_pdf_a4_size(self, tmp_dir, sample_qimage, qt_renderer):
         """PDF with A4 page size."""
         out_path = str(tmp_dir / "chart_a4.pdf")
         opts = ExportOptions(page_size="A4")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -226,11 +233,11 @@ class TestPDFExport:
         with open(out_path, "rb") as f:
             assert f.read(5) == b"%PDF-"
 
-    def test_export_pdf_letter_size(self, tmp_dir, sample_qimage):
+    def test_export_pdf_letter_size(self, tmp_dir, sample_qimage, qt_renderer):
         """PDF with Letter page size."""
         out_path = str(tmp_dir / "chart_letter.pdf")
         opts = ExportOptions(page_size="Letter")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -239,7 +246,7 @@ class TestPDFExport:
         )
         assert os.path.exists(out_path)
 
-    def test_export_pdf_with_stats(self, tmp_dir, sample_qimage):
+    def test_export_pdf_with_stats(self, tmp_dir, sample_qimage, qt_renderer):
         """PDF with statistics summary included."""
         out_path = str(tmp_dir / "chart_stats.pdf")
         stats = {
@@ -251,7 +258,7 @@ class TestPDFExport:
             "count": 100,
         }
         opts = ExportOptions(page_size="A4", include_stats=True, stats_data=stats)
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -278,10 +285,10 @@ class TestAtomicExport:
         assert not os.path.exists(out_path + ".tmp")
         assert Path(out_path).read_bytes() == data
 
-    def test_export_png_uses_atomic_write(self, tmp_dir, sample_qimage):
+    def test_export_png_uses_atomic_write(self, tmp_dir, sample_qimage, qt_renderer):
         """PNG export should use atomic write — no .tmp left behind."""
         out_path = str(tmp_dir / "atomic_chart.png")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.export_chart_sync(
             image=sample_qimage,
             path=out_path,
@@ -300,7 +307,7 @@ class TestAtomicExport:
                 atomic_write(out_path, b"data")
         assert not os.path.exists(out_path + ".tmp")
 
-    def test_export_uses_temp_rename_pattern(self, tmp_dir, sample_qimage):
+    def test_export_uses_temp_rename_pattern(self, tmp_dir, sample_qimage, qt_renderer):
         """Verify export writes to .tmp first, then renames (checked via controller internals)."""
         out_path = str(tmp_dir / "pattern_test.png")
         rename_calls = []
@@ -311,7 +318,7 @@ class TestAtomicExport:
             rename_calls.append((src, dst))
             return original_rename(src, dst)
 
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         with patch("data_graph_studio.core.export_workers.os.rename", tracking_rename):
             ctrl.export_chart_sync(
                 image=sample_qimage,
@@ -333,10 +340,10 @@ class TestAtomicExport:
 class TestExportCancel:
     """UT-4.5: Cancel during export cleans up partial files."""
 
-    def test_cancel_flag_stops_export(self, tmp_dir, sample_qimage):
+    def test_cancel_flag_stops_export(self, tmp_dir, sample_qimage, qt_renderer):
         """Setting _cancelled should stop the worker and delete partial file."""
         out_path = str(tmp_dir / "cancel_test.png")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         # Pre-cancel before running
         ctrl.cancel()
 
@@ -348,7 +355,7 @@ class TestExportCancel:
         # File should NOT exist (cancelled)
         assert not os.path.exists(out_path)
 
-    def test_cancel_deletes_tmp_file(self, tmp_dir, sample_qimage):
+    def test_cancel_deletes_tmp_file(self, tmp_dir, sample_qimage, qt_renderer):
         """If tmp file was partially written when cancel hits, it should be cleaned."""
         out_path = str(tmp_dir / "cancel_tmp_test.png")
         tmp_file = out_path + ".tmp"
@@ -357,7 +364,7 @@ class TestExportCancel:
         Path(tmp_file).write_bytes(b"partial data")
         assert os.path.exists(tmp_file)
 
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         ctrl.cancel()
         ctrl.export_chart_sync(
             image=sample_qimage,
@@ -368,10 +375,10 @@ class TestExportCancel:
         assert not os.path.exists(out_path)
         assert not os.path.exists(tmp_file)
 
-    def test_cancel_reset_allows_next_export(self, tmp_dir, sample_qimage):
+    def test_cancel_reset_allows_next_export(self, tmp_dir, sample_qimage, qt_renderer):
         """After cancel + reset, the next export should succeed."""
         out_path = str(tmp_dir / "reset_test.png")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
 
         # Cancel then reset
         ctrl.cancel()
@@ -472,10 +479,10 @@ class TestExportOptions:
 class TestExportSignals:
     """Test that ExportController emits proper signals."""
 
-    def test_progress_signal(self, tmp_dir, sample_qimage, qapp):
+    def test_progress_signal(self, tmp_dir, sample_qimage, qapp, qt_renderer):
         """progress_changed event should fire during export."""
         out_path = str(tmp_dir / "signal_test.png")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         progress_values = []
 
         ctrl.subscribe("progress_changed", lambda v: progress_values.append(v))
@@ -488,10 +495,10 @@ class TestExportSignals:
         assert len(progress_values) >= 1
         assert max(progress_values) == 100
 
-    def test_completed_signal(self, tmp_dir, sample_qimage, qapp):
+    def test_completed_signal(self, tmp_dir, sample_qimage, qapp, qt_renderer):
         """export_completed should fire with the output path."""
         out_path = str(tmp_dir / "complete_test.png")
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         completed_paths = []
 
         ctrl.subscribe("export_completed", lambda p: completed_paths.append(p))
@@ -502,10 +509,10 @@ class TestExportSignals:
         )
         assert out_path in completed_paths
 
-    def test_failed_signal_on_error(self, tmp_dir, qapp):
+    def test_failed_signal_on_error(self, tmp_dir, qapp, qt_renderer):
         """export_failed should fire if an error occurs."""
         # Export with invalid image to trigger error
-        ctrl = ExportController()
+        ctrl = ExportController(renderer=qt_renderer)
         errors = []
         ctrl.subscribe("export_failed", lambda e: errors.append(e))
 
