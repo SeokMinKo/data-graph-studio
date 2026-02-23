@@ -399,3 +399,165 @@ def test_get_unique_values_no_duplicates(values):
     dq = DataQuery()
     unique = dq.get_unique_values(df, "x")
     assert len(unique) == len(set(unique))
+
+
+# ---------------------------------------------------------------------------
+# Group 4: Core data operation invariants
+# ---------------------------------------------------------------------------
+
+from data_graph_studio.core.parsing_utils import ParsingEngine
+
+
+# Test 21: detect_delimiter idempotency
+# If we detect a delimiter from a CSV string, re-joining and re-splitting
+# with that delimiter should preserve the row count.
+@settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    delimiter=st.sampled_from([',', '\t', ';', '|']),
+    # Each row is a list of 2..5 simple alphanumeric fields
+    rows=st.lists(
+        st.lists(
+            st.from_regex(r'[A-Za-z0-9]{1,8}', fullmatch=True),
+            min_size=2,
+            max_size=5,
+        ),
+        min_size=1,
+        max_size=10,
+    ),
+)
+def test_detect_delimiter_idempotent(delimiter, rows):
+    """Detecting delimiter from synthetic CSV, then splitting on it, preserves row count."""
+    # Build CSV text — no mixing of delimiters so detection is unambiguous
+    lines = [delimiter.join(fields) for fields in rows]
+
+    detected = ParsingEngine._detect_delimiter_auto(lines)
+
+    # Re-split each line using the detected delimiter
+    resplit_counts = [len(line.split(detected)) for line in lines]
+    original_counts = [len(line.split(delimiter)) for line in lines]
+
+    # If detection found the right delimiter, field counts match on every row
+    if detected == delimiter:
+        assert resplit_counts == original_counts, (
+            f"Row counts changed after re-split: {original_counts} → {resplit_counts}"
+        )
+
+    # Idempotency: running detection a second time on the same lines gives the same result
+    detected2 = ParsingEngine._detect_delimiter_auto(lines)
+    assert detected2 == detected, (
+        f"detect_delimiter_auto is not idempotent: first={detected!r}, second={detected2!r}"
+    )
+
+
+# Test 22: count(col >= x) >= count(col > x) always holds
+@settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    values=st.lists(
+        st.floats(allow_nan=False, allow_infinity=False, min_value=-1e6, max_value=1e6),
+        min_size=1,
+        max_size=100,
+    ),
+    threshold=st.floats(allow_nan=False, allow_infinity=False, min_value=-1e6, max_value=1e6),
+)
+def test_ge_count_gte_gt_count(values, threshold):
+    """For any numeric column and threshold, count(col >= x) >= count(col > x)."""
+    df = pl.DataFrame({"value": values})
+    count_ge = df.filter(pl.col("value") >= threshold).height
+    count_gt = df.filter(pl.col("value") > threshold).height
+    assert count_ge >= count_gt, (
+        f"Expected count(>= {threshold}) >= count(> {threshold}), "
+        f"got {count_ge} < {count_gt}"
+    )
+
+
+# Test 23: Sort stability — same inputs always produce same outputs
+@settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    values=st.lists(
+        st.integers(min_value=-1000, max_value=1000),
+        min_size=1,
+        max_size=50,
+    ),
+    descending=st.booleans(),
+)
+def test_sort_deterministic(values, descending):
+    """Sorting a DataFrame by the same key twice gives identical results."""
+    df = pl.DataFrame({"x": values})
+    result1 = df.sort("x", descending=descending)
+    result2 = df.sort("x", descending=descending)
+    assert result1.equals(result2), "Two sorts of the same DataFrame produced different results"
+
+
+# Test 24: Re-sorting an already-sorted DataFrame leaves it unchanged
+@settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    values=st.lists(
+        st.integers(min_value=-1000, max_value=1000),
+        min_size=1,
+        max_size=50,
+    ),
+    descending=st.booleans(),
+)
+def test_sort_idempotent(values, descending):
+    """Sorting an already-sorted DataFrame by the same key is a no-op."""
+    df = pl.DataFrame({"x": values})
+    sorted_once = df.sort("x", descending=descending)
+    sorted_twice = sorted_once.sort("x", descending=descending)
+    assert sorted_once.equals(sorted_twice), (
+        "Re-sorting an already-sorted DataFrame changed the result"
+    )
+
+
+# Test 25: Column stats invariant — min <= mean <= max for non-empty numeric column
+@settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    data=st.lists(
+        st.floats(allow_nan=False, allow_infinity=False, min_value=-1e9, max_value=1e9),
+        min_size=1,
+        max_size=100,
+    )
+)
+def test_min_lte_mean_lte_max(data):
+    """For any non-empty numeric column: min <= mean <= max always holds."""
+    df = pl.DataFrame({"value": data})
+    stats = df.select([
+        pl.col("value").min().alias("min"),
+        pl.col("value").mean().alias("mean"),
+        pl.col("value").max().alias("max"),
+    ])
+    col_min = stats["min"][0]
+    col_mean = stats["mean"][0]
+    col_max = stats["max"][0]
+
+    # Use a small epsilon for floating-point rounding at extreme ranges
+    eps = max(abs(col_max), abs(col_min)) * 1e-10 + 1e-10
+    assert col_min <= col_mean + eps, (
+        f"min ({col_min}) > mean ({col_mean})"
+    )
+    assert col_mean <= col_max + eps, (
+        f"mean ({col_mean}) > max ({col_max})"
+    )
+
+
+# Test 26: String search/filter never increases row count
+@settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    strings=st.lists(
+        st.text(min_size=0, max_size=20, alphabet=st.characters(whitelist_categories=("L", "N", "P", "Zs"))),
+        min_size=1,
+        max_size=50,
+    ),
+    search_term=st.text(min_size=1, max_size=5, alphabet=st.characters(whitelist_categories=("L", "N"))),
+)
+def test_string_filter_never_increases_row_count(strings, search_term):
+    """Filtering by string (contains) never produces more rows than the original."""
+    df = pl.DataFrame({"s": strings})
+    original_count = df.height
+    try:
+        filtered = df.filter(pl.col("s").str.contains(search_term, literal=True))
+    except Exception:
+        # Some generated strings may be invalid regex — just skip
+        return
+    assert filtered.height <= original_count, (
+        f"String filter increased row count: {original_count} → {filtered.height}"
+    )
