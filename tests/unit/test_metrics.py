@@ -31,3 +31,61 @@ def test_snapshot_is_independent():
     snap2 = m.snapshot()
     assert snap1["counters"]["a"] == 1
     assert snap2["counters"]["a"] == 2
+
+
+def test_timed_operation_records_duration():
+    m = MetricsCollector()
+    with m.timed_operation("test.op"):
+        pass
+    snap = m.snapshot()
+    assert "test.op" in snap["timers"]
+    assert snap["timers"]["test.op"]["count"] == 1
+
+
+def test_timed_operation_increments_counter():
+    m = MetricsCollector()
+    with m.timed_operation("test.op"):
+        pass
+    snap = m.snapshot()
+    assert snap["counters"].get("test.op.count", 0) == 1
+
+
+def test_timed_operation_records_error():
+    m = MetricsCollector()
+    try:
+        with m.timed_operation("test.op"):
+            raise ValueError("boom")
+    except ValueError:
+        pass
+    snap = m.snapshot()
+    assert snap["counters"].get("test.op.error", 0) == 1
+
+
+def test_timed_operation_does_not_suppress_exceptions():
+    import pytest
+    m = MetricsCollector()
+    with pytest.raises(RuntimeError, match="should propagate"):
+        with m.timed_operation("test.op"):
+            raise RuntimeError("should propagate")
+
+
+def test_timed_operation_still_records_duration_on_error():
+    m = MetricsCollector()
+    try:
+        with m.timed_operation("test.op"):
+            raise ValueError("boom")
+    except ValueError:
+        pass
+    snap = m.snapshot()
+    assert "test.op" in snap["timers"]
+    assert snap["timers"]["test.op"]["count"] == 1
+
+
+def test_timed_operation_multiple_calls_accumulate():
+    m = MetricsCollector()
+    for _ in range(3):
+        with m.timed_operation("test.op"):
+            pass
+    snap = m.snapshot()
+    assert snap["timers"]["test.op"]["count"] == 3
+    assert snap["counters"]["test.op.count"] == 3
