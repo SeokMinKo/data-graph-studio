@@ -153,7 +153,7 @@ class ProfileController(Observable):
         except ConfigError as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return False
-        except (OSError, PermissionError, TypeError) as exc:  # pragma: no cover - defensive
+        except (RuntimeError, TypeError) as exc:  # pragma: no cover - defensive
             self.emit("error_occurred", str(exc))
             return False
 

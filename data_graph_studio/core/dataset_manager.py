@@ -224,7 +224,7 @@ class DatasetManager:
                 self._on_dataset_removing(dataset_id)
             except DatasetError as e:
                 logger.warning("dataset_manager.removing_callback_error", extra={"error": e})
-            except (TypeError, RuntimeError, AttributeError) as e:
+            except (TypeError, KeyError, AttributeError) as e:
                 logger.warning("dataset_manager.removing_callback_error.unexpected", extra={"error": e}, exc_info=True)
 
         dataset = self._datasets[dataset_id]
