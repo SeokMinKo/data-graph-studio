@@ -160,7 +160,7 @@ class GraphSettingMapper:
                 for key, value in setting.chart_settings.items():
                     if hasattr(cs, key):
                         setattr(cs, key, value)
-        except Exception as e:
+        except (AttributeError, TypeError, KeyError, ValueError) as e:
             raise ValidationError(
                 f"GraphSetting을 AppState에 적용하는 데 실패했습니다: {e}",
                 operation="to_app_state",
@@ -176,7 +176,7 @@ class GraphSettingMapper:
             logger.debug("[DEBUG-CRASH] emitting hover_zone_changed")
             state.hover_zone_changed.emit()
             logger.debug("[DEBUG-CRASH] all signals emitted OK")
-        except Exception as e:
+        except (RuntimeError, AttributeError, TypeError) as e:
             logger.error("graph_setting_mapper.signal_emit_failed", extra={"error": e}, exc_info=True)
         finally:
             state.end_batch_update()
