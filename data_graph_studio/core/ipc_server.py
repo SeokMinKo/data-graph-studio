@@ -25,6 +25,7 @@ from data_graph_studio.core.constants import (
     IPC_PORT_FILE_NAME,
     IPC_SERVER_HOST,
     IPC_THREAD_NAME,
+    IPC_HANDLER_TIMEOUT,
 )
 from data_graph_studio.core.ipc_protocol import make_error_response, parse_request
 
@@ -138,7 +139,19 @@ class IpcServer:
         try:
             data = await asyncio.wait_for(reader.read(65536), timeout=10.0)
             msg = json.loads(data.decode())
-            result = self._handler(msg)
+            loop = asyncio.get_event_loop()
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: self._handler(msg)),
+                    timeout=IPC_HANDLER_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                cmd = msg.get(IPC_KEY_COMMAND, "<unknown>") if isinstance(msg, dict) else "<unknown>"
+                logger.error(
+                    "ipc_server.handler_timeout",
+                    extra={"command": cmd, "timeout_s": IPC_HANDLER_TIMEOUT},
+                )
+                result = make_error_response(f"command timed out: {cmd}")
             response = json.dumps(result, ensure_ascii=False, default=str) + "\n"
             writer.write(response.encode("utf-8"))
             await writer.drain()
