@@ -145,7 +145,7 @@ def load_file_internal(
     loader._warning_message = None
 
     try:
-        with get_metrics().timer("file.load_duration"):
+        with get_metrics().timed_operation("file.load"):
             encoding = loader._normalize_encoding(encoding)
             file_size = os.path.getsize(path)
             loader._windowed = False

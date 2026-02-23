@@ -394,21 +394,22 @@ class FilteringManager(Observable, IFilterApplier):
         Returns:
             필터링된 데이터프레임
         """
-        if scheme_name not in self._schemes:
-            return data
+        with get_metrics().timed_operation("filter.apply"):
+            if scheme_name not in self._schemes:
+                return data
 
-        scheme = self._schemes[scheme_name]
+            scheme = self._schemes[scheme_name]
 
-        # 상속된 스킴의 필터도 적용
-        all_filters = self._get_all_filters(scheme)
+            # 상속된 스킴의 필터도 적용
+            all_filters = self._get_all_filters(scheme)
 
-        result = data
-        for f in all_filters:
-            if f.enabled:
-                result = self._apply_single_filter(result, f)
+            result = data
+            for f in all_filters:
+                if f.enabled:
+                    result = self._apply_single_filter(result, f)
 
-        get_metrics().increment("filter.applied")
-        return result
+            get_metrics().increment("filter.applied")
+            return result
 
     def _apply_single_filter(self, data: pl.DataFrame, f: Filter) -> pl.DataFrame:
         expr = f.to_expression()

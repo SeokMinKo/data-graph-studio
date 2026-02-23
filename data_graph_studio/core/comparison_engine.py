@@ -142,42 +142,43 @@ class ComparisonEngine(IComparisonEngine):
         Returns:
             차이 DataFrame (key, value_a, value_b, diff, diff_pct) 또는 None.
         """
-        df_a = self._get_df_snapshot(dataset_a_id)
-        df_b = self._get_df_snapshot(dataset_b_id)
+        with get_metrics().timed_operation("comparison.calculate_difference"):
+            df_a = self._get_df_snapshot(dataset_a_id)
+            df_b = self._get_df_snapshot(dataset_b_id)
 
-        if df_a is None or df_b is None:
-            return None
-        if value_column not in df_a.columns or value_column not in df_b.columns:
-            return None
-
-        if key_column:
-            if key_column not in df_a.columns or key_column not in df_b.columns:
+            if df_a is None or df_b is None:
                 return None
-            merged = df_a.select([key_column, value_column]).join(
-                df_b.select([key_column, value_column]),
-                on=key_column, how="full", suffix="_b",
-            )
-            value_a_col = value_column
-            value_b_col = f"{value_column}_b"
-        else:
-            min_len = min(len(df_a), len(df_b))
-            merged = pl.DataFrame({
-                "index": list(range(min_len)),
-                value_column: df_a[value_column].head(min_len),
-                f"{value_column}_b": df_b[value_column].head(min_len),
-            })
-            key_column = "index"
-            value_a_col = value_column
-            value_b_col = f"{value_column}_b"
+            if value_column not in df_a.columns or value_column not in df_b.columns:
+                return None
 
-        result = merged.with_columns([
-            (pl.col(value_a_col) - pl.col(value_b_col)).alias("diff"),
-            ((pl.col(value_a_col) - pl.col(value_b_col)) /
-             pl.col(value_b_col).abs() * 100).alias("diff_pct"),
-        ]).rename({value_a_col: "value_a", value_b_col: "value_b"})
+            if key_column:
+                if key_column not in df_a.columns or key_column not in df_b.columns:
+                    return None
+                merged = df_a.select([key_column, value_column]).join(
+                    df_b.select([key_column, value_column]),
+                    on=key_column, how="full", suffix="_b",
+                )
+                value_a_col = value_column
+                value_b_col = f"{value_column}_b"
+            else:
+                min_len = min(len(df_a), len(df_b))
+                merged = pl.DataFrame({
+                    "index": list(range(min_len)),
+                    value_column: df_a[value_column].head(min_len),
+                    f"{value_column}_b": df_b[value_column].head(min_len),
+                })
+                key_column = "index"
+                value_a_col = value_column
+                value_b_col = f"{value_column}_b"
 
-        get_metrics().increment("comparison.calculated")
-        return result
+            result = merged.with_columns([
+                (pl.col(value_a_col) - pl.col(value_b_col)).alias("diff"),
+                ((pl.col(value_a_col) - pl.col(value_b_col)) /
+                 pl.col(value_b_col).abs() * 100).alias("diff_pct"),
+            ]).rename({value_a_col: "value_a", value_b_col: "value_b"})
+
+            get_metrics().increment("comparison.calculated")
+            return result
 
     def get_comparison_statistics(
         self,
