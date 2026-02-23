@@ -81,7 +81,15 @@ class FileWatcher(Observable):
         fs: IFileSystem,
         timer_factory: ITimerFactory,
         poll_interval_ms: int = DEFAULT_POLL_INTERVAL_MS,
-    ):
+    ) -> None:
+        """Initialise FileWatcher with injected filesystem and timer factory.
+
+        Input: fs — IFileSystem, abstraction for stat/read operations;
+               timer_factory — ITimerFactory, creates poll and debounce timers;
+               poll_interval_ms — int, desired poll interval clamped to [500, 60000]
+        Output: None
+        Invariants: no timer is started until the first file is watched
+        """
         super().__init__()
 
         self._fs = fs
@@ -103,18 +111,29 @@ class FileWatcher(Observable):
 
     @property
     def poll_interval_ms(self) -> int:
-        """Return the current polling interval in milliseconds."""
+        """Return the current polling interval in milliseconds.
+
+        Output: int — value in range [MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS]
+        """
         return self._poll_interval_ms
 
     @property
     def watched_count(self) -> int:
-        """Return the number of files currently being watched."""
+        """Return the number of files currently being watched.
+
+        Output: int — zero or more, capped at MAX_WATCHED_FILES
+        """
         return len(self._entries)
 
     # ── Public API ────────────────────────────────────────────
 
     def set_interval(self, ms: int) -> None:
-        """Set polling interval. Clamped to [500, 60000] ms."""
+        """Set the polling interval, clamping to [500, 60000] ms.
+
+        Input: ms — int, desired polling interval in milliseconds
+        Output: None
+        Invariants: restarts the timer immediately if it is already running
+        """
         self._poll_interval_ms = _clamp_interval(ms)
         # Restart timer if running
         if self._timer is not None:
@@ -122,15 +141,14 @@ class FileWatcher(Observable):
             self._start_timer()
 
     def watch(self, file_path: str, mode: str = "reload") -> bool:
-        """
-        Start watching a file.
+        """Register a file for polling and start the timer if not already running.
 
-        Args:
-            file_path: Path to the file
-            mode: "reload" (full change) or "tail" (append-only)
-
-        Returns:
-            True if watch started successfully, False otherwise.
+        Input: file_path — str, absolute path to the file to watch;
+               mode — str, 'reload' (any content change) or 'tail' (append-only)
+        Output: bool — True if watch registered, False if file not found or stat fails
+        Invariants: files >= 2 GB are silently promoted to tail mode (Section 10.2);
+                    oldest entry evicted when MAX_WATCHED_FILES is reached;
+                    initial mtime/size captured as baseline to prevent false positives
         """
         # Check file exists
         if not self._fs.exists(file_path):
@@ -187,7 +205,13 @@ class FileWatcher(Observable):
         return True
 
     def unwatch(self, file_path: str) -> None:
-        """Stop watching a file."""
+        """Stop watching a file and cancel any pending debounce event for it.
+
+        Input: file_path — str, path previously registered with watch()
+        Output: None
+        Invariants: no-op if file_path was not being watched; poll timer is stopped
+                    when no files remain
+        """
         self._entries.pop(file_path, None)
         self._debounce_pending.pop(file_path, None)
         self._debounce_data.pop(file_path, None)
@@ -197,11 +221,21 @@ class FileWatcher(Observable):
             self._stop_timer()
 
     def is_watching(self, file_path: str) -> bool:
-        """Check if a file is being watched."""
+        """Return True if file_path is currently registered for polling.
+
+        Input: file_path — str
+        Output: bool — True if actively watched, False otherwise
+        """
         return file_path in self._entries
 
     def get_watch_info(self, file_path: str) -> Optional[Dict[str, Any]]:
-        """Get watch info for a file."""
+        """Return a snapshot of the watch state for a registered file.
+
+        Input: file_path — str
+        Output: Dict[str, Any] — keys: path, mode, last_mtime, last_size,
+                last_row_count, backoff_multiplier, effective_interval_ms;
+                or None if file_path is not being watched
+        """
         entry = self._entries.get(file_path)
         if entry is None:
             return None
@@ -219,16 +253,24 @@ class FileWatcher(Observable):
         }
 
     def begin_self_modify(self, file_path: str) -> None:
-        """Mark file as being modified by this app (prevents infinite loop)."""
+        """Mark a file as being written by this application to suppress change events.
+
+        Input: file_path — str, path registered with watch()
+        Output: None
+        Invariants: no-op if file_path is not being watched; call end_self_modify()
+                    after the write completes (FR-2.8 anti-loop)
+        """
         entry = self._entries.get(file_path)
         if entry:
             entry.self_modifying = True
 
     def end_self_modify(self, file_path: str) -> None:
-        """
-        End self-modify mode.
-        Updates last_mtime/size to current state so the self-write
-        isn't detected as an external change.
+        """Clear self-modify flag and update baseline stat to suppress spurious reload.
+
+        Input: file_path — str, path previously passed to begin_self_modify()
+        Output: None
+        Invariants: no-op if file_path is not watched; stat failure (FileNotFoundError,
+                    PermissionError) is silently swallowed; FR-2.8 anti-loop guarantee
         """
         entry = self._entries.get(file_path)
         if entry:
@@ -242,9 +284,12 @@ class FileWatcher(Observable):
                 pass
 
     def flush_debounce(self) -> None:
-        """
-        Flush pending debounce events immediately.
-        Used in tests and during shutdown.
+        """Emit all pending debounced events immediately, bypassing the debounce timer.
+
+        Output: None — emits file_changed, rows_appended, or file_deleted for each
+                pending path via Observable.emit
+        Invariants: clears pending and data dicts before emitting; safe to call
+                    concurrently with shutdown; used by tests and shutdown
         """
         if not self._debounce_pending:
             return
@@ -264,7 +309,12 @@ class FileWatcher(Observable):
                 self.emit("file_deleted", path)
 
     def shutdown(self) -> None:
-        """Stop all watchers and clean up. PRD Section 10.6."""
+        """Flush pending events, stop the poll timer, and clear all watch state (PRD 10.6).
+
+        Output: None
+        Invariants: flushes debounce queue before stopping; all internal collections cleared;
+                    safe to call more than once
+        """
         self.flush_debounce()
         self._stop_timer()
         self._entries.clear()
@@ -274,7 +324,12 @@ class FileWatcher(Observable):
     # ── Backoff (Section 10.2) ────────────────────────────────
 
     def _apply_backoff(self, file_path: str) -> None:
-        """Double the backoff multiplier for a file (max 30s effective)."""
+        """Double the error backoff multiplier for a file, capped at MAX_BACKOFF_MS effective.
+
+        Input: file_path — str, registered watch path
+        Output: None
+        Invariants: no-op if file_path is not watched; effective interval never exceeds MAX_BACKOFF_MS
+        """
         entry = self._entries.get(file_path)
         if entry:
             entry.backoff_multiplier = min(
@@ -287,7 +342,12 @@ class FileWatcher(Observable):
                 entry.backoff_multiplier = MAX_BACKOFF_MS // max(self._poll_interval_ms, 1)
 
     def _reset_backoff(self, file_path: str) -> None:
-        """Reset backoff to normal after a successful poll."""
+        """Reset the backoff multiplier to 1 after a successful poll for a file.
+
+        Input: file_path — str, registered watch path
+        Output: None
+        Invariants: no-op if file_path is not watched
+        """
         entry = self._entries.get(file_path)
         if entry:
             entry.backoff_multiplier = 1
@@ -295,6 +355,11 @@ class FileWatcher(Observable):
     # ── Timer Management ──────────────────────────────────────
 
     def _start_timer(self) -> None:
+        """Create and start the poll timer if one is not already running.
+
+        Output: None
+        Invariants: no-op if timer already running; timer fires _on_poll at poll_interval_ms
+        """
         if self._timer is not None:
             return
         self._timer = self._timer_factory.create_timer(
@@ -304,6 +369,11 @@ class FileWatcher(Observable):
             self._timer.start()
 
     def _stop_timer(self) -> None:
+        """Stop and discard the poll timer.
+
+        Output: None
+        Invariants: no-op if timer is not running; self._timer set to None
+        """
         if self._timer is not None:
             self._timer.stop()
             self._timer = None
@@ -311,7 +381,12 @@ class FileWatcher(Observable):
     # ── Polling ───────────────────────────────────────────────
 
     def _on_poll(self) -> None:
-        """Called by timer on each poll interval."""
+        """Poll all watched files for changes on each timer tick.
+
+        Output: None — delegates to _check_file for each registered path
+        Invariants: snapshot of keys taken before iteration to allow safe mutation;
+                    entries removed inside _check_file are skipped via None guard
+        """
         # Copy keys to allow mutation during iteration
         paths = list(self._entries.keys())
         for path in paths:
@@ -321,7 +396,13 @@ class FileWatcher(Observable):
             self._check_file(entry)
 
     def _check_file(self, entry_or_path: "_WatchEntry | str") -> None:
-        """Check a single file for changes. Accepts a _WatchEntry or a file path string."""
+        """Stat a single watched file and schedule a debounce event if it changed.
+
+        Input: entry_or_path — _WatchEntry or str path; str is resolved to its _WatchEntry
+        Output: None — may call _schedule_debounce or _handle_tail/_handle_reload;
+                removes entry and schedules 'deleted' if file is inaccessible
+        Invariants: self-modifying files are skipped (FR-2.8); backoff reset on success
+        """
         if isinstance(entry_or_path, str):
             entry = self._entries.get(entry_or_path)
             if entry is None:
@@ -361,16 +442,27 @@ class FileWatcher(Observable):
         self._reset_backoff(path)
 
     def _handle_reload(self, entry: _WatchEntry, st: Any) -> None:
-        """Handle change in reload mode → emit file_changed."""
+        """Update baseline stat and schedule a 'changed' debounce event (reload mode).
+
+        Input: entry — _WatchEntry, the watch record for the file;
+               st — stat_result, current filesystem stat
+        Output: None
+        Invariants: entry.last_mtime and last_size updated to st values before scheduling
+        """
         entry.last_mtime = st.st_mtime
         entry.last_size = st.st_size
         self._schedule_debounce(entry.path, "changed")
 
     def _handle_tail(self, entry: _WatchEntry, st: Any) -> None:
-        """
-        Handle change in tail mode.
-        Uses seek-based reading for performance — only reads new bytes.
-        Falls back to full read if file was truncated or on first read without header.
+        """Detect new rows appended to a file and schedule a debounce event (tail mode).
+
+        Input: entry — _WatchEntry, the watch record for the file;
+               st — stat_result, current filesystem stat
+        Output: None — schedules 'appended' event with new row count, or 'changed'
+                if the CSV header changed, or 'deleted' if the file vanished
+        Raises: nothing — read errors apply backoff; permission errors emit 'deleted'
+        Invariants: uses seek-based read when size grew and header is known (performance);
+                    falls back to full IFileSystem.read_file if seek fails (ERR-2.3)
         """
         path = entry.path
         current_size = st.st_size
@@ -441,10 +533,12 @@ class FileWatcher(Observable):
     # ── Debounce ──────────────────────────────────────────────
 
     def _schedule_debounce(self, path: str, event_type: str) -> None:
-        """
-        Schedule a debounced event.
-        Multiple events within debounce window are merged
-        (last event wins for same path).
+        """Record a pending event and arm the debounce timer if not already armed.
+
+        Input: path — str, watched file path; event_type — str, 'changed' | 'appended' | 'deleted'
+        Output: None
+        Invariants: last event wins per path within the debounce window;
+                    if timer has no start() (e.g. NullTimer in tests), flushes synchronously
         """
         self._debounce_pending[path] = event_type
 
@@ -463,7 +557,10 @@ class FileWatcher(Observable):
                 self.flush_debounce()
 
     def _on_debounce_timeout(self) -> None:
-        """Debounce timer expired → emit pending events."""
+        """Handle debounce timer expiry by stopping the timer and flushing pending events.
+
+        Output: None — delegates to flush_debounce(); clears self._debounce_timer
+        """
         if self._debounce_timer is not None:
             self._debounce_timer.stop()
             self._debounce_timer = None

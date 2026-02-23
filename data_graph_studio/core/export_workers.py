@@ -108,7 +108,19 @@ class ExportWorker:
         on_progress: Optional[Callable[[int], None]] = None,
         on_completed: Optional[Callable[[str], None]] = None,
         on_failed: Optional[Callable[[str], None]] = None,
-    ):
+    ) -> None:
+        """Configure an ExportWorker ready to run on a background thread.
+
+        Input: task — str, 'chart' or 'data'; image — QImage | None, source for chart export;
+               df — pl.DataFrame | None, source for data export; path — str, destination file;
+               fmt — ExportFormat, target format; options — ExportOptions | None, render config;
+               renderer — IExportRenderer | None, required for chart tasks;
+               on_progress — Callable[[int], None] | None, receives 0-100 progress ticks;
+               on_completed — Callable[[str], None] | None, receives final file path on success;
+               on_failed — Callable[[str], None] | None, receives error message on failure
+        Output: None
+        Invariants: cancellation flag starts False; missing callbacks default to no-ops
+        """
         self.task = task
         self.image = image
         self.df = df
@@ -123,16 +135,31 @@ class ExportWorker:
 
     # -- cancel support --
     def cancel(self) -> None:
-        """Signal that the export operation should be cancelled."""
+        """Request cancellation of the in-progress export operation.
+
+        Output: None
+        Invariants: sets internal flag; run() will detect it at the next checkpoint
+                    and clean up partial files
+        """
         self._cancelled = True
 
     def is_cancelled(self) -> bool:
-        """Return True if cancellation has been requested."""
+        """Return True if cancellation has been requested via cancel().
+
+        Output: bool — True after cancel() has been called, False otherwise
+        """
         return self._cancelled
 
     # -- entry point --
     def run(self) -> None:
-        """Execute the export task (chart or data) on the current thread."""
+        """Execute the export task (chart or data) on the calling thread.
+
+        Output: None — results delivered via on_completed or on_failed callbacks
+        Raises: nothing — all ExportError and common OS exceptions are caught and
+                forwarded to on_failed; unknown tasks also call on_failed
+        Invariants: exactly one of on_completed or on_failed is called per run()
+                    unless cancelled mid-way
+        """
         try:
             if self.task == "chart":
                 self._export_chart()
@@ -147,12 +174,19 @@ class ExportWorker:
         except ExportError as exc:
             self._on_failed(str(exc))
         except (OSError, MemoryError, PermissionError, pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as exc:
-            logger.error("export_worker.run.failed op=%s fmt=%s", self.task, getattr(self.fmt, "value", self.fmt), exc_info=True)
+            logger.error("export_worker.run.failed", extra={"op": self.task, "fmt": getattr(self.fmt, "value", self.fmt)}, exc_info=True)
             self._on_failed(str(exc))
 
     # -- chart export ----------------------------------------------------------
 
     def _export_chart(self) -> None:
+        """Dispatch chart export to the format-specific handler (PNG/SVG/PDF).
+
+        Output: None — calls on_completed with self.path on success; on_failed on error
+        Raises: nothing — errors forwarded to on_failed by run()
+        Invariants: reports progress from _PROGRESS_RENDER_START to _PROGRESS_DONE;
+                    cancelled early if image is None or null
+        """
         if self._cancelled:
             self._cleanup()
             return
@@ -179,7 +213,13 @@ class ExportWorker:
             self._on_completed(self.path)
 
     def _export_png(self) -> None:
-        """Render image to PNG and write atomically."""
+        """Render self.image to PNG bytes and write the file atomically.
+
+        Output: None — file at self.path written via atomic_write
+        Raises: ExportError, OSError — propagated to run() and forwarded to on_failed
+        Invariants: respects ExportOptions.width/height/background/dpi; cancellation
+                    checked before write; partial file cleaned up on cancel
+        """
         opts = self.options
         img = self.image
 
@@ -205,7 +245,13 @@ class ExportWorker:
         atomic_write(self.path, data)
 
     def _export_svg(self) -> None:
-        """Render image to SVG."""
+        """Render self.image to SVG bytes and write the file atomically.
+
+        Output: None — file at self.path written via atomic_write
+        Raises: ExportError, OSError — propagated to run() and forwarded to on_failed
+        Invariants: width/height fall back to image dimensions if not set in options;
+                    cancellation checked before write
+        """
         opts = self.options
         img = self.image
         width = opts.width or img.width()
@@ -224,7 +270,13 @@ class ExportWorker:
         atomic_write(self.path, data)
 
     def _export_pdf(self) -> None:
-        """Render chart + optional stats to PDF via the renderer."""
+        """Render self.image (and optional stats) to PDF bytes and write atomically.
+
+        Output: None — file at self.path written via atomic_write
+        Raises: ExportError, OSError — propagated to run() and forwarded to on_failed
+        Invariants: progress emitted at PDF_PHASE1, PDF_PHASE2, PDF_FINALIZE checkpoints;
+                    ExportOptions.include_stats and stats_data control stats appendix
+        """
         opts = self.options
         img = self.image
 
@@ -252,7 +304,13 @@ class ExportWorker:
     # -- data export -----------------------------------------------------------
 
     def _export_data(self) -> None:
-        """Export Polars DataFrame to file (CSV/Parquet/Excel)."""
+        """Dispatch data export to the format-specific handler (CSV/Parquet/Excel).
+
+        Output: None — calls on_completed with self.path on success; on_failed on error
+        Raises: nothing — errors forwarded to on_failed by run()
+        Invariants: cancelled early if self.df is None; increments export.completed metric
+                    on success
+        """
         if self._cancelled:
             self._cleanup()
             return
@@ -279,6 +337,11 @@ class ExportWorker:
             self._on_completed(self.path)
 
     def _export_csv(self) -> None:
+        """Serialise self.df to UTF-8 CSV bytes and write atomically to self.path.
+
+        Output: None — file written; cancellation checked before write
+        Raises: OSError, pl.exceptions.InvalidOperationError — propagated to run()
+        """
         data = self.df.write_csv().encode("utf-8")  # type: ignore[union-attr]
         if self._cancelled:
             self._cleanup()
@@ -287,7 +350,13 @@ class ExportWorker:
         atomic_write(self.path, data)
 
     def _export_parquet(self) -> None:
+        """Write self.df to Parquet using a temp-file-then-rename strategy.
 
+        Output: None — file at self.path atomically replaced on success
+        Raises: OSError, MemoryError, pl.exceptions.InvalidOperationError — propagated to run();
+                temp file cleaned up before re-raising
+        Invariants: parent directory created if absent; cancellation checked before rename
+        """
         # Polars write_parquet writes to path; use temp file + rename
         tmp_path = self.path + ".tmp"
         try:
@@ -309,6 +378,13 @@ class ExportWorker:
             raise
 
     def _export_excel(self) -> None:
+        """Write self.df to Excel using a temp-file-then-rename strategy.
+
+        Output: None — file at self.path atomically replaced on success
+        Raises: OSError, MemoryError, pl.exceptions.InvalidOperationError — propagated to run();
+                temp file cleaned up before re-raising
+        Invariants: parent directory created if absent; cancellation checked before rename
+        """
         tmp_path = self.path + ".tmp"
         try:
             parent = os.path.dirname(self.path)
@@ -331,12 +407,11 @@ class ExportWorker:
     # -- helpers ---------------------------------------------------------------
 
     def _get_renderer(self) -> "IExportRenderer":
-        """Return the injected renderer.
+        """Return the injected IExportRenderer, raising if none was provided.
 
-        A renderer must be supplied via the constructor ``renderer`` parameter.
-        The UI layer is responsible for injecting a concrete implementation
-        (e.g. QtExportRenderer) when constructing this worker or its owning
-        ExportController.  Core never imports from the UI layer.
+        Output: IExportRenderer — the renderer injected at construction time
+        Raises: ExportError — no renderer was supplied; the UI layer must inject one
+                (e.g. QtExportRenderer) — core never imports from the UI layer
         """
         if self._renderer is not None:
             return self._renderer
@@ -346,7 +421,11 @@ class ExportWorker:
         )
 
     def _cleanup(self) -> None:
-        """Remove partial / temp files after cancel — ERR-4.2."""
+        """Remove the destination and temp files left by a cancelled export (ERR-4.2).
+
+        Output: None — OSError from unlink is silently ignored
+        Invariants: attempts removal of both self.path and self.path + ".tmp"
+        """
         for p in (self.path, self.path + ".tmp"):
             if os.path.exists(p):
                 try:
