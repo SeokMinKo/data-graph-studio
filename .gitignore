@@ -132,3 +132,4 @@ autosave.json
 
 # Keep test data samples
 !test_data/
+.worktrees/
