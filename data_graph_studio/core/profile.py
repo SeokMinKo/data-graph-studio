@@ -340,7 +340,7 @@ class ProfileManager:
             try:
                 with open(recent_file, 'r', encoding='utf-8') as f:
                     self._recent_profiles = json.load(f)
-            except Exception:
+            except (json.JSONDecodeError, OSError, PermissionError):
                 logger.warning("profile.load_recent_profiles.failed", exc_info=True)
                 self._recent_profiles = []
 
@@ -350,7 +350,7 @@ class ProfileManager:
         try:
             with open(recent_file, 'w', encoding='utf-8') as f:
                 json.dump(self._recent_profiles, f)
-        except Exception:
+        except (OSError, PermissionError):
             logger.warning("profile.save_recent_profiles.failed", exc_info=True)
 
     @property
@@ -432,7 +432,7 @@ class ProfileManager:
                     self._recent_profiles.remove(path)
                     self._save_recent_profiles()
                 return True
-        except Exception:
+        except (OSError, PermissionError):
             logger.warning("profile.delete_profile.failed", extra={"path": path}, exc_info=True)
         return False
 

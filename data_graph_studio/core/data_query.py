@@ -38,11 +38,28 @@ class DataQuery:
         operator: str,
         value: Any,
     ) -> Optional[pl.DataFrame]:
-        """조건에 맞는 행을 필터링한다.
+        """Filter rows in a DataFrame that match a column condition.
 
-        Supported operators: 'eq', 'ne', 'gt', 'lt', 'ge', 'le',
-        'contains', 'startswith', 'endswith', 'isnull', 'notnull'.
-        Raises ValueError for unknown operators.
+        Input:
+            df: DataFrame to filter; returns None immediately if None.
+            column: Name of the column to apply the filter on.
+            operator: Comparison operator string. Supported values: 'eq', 'ne',
+                'gt', 'lt', 'ge', 'le', 'contains', 'startswith', 'endswith',
+                'isnull', 'notnull'.
+            value: The value to compare against; ignored for 'isnull'/'notnull'.
+
+        Output:
+            Filtered DataFrame containing only rows where the condition holds.
+            Returns None if df is None. For GT/GE/LT/LE operators, NaN rows
+            are excluded from the result.
+
+        Raises:
+            QueryError: If operator is not one of the supported operator strings.
+
+        Invariants:
+            - Result row count <= input row count.
+            - Returns None iff df is None.
+            - NaN values are never included in GT/GE/LT/LE results.
         """
         if df is None:
             return None
@@ -69,7 +86,25 @@ class DataQuery:
         columns: List[str],
         descending: Union[bool, List[bool]] = False,
     ) -> Optional[pl.DataFrame]:
-        """DataFrame을 정렬한다."""
+        """Sort a DataFrame by one or more columns.
+
+        Input:
+            df: DataFrame to sort; returns None immediately if None.
+            columns: List of column names to sort by, applied left-to-right.
+            descending: If bool, applies to all columns. If list, must match
+                length of columns; each entry controls the corresponding column.
+
+        Output:
+            New DataFrame sorted by the specified columns. Returns None if df
+            is None. Row count is always equal to the input row count.
+
+        Raises:
+            None. Polars errors are caught internally for streaming→eager fallback.
+
+        Invariants:
+            - Output row count == input row count.
+            - Returns None iff df is None.
+        """
         if df is None:
             return None
         try:
@@ -86,10 +121,30 @@ class DataQuery:
         value_columns: List[str],
         agg_funcs: List[str],
     ) -> Optional[pl.DataFrame]:
-        """그룹별 집계를 수행한다.
+        """Perform group-by aggregation on a DataFrame.
 
-        agg_funcs: 'sum', 'mean', 'median', 'min', 'max', 'count', 'std', 'var',
-        'first', 'last'.
+        Input:
+            df: DataFrame to aggregate; returns None immediately if None.
+            group_columns: Column names to group by.
+            value_columns: Columns to aggregate; zipped with agg_funcs.
+            agg_funcs: Aggregation function names, one per value column.
+                Supported: 'sum', 'mean', 'median', 'min', 'max', 'count',
+                'std', 'var', 'first', 'last'. Unknown func names are silently
+                skipped (no corresponding aggregation expression is emitted).
+
+        Output:
+            Aggregated DataFrame with one row per unique combination of
+            group_columns. Each aggregated value column is named
+            ``{col}_{func}``. Returns None if df is None.
+
+        Raises:
+            None. Polars errors are caught internally for streaming→eager fallback.
+
+        Invariants:
+            - Output columns include all group_columns plus ``{col}_{func}``
+              for each valid (value_column, agg_func) pair.
+            - Output row count <= input row count.
+            - Returns None iff df is None.
         """
         if df is None:
             return None
@@ -116,14 +171,39 @@ class DataQuery:
         windowed: bool = False,
         cache: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """컬럼 통계를 계산한다.
+        """Compute descriptive statistics for a single column.
 
-        Args:
-            df: 대상 DataFrame.
-            column: 통계 대상 컬럼.
-            lazy_df: windowed 모드에서 전체 통계용 LazyFrame.
-            windowed: windowed 모드 여부.
-            cache: 결과 캐시 딕셔너리 (있으면 캐시에서 조회/저장).
+        Input:
+            df: DataFrame containing the column; used for eager stats when not
+                in windowed mode. Returns ``{}`` if column not in df.
+            column: Name of the column to compute statistics for.
+            lazy_df: Full-dataset LazyFrame used in windowed mode to compute
+                statistics over the entire dataset rather than just the window.
+                Ignored when windowed is False.
+            windowed: If True, statistics are computed from lazy_df (full
+                dataset); if False, statistics are computed from df directly.
+            cache: Optional dict used as a result cache. Cache key is
+                ``stats_{column}`` (or ``stats_{column}_windowed`` when
+                windowed=True). If the key exists the cached value is returned
+                without recomputation; on miss, the result is stored before
+                returning.
+
+        Output:
+            Dict with numeric statistics for the column. Keys include at
+            minimum: ``count``, ``mean``, ``std``, ``min``, ``max``,
+            ``median``, ``null_count``, ``unique_count``. Additional keys
+            (``q1``, ``q3``, ``sum``) are present for numeric columns.
+            Returns ``{}`` if column is absent from both df and lazy_df.
+
+        Raises:
+            pl.exceptions.InvalidOperationError: If a numeric aggregation is
+                applied to an incompatible dtype inside Polars.
+
+        Invariants:
+            - Return type is always a dict (never None).
+            - Result is idempotent for the same (df, column, windowed) triple.
+            - Cache key uniquely encodes the windowed context to prevent
+              stale full-dataset stats from leaking into windowed views.
         """
         # Include windowed context so full-dataset stats aren't returned in windowed mode.
         cache_key = f"stats_{column}_windowed" if windowed else f"stats_{column}"
@@ -145,7 +225,33 @@ class DataQuery:
         windowed: bool = False,
         cache: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Dict[str, Any]]:
-        """모든 (또는 지정된) 컬럼의 통계를 반환한다."""
+        """Compute statistics for all (or specified) columns in a DataFrame.
+
+        Input:
+            df: DataFrame to compute statistics for; returns ``{}`` if None.
+            value_columns: Explicit list of column names to include. If None,
+                defaults to all columns whose dtype is numeric (per
+                NUMERIC_DTYPES). Non-existent column names are silently skipped
+                via get_statistics returning ``{}``.
+            lazy_df: Forwarded to get_statistics for windowed mode support.
+            windowed: Forwarded to get_statistics; controls whether stats are
+                drawn from lazy_df or df.
+            cache: Forwarded to get_statistics for per-column result caching.
+
+        Output:
+            Dict mapping column name to its statistics dict (same shape as
+            get_statistics output). Returns ``{}`` if df is None or if
+            value_columns resolves to an empty list.
+
+        Raises:
+            pl.exceptions.InvalidOperationError: Propagated from get_statistics
+                if a column's dtype is incompatible with aggregation.
+
+        Invariants:
+            - Return type is always a dict (never None).
+            - Keys are exactly the resolved value_columns that are present.
+            - Returns ``{}`` iff df is None.
+        """
         if df is None:
             return {}
 
@@ -167,7 +273,38 @@ class DataQuery:
         lazy_df: Optional[pl.LazyFrame] = None,
         windowed: bool = False,
     ) -> Optional[Dict[str, Any]]:
-        """전체 데이터 기준 요약 통계를 반환한다."""
+        """Return a high-level summary of the full dataset profile.
+
+        Input:
+            df: Current DataFrame (used implicitly; not accessed directly in
+                the non-windowed path, but kept for API consistency).
+            profile: DataProfile object with attributes ``total_rows``,
+                ``total_columns``, ``columns``, ``memory_bytes``,
+                ``load_time_seconds``. Used when not in windowed mode.
+                Returns None if profile is None in non-windowed mode.
+            lazy_df: Full-dataset LazyFrame. Required when windowed=True to
+                compute aggregate summary on the fly via compute_windowed_profile.
+            windowed: If True and lazy_df is provided, computes a live profile
+                from lazy_df. If False (or lazy_df is None), falls back to the
+                pre-computed profile object.
+
+        Output:
+            Dict with keys: ``total_rows``, ``total_columns``,
+            ``numeric_columns``, ``text_columns``, ``columns``,
+            ``memory_bytes``, ``load_time_seconds`` when using the profile
+            path. In windowed mode, shape depends on compute_windowed_profile.
+            Returns None if windowed=False and profile is None.
+
+        Raises:
+            AttributeError: If profile is not None but lacks required
+                attributes (total_rows, total_columns, columns, etc.).
+
+        Invariants:
+            - Returns None iff not windowed (or lazy_df is None) and profile
+              is None.
+            - numeric_columns + text_columns == total_columns in non-windowed
+              path.
+        """
         if not windowed or lazy_df is None:
             if profile is None:
                 return None
@@ -191,7 +328,36 @@ class DataQuery:
         max_unique_ratio: float = 0.05,
         max_unique_count: int = 100,
     ) -> bool:
-        """컬럼이 categorical인지 판단한다."""
+        """Determine whether a column should be treated as categorical.
+
+        Input:
+            df: DataFrame containing the column; returns False if None.
+            column: Column name to inspect; returns False if not in df.
+            max_unique_ratio: Maximum ratio of unique values to total rows for
+                numeric and Utf8 columns to be considered categorical.
+                Default 0.05 (5%).
+            max_unique_count: Maximum absolute count of unique values for a
+                numeric column to qualify as categorical. Default 100. For
+                numeric columns the effective limit is min(20, max_unique_count).
+
+        Output:
+            True if the column is considered categorical, False otherwise.
+            Classification rules by dtype:
+            - pl.Categorical or pl.Boolean: always True.
+            - pl.Date/pl.Datetime/pl.Time: always False.
+            - Numeric: True iff unique_count <= min(20, max_unique_count)
+              AND unique_count / row_count < max_unique_ratio.
+            - pl.Utf8: True iff unique_count <= max_unique_count OR
+              unique_count / row_count < max_unique_ratio.
+            - Other dtypes: False.
+
+        Raises:
+            None. All errors are prevented by early-exit guards.
+
+        Invariants:
+            - Returns False iff df is None or column not in df.columns.
+            - Return type is always bool.
+        """
         if df is None or column not in df.columns:
             return False
 
@@ -224,7 +390,30 @@ class DataQuery:
         column: str,
         limit: int = 1000,
     ) -> List[Any]:
-        """컬럼의 유니크 값 목록을 반환한다."""
+        """Return sorted unique values for a column, up to a limit.
+
+        Input:
+            df: DataFrame to query; returns [] if None.
+            column: Column name to retrieve unique values from; returns [] if
+                not in df.columns.
+            limit: Maximum number of unique values to return. Values are sorted
+                before the limit is applied, so the result is always the first
+                ``limit`` values in ascending order.
+
+        Output:
+            Sorted list of up to ``limit`` unique values from the column.
+            Values are in ascending order (Polars default sort). Returns []
+            if df is None or column is absent.
+
+        Raises:
+            None. Early-exit guards prevent all error paths.
+
+        Invariants:
+            - Return type is always a list.
+            - Result length <= limit.
+            - Returns [] iff df is None or column not in df.columns.
+            - Values are sorted in ascending order.
+        """
         if df is None or column not in df.columns:
             return []
         # sort() is intentional: results are shown in dropdowns/axis labels where
@@ -237,7 +426,28 @@ class DataQuery:
         n: int = 10000,
         seed: int = 42,
     ) -> Optional[pl.DataFrame]:
-        """DataFrame에서 샘플링한다."""
+        """Return a random sample of at most n rows from a DataFrame.
+
+        Input:
+            df: DataFrame to sample from; returns None if None.
+            n: Maximum number of rows to return. If df has <= n rows, the
+                entire DataFrame is returned without sampling.
+            seed: Random seed for reproducible sampling. Default 42.
+
+        Output:
+            DataFrame with at most n rows. If len(df) <= n, returns df
+            unchanged. Returns None if df is None.
+
+        Raises:
+            pl.exceptions.InvalidOperationError: May propagate from Polars
+                on invalid sample configurations (e.g., fractional n). Not
+                caught; callers should handle if needed.
+
+        Invariants:
+            - Output row count <= n.
+            - Output row count == len(df) when len(df) <= n.
+            - Returns None iff df is None.
+        """
         if df is None:
             return None
         if len(df) <= n:
@@ -250,7 +460,26 @@ class DataQuery:
         start: int,
         end: int,
     ) -> Optional[pl.DataFrame]:
-        """DataFrame 슬라이스를 반환한다."""
+        """Return a contiguous row slice of a DataFrame.
+
+        Input:
+            df: DataFrame to slice; returns None if None.
+            start: Zero-based index of the first row to include (inclusive).
+            end: Zero-based index of the last row to include (exclusive).
+                Length of slice is ``end - start``.
+
+        Output:
+            DataFrame containing rows from index start up to (but not
+            including) end. Returns None if df is None. If the slice range
+            exceeds the DataFrame length, Polars clamps it silently.
+
+        Raises:
+            None. Polars slice does not raise on out-of-bound ranges.
+
+        Invariants:
+            - Output row count == max(0, min(end, len(df)) - start).
+            - Returns None iff df is None.
+        """
         if df is None:
             return None
         return df.slice(start, end - start)
@@ -263,14 +492,36 @@ class DataQuery:
         case_sensitive: bool = False,
         max_columns: int = 20,
     ) -> Optional[pl.DataFrame]:
-        """텍스트 검색을 수행한다.
+        """Search all (or specified) columns for rows matching a text query.
 
-        Args:
-            df: 대상 DataFrame.
-            query: 검색어.
-            columns: 검색할 컬럼 목록 (None이면 전체).
-            case_sensitive: 대소문자 구분 여부.
-            max_columns: 검색할 최대 컬럼 수.
+        Input:
+            df: DataFrame to search; returns None if None.
+            query: Search string. If case_sensitive=False, treated as a
+                case-insensitive regex pattern (via ``(?i)`` prefix and
+                re.escape). If case_sensitive=True, treated as a literal string.
+            columns: Explicit list of columns to search. If None, the first
+                min(len(df.columns), max_columns) columns are searched.
+            case_sensitive: Whether to perform case-sensitive matching.
+                Default False (case-insensitive).
+            max_columns: Upper bound on columns searched when columns=None.
+                Default 20.
+
+        Output:
+            DataFrame containing only rows where at least one searched column
+            contains the query string (cast to Utf8 for comparison). Returns
+            None if df is None. Returns an empty DataFrame (0 rows) if columns
+            resolves to an empty list or all column conditions fail to build.
+
+        Raises:
+            None. Per-column errors during condition building are caught and
+            logged; that column is skipped without propagating the exception.
+
+        Invariants:
+            - Returns None iff df is None.
+            - Output row count <= input row count.
+            - Every returned row matches the query in at least one searched
+              column.
+            - Columns with incompatible types are silently skipped.
         """
         if df is None:
             return None
@@ -312,15 +563,36 @@ class DataQuery:
         df: pl.DataFrame,
         filter_map: Dict[str, List[Any]],
     ) -> Optional[pl.DataFrame]:
-        """여러 컬럼의 값 목록 필터를 Polars LazyFrame에 한 번에 적용한다.
+        """Filter rows by multiple column allowlists in a single lazy pass.
 
-        graph_panel의 ``_active_filter`` (``{column: [val, ...]}`` 형태) 에
-        맞춰 설계된 편의 메서드.  필터는 lazy 평가 레이어에서 결합된 후
-        ``collect()`` 한 번만 호출되므로, eager 루프 방식보다 메모리 효율이 높다.
+        Designed for graph_panel's ``_active_filter`` pattern where the filter
+        state is a ``{column: [val, ...]}`` dict. All predicates are combined
+        in a single LazyFrame query and collected once, which is more memory-
+        efficient than iterating with eager filters.
 
-        Args:
-            df: 대상 DataFrame.  None이면 None을 반환한다.
-            filter_map: ``{컬럼명: 허용 값 리스트}`` 딕셔너리.
+        Input:
+            df: DataFrame to filter; returns None if None.
+            filter_map: Dict mapping column names to lists of allowed values.
+                Values are cast to str for comparison (matches graph_panel
+                behaviour). Keys for columns not in df are silently skipped.
+                Keys with empty value lists are silently skipped.
+
+        Output:
+            Filtered DataFrame containing only rows where every column in
+            filter_map (with a non-empty value list) holds one of the allowed
+            values. Returns None if df is None. Returns df unchanged if
+            filter_map is empty or all entries are empty/missing.
+
+        Raises:
+            pl.exceptions.InvalidOperationError: Propagated from Polars if
+                a predicate cannot be evaluated (e.g., dtype cast fails in
+                eager fallback).
+
+        Invariants:
+            - Returns None iff df is None.
+            - Output row count <= input row count.
+            - Missing or empty-valued keys in filter_map have no effect.
+            - All predicates are AND-combined (row must satisfy all filters).
         """
         if df is None:
             return None
@@ -350,7 +622,32 @@ class DataQuery:
             return lf.collect()
 
     def create_index(self, df: pl.DataFrame, column: str) -> Dict[Any, List[int]]:
-        """인덱스를 생성한다 (deprecated)."""
+        """Build a value-to-row-indices mapping for a column (deprecated).
+
+        .. deprecated::
+            Use Polars native filtering (``df.filter(pl.col(col) == val)``)
+            instead. This method exists only for backward compatibility.
+
+        Input:
+            df: DataFrame to index; returns ``{}`` if None.
+            column: Column name to build the index on; returns ``{}`` if not
+                in df.columns.
+
+        Output:
+            Dict mapping each unique value in the column to a list of integer
+            row indices (0-based) where that value occurs. Returns ``{}`` if
+            df is None or column is absent.
+
+        Raises:
+            DeprecationWarning: Always emitted via warnings.warn with
+                stacklevel=2.
+
+        Invariants:
+            - Return type is always a dict.
+            - Returns ``{}`` iff df is None or column not in df.columns.
+            - Union of all index lists covers every row index in df exactly
+              once (complete partition).
+        """
         warnings.warn(
             "create_index is deprecated. Use Polars native filtering instead.",
             DeprecationWarning,
