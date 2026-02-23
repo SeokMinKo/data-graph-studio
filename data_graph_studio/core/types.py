@@ -11,8 +11,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, List, NewType, Optional
 import uuid
+
+# ---------------------------------------------------------------------------
+# Semantic ID types — use instead of raw str for domain identifiers
+# ---------------------------------------------------------------------------
+DatasetId = NewType("DatasetId", str)
+ProfileId = NewType("ProfileId", str)
+AnnotationId = NewType("AnnotationId", str)
+ColumnName = NewType("ColumnName", str)
+FilePath = NewType("FilePath", str)
 
 import polars as pl
 
@@ -113,7 +122,7 @@ class DataProfile:
 @dataclass
 class DatasetInfo:
     """개별 데이터셋 정보."""
-    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])  # DatasetId
     name: str = ""
     df: Optional[pl.DataFrame] = None
     lazy_df: Optional[pl.LazyFrame] = None
