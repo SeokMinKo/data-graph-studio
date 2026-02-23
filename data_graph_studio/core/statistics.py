@@ -86,14 +86,24 @@ class DescriptiveStatistics(IStatisticsAnalyzer):
         self,
         values: np.ndarray
     ) -> Dict[str, float]:
-        """
-        기술 통계량 계산
+        """Compute descriptive statistics for a numeric array, excluding NaN values.
 
-        Args:
-            values: 데이터 배열
+        Input:
+            values: np.ndarray of numeric values. May contain NaN values, which are
+                excluded before calculation. May be empty after NaN removal.
 
-        Returns:
-            통계량 딕셔너리
+        Output:
+            Dict with keys: mean, median, std, var, min, max, q1, q3, iqr, skewness,
+            kurtosis, n, se (standard error). Returns an empty dict if all values are NaN.
+
+        Raises:
+            None
+
+        Invariants:
+            - NaN values are always stripped before any computation.
+            - Returns {} (not None) when the cleaned array is empty.
+            - Operation is timed via MetricsCollector.timed_operation("statistics.calculate").
+            - "statistics.calculated" counter is incremented on successful computation.
         """
         with get_metrics().timed_operation("statistics.calculate"):
             values = values[~np.isnan(values)]
@@ -127,15 +137,23 @@ class DescriptiveStatistics(IStatisticsAnalyzer):
         values: np.ndarray,
         confidence: float = 0.95
     ) -> Tuple[float, float]:
-        """
-        평균의 신뢰 구간
+        """Compute the confidence interval for the mean of a numeric array.
 
-        Args:
-            values: 데이터 배열
-            confidence: 신뢰 수준
+        Input:
+            values: np.ndarray of numeric values. NaN values are excluded. May be empty.
+            confidence: Confidence level between 0 and 1 exclusive (default 0.95).
 
-        Returns:
-            (하한, 상한) 튜플
+        Output:
+            Tuple (lower_bound, upper_bound) of the confidence interval for the mean.
+            When fewer than 2 non-NaN values remain, returns (mean, mean) — a degenerate
+            interval of width 0.
+
+        Raises:
+            None
+
+        Invariants:
+            - lower_bound <= mean <= upper_bound.
+            - Width shrinks as len(values) grows (for fixed confidence and variance).
         """
         values = values[~np.isnan(values)]
 
@@ -154,15 +172,23 @@ class DescriptiveStatistics(IStatisticsAnalyzer):
         values: np.ndarray,
         percentiles: List[float]
     ) -> Dict[float, float]:
-        """
-        백분위수 계산
+        """Compute requested percentiles for a numeric array.
 
-        Args:
-            values: 데이터 배열
-            percentiles: 백분위수 목록 (0-100)
+        Input:
+            values: np.ndarray of numeric values. NaN values are excluded.
+            percentiles: List of percentile values in the range [0, 100] to compute
+                (e.g., [25, 50, 75]).
 
-        Returns:
-            {백분위수: 값} 딕셔너리
+        Output:
+            Dict mapping each requested percentile to its computed value. Returns
+            {p: 0 for p in percentiles} when all values are NaN or the array is empty.
+
+        Raises:
+            None
+
+        Invariants:
+            - All keys in the result exactly match the input percentiles list.
+            - Results are monotonically non-decreasing for sorted percentiles.
         """
         values = values[~np.isnan(values)]
 

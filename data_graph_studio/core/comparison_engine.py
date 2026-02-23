@@ -81,15 +81,29 @@ class ComparisonEngine(IComparisonEngine):
         key_column: str,
         fill_strategy: str = "null",
     ) -> Dict[str, pl.DataFrame]:
-        """키 컬럼 기준으로 데이터셋을 정렬한다.
+        """Align multiple datasets on a shared key column, filling gaps according to a fill strategy.
 
-        Args:
-            dataset_ids: 정렬할 데이터셋 ID 목록.
-            key_column: 정렬 기준 컬럼.
-            fill_strategy: 누락값 처리 ('null', 'forward', 'backward', 'interpolate').
+        Input:
+            dataset_ids: Non-empty list of dataset ID strings to align; datasets that do not
+                contain key_column are silently skipped.
+            key_column: Column name used as the alignment key; must exist in at least one
+                referenced dataset.
+            fill_strategy: How to fill missing values after the join. One of "null" (keep
+                nulls), "forward", "backward", or "interpolate" (float columns only).
+                Default "null".
 
-        Returns:
-            {dataset_id: aligned_df} 매핑.
+        Output:
+            Dict mapping dataset_id to the aligned pl.DataFrame. Keys include only datasets
+            that contained key_column. Returns an empty dict if dataset_ids is empty or no
+            dataset contains key_column.
+
+        Raises:
+            None
+
+        Invariants:
+            - All returned DataFrames share the same key_column value set (union of all keys).
+            - Row count per aligned DataFrame == number of unique key values across all datasets.
+            - Column sets per dataset are unchanged beyond added fill values.
         """
         if not dataset_ids:
             return {}
@@ -131,16 +145,27 @@ class ComparisonEngine(IComparisonEngine):
         value_column: str,
         key_column: Optional[str] = None,
     ) -> Optional[pl.DataFrame]:
-        """두 데이터셋 간 차이를 계산한다.
+        """Calculate row-wise difference between two datasets for a given value column.
 
-        Args:
-            dataset_a_id: 첫 번째 데이터셋 ID.
-            dataset_b_id: 두 번째 데이터셋 ID.
-            value_column: 비교할 값 컬럼.
-            key_column: 키 컬럼 (None이면 인덱스 기준).
+        Input:
+            dataset_a_id: ID of the first (base) dataset; must be registered in DatasetManager.
+            dataset_b_id: ID of the second (comparison) dataset; must be registered in DatasetManager.
+            value_column: Name of the numeric column to compare; must exist in both datasets.
+            key_column: Optional column name for key-based joining. If None, comparison is done
+                by positional index, truncating to the shorter dataset length.
 
-        Returns:
-            차이 DataFrame (key, value_a, value_b, diff, diff_pct) 또는 None.
+        Output:
+            pl.DataFrame with columns [key_column|"index", "value_a", "value_b", "diff",
+            "diff_pct"], or None if either dataset is missing or value_column is absent.
+
+        Raises:
+            None
+
+        Invariants:
+            - "diff" == value_a - value_b for each row.
+            - "diff_pct" == (value_a - value_b) / abs(value_b) * 100.
+            - Operation is timed via MetricsCollector.timed_operation("comparison.calculate_difference").
+            - metrics "comparison.calculated" counter is incremented on success.
         """
         with get_metrics().timed_operation("comparison.calculate_difference"):
             df_a = self._get_df_snapshot(dataset_a_id)
@@ -185,14 +210,24 @@ class ComparisonEngine(IComparisonEngine):
         dataset_ids: List[str],
         value_column: str,
     ) -> Dict[str, Dict[str, Any]]:
-        """여러 데이터셋의 비교 통계를 반환한다.
+        """Compute summary statistics for a value column across multiple datasets.
 
-        Args:
-            dataset_ids: 비교할 데이터셋 ID 목록.
-            value_column: 통계 대상 컬럼.
+        Input:
+            dataset_ids: List of dataset ID strings to include; datasets that do not exist
+                or do not contain value_column are silently skipped.
+            value_column: Name of the numeric column to summarise; must have a numeric dtype
+                (Int8–Int64, Float32, Float64) to be included.
 
-        Returns:
-            {dataset_id: {stat_name: value}} 매핑.
+        Output:
+            Dict mapping dataset_id to a stats dict with keys: name, color, count, sum, mean,
+            median, std, min, max, q1, q3. Datasets that are skipped are absent from the dict.
+
+        Raises:
+            None
+
+        Invariants:
+            - Only numeric columns produce entries; non-numeric datasets are skipped silently.
+            - Does not modify any dataset state.
         """
         stats: Dict[str, Dict[str, Any]] = {}
 
@@ -229,15 +264,26 @@ class ComparisonEngine(IComparisonEngine):
         key_column: Optional[str] = None,
         how: str = "full",
     ) -> Optional[pl.DataFrame]:
-        """여러 데이터셋을 병합한다.
+        """Merge multiple datasets into a single DataFrame.
 
-        Args:
-            dataset_ids: 병합할 데이터셋 ID 목록.
-            key_column: 조인 키 컬럼 (None이면 수직 결합).
-            how: 조인 방식 ('inner', 'outer', 'left', 'right').
+        Input:
+            dataset_ids: List of dataset ID strings to merge; datasets that do not exist
+                or have no DataFrame are silently skipped.
+            key_column: Optional join key column name. If None, datasets are vertically
+                concatenated (diagonal concat to handle schema differences).
+            how: Join strategy when key_column is provided: "inner", "outer", "left", or
+                "right" (default "full").
 
-        Returns:
-            병합된 DataFrame 또는 None.
+        Output:
+            Merged pl.DataFrame, or None if no valid datasets were found.
+
+        Raises:
+            None
+
+        Invariants:
+            - Each source dataset is tagged with "_dataset_id" and "_dataset_name" columns.
+            - When key_column is None, result schema is the union of all dataset schemas.
+            - When key_column is provided, columns from dataset N are suffixed with "_N".
         """
         dfs = []
         for did in dataset_ids:
@@ -268,16 +314,28 @@ class ComparisonEngine(IComparisonEngine):
         value_column: str,
         test_type: str = "auto",
     ) -> Optional[Dict[str, Any]]:
-        """두 데이터셋 간 통계 검정을 수행한다.
+        """Perform a two-sample statistical test between datasets for a given column.
 
-        Args:
-            dataset_a_id: 첫 번째 데이터셋 ID.
-            dataset_b_id: 두 번째 데이터셋 ID.
-            value_column: 검정 대상 컬럼.
-            test_type: 검정 유형 ('auto', 'ttest', 'mannwhitney', 'ks').
+        Input:
+            dataset_a_id: ID of the first dataset; must be registered in DatasetManager.
+            dataset_b_id: ID of the second dataset; must be registered in DatasetManager.
+            value_column: Name of the numeric column to test; must exist in both datasets.
+            test_type: One of "auto" (select automatically), "ttest" (Welch's t-test),
+                "mannwhitney" (Mann-Whitney U), or "ks" (Kolmogorov-Smirnov).
+                Default "auto".
 
-        Returns:
-            검정 결과 딕셔너리 또는 에러 딕셔너리.
+        Output:
+            Dict with keys: test_name, statistic, p_value, is_significant, effect_size,
+            interpretation. On error, dict contains "error" key with a description and
+            remaining keys set to None.
+
+        Raises:
+            None (errors are captured in the returned dict).
+
+        Invariants:
+            - Returns an error dict (not None) when scipy is unavailable.
+            - is_significant == (p_value < 0.05) when a test succeeds.
+            - effect_size is Cohen's d calculated using pooled variance.
         """
         if not HAS_SCIPY:
             return {
@@ -352,17 +410,28 @@ class ComparisonEngine(IComparisonEngine):
         column_b: Optional[str] = None,
         method: str = "pearson",
     ) -> Optional[Dict[str, Any]]:
-        """두 데이터셋/컬럼 간 상관관계를 계산한다.
+        """Compute the correlation coefficient between two columns across two datasets.
 
-        Args:
-            dataset_a_id: 첫 번째 데이터셋 ID.
-            dataset_b_id: 두 번째 데이터셋 ID.
-            column_a: 첫 번째 컬럼.
-            column_b: 두 번째 컬럼 (None이면 column_a와 동일).
-            method: 상관계수 유형 ('pearson', 'spearman').
+        Input:
+            dataset_a_id: ID of the first dataset; must be registered in DatasetManager.
+            dataset_b_id: ID of the second dataset; must be registered in DatasetManager.
+            column_a: Column name from dataset A to correlate; must be numeric.
+            column_b: Column name from dataset B to correlate; defaults to column_a if None.
+            method: Correlation method: "pearson" or "spearman" (default "pearson").
 
-        Returns:
-            상관 결과 딕셔너리.
+        Output:
+            Dict with keys: method, correlation, p_value, is_significant, strength,
+            interpretation. On error, dict contains "error" key. Returns an error dict
+            (not None) when scipy is unavailable.
+
+        Raises:
+            None (errors are captured in the returned dict).
+
+        Invariants:
+            - Comparison uses min(len(data_a), len(data_b)) aligned data points.
+            - Returns an error dict when fewer than 3 aligned data points are available.
+            - is_significant == (p_value < 0.05) on success.
+            - strength is one of: "negligible", "weak", "moderate", "strong", "very strong".
         """
         if not HAS_SCIPY:
             return {
@@ -446,14 +515,24 @@ class ComparisonEngine(IComparisonEngine):
         dataset_ids: List[str],
         value_column: str,
     ) -> Dict[str, Dict[str, Any]]:
-        """여러 데이터셋의 기술통계 비교를 수행한다.
+        """Compute extended descriptive statistics for a column across multiple datasets.
 
-        Args:
-            dataset_ids: 비교할 데이터셋 ID 목록.
-            value_column: 통계 대상 컬럼.
+        Input:
+            dataset_ids: List of dataset ID strings to include; datasets that do not exist
+                or do not contain value_column are silently skipped.
+            value_column: Name of the numeric column to summarise.
 
-        Returns:
-            {dataset_id: {stat_name: value}} 매핑 (확장 통계 포함).
+        Output:
+            Dict mapping dataset_id to an extended stats dict that includes all keys from
+            get_comparison_statistics() plus: skewness, kurtosis, iqr, range, cv (coefficient
+            of variation). skewness/kurtosis are None when scipy is unavailable.
+
+        Raises:
+            None
+
+        Invariants:
+            - cv is None when the column mean is zero (avoids division by zero).
+            - Extends (does not replace) the base stats from get_comparison_statistics().
         """
         result = self.get_comparison_statistics(dataset_ids, value_column)
 
@@ -484,7 +563,23 @@ class ComparisonEngine(IComparisonEngine):
         dataset_id: str,
         value_column: str,
     ) -> Optional[Dict[str, Any]]:
-        """정규성 검정을 수행한다 (dataset → run_normality_test)."""
+        """Run a normality test on a column from the specified dataset.
+
+        Input:
+            dataset_id: ID of the dataset to test; must be registered in DatasetManager.
+            value_column: Name of the numeric column to test; must exist in the dataset.
+
+        Output:
+            Dict with normality test results (delegated from run_normality_test), or
+            {"error": "Dataset or column not found"} if the dataset or column is absent.
+
+        Raises:
+            None
+
+        Invariants:
+            - Null values are dropped before the test is run.
+            - Does not modify any dataset state.
+        """
         df = self._get_df_snapshot(dataset_id)
         if df is None or value_column not in df.columns:
             return {"error": "Dataset or column not found"}

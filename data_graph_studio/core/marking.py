@@ -48,12 +48,24 @@ class Marking:
         return len(self.selected_indices)
 
     def select(self, indices: Set[int], mode: MarkMode = MarkMode.REPLACE) -> None:
-        """
-        인덱스 선택
+        """Update selected_indices according to the given mode.
 
-        Args:
-            indices: 선택할 인덱스 집합
-            mode: 선택 모드 (REPLACE, ADD, REMOVE, TOGGLE, INTERSECT)
+        Input:
+            indices: Set of integer row indices to apply the mode operation with.
+            mode: MarkMode enum value controlling how indices are combined with the
+                current selection (REPLACE, ADD, REMOVE, TOGGLE, or INTERSECT).
+
+        Output:
+            None. Side effect: self.selected_indices is updated in place.
+
+        Raises:
+            None
+
+        Invariants:
+            - REPLACE: selected_indices == set(indices) after the call.
+            - ADD: selected_indices is a superset of the original.
+            - REMOVE: selected_indices is a subset of the original.
+            - INTERSECT: selected_indices <= original AND selected_indices <= indices.
         """
         if mode == MarkMode.REPLACE:
             self.selected_indices = set(indices)
@@ -72,7 +84,21 @@ class Marking:
             self.selected_indices.intersection_update(indices)
 
     def clear(self) -> None:
-        """선택 클리어"""
+        """Clear all selections including per-table selections.
+
+        Input:
+            None
+
+        Output:
+            None. Side effect: selected_indices and _table_selections are emptied.
+
+        Raises:
+            None
+
+        Invariants:
+            - selected_indices == set() after the call.
+            - _table_selections == {} after the call.
+        """
         self.selected_indices.clear()
         self._table_selections.clear()
 
@@ -82,13 +108,23 @@ class Marking:
         table_name: str,
         mode: MarkMode = MarkMode.REPLACE
     ) -> None:
-        """
-        특정 테이블에 대한 선택
+        """Update the selection for a specific table.
 
-        Args:
-            indices: 선택할 인덱스 집합
-            table_name: 테이블 이름
-            mode: 선택 모드
+        Input:
+            indices: Set of integer row indices to apply the mode operation with.
+            table_name: Non-empty string identifying the target table.
+            mode: MarkMode enum value controlling the combination logic
+                (REPLACE, ADD, REMOVE, TOGGLE, or INTERSECT).
+
+        Output:
+            None. Side effect: _table_selections[table_name] is updated in place.
+
+        Raises:
+            None
+
+        Invariants:
+            - table_name key always exists in _table_selections after the call.
+            - global selected_indices is not affected by this method.
         """
         if table_name not in self._table_selections:
             self._table_selections[table_name] = set()
@@ -109,11 +145,40 @@ class Marking:
             self._table_selections[table_name].intersection_update(indices)
 
     def get_for_table(self, table_name: str) -> Set[int]:
-        """특정 테이블의 선택된 인덱스 반환"""
+        """Return the selected indices for a specific table.
+
+        Input:
+            table_name: Name of the table to retrieve selections for.
+
+        Output:
+            Set of selected integer row indices for the table, or an empty set if
+            no selection exists for that table.
+
+        Raises:
+            None
+
+        Invariants:
+            - Returns an empty set (not None) when table_name is unknown.
+            - Does not modify any state.
+        """
         return self._table_selections.get(table_name, set())
 
     def clear_for_table(self, table_name: str) -> None:
-        """특정 테이블의 선택 클리어"""
+        """Clear the selection for a specific table.
+
+        Input:
+            table_name: Name of the table whose selection to clear.
+
+        Output:
+            None. Side effect: _table_selections[table_name] is emptied if it exists.
+
+        Raises:
+            None
+
+        Invariants:
+            - No-op if table_name is not in _table_selections.
+            - global selected_indices is unaffected.
+        """
         if table_name in self._table_selections:
             self._table_selections[table_name].clear()
 
@@ -169,18 +234,22 @@ class MarkingManager(Observable):
         return self._active_marking
 
     def create_marking(self, name: str, color: Optional[str] = None) -> Marking:
-        """
-        새 마킹 생성
+        """Create and register a new Marking with a unique name.
 
-        Args:
-            name: 마킹 이름
-            color: 마킹 색상 (없으면 자동 할당)
+        Input:
+            name: Non-empty unique string name for the new marking; must not already exist.
+            color: Optional hex color string (e.g., "#1f77b4"). If None, the next color from
+                DEFAULT_COLORS is assigned automatically.
 
-        Returns:
-            생성된 Marking 객체
+        Output:
+            The newly created Marking instance.
 
         Raises:
-            ValueError: 이미 존재하는 마킹 이름
+            ValidationError: if a marking with the given name already exists.
+
+        Invariants:
+            - Emits "marking_created" event with name after successful creation.
+            - _color_index is incremented by 1 when color is auto-assigned.
         """
         if name in self._markings:
             raise ValidationError(
@@ -202,15 +271,22 @@ class MarkingManager(Observable):
         return marking
 
     def remove_marking(self, name: str) -> None:
-        """
-        마킹 제거
+        """Remove the named marking from the manager.
 
-        Args:
-            name: 마킹 이름
+        Input:
+            name: Name of the marking to remove; must not be "Main".
+
+        Output:
+            None. Side effect: marking is deleted; if it was active, active_marking
+            reverts to "Main".
 
         Raises:
-            ValueError: Main 마킹은 제거 불가
-            KeyError: 존재하지 않는 마킹
+            ValidationError: if name is "Main" (the default marking is protected).
+            KeyError: if name does not exist.
+
+        Invariants:
+            - Emits "marking_removed" event after successful removal.
+            - active_marking is always a valid, existing marking after the call.
         """
         if name == "Main":
             raise ValidationError(
@@ -234,14 +310,21 @@ class MarkingManager(Observable):
         self.emit("marking_removed", name)
 
     def set_active_marking(self, name: str) -> None:
-        """
-        활성 마킹 변경
+        """Set the named marking as the currently active marking.
 
-        Args:
-            name: 마킹 이름
+        Input:
+            name: Name of an existing marking to activate.
+
+        Output:
+            None. Side effect: active_marking is updated and "active_marking_changed"
+            event is emitted when the marking actually changes.
 
         Raises:
-            KeyError: 존재하지 않는 마킹
+            KeyError: if name does not exist.
+
+        Invariants:
+            - active_marking == name after the call.
+            - No event is emitted if name == current active_marking.
         """
         if name not in self._markings:
             raise KeyError(f"Marking '{name}' not found")
@@ -257,17 +340,25 @@ class MarkingManager(Observable):
         mode: MarkMode = MarkMode.REPLACE,
         table_name: Optional[str] = None
     ) -> None:
-        """
-        마킹에 인덱스 선택
+        """Apply a selection to the named marking.
 
-        Args:
-            marking_name: 마킹 이름
-            indices: 선택할 인덱스 집합
-            mode: 선택 모드
-            table_name: 테이블 이름 (다중 테이블 시)
+        Input:
+            marking_name: Name of an existing marking to update.
+            indices: Set of integer row indices to select.
+            mode: MarkMode enum value controlling how indices combine with the current
+                selection (default REPLACE).
+            table_name: Optional table name for per-table selection; if None, the global
+                selected_indices is updated.
+
+        Output:
+            None. Side effect: marking selection is updated; "marking_changed" event is
+            emitted with (marking_name, updated_indices_set).
 
         Raises:
-            KeyError: 존재하지 않는 마킹
+            KeyError: if marking_name does not exist.
+
+        Invariants:
+            - Emits "marking_changed" with the post-update selected set.
         """
         if marking_name not in self._markings:
             raise KeyError(f"Marking '{marking_name}' not found")
@@ -291,7 +382,23 @@ class MarkingManager(Observable):
         mode: MarkMode = MarkMode.REPLACE,
         table_name: Optional[str] = None
     ) -> None:
-        """Alias for mark(). Provided for API compatibility."""
+        """Alias for mark(). Provided for API compatibility.
+
+        Input:
+            marking_name: Name of an existing marking to update.
+            indices: Set of integer row indices to select.
+            mode: MarkMode enum value (default REPLACE).
+            table_name: Optional table name for per-table selection.
+
+        Output:
+            None. Delegates entirely to mark().
+
+        Raises:
+            KeyError: if marking_name does not exist (propagated from mark()).
+
+        Invariants:
+            - Identical behaviour to mark() in all cases.
+        """
         self.mark(marking_name, indices, mode, table_name)
 
     def mark_active(
@@ -300,13 +407,21 @@ class MarkingManager(Observable):
         mode: MarkMode = MarkMode.REPLACE,
         table_name: Optional[str] = None
     ) -> None:
-        """
-        활성 마킹에 인덱스 선택
+        """Apply a selection to the currently active marking.
 
-        Args:
-            indices: 선택할 인덱스 집합
-            mode: 선택 모드
-            table_name: 테이블 이름
+        Input:
+            indices: Set of integer row indices to select.
+            mode: MarkMode enum value controlling combination logic (default REPLACE).
+            table_name: Optional table name for per-table selection.
+
+        Output:
+            None. Delegates to mark() using the current active_marking name.
+
+        Raises:
+            KeyError: if the active marking has been removed (should not happen normally).
+
+        Invariants:
+            - Equivalent to mark(self._active_marking, indices, mode, table_name).
         """
         self.mark(self._active_marking, indices, mode, table_name)
 
@@ -315,18 +430,23 @@ class MarkingManager(Observable):
         marking_name: str,
         table_name: Optional[str] = None
     ) -> Set[int]:
-        """
-        마킹된 인덱스 조회
+        """Return the selected indices for the named marking.
 
-        Args:
-            marking_name: 마킹 이름
-            table_name: 테이블 이름
+        Input:
+            marking_name: Name of an existing marking to query.
+            table_name: Optional table name; if provided, returns the per-table selection
+                instead of the global selection.
 
-        Returns:
-            선택된 인덱스 집합
+        Output:
+            Set of selected integer row indices. Returns a copy of the global selection
+            when table_name is None, or the table-specific selection when provided.
 
         Raises:
-            KeyError: 존재하지 않는 마킹
+            KeyError: if marking_name does not exist.
+
+        Invariants:
+            - Does not modify marking state.
+            - Returns a copy (not a reference) of global selected_indices.
         """
         if marking_name not in self._markings:
             raise KeyError(f"Marking '{marking_name}' not found")
@@ -342,15 +462,23 @@ class MarkingManager(Observable):
         marking_name: str,
         table_name: Optional[str] = None
     ) -> None:
-        """
-        마킹 클리어
+        """Clear the selection in the named marking.
 
-        Args:
-            marking_name: 마킹 이름
-            table_name: 특정 테이블만 클리어
+        Input:
+            marking_name: Name of an existing marking to clear.
+            table_name: Optional table name; if provided, only clears the per-table
+                selection; if None, clears the entire marking.
+
+        Output:
+            None. Side effect: selection is cleared; "marking_changed" event emitted
+            with an empty set.
 
         Raises:
-            KeyError: 존재하지 않는 마킹
+            KeyError: if marking_name does not exist.
+
+        Invariants:
+            - selected_indices (or table selection) is empty after the call.
+            - Emits "marking_changed" with an empty set.
         """
         if marking_name not in self._markings:
             raise KeyError(f"Marking '{marking_name}' not found")
@@ -365,17 +493,41 @@ class MarkingManager(Observable):
         self.emit("marking_changed", marking_name, set())
 
     def clear_all_markings(self) -> None:
-        """모든 마킹 클리어"""
+        """Clear the selection in every registered marking.
+
+        Input:
+            None
+
+        Output:
+            None. Side effect: all markings are cleared; "marking_changed" event is
+            emitted for each marking with an empty set.
+
+        Raises:
+            None
+
+        Invariants:
+            - All markings have empty selected_indices after the call.
+        """
         for name, marking in self._markings.items():
             marking.clear()
             self.emit("marking_changed", name, set())
 
     def get_all_marked(self) -> Set[int]:
-        """
-        모든 마킹의 선택된 인덱스 합집합
+        """Return the union of selected indices across all markings.
 
-        Returns:
-            모든 마킹에서 선택된 인덱스 집합
+        Input:
+            None
+
+        Output:
+            Set of integer row indices that are selected in at least one marking.
+            Returns an empty set if no markings have selections.
+
+        Raises:
+            None
+
+        Invariants:
+            - Result is a superset of each individual marking's selected_indices.
+            - Does not modify marking state.
         """
         result: Set[int] = set()
         for marking in self._markings.values():
@@ -383,14 +535,22 @@ class MarkingManager(Observable):
         return result
 
     def get_intersection(self, marking_names: List[str]) -> Set[int]:
-        """
-        여러 마킹의 교집합
+        """Return the intersection of selected indices across the specified markings.
 
-        Args:
-            marking_names: 마킹 이름 목록
+        Input:
+            marking_names: List of marking name strings to intersect.
+                Names that do not exist are silently skipped after the first element.
 
-        Returns:
-            교집합 인덱스
+        Output:
+            Set of integer row indices selected in ALL listed markings. Returns an empty
+            set if marking_names is empty.
+
+        Raises:
+            KeyError: if the first marking name in the list does not exist.
+
+        Invariants:
+            - Result is a subset of each individual marking's selected_indices.
+            - Does not modify marking state.
         """
         if not marking_names:
             return set()
@@ -404,15 +564,21 @@ class MarkingManager(Observable):
         return result
 
     def get_difference(self, marking_a: str, marking_b: str) -> Set[int]:
-        """
-        두 마킹의 차집합 (A - B)
+        """Return indices in marking A that are not in marking B (set difference A - B).
 
-        Args:
-            marking_a: 마킹 A 이름
-            marking_b: 마킹 B 이름
+        Input:
+            marking_a: Name of the first marking (minuend); returns empty set if not found.
+            marking_b: Name of the second marking (subtrahend); treated as empty if not found.
 
-        Returns:
-            차집합 인덱스 (A에는 있고 B에는 없는)
+        Output:
+            Set of integer row indices present in marking_a but absent from marking_b.
+
+        Raises:
+            None
+
+        Invariants:
+            - Result is a subset of marking_a.selected_indices.
+            - Does not modify marking state.
         """
         set_a = self._markings.get(marking_a, Marking("", "")).selected_indices
         set_b = self._markings.get(marking_b, Marking("", "")).selected_indices
@@ -420,43 +586,78 @@ class MarkingManager(Observable):
         return set_a - set_b
 
     def is_marked(self, marking_name: str, index: int) -> bool:
-        """
-        특정 인덱스가 마킹되어 있는지 확인
+        """Check whether a specific row index is selected in the named marking.
 
-        Args:
-            marking_name: 마킹 이름
-            index: 확인할 인덱스
+        Input:
+            marking_name: Name of the marking to query.
+            index: Zero-based integer row index to test.
 
-        Returns:
-            마킹 여부
+        Output:
+            True if index is in the marking's selected_indices, False otherwise.
+            Returns False if marking_name does not exist.
+
+        Raises:
+            None
+
+        Invariants:
+            - Does not modify marking state.
         """
         if marking_name not in self._markings:
             return False
         return index in self._markings[marking_name].selected_indices
 
     def get_marking_names(self) -> List[str]:
-        """
-        모든 마킹 이름 목록
+        """Return a list of all registered marking names.
 
-        Returns:
-            마킹 이름 목록
+        Input:
+            None
+
+        Output:
+            List of marking name strings in insertion order.
+
+        Raises:
+            None
+
+        Invariants:
+            - Always contains at least "Main".
+            - Does not modify manager state.
         """
         return list(self._markings.keys())
 
     def get_marking(self, name: str) -> Optional[Marking]:
-        """
-        마킹 객체 조회
+        """Look up and return a Marking by name.
 
-        Args:
-            name: 마킹 이름
+        Input:
+            name: Name of the marking to retrieve.
 
-        Returns:
-            Marking 객체 또는 None
+        Output:
+            Marking instance if name exists, or None.
+
+        Raises:
+            None
+
+        Invariants:
+            - Does not modify manager state.
         """
         return self._markings.get(name)
 
     def reset(self) -> None:
-        """전체 초기화"""
+        """Reset the manager to its initial state: clear all markings and recreate the default "Main" marking.
+
+        Input:
+            None
+
+        Output:
+            None. Side effect: all markings are removed; a fresh "Main" marking is created
+            and active_marking is set to "Main".
+
+        Raises:
+            None
+
+        Invariants:
+            - After the call, exactly one marking ("Main") exists and active_marking == "Main".
+            - _color_index is reset to 0 before the default marking is created.
+        """
         self._markings.clear()
         self._active_marking = "Main"
         self._color_index = 0
