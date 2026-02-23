@@ -720,8 +720,7 @@ class ProfileManager:
 
         Output:
             True if the profile was open and closed successfully.
-            False if the profile has unsaved changes (caller should save first)
-            or if no profile is currently open.
+            False if the profile has unsaved changes (caller should save first).
 
         Raises:
             None.
