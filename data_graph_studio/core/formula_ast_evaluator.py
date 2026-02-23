@@ -15,7 +15,15 @@ from data_graph_studio.core.formula_exceptions import FormulaError
 
 
 class FormulaAstEvaluator:
-    """Stateless helper that evaluates Python AST nodes into Polars Series."""
+    """Stateless helper that evaluates Python AST nodes into Polars Series.
+
+    Input: node — ast.AST, the root of a parsed formula expression tree
+    Input: df — pl.DataFrame, provides column data for name lookups
+    Input: col_map — Dict[str, str], maps formula identifiers to DataFrame column names
+    Output: pl.Series or scalar value produced by evaluating the expression
+    Raises: FormulaError — for unknown identifiers, unsupported operators, or unknown functions
+    Invariants: df is not modified; col_map keys must match column names in df
+    """
 
     # ── Public entry point ────────────────────────────────────
 
@@ -25,7 +33,14 @@ class FormulaAstEvaluator:
         df: pl.DataFrame,
         col_map: Dict[str, str],
     ) -> Any:
-        """Recursively evaluate an AST node into a pl.Series or scalar."""
+        """Evaluate an AST node into a Polars Series or scalar.
+
+        Input: node — ast.AST, root of the expression tree
+        Input: df — pl.DataFrame, source data for column references
+        Input: col_map — Dict[str, str], identifier-to-column-name mapping
+        Output: pl.Series or Python scalar result of the expression
+        Raises: FormulaError — if the node type or identifier is unsupported
+        """
         return self._eval_ast_node(node, df, col_map)
 
     # ── Internal AST evaluation ───────────────────────────────
@@ -36,7 +51,15 @@ class FormulaAstEvaluator:
         df: pl.DataFrame,
         col_map: Dict[str, str],
     ) -> Any:
-        """Recursively evaluate an AST node into a pl.Series or scalar."""
+        """Recursively dispatch an AST node to the appropriate evaluation branch.
+
+        Input: node — ast.AST, one of Expression/Constant/Name/UnaryOp/BinOp/Compare/BoolOp/Call
+        Input: df — pl.DataFrame, source data for column lookups
+        Input: col_map — Dict[str, str], identifier-to-column mapping
+        Output: pl.Series or scalar produced by the node
+        Raises: FormulaError — for unsupported node types, unknown identifiers, or unsupported operators
+        Invariants: chained comparisons are folded with element-wise AND
+        """
 
         if isinstance(node, ast.Expression):
             return self._eval_ast_node(node.body, df, col_map)
@@ -113,7 +136,16 @@ class FormulaAstEvaluator:
     def _apply_binop(
         self, op: ast.operator, left: Any, right: Any, df: pl.DataFrame
     ) -> Any:
-        """Apply a binary operator."""
+        """Apply an arithmetic or bitwise binary operator element-wise.
+
+        Input: op — ast.operator, one of Add/Sub/Mult/Div/FloorDiv/Mod/Pow/BitAnd/BitOr
+        Input: left — pl.Series or scalar, left operand
+        Input: right — pl.Series or scalar, right operand
+        Input: df — pl.DataFrame, used for scalar broadcasting via _to_series
+        Output: pl.Series result of the operation
+        Raises: FormulaError — for unsupported operator types
+        Invariants: division and modulo by zero produce null (not inf/nan)
+        """
         # Ensure at least one side is a Series for proper broadcasting
         left = self._to_series(left, df)
         right = self._to_series(right, df)
@@ -177,7 +209,15 @@ class FormulaAstEvaluator:
     def _apply_cmpop(
         self, op: ast.cmpop, left: Any, right: Any, df: pl.DataFrame
     ) -> Any:
-        """Apply a comparison operator."""
+        """Apply a comparison operator element-wise, returning a boolean Series.
+
+        Input: op — ast.cmpop, one of Gt/Lt/GtE/LtE/Eq/NotEq
+        Input: left — pl.Series or scalar, left operand
+        Input: right — pl.Series or scalar, right operand
+        Input: df — pl.DataFrame, used for scalar broadcasting
+        Output: pl.Series of bool, element-wise comparison result
+        Raises: FormulaError — for unsupported comparison operators
+        """
         left = self._to_series(left, df)
         right = self._to_series(right, df)
 
@@ -202,7 +242,17 @@ class FormulaAstEvaluator:
         df: pl.DataFrame,
         col_map: Dict[str, str],
     ) -> Any:
-        """Evaluate a function call node."""
+        """Evaluate a function-call AST node against supported formula functions.
+
+        Input: node — ast.Call, the call node with func and args
+        Input: df — pl.DataFrame, source data for column references
+        Input: col_map — Dict[str, str], identifier-to-column mapping
+        Output: pl.Series result of the function applied to its arguments
+        Raises: FormulaError — for complex call expressions or unknown function names
+        Raises: ValueError — if rolling_mean window is not positive
+        Invariants: aggregate functions (mean/std/sum/count/first/last) broadcast
+                    their scalar result to a constant Series of length len(df)
+        """
         func_name = _get_call_name(node)
         if func_name is None:
             raise FormulaError("Complex function calls not supported")
@@ -261,7 +311,13 @@ class FormulaAstEvaluator:
         raise FormulaError(f"Unknown function: {func_name}")
 
     def _to_series(self, val: Any, df: pl.DataFrame) -> pl.Series:
-        """Ensure a value is a pl.Series (broadcast scalars)."""
+        """Coerce a scalar or Series value to a pl.Series of length len(df).
+
+        Input: val — Any, either a pl.Series or a Python bool/int/float/other scalar
+        Input: df — pl.DataFrame, used only to determine the target length for broadcasting
+        Output: pl.Series of length len(df)
+        Invariants: existing Series are returned as-is; scalars are broadcast to len(df) elements
+        """
         if isinstance(val, pl.Series):
             return val
         if isinstance(val, bool):
@@ -272,7 +328,11 @@ class FormulaAstEvaluator:
 
 
 def _get_call_name(node: ast.Call) -> Optional[str]:
-    """Extract function name from an ast.Call node (module-level helper)."""
+    """Extract the function name string from an ast.Call node.
+
+    Input: node — ast.Call, the call node to inspect
+    Output: str function name if the callee is a plain Name or Attribute; None otherwise
+    """
     func = node.func
     if isinstance(func, ast.Name):
         return func.id
