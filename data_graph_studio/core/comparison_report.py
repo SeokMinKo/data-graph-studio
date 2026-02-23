@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 from .data_engine import DataEngine
+from .exceptions import ExportError
 from .state import AppState
 
 logger = logging.getLogger(__name__)
@@ -146,9 +147,12 @@ class ComparisonReport:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html)
             return True
-        except Exception:
-            logger.error("comparison_report.export_html.failed", extra={"path": file_path}, exc_info=True)
-            return False
+        except Exception as e:
+            raise ExportError(
+                f"HTML 리포트 파일 쓰기 실패: {e}",
+                operation="export_html",
+                context={"path": file_path},
+            ) from e
 
     def _generate_html_report(self, data: Dict[str, Any]) -> str:
         """HTML 리포트 생성"""
@@ -376,9 +380,12 @@ class ComparisonReport:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
             return True
-        except Exception:
-            logger.error("comparison_report.export_json.failed", extra={"path": file_path}, exc_info=True)
-            return False
+        except Exception as e:
+            raise ExportError(
+                f"JSON 리포트 파일 쓰기 실패: {e}",
+                operation="export_json",
+                context={"path": file_path},
+            ) from e
 
     def export_csv(self, file_path: str, dataset_ids: List[str] = None) -> bool:
         """CSV 형식으로 내보내기 (통계 테이블)"""
@@ -447,6 +454,9 @@ class ComparisonReport:
                         ])
 
             return True
-        except Exception:
-            logger.error("comparison_report.export_csv.failed", extra={"path": file_path}, exc_info=True)
-            return False
+        except Exception as e:
+            raise ExportError(
+                f"CSV 리포트 파일 쓰기 실패: {e}",
+                operation="export_csv",
+                context={"path": file_path},
+            ) from e
