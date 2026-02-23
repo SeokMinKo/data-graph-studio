@@ -16,10 +16,19 @@ logger = logging.getLogger(__name__)
 from data_graph_studio.core.constants import (
     IPC_DEFAULT_PORT as DEFAULT_PORT,
     IPC_MAX_PORT_ATTEMPTS as MAX_PORT_ATTEMPTS,
+    IPC_KEY_COMMAND,
+    IPC_KEY_ARGS,
+    IPC_KEY_STATUS,
+    IPC_KEY_MESSAGE,
+    IPC_STATUS_ERROR,
+    IPC_PORT_DIR,
+    IPC_PORT_FILE_NAME,
+    IPC_SERVER_HOST,
+    IPC_THREAD_NAME,
 )
 from data_graph_studio.core.ipc_protocol import make_error_response, parse_request
 
-_PORT_FILE = Path.home() / ".dgs" / "ipc_port"
+_PORT_FILE = Path.home() / IPC_PORT_DIR / IPC_PORT_FILE_NAME
 
 
 def _pid_is_alive(pid: int) -> bool:
@@ -86,7 +95,7 @@ class IpcServer:
         ready = threading.Event()
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(
-            target=self._run_loop, args=(ready,), daemon=True, name="ipc-server"
+            target=self._run_loop, args=(ready,), daemon=True, name=IPC_THREAD_NAME
         )
         self._thread.start()
         ready.wait(timeout=5.0)
@@ -111,7 +120,7 @@ class IpcServer:
             port = DEFAULT_PORT + attempt
             try:
                 self._server = await asyncio.start_server(
-                    self._handle_client, "127.0.0.1", port
+                    self._handle_client, IPC_SERVER_HOST, port
                 )
                 self._port = port
                 self._write_port_file(port)
@@ -135,7 +144,7 @@ class IpcServer:
             await writer.drain()
         except Exception as e:
             logger.warning("ipc_server.handle_client_error", extra={"error": str(e)})
-            err = json.dumps({"status": "error", "error": str(e)}) + "\n"
+            err = json.dumps({IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": str(e)}) + "\n"
             try:
                 writer.write(err.encode("utf-8"))
                 await writer.drain()
@@ -175,17 +184,17 @@ class IPCServer(IpcServer):
         except ValueError as e:
             logger.warning("ipc_server.invalid_request", extra={"error": str(e)})
             return make_error_response(str(e))
-        command = req["command"]
-        args = req["args"]
+        command = req[IPC_KEY_COMMAND]
+        args = req[IPC_KEY_ARGS]
         if command in self._handlers:
             try:
                 return self._handlers[command](**args)
             except Exception as e:
                 logger.warning("ipc_server.dispatch_error", extra={"command": command, "error": str(e)})
-                return {"status": "error", "message": str(e)}
+                return {IPC_KEY_STATUS: IPC_STATUS_ERROR, IPC_KEY_MESSAGE: str(e)}
         else:
             logger.debug("ipc_server.unknown_command", extra={"command": command})
-            return {"status": "error", "message": f"unknown command: {command}"}
+            return {IPC_KEY_STATUS: IPC_STATUS_ERROR, IPC_KEY_MESSAGE: f"unknown command: {command}"}
 
     def start(self, port: int = None) -> bool:  # type: ignore[override]
         """Start the server. Returns True on success (old API)."""
@@ -240,10 +249,10 @@ class IPCClient:
     def send_command(self, command: str, **args) -> dict:
         """Send a JSON command to the server and return the parsed response dict."""
         if not self._socket:
-            return {"status": "error", "error": "Not connected"}
+            return {IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": "Not connected"}
 
         try:
-            data = json.dumps({"command": command, "args": args}, ensure_ascii=False)
+            data = json.dumps({IPC_KEY_COMMAND: command, IPC_KEY_ARGS: args}, ensure_ascii=False)
             self._socket.sendall((data + "\n").encode("utf-8"))
 
             response = b""
@@ -255,7 +264,7 @@ class IPCClient:
 
             return json.loads(response.decode("utf-8").strip())
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            return {IPC_KEY_STATUS: IPC_STATUS_ERROR, "error": str(e)}
 
     def __enter__(self):
         self.connect()

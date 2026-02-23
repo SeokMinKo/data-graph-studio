@@ -8,6 +8,15 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+from .constants import (
+    IPC_KEY_COMMAND,
+    IPC_KEY_ARGS,
+    IPC_KEY_STATUS,
+    IPC_KEY_MESSAGE,
+    IPC_STATUS_OK,
+    IPC_STATUS_ERROR,
+)
+
 
 class IpcRequest(TypedDict):
     """Incoming IPC request message."""
@@ -29,15 +38,15 @@ def parse_request(data: dict[str, Any]) -> IpcRequest:
     Raises:
         ValueError: if "command" key is missing or not a string.
     """
-    if "command" not in data:
+    if IPC_KEY_COMMAND not in data:
         raise ValueError("IPC request missing required 'command' key")
-    if not isinstance(data["command"], str):
+    if not isinstance(data[IPC_KEY_COMMAND], str):
         raise ValueError(
-            f"IPC 'command' must be str, got {type(data['command']).__name__}"
+            f"IPC 'command' must be str, got {type(data[IPC_KEY_COMMAND]).__name__}"
         )
     return IpcRequest(
-        command=data["command"],
-        args=data.get("args", {}),
+        command=data[IPC_KEY_COMMAND],
+        args=data.get(IPC_KEY_ARGS, {}),
     )
 
 
@@ -46,7 +55,7 @@ def make_ok_response(**fields: Any) -> dict[str, Any]:
 
     Returns: {"status": "ok", **fields}
     """
-    return {"status": "ok", **fields}
+    return {IPC_KEY_STATUS: IPC_STATUS_OK, **fields}
 
 
 def make_error_response(message: str) -> IpcErrorResponse:
@@ -54,4 +63,4 @@ def make_error_response(message: str) -> IpcErrorResponse:
 
     Returns: {"status": "error", "message": message}
     """
-    return IpcErrorResponse(status="error", message=message)
+    return IpcErrorResponse(status=IPC_STATUS_ERROR, message=message)
