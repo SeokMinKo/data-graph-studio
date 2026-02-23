@@ -58,10 +58,10 @@ from .state_view_mixin import ViewSettingsMixin
 
 
 class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin, Observable):
-    """
-    앱 전역 상태 관리
+    """Central application state container.
 
-    Observable events로 상태 변경을 알림
+    Composes dataset, column-zone, filter/sort, and view-settings behaviour via mixins.
+    State changes are broadcast to subscribers via Observable events.
     """
 
     def __init__(self):
@@ -147,61 +147,51 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
         return self._selection
 
     def select_rows(self, rows: List[int], add: bool = False):
-        """
-        Select the given rows, optionally adding to the existing selection.
+        """Select the given rows, optionally adding to the existing selection.
 
-        Args:
-            rows: Row indices to select.
-            add: If True, add to existing selection. If False, replace it.
-
-        Emits:
-            selection_changed signal.
+        Input: rows — List[int], row indices to select.
+               add — bool; if True, merge with existing selection; if False, replace it.
+        Output: None
+        Emits: selection_changed.
         """
         self._selection.select(rows, add)
         self.emit("selection_changed")
 
     def deselect_rows(self, rows: List[int]):
-        """
-        Remove the given rows from the selection.
+        """Remove the given rows from the current selection.
 
-        Args:
-            rows: Row indices to deselect.
-
-        Emits:
-            selection_changed signal.
+        Input: rows — List[int], row indices to deselect.
+        Output: None
+        Emits: selection_changed.
         """
         self._selection.deselect(rows)
         self.emit("selection_changed")
 
     def toggle_row(self, row: int):
-        """
-        Toggle the selection state of a single row.
+        """Toggle the selection state of a single row.
 
-        Args:
-            row: Row index to toggle.
-
-        Emits:
-            selection_changed signal.
+        Input: row — int, row index to toggle.
+        Output: None
+        Emits: selection_changed.
         """
         self._selection.toggle(row)
         self.emit("selection_changed")
 
     def clear_selection(self):
-        """
-        Clear all selected and highlighted rows.
+        """Clear all selected and highlighted rows.
 
-        Emits:
-            selection_changed signal.
+        Output: None
+        Emits: selection_changed.
         """
         self._selection.clear()
         self.emit("selection_changed")
 
     def select_all(self):
-        """
-        Select all visible rows.
+        """Select all currently visible rows.
 
-        Emits:
-            selection_changed signal.
+        Output: None
+        Emits: selection_changed.
+        Invariants: all indices in range(self._visible_rows) are selected.
         """
         self._selection.select(list(range(self._visible_rows)))
         self.emit("selection_changed")
@@ -214,7 +204,12 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
         return self._limit_to_marking
 
     def set_limit_to_marking(self, enabled: bool):
-        """Toggle limit to marking mode"""
+        """Enable or disable limit-to-marking mode.
+
+        Input: enabled — bool; True restricts the table to marked rows only.
+        Output: None
+        Emits: limit_to_marking_changed with the new value, but only when the value changes.
+        """
         if self._limit_to_marking != enabled:
             self._limit_to_marking = enabled
             self.emit("limit_to_marking_changed", enabled)
@@ -222,7 +217,12 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
     # ==================== Reset ====================
 
     def reset(self):
-        """전체 상태 초기화"""
+        """Reset all application state to initial defaults and emit data_cleared.
+
+        Output: None
+        Emits: data_cleared.
+        Invariants: all column zones, filters, sorts, selection, and chart settings are cleared.
+        """
         self._data_loaded = False
         self._total_rows = 0
         self._visible_rows = 0
@@ -244,28 +244,34 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
 
     @property
     def current_profile(self) -> Optional['Profile']:
-        """현재 프로파일"""
+        """The currently loaded Profile, or None if no profile is active."""
         return self._current_profile
 
     @property
     def current_setting_id(self) -> Optional[str]:
-        """현재 활성 설정 ID"""
+        """ID of the currently active GraphSetting, or None if not set."""
         return self._current_setting_id
 
     @property
     def current_setting(self) -> Optional['GraphSetting']:
-        """현재 활성 설정"""
+        """The currently active GraphSetting resolved from the current profile, or None."""
         if self._current_profile and self._current_setting_id:
             return self._current_profile.get_setting(self._current_setting_id)
         return None
 
     @property
     def floating_windows(self) -> Dict[str, Any]:
-        """플로팅 윈도우 목록"""
+        """Mapping of window_id to open FloatingGraphWindow instances."""
         return self._floating_windows
 
     def set_profile(self, profile: Optional['Profile']):
-        """프로파일 설정"""
+        """Load a profile and activate its default or first setting.
+
+        Input: profile — Profile to load, or None to clear the active profile.
+        Output: None
+        Emits: profile_loaded with the profile when set; profile_cleared when None.
+        Invariants: self.current_setting_id points to a valid setting if profile has any.
+        """
         self._current_profile = profile
         self._current_setting_id = None
         if profile:
@@ -279,7 +285,12 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
             self.emit("profile_cleared")
 
     def activate_setting(self, setting_id: str):
-        """설정 활성화"""
+        """Activate a named GraphSetting within the current profile.
+
+        Input: setting_id — str, ID of the setting to activate.
+        Output: None — no-op if no profile is loaded or the setting ID is not found.
+        Emits: setting_activated with setting_id on success.
+        """
         if self._current_profile:
             setting = self._current_profile.get_setting(setting_id)
             if setting:
@@ -287,13 +298,26 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
                 self.emit("setting_activated", setting_id)
 
     def add_setting(self, setting: 'GraphSetting'):
-        """현재 프로파일에 설정 추가"""
+        """Add a GraphSetting to the current profile.
+
+        Input: setting — GraphSetting to add.
+        Output: None — no-op if no profile is loaded.
+        Emits: setting_added with setting.id on success.
+        """
         if self._current_profile:
             self._current_profile.add_setting(setting)
             self.emit("setting_added", setting.id)
 
     def remove_setting(self, setting_id: str):
-        """현재 프로파일에서 설정 제거"""
+        """Remove a GraphSetting from the current profile by ID.
+
+        If the removed setting was active, the active setting shifts to the first
+        remaining setting, or None if the profile becomes empty.
+
+        Input: setting_id — str, ID of the setting to remove.
+        Output: None — no-op if no profile is loaded or the setting is not found.
+        Emits: setting_removed with setting_id on success.
+        """
         if self._current_profile:
             if self._current_profile.remove_setting(setting_id):
                 if self._current_setting_id == setting_id:
@@ -305,18 +329,33 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
                 self.emit("setting_removed", setting_id)
 
     def register_floating_window(self, window_id: str, window: Any):
-        """플로팅 윈도우 등록"""
+        """Register an open floating graph window.
+
+        Input: window_id — str, unique identifier for the window.
+               window — FloatingGraphWindow instance.
+        Output: None
+        Emits: floating_window_opened with window_id.
+        """
         self._floating_windows[window_id] = window
         self.emit("floating_window_opened", window_id)
 
     def unregister_floating_window(self, window_id: str):
-        """플로팅 윈도우 해제"""
+        """Deregister a floating graph window when it is closed.
+
+        Input: window_id — str, identifier of the window to remove.
+        Output: None — no-op if window_id is not registered.
+        Emits: floating_window_closed with window_id on success.
+        """
         if window_id in self._floating_windows:
             del self._floating_windows[window_id]
             self.emit("floating_window_closed", window_id)
 
     def get_current_graph_state(self) -> Dict[str, Any]:
-        """현재 그래프 상태를 딕셔너리로 반환 (설정 저장용)"""
+        """Serialize the current graph configuration to a plain dictionary.
+
+        Output: Dict[str, Any] — snapshot of chart type, axes, zones, settings,
+                filters, and sorts; suitable for saving as a GraphSetting.
+        """
         return {
             'chart_type': self._chart_settings.chart_type.value,
             'x_column': self._x_column,
@@ -374,7 +413,17 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
         }
 
     def apply_graph_setting(self, setting: 'GraphSetting'):
-        """GraphSetting을 현재 상태에 적용"""
+        """Apply a GraphSetting to the current AppState, restoring chart configuration.
+
+        Restores chart type, x-column, group/value/hover zones, chart settings,
+        and optionally filters and sorts if include_filters/include_sorts are set.
+
+        Input: setting — GraphSetting snapshot to restore from.
+        Output: None
+        Emits: group_zone_changed, value_zone_changed, hover_zone_changed,
+               chart_settings_changed; additionally filter_changed and sort_changed
+               when include_filters and include_sorts are True respectively.
+        """
 
         # 차트 타입
         try:
