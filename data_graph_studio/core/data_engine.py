@@ -40,7 +40,7 @@ except ImportError:
 from .constants import LRU_CACHE_MAXSIZE
 from .data_engine_dataset_mixin import DatasetMixin
 from .data_engine_analysis_mixin import AnalysisMixin
-from .exceptions import QueryError
+from .exceptions import QueryError, ValidationError
 from .metrics import get_metrics
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,11 @@ class DataEngine(DatasetMixin, AnalysisMixin):
     def drop_column(self, col_name: str) -> None:
         """컬럼 삭제 (dataset sync + cache clear)."""
         if not isinstance(col_name, str) or not col_name.strip():
-            raise ValueError(f"column name must be a non-empty string, got {col_name!r}")
+            raise ValidationError(
+                f"column name must be a non-empty string, got {col_name!r}",
+                operation="drop_column",
+                context={"col_name": col_name},
+            )
         if self.df is None or col_name not in self.df.columns:
             return
         new_df = self.df.drop(col_name)

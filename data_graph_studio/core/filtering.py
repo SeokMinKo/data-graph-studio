@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from data_graph_studio.core.observable import Observable
 from data_graph_studio.core.metrics import get_metrics
 from data_graph_studio.core.filter_helpers import FILTER_DISPATCH as _FILTER_DISPATCH
-from data_graph_studio.core.exceptions import QueryError
+from data_graph_studio.core.exceptions import QueryError, ValidationError
 
 
 class IFilterApplier(ABC):
@@ -217,7 +217,11 @@ class FilteringManager(Observable, IFilterApplier):
             ValueError: 이미 존재하는 스킴 이름
         """
         if name in self._schemes:
-            raise ValueError(f"Scheme '{name}' already exists")
+            raise ValidationError(
+                f"Scheme '{name}' already exists",
+                operation="create_scheme",
+                context={"name": name},
+            )
 
         scheme = FilteringScheme(name=name, inherit_from=inherit_from)
         self._schemes[name] = scheme
@@ -237,7 +241,11 @@ class FilteringManager(Observable, IFilterApplier):
             ValueError: Page 스킴은 제거 불가
         """
         if name == "Page":
-            raise ValueError("Cannot remove Page scheme")
+            raise ValidationError(
+                "Cannot remove Page scheme",
+                operation="remove_scheme",
+                context={"name": name},
+            )
 
         if name in self._schemes:
             del self._schemes[name]

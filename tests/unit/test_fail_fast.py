@@ -1,36 +1,38 @@
 """Fail Fast: core API must reject invalid input at the boundary."""
 import pytest
 
+from data_graph_studio.core.exceptions import ValidationError
+
 
 # ── DataEngine.drop_column ─────────────────────────────────────────────────
 
 def test_drop_column_rejects_empty_string():
-    """drop_column() must raise ValueError for empty column name."""
+    """drop_column() must raise ValidationError for empty column name."""
     from data_graph_studio.core.data_engine import DataEngine
     import polars as pl
     engine = DataEngine()
     engine.update_dataframe(pl.DataFrame({"a": [1, 2, 3]}))
-    with pytest.raises(ValueError, match="column name"):
+    with pytest.raises(ValidationError, match="column name"):
         engine.drop_column("")
 
 
 def test_drop_column_rejects_whitespace_only():
-    """drop_column() must raise ValueError for whitespace-only column name."""
+    """drop_column() must raise ValidationError for whitespace-only column name."""
     from data_graph_studio.core.data_engine import DataEngine
     import polars as pl
     engine = DataEngine()
     engine.update_dataframe(pl.DataFrame({"a": [1]}))
-    with pytest.raises(ValueError, match="column name"):
+    with pytest.raises(ValidationError, match="column name"):
         engine.drop_column("   ")
 
 
 def test_drop_column_rejects_none():
-    """drop_column() must raise TypeError or ValueError for None."""
+    """drop_column() must raise ValidationError or TypeError for None."""
     from data_graph_studio.core.data_engine import DataEngine
     import polars as pl
     engine = DataEngine()
     engine.update_dataframe(pl.DataFrame({"a": [1]}))
-    with pytest.raises((ValueError, TypeError)):
+    with pytest.raises((ValidationError, TypeError)):
         engine.drop_column(None)
 
 
@@ -81,26 +83,26 @@ def test_add_precision_column_accepts_valid_name():
 # ── SelectionState.select / deselect ──────────────────────────────────────
 
 def test_select_rejects_negative_index():
-    """SelectionState.select() must raise ValueError for a negative row index."""
+    """SelectionState.select() must raise ValidationError for a negative row index."""
     from data_graph_studio.core.state import SelectionState
     sel = SelectionState()
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValidationError, match="non-negative"):
         sel.select([-1])
 
 
 def test_select_rejects_mixed_valid_and_negative():
-    """SelectionState.select() must raise ValueError when any index is negative."""
+    """SelectionState.select() must raise ValidationError when any index is negative."""
     from data_graph_studio.core.state import SelectionState
     sel = SelectionState()
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValidationError, match="non-negative"):
         sel.select([0, 1, -5])
 
 
 def test_select_rejects_non_integer():
-    """SelectionState.select() must raise ValueError for non-integer row index."""
+    """SelectionState.select() must raise ValidationError for non-integer row index."""
     from data_graph_studio.core.state import SelectionState
     sel = SelectionState()
-    with pytest.raises((ValueError, TypeError)):
+    with pytest.raises((ValidationError, TypeError)):
         sel.select(["row_0"])
 
 
@@ -113,11 +115,11 @@ def test_select_accepts_valid_indices():
 
 
 def test_deselect_rejects_negative_index():
-    """SelectionState.deselect() must raise ValueError for a negative row index."""
+    """SelectionState.deselect() must raise ValidationError for a negative row index."""
     from data_graph_studio.core.state import SelectionState
     sel = SelectionState()
     sel.select([0, 1, 2])
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValidationError, match="non-negative"):
         sel.deselect([-1])
 
 

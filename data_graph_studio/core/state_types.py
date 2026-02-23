@@ -8,6 +8,7 @@ Extracted from state.py for improved modularity.
 from typing import Optional, List, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
+from data_graph_studio.core.exceptions import ValidationError
 
 
 # ==================== Theme State (PRD §3.6 / §9.3) ====================
@@ -198,7 +199,11 @@ class SelectionState:
         """
         invalid = [r for r in rows if not isinstance(r, int) or r < 0]
         if invalid:
-            raise ValueError(f"row index must be a non-negative integer, got: {invalid[:3]}")
+            raise ValidationError(
+                f"row index must be a non-negative integer, got: {invalid[:3]}",
+                operation="select",
+                context={"invalid_sample": invalid[:3]},
+            )
         if not add:
             self.selected_rows.clear()
         self.selected_rows.update(rows)
@@ -212,7 +217,11 @@ class SelectionState:
         """
         invalid = [r for r in rows if not isinstance(r, int) or r < 0]
         if invalid:
-            raise ValueError(f"row index must be a non-negative integer, got: {invalid[:3]}")
+            raise ValidationError(
+                f"row index must be a non-negative integer, got: {invalid[:3]}",
+                operation="deselect",
+                context={"invalid_sample": invalid[:3]},
+            )
         self.selected_rows.difference_update(rows)
 
     def toggle(self, row: int):
