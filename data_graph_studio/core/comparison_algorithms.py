@@ -45,7 +45,7 @@ def select_test_type(data_a: np.ndarray, data_b: np.ndarray) -> str:
         _, p_a = scipy_stats.shapiro(sample_a) if len(sample_a) >= 3 else (0, 1)
         _, p_b = scipy_stats.shapiro(sample_b) if len(sample_b) >= 3 else (0, 1)
         return "ttest" if p_a >= 0.05 and p_b >= 0.05 else "mannwhitney"
-    except Exception:
+    except (ValueError, TypeError):
         logger.debug("comparison_algorithms.select_test_type.failed", exc_info=True)
         return "ttest"
 
@@ -137,5 +137,5 @@ def run_normality_test(data: np.ndarray) -> Dict[str, Any]:
             "is_normal": is_normal,
             "interpretation": interpretation,
         }
-    except Exception as e:
+    except (ValueError, TypeError, ArithmeticError) as e:
         return {"error": str(e)}
