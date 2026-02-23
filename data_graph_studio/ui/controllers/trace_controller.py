@@ -29,8 +29,7 @@ class TraceController:
         logger.debug("[Logger] opening TraceConfigDialog")
         dialog = TraceConfigDialog(self.w)
         result = dialog.exec()
-        logger.debug("[Logger] TraceConfigDialog result=%s, start_requested=%s",
-                     result, dialog.start_requested)
+        logger.debug("trace_controller.config_dialog.result", extra={"result": result, "start_requested": dialog.start_requested})
 
         if result == QDialog.DialogCode.Accepted and dialog.start_requested:
             self.w._run_trace(dialog.get_config())
@@ -55,8 +54,9 @@ class TraceController:
         has_events = bool(logger_cfg.get("events"))
         has_adb = bool(shutil.which("adb"))
         has_save_path = bool(logger_cfg.get("save_path"))
-        logger.debug("[Logger] start_trace check: adb=%s, device=%s, events=%s, save=%s",
-                     has_adb, has_device, has_events, has_save_path)
+        logger.debug("trace_controller.start_trace.check", extra={
+            "adb": has_adb, "device": has_device, "events": has_events, "save": has_save_path,
+        })
 
         if has_device and has_events and has_adb and has_save_path:
             # Bug fix: verify capture mode prerequisites before starting
@@ -110,10 +110,11 @@ class TraceController:
             TraceProgressDialog,
         )
 
-        logger.info("[Logger] _run_trace: mode=%s, device=%s, events=%d",
-                     logger_cfg.get("capture_mode", "?"),
-                     logger_cfg.get("device_serial", "?"),
-                     len(logger_cfg.get("events", [])))
+        logger.info("trace_controller.run_trace", extra={
+            "mode": logger_cfg.get("capture_mode", "?"),
+            "device": logger_cfg.get("device_serial", "?"),
+            "events": len(logger_cfg.get("events", [])),
+        })
 
         if not shutil.which("adb"):
             QMessageBox.warning(
@@ -164,10 +165,10 @@ class TraceController:
             controller = AdbTraceController(self.w)
 
         try:
-            logger.debug("[Logger] starting %s trace on %s", capture_mode, serial)
+            logger.debug("trace_controller.start_trace.begin", extra={"mode": capture_mode, "serial": serial})
             controller.start_trace(serial, logger_cfg)
         except Exception as e:
-            logger.error("[Logger] start_trace failed: %s", e, exc_info=True)
+            logger.error("trace_controller.start_trace.failed", extra={"error": str(e)}, exc_info=True)
             QMessageBox.warning(self.w, "Logger", f"Failed to start trace:\n{e}")
             controller.cleanup()
             return
@@ -175,14 +176,14 @@ class TraceController:
         dialog = TraceProgressDialog(controller, save_path, self.w)
         result = dialog.exec()
 
-        logger.debug("[Logger] TraceProgressDialog result=%s", result)
+        logger.debug("trace_controller.progress_dialog.result", extra={"result": result})
         if result == QDialog.DialogCode.Accepted:
             self.w.statusBar().showMessage(f"Trace saved: {save_path}", 5000)
 
             if is_perfetto:
                 # PerfettoTraceController saves CSV with .csv suffix
                 csv_path = str(Path(save_path).with_suffix(".csv"))
-                logger.info("[Logger] loading perfetto CSV: %s", csv_path)
+                logger.info("trace_controller.load_csv.start", extra={"csv_path": csv_path})
                 self.w._load_csv_async(csv_path)
             else:
                 reply = QMessageBox.question(
@@ -225,33 +226,32 @@ class TraceController:
                     logger.exception("trace_controller.csv_worker.error")
                     self_w.error.emit(str(e))
 
-        logger.debug("[Logger] _load_csv_async: %s", csv_path)
+        logger.debug("trace_controller.load_csv_async", extra={"csv_path": csv_path})
         self.w.statusBar().showMessage("Loading CSV...", 0)
         worker = _CsvWorker(self.w)
 
         def on_finished(df):
             """Handle successful CSV load and create a dataset from the result."""
-            logger.info("[Logger] CSV loaded: %d rows, %d cols, columns=%s",
-                        len(df), len(df.columns), list(df.columns)[:10])
+            logger.info("trace_controller.csv.loaded", extra={"rows": len(df), "cols": len(df.columns), "columns": list(df.columns)[:10]})
             name = Path(csv_path).stem
             did = self.w.engine.load_dataset_from_dataframe(
                 df, name=name, source_path=csv_path
             )
             if did:
-                logger.info("[Logger] dataset created: id=%s, name=%s", did, name)
+                logger.info("trace_controller.dataset.created", extra={"id": did, "name": name})
                 self.w._on_data_loaded()
                 self.w._apply_graph_presets(df, converter="blocklayer")
                 self.w.statusBar().showMessage(
                     f"Perfetto trace: loaded {len(df)} rows", 5000,
                 )
             else:
-                logger.error("[Logger] load_dataset_from_dataframe returned None for %s", csv_path)
+                logger.error("trace_controller.load_dataset.none", extra={"csv_path": csv_path})
                 QMessageBox.warning(self.w, "Logger", "Failed to load CSV data.")
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
             """Handle CSV load failure by showing an error dialog."""
-            logger.error("[Logger] CSV load failed: %s", msg)
+            logger.error("trace_controller.csv.load_failed", extra={"msg": msg})
             QMessageBox.critical(self.w, "Logger", f"CSV load failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
@@ -292,20 +292,19 @@ class TraceController:
                     logger.exception("trace_controller.parse_worker.ftrace.error")
                     self_w.error.emit(str(e))
 
-        logger.debug("[Logger] _parse_ftrace_async: %s, converter=%s", file_path, converter)
+        logger.debug("trace_controller.parse_ftrace_async", extra={"file_path": file_path, "converter": converter})
         self.w.statusBar().showMessage("Parsing ftrace file...", 0)
         worker = _ParseWorker(self.w)
 
         def on_finished(df):
             """Handle successful ftrace parse and create a dataset from the result."""
-            logger.info("[Logger] ftrace parsed: %d rows, %d cols, columns=%s",
-                        len(df), len(df.columns), list(df.columns)[:10])
+            logger.info("trace_controller.ftrace.parsed", extra={"rows": len(df), "cols": len(df.columns), "columns": list(df.columns)[:10]})
             dataset_name = Path(file_path).stem
             dataset_id = self.w.engine.load_dataset_from_dataframe(
                 df, name=dataset_name, source_path=file_path
             )
             if dataset_id:
-                logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
+                logger.info("trace_controller.ftrace.dataset_created", extra={"id": dataset_id})
                 dataset = self.w.engine.get_dataset(dataset_id)
                 if dataset:
                     self.w.state.add_dataset(
@@ -329,7 +328,7 @@ class TraceController:
 
         def on_error(msg):
             """Handle ftrace parse failure by showing an error dialog."""
-            logger.error("[Logger] ftrace parse failed: %s", msg)
+            logger.error("trace_controller.ftrace.parse_failed", extra={"msg": msg})
             QMessageBox.critical(self.w, "Ftrace Parser", f"Parse failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
@@ -482,7 +481,7 @@ class TraceController:
 
         presets = BUILTIN_PRESETS.get(converter, [])
         if not presets:
-            logger.debug("[Logger] no presets for converter=%s", converter)
+            logger.debug("trace_controller.presets.none", extra={"converter": converter})
             return
 
         dataset_id = self.w.state.active_dataset_id
@@ -499,10 +498,10 @@ class TraceController:
 
         for preset in presets:
             if not preset.columns_present(df):
-                logger.debug("[Logger] preset '%s' skipped: columns missing", preset.name)
+                logger.debug("trace_controller.preset.skipped.columns_missing", extra={"preset": preset.name})
                 continue
             if preset.name in existing_names:
-                logger.debug("[Logger] preset '%s' already exists, skipping", preset.name)
+                logger.debug("trace_controller.preset.skipped.exists", extra={"preset": preset.name})
                 # Use existing profile as first if none yet
                 if first_profile_id is None:
                     for s in existing:
@@ -547,9 +546,13 @@ class TraceController:
             )
             self.w.profile_store.add(gs)
             created_count += 1
-            logger.info("[Logger] created profile '%s' (id=%s, chart=%s, x=%s, y=%s)",
-                        preset.name, profile_id, preset.chart_type,
-                        preset.x_column, preset.y_columns)
+            logger.info("trace_controller.profile.created", extra={
+                "name": preset.name,
+                "id": profile_id,
+                "chart": preset.chart_type,
+                "x": preset.x_column,
+                "y": preset.y_columns,
+            })
 
             if first_profile_id is None:
                 first_profile_id = profile_id
@@ -557,7 +560,7 @@ class TraceController:
         # Refresh project tree to show new profiles
         if created_count > 0 and hasattr(self, 'profile_model'):
             self.w.profile_model.refresh()
-            logger.info("[Logger] %d profiles created for dataset %s", created_count, dataset_id)
+            logger.info("trace_controller.profiles.created", extra={"count": created_count, "dataset_id": dataset_id})
 
         # Apply the first profile
         if first_profile_id:
@@ -566,10 +569,10 @@ class TraceController:
                 if ok:
                     self.w.graph_panel.refresh()
                     self.w.graph_panel.autofit()
-                    logger.info("[Logger] auto-applied profile: %s", first_profile_id)
+                    logger.info("trace_controller.profile.auto_applied", extra={"profile_id": first_profile_id})
                 else:
-                    logger.warning("[Logger] failed to apply profile: %s", first_profile_id)
+                    logger.warning("trace_controller.profile.apply_failed", extra={"profile_id": first_profile_id})
             except Exception as e:
-                logger.warning("[Logger] error applying profile: %s", e, exc_info=True)
+                logger.warning("trace_controller.profile.apply_error", extra={"error": str(e)}, exc_info=True)
 
 

@@ -93,7 +93,7 @@ def load_logger_config() -> dict[str, Any]:
                 raise ValueError("Config root is not a dict")
             return migrate_config(config)
         except (json.JSONDecodeError, OSError, ValueError) as exc:
-            logger.warning("Failed to load logger config: %s", exc)
+            logger.warning("trace_config.load_config.failed", extra={"error": str(exc)})
     return migrate_config(dict(_DEFAULT_CONFIG))
 
 
@@ -239,14 +239,14 @@ class ConnectionPanel(QWidget):
         if exit_code != 0:
             msg = stderr.strip() or f"adb exited with code {exit_code}"
             self._adb_info.setText(f"⚠️ ADB error: {msg}")
-            logger.warning("ADB device scan failed (exit %d): %s", exit_code, msg)
+            logger.warning("trace_config.adb_scan.failed", extra={"exit_code": exit_code, "msg": msg})
             return
 
         self._parse_device_output(stdout)
 
     def _parse_device_output(self, stdout: str) -> None:
         """Parse `adb devices -l` output into list items."""
-        logger.debug("[TraceConfig] parsing device output:\n%s", stdout[:500])
+        logger.debug("trace_config.parse_device_output", extra={"stdout_preview": stdout[:500]})
         for line in stdout.strip().split("\n")[1:]:
             line = line.strip()
             if not line or "offline" in line:
@@ -836,11 +836,12 @@ class TraceConfigDialog(QDialog):
 
     def _validate(self) -> bool:
         """Validate config. On failure, navigate to problem category."""
-        logger.debug("[TraceConfig] validating: adb=%s, device=%s, events=%d, save=%s",
-                     self.connection_panel.adb_found,
-                     self.connection_panel.selected_serial(),
-                     len(self.events_panel.selected_events()),
-                     self.output_panel.save_path())
+        logger.debug("trace_config.validate", extra={
+            "adb": self.connection_panel.adb_found,
+            "device": self.connection_panel.selected_serial(),
+            "events": len(self.events_panel.selected_events()),
+            "save": self.output_panel.save_path(),
+        })
         # EC-1: ADB not installed
         if not self.connection_panel.adb_found:
             self._category_list.setCurrentRow(CAT_CONNECTION)
@@ -904,9 +905,12 @@ class TraceConfigDialog(QDialog):
         self._start_requested = True
 
         config = self.get_config()
-        logger.info("[TraceConfig] starting with config: mode=%s, device=%s, events=%d, save=%s",
-                    config.get("capture_mode"), config.get("device_serial"),
-                    len(config.get("events", [])), config.get("save_path"))
+        logger.info("trace_config.start_recording", extra={
+            "mode": config.get("capture_mode"),
+            "device": config.get("device_serial"),
+            "events": len(config.get("events", [])),
+            "save": config.get("save_path"),
+        })
         save_logger_config(config)
         self._saved_config = dict(config)
         self._dirty = False

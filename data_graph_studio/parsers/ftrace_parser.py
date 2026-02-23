@@ -406,7 +406,7 @@ class FtraceParser(BaseParser):
         """Parse the 'details' field for all three event types, add join keys."""
         sample_detail = issues["details"].drop_nulls().head(1).to_list()
         is_perfetto_fmt = bool(sample_detail and "dev=" in sample_detail[0])
-        logger.debug("[blocklayer-vec] detail format: %s", "perfetto" if is_perfetto_fmt else "raw")
+        logger.debug("ftrace_parser.detail_format", extra={"format": "perfetto" if is_perfetto_fmt else "raw"})
 
         issue_cols = self._blk_detail_parse_cols(is_perfetto_fmt, complete=False)
         complete_cols = self._blk_detail_parse_cols(is_perfetto_fmt, complete=True)

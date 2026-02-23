@@ -169,7 +169,7 @@ def run_avd_qa(
     try:
         resp = _ipc_send({"command": "ping"}, timeout=5)
         if resp != "pong" and not (isinstance(resp, dict) and resp.get("status") != "error"):
-            logger.error("DGS ping failed: %s", resp)
+            logger.error("avd_qa.dgs_ping.failed", extra={"response": resp})
             print("Cannot connect to DGS. Start DGS first, then run this script.")
             return 1
         scenarios.append({"name": "dgs_connect", "status": "PASS", "notes": "pong"})
@@ -191,12 +191,12 @@ def run_avd_qa(
                 print("Or provide a pre-captured trace with --trace-file")
                 return 1
             device = avd_devices[0]
-        logger.info("using device: %s", device)
+        logger.info("avd_qa.device.selected", extra={"device": device})
         scenarios.append({"name": "avd_connect", "status": "PASS",
                           "notes": f"serial={device}"})
 
         # ── Step 3: Capture trace ──────────────────────────────────────
-        logger.info("step3: capture block layer trace on %s", device)
+        logger.info("avd_qa.capture_trace.start", extra={"device": device})
         trace_path = str(out_dir / "block_trace.txt")
         try:
             capture_block_trace(
@@ -209,13 +209,13 @@ def run_avd_qa(
             scenarios.append({"name": "trace_capture", "status": "PASS",
                                "notes": f"{size:,} bytes"})
         except Exception as e:
-            logger.error("trace capture failed: %s", e)
+            logger.error("avd_qa.capture_trace.failed", extra={"error": str(e)})
             scenarios.append({"name": "trace_capture", "status": "FAIL",
                                "notes": str(e)})
             _write_report(scenarios, device or "unknown", out_dir)
             return 1
     else:
-        logger.info("step2: using pre-captured trace: %s", trace_path)
+        logger.info("avd_qa.trace.pre_captured", extra={"trace_path": trace_path})
         device = device or "pre-captured"
         scenarios.append({"name": "avd_connect", "status": "WARN",
                           "notes": "using pre-captured trace, no AVD"})
@@ -236,7 +236,7 @@ def run_avd_qa(
         scenarios.append({"name": "parse_ftrace", "status": "PASS",
                           "notes": "dataset loaded"})
     except Exception as e:
-        logger.error("parse_ftrace failed: %s", e)
+        logger.error("avd_qa.parse_ftrace.failed", extra={"error": str(e)})
         scenarios.append({"name": "parse_ftrace", "status": "FAIL",
                           "notes": str(e)})
         _write_report(scenarios, device, out_dir)
