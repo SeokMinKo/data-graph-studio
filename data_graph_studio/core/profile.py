@@ -719,14 +719,16 @@ class ProfileManager:
         """Close the currently open profile without saving.
 
         Output:
-            True if a profile was open and is now closed; False if no profile was open.
+            True if the profile was open and closed successfully.
+            False if the profile has unsaved changes (caller should save first)
+            or if no profile is currently open.
 
         Raises:
             None.
 
         Invariants:
-            - After call, current_profile is None.
-            - is_dirty is False after close.
+            - If True is returned, current_profile is None and is_dirty is False.
+            - If False is returned due to dirty state, current_profile is unchanged.
         """
         if self._dirty:
             return False
@@ -745,10 +747,11 @@ class ProfileManager:
             None.
 
         Raises:
-            ValueError: If no profile is currently open.
+            None. If no profile is currently open, the call is a silent no-op.
 
         Invariants:
-            - current_profile.is_dirty is True after a successful add.
+            - If current_profile is not None, is_dirty is True after a successful add.
+            - If current_profile is None, this method is a no-op.
         """
         if self._current:
             self._current.add_setting(setting)
@@ -764,7 +767,7 @@ class ProfileManager:
             True if removed; False if setting_id not found in current profile.
 
         Raises:
-            ValueError: If no profile is currently open.
+            None. Returns False if no profile is currently open.
 
         Invariants:
             - If True is returned, setting is no longer in current_profile.settings.
