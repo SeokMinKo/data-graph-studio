@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_DELIMITER = ','
 DEFAULT_ENCODING = 'utf-8'
 DELIMITER_SAMPLE_LINES = 10
-ENCODING_SAMPLE_SIZE = 10000
+ENCODING_SAMPLE_SIZE = 65536  # 64KB sample — enough for encoding detection, safe on multi-GB files
 PARQUET_CONVERT_THRESHOLD = 500 * 1024 * 1024   # 500 MB
 WINDOWED_LOAD_THRESHOLD = 300 * 1024 * 1024     # 300 MB
 DEFAULT_WINDOW_SIZE = 200_000
@@ -82,10 +82,12 @@ def _run_with_timeout(fn, timeout_s: float, operation: str):
 
 
 def _detect_encoding_impl(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) -> str:
-    """파일 인코딩 감지 내부 구현 (I/O 수행)."""
+    """파일 인코딩 감지 내부 구현 — 앞 sample_size 바이트만 읽어 탐지한다."""
     try:
-        from charset_normalizer import from_path
-        result = from_path(path)
+        from charset_normalizer import from_bytes
+        with open(path, 'rb') as f:
+            raw = f.read(sample_size)
+        result = from_bytes(raw)
         best = result.best()
         return best.encoding if best else DEFAULT_ENCODING
     except ImportError:
