@@ -24,7 +24,7 @@ class ProfileStore:
 
     def add(self, setting: GraphSetting) -> None:
         """Add a new graph setting to the store."""
-        logger.debug("profile_store.add", extra={"setting_id": setting.id, "name": setting.name})
+        logger.debug("profile_store.add", extra={"setting_id": setting.id, "profile_name": setting.name})
         self._settings[setting.id] = setting
 
     def get(self, setting_id: str) -> Optional[GraphSetting]:

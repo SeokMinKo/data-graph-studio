@@ -191,7 +191,7 @@ class MarkingManager(Observable):
         marking = Marking(name=name, color=color)
         self._markings[name] = marking
 
-        logger.debug("marking_manager.create", extra={"name": name})
+        logger.debug("marking_manager.create", extra={"marking_name": name})
         self.emit("marking_created", name)
 
         return marking
@@ -215,7 +215,7 @@ class MarkingManager(Observable):
 
         del self._markings[name]
 
-        logger.debug("marking_manager.remove", extra={"name": name})
+        logger.debug("marking_manager.remove", extra={"marking_name": name})
 
         # 활성 마킹이 제거된 경우 Main으로 변경
         if self._active_marking == name:
@@ -272,7 +272,7 @@ class MarkingManager(Observable):
 
         # 시그널 발생
         selected = marking.get_for_table(table_name) if table_name else marking.selected_indices
-        logger.debug("marking_manager.update", extra={"name": marking_name, "count": len(selected)})
+        logger.debug("marking_manager.update", extra={"marking_name": marking_name, "count": len(selected)})
         self.emit("marking_changed", marking_name, set(selected))
 
     def update_marking(

@@ -1026,7 +1026,7 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     logger.warning("main_window.apply_profile_failed", extra={"error": e}, exc_info=True)
                 
-                logger.info("main_window.wizard_result_applied", extra={"name": graph_setting.name})
+                logger.info("main_window.wizard_result_applied", extra={"graph_name": graph_setting.name})
 
     def _schedule_autofit(self):
         """프로파일 전환/생성 후 그래프를 자동으로 Fit (데이터에 맞춤)."""

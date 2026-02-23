@@ -158,7 +158,7 @@ class DatasetManager:
         if self._active_dataset_id is None:
             self._active_dataset_id = dataset_id
 
-        logger.info("dataset_manager.dataset_loaded", extra={"dataset_id": dataset_id, "name": name, "row_count": dataset.row_count})
+        logger.info("dataset_manager.dataset_loaded", extra={"dataset_id": dataset_id, "dataset_name": name, "row_count": dataset.row_count})
         return dataset_id
 
     def load_dataset_from_dataframe(
@@ -201,7 +201,7 @@ class DatasetManager:
         if self._active_dataset_id is None:
             self._active_dataset_id = dataset_id
 
-        logger.info("dataset_manager.dataset_from_dataframe", extra={"dataset_id": dataset_id, "name": name, "row_count": dataset.row_count})
+        logger.info("dataset_manager.dataset_from_dataframe", extra={"dataset_id": dataset_id, "dataset_name": name, "row_count": dataset.row_count})
         return dataset_id
 
     def remove_dataset(self, dataset_id: str) -> bool:

@@ -30,7 +30,7 @@ class CaptureService(ICaptureService):
     def register_panel(self, name: str, widget: Any) -> None:
         """Register a named panel widget for capture."""
         self._panels[name] = widget
-        logger.debug("capture_service.panel_registered", extra={"name": name})
+        logger.debug("capture_service.panel_registered", extra={"panel_name": name})
 
     def list_panels(self) -> List[str]:
         """Return list of registered panel names."""
@@ -48,7 +48,9 @@ class CaptureService(ICaptureService):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if request.target == "all":
-            targets = list(self._panels.keys()) + ["window"]
+            targets = list(self._panels.keys())
+            if "window" in self._panels:
+                targets.append("window")
         elif request.target == "window":
             targets = ["window"]
         else:
@@ -65,7 +67,7 @@ class CaptureService(ICaptureService):
 
     def _capture_one(self, name: str, output_dir: Path, fmt: str) -> CaptureResult:
         """Capture a single panel by name."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         file_path = output_dir / f"{name}_{timestamp}.{fmt}"
 
         try:
@@ -83,7 +85,7 @@ class CaptureService(ICaptureService):
             return CaptureResult(name=name, file=saved, state=state, summary=summary)
 
         except Exception as exc:
-            logger.warning("capture_service.capture_failed", extra={"name": name, "error": str(exc)})
+            logger.warning("capture_service.capture_failed", extra={"panel_name": name, "error": str(exc)})
             return CaptureResult(name=name, file=file_path, state={}, summary="", error=str(exc))
 
     def _grab_widget(self, widget: Any, file_path: Path) -> Path:

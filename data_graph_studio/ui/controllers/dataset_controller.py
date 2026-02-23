@@ -210,7 +210,7 @@ class DatasetController:
                 w.profile_model.refresh()
 
                 gc.collect()
-                logger.info("dataset_controller.dataset_added", extra={"dataset_id": dataset_id, "name": name, "row_count": w.engine.row_count})
+                logger.info("dataset_controller.dataset_added", extra={"dataset_id": dataset_id, "dataset_name": name, "row_count": w.engine.row_count})
 
             w._pending_dataset_id = None
             w._pending_dataset_name = None

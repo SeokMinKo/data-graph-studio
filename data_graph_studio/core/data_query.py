@@ -160,9 +160,12 @@ class DataQuery:
         if not windowed or lazy_df is None:
             if profile is None:
                 return None
+            numeric_columns = sum(1 for c in profile.columns if c.is_numeric)
             return {
                 'total_rows': profile.total_rows,
                 'total_columns': profile.total_columns,
+                'numeric_columns': numeric_columns,
+                'text_columns': profile.total_columns - numeric_columns,
                 'columns': profile.columns,
                 'memory_bytes': profile.memory_bytes,
                 'load_time_seconds': profile.load_time_seconds,
