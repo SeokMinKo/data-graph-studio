@@ -577,7 +577,7 @@ class ProfileManager:
 
         Invariants:
             - After call, current_profile is the returned profile.
-            - is_dirty is True after this call.
+            - is_dirty is False after this call.
         """
         self._current = Profile.create_new(name)
         self._dirty = False
