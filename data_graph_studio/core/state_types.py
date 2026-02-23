@@ -176,16 +176,26 @@ class SelectionState:
 
     @property
     def has_selection(self) -> bool:
-        """True if at least one row is selected."""
+        """Return True if at least one row is selected.
+
+        Output: bool — True when selected_rows is non-empty
+        """
         return len(self.selected_rows) > 0
 
     @property
     def selection_count(self) -> int:
-        """Number of currently selected rows."""
+        """Return the number of currently selected rows.
+
+        Output: int — len(selected_rows), >= 0
+        """
         return len(self.selected_rows)
 
     def clear(self):
-        """Clear all selected and highlighted rows."""
+        """Clear all selected and highlighted rows.
+
+        Output: None
+        Invariants: selected_rows and highlighted_rows are empty after this call
+        """
         self.selected_rows.clear()
         self.highlighted_rows.clear()
 

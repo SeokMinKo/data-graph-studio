@@ -39,6 +39,13 @@ class AnnotationController:
     """
 
     def __init__(self, undo_manager: Any = None):
+        """Initialize the AnnotationController with an empty annotation store.
+
+        Input: undo_manager — Any, optional UndoManager instance; when provided,
+            mutating operations push undo snapshots; defaults to None (no undo)
+        Output: None
+        Invariants: _annotations is empty; _undo_manager is stored as-is
+        """
         self._annotations: Dict[str, Annotation] = {}
         self._undo_manager = undo_manager
 

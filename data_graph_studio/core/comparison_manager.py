@@ -120,12 +120,20 @@ class DatasetState:
             self.chart_settings = ChartSettings()
 
     def clone(self) -> 'DatasetState':
-        """상태 복제"""
+        """Return a deep copy of this DatasetState.
+
+        Output: DatasetState — independent copy with all fields duplicated
+        Invariants: original is unchanged; result.dataset_id == self.dataset_id
+        """
         import copy
         return copy.deepcopy(self)
 
     def reset(self):
-        """상태 초기화"""
+        """Reset all mutable fields to their initial empty/default values.
+
+        Output: None
+        Invariants: x_column is None; all list fields are empty; selection and chart_settings are fresh defaults
+        """
         from .state import ChartSettings
         self.x_column = None
         self.group_columns.clear()
@@ -154,6 +162,12 @@ class ComparisonManager(Observable):
     """
 
     def __init__(self):
+        """Initialize the ComparisonManager with empty state and default settings.
+
+        Output: None
+        Invariants: _dataset_states and _dataset_metadata are empty; _active_dataset_id is None;
+                    _comparison_settings defaults to SINGLE mode; _dataset_color_index starts at 0
+        """
         super().__init__()
 
         self._dataset_states: Dict[str, DatasetState] = {}
@@ -166,49 +180,76 @@ class ComparisonManager(Observable):
 
     @property
     def dataset_states(self) -> Dict[str, DatasetState]:
-        """Return the mapping of dataset ID to DatasetState."""
+        """Return the mapping of dataset ID to DatasetState.
+
+        Output: Dict[str, DatasetState] — live reference; mutate with caution
+        """
         return self._dataset_states
 
     @property
     def dataset_metadata(self) -> Dict[str, DatasetMetadata]:
-        """Return the mapping of dataset ID to DatasetMetadata."""
+        """Return the mapping of dataset ID to DatasetMetadata.
+
+        Output: Dict[str, DatasetMetadata] — live reference; mutate with caution
+        """
         return self._dataset_metadata
 
     @property
     def active_dataset_id(self) -> Optional[str]:
-        """Return the ID of the currently active dataset."""
+        """Return the ID of the currently active dataset.
+
+        Output: Optional[str] — dataset ID string, or None if no dataset is active
+        """
         return self._active_dataset_id
 
     @property
     def active_dataset_state(self) -> Optional[DatasetState]:
-        """Return the DatasetState of the currently active dataset, or None."""
+        """Return the DatasetState of the currently active dataset, or None.
+
+        Output: Optional[DatasetState] — state for active dataset, or None when no dataset is active
+        """
         if self._active_dataset_id:
             return self._dataset_states.get(self._active_dataset_id)
         return None
 
     @property
     def comparison_settings(self) -> ComparisonSettings:
-        """Return the current comparison settings."""
+        """Return the current comparison settings.
+
+        Output: ComparisonSettings — live reference containing mode, sync flags, and dataset IDs
+        """
         return self._comparison_settings
 
     @property
     def comparison_mode(self) -> ComparisonMode:
-        """Return the active comparison mode."""
+        """Return the active comparison mode.
+
+        Output: ComparisonMode — current mode enum value (SINGLE, OVERLAY, SIDE_BY_SIDE, or DIFFERENCE)
+        """
         return self._comparison_settings.mode
 
     @property
     def dataset_count(self) -> int:
-        """Return the number of loaded datasets."""
+        """Return the number of loaded datasets.
+
+        Output: int — count of entries in _dataset_states, >= 0
+        """
         return len(self._dataset_states)
 
     @property
     def comparison_dataset_ids(self) -> List[str]:
-        """Return the list of dataset IDs included in comparison."""
+        """Return the list of dataset IDs included in comparison.
+
+        Output: List[str] — ordered list of dataset IDs from comparison_settings
+        """
         return self._comparison_settings.comparison_datasets
 
     @property
     def is_profile_comparison_active(self) -> bool:
-        """Return True when profile comparison mode is active with at least two profiles."""
+        """Return True when profile comparison mode is active with at least two profiles.
+
+        Output: bool — True only when target=="profile", mode!=SINGLE, and >= 2 profile IDs are set
+        """
         return (
             self._comparison_settings.comparison_target == "profile"
             and len(self._comparison_settings.comparison_profile_ids) >= 2

@@ -34,7 +34,12 @@ AGG_MAP: Dict[str, Any] = {
 
 
 def build_filter_ops(column: str, value: Any) -> Dict[str, Any]:
-    """Return the operator-expression mapping for a single column/value pair."""
+    """Return the operator-expression mapping for a single column/value pair.
+
+    Input: column — str, name of the DataFrame column to filter on
+           value — Any, scalar comparison value
+    Output: Dict[str, Any] — mapping of operator string to Polars expression (pl.Expr or bool expr)
+    """
     col = pl.col(column)
     return {
         'eq': col == value,
@@ -52,7 +57,11 @@ def build_filter_ops(column: str, value: Any) -> Dict[str, Any]:
 
 
 def compute_eager_column_stats(series: pl.Series) -> Dict[str, Any]:
-    """Compute basic statistics for a Polars Series (eager path)."""
+    """Compute basic statistics for a Polars Series (eager path).
+
+    Input: series — pl.Series, the column data to summarise
+    Output: Dict[str, Any] — always contains count, null_count, unique_count; numeric dtypes also include sum, mean, median, std, min, max, q1, q3
+    """
     stats: Dict[str, Any] = {
         'count': len(series),
         'null_count': series.null_count(),

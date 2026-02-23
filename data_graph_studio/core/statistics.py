@@ -56,7 +56,11 @@ class IStatisticsAnalyzer(ABC):
 
     @abstractmethod
     def calculate(self, data) -> dict:
-        """Calculate descriptive statistics for given data."""
+        """Calculate descriptive statistics for the given data.
+
+        Input: data — the data object to analyse (type depends on implementation)
+        Output: dict — key/value mapping of statistic names to computed values
+        """
         ...
 
 

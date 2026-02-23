@@ -177,81 +177,126 @@ class FileLoader:
 
     @property
     def df(self) -> Optional[pl.DataFrame]:
-        """Return the currently loaded DataFrame, or None if no file has been loaded."""
+        """Return the currently loaded DataFrame, or None if no file has been loaded.
+
+        Output: Optional[pl.DataFrame] — the in-memory DataFrame, or None
+        """
         return self._df
 
     @property
     def profile(self) -> Optional[DataProfile]:
-        """Return the DataProfile computed after the last successful load, or None."""
+        """Return the DataProfile computed after the last successful load, or None.
+
+        Output: Optional[DataProfile] — column-level stats snapshot, or None if not loaded
+        """
         return self._profile
 
     @property
     def progress(self) -> LoadingProgress:
-        """Return the current loading progress state object."""
+        """Return the current loading progress state object.
+
+        Output: LoadingProgress — live snapshot; never None
+        """
         return self._progress
 
     @property
     def source(self) -> Optional[DataSource]:
-        """Return the DataSource descriptor for the last loaded file, or None."""
+        """Return the DataSource descriptor for the last loaded file, or None.
+
+        Output: Optional[DataSource] — path, encoding, and delimiter info, or None
+        """
         return self._source
 
     @property
     def is_loaded(self) -> bool:
-        """Return True if a DataFrame is currently held in memory."""
+        """Return True if a DataFrame is currently held in memory.
+
+        Output: bool — True when _df is not None
+        """
         return self._df is not None
 
     @property
     def row_count(self) -> int:
-        """Return total row count: full file size when windowed, len(df) otherwise, 0 if not loaded."""
+        """Return total row count: full file size when windowed, len(df) otherwise, 0 if not loaded.
+
+        Output: int — total row count, never negative
+        """
         if self._windowed and self._total_rows > 0:
             return self._total_rows
         return len(self._df) if self._df is not None else 0
 
     @property
     def column_count(self) -> int:
-        """Return the number of columns in the current DataFrame, or 0 if not loaded."""
+        """Return the number of columns in the current DataFrame, or 0 if not loaded.
+
+        Output: int — column count, never negative
+        """
         return len(self._df.columns) if self._df is not None else 0
 
     @property
     def columns(self) -> List[str]:
-        """Return the list of column names, or an empty list if not loaded."""
+        """Return the list of column names, or an empty list if not loaded.
+
+        Output: List[str] — column names in schema order
+        """
         return self._df.columns if self._df is not None else []
 
     @property
     def dtypes(self) -> Dict[str, str]:
-        """Return a mapping of column name to Polars dtype string, or {} if not loaded."""
+        """Return a mapping of column name to Polars dtype string, or {} if not loaded.
+
+        Output: Dict[str, str] — column name to dtype string mapping
+        """
         if self._df is None:
             return {}
         return {col: str(dtype) for col, dtype in zip(self._df.columns, self._df.dtypes)}
 
     @property
     def is_windowed(self) -> bool:
-        """Return True if the current DataFrame is a window slice of a larger LazyFrame."""
+        """Return True if the current DataFrame is a window slice of a larger LazyFrame.
+
+        Output: bool — True when _windowed flag is set
+        """
         return self._windowed
 
     @property
     def total_rows(self) -> int:
-        """Return the total row count of the source file (falls back to row_count if unknown)."""
+        """Return the total row count of the source file (falls back to row_count if unknown).
+
+        Output: int — full source file row count, or row_count when _total_rows is 0
+        """
         return self._total_rows if self._total_rows else self.row_count
 
     @property
     def window_start(self) -> int:
-        """Return the 0-based row index where the current window begins."""
+        """Return the 0-based row index where the current window begins.
+
+        Output: int — start offset into the source LazyFrame, >= 0
+        """
         return self._window_start
 
     @property
     def window_size(self) -> int:
-        """Return the maximum number of rows in the current window slice."""
+        """Return the maximum number of rows in the current window slice.
+
+        Output: int — requested window size, >= 1
+        """
         return self._window_size
 
     @property
     def has_lazy(self) -> bool:
-        """Return True if a LazyFrame is available for deferred computation."""
+        """Return True if a LazyFrame is available for deferred computation.
+
+        Output: bool — True when _lazy_df is not None
+        """
         return self._lazy_df is not None
 
     @property
     def warning_message(self) -> Optional[str]:
-        """Return a user-facing warning from the last load operation, or None if none occurred."""
+        """Return a user-facing warning from the last load operation, or None if none occurred.
+
+        Output: Optional[str] — warning string, or None
+        """
         return self._warning_message
 
     def set_progress_callback(self, callback: Callable[[LoadingProgress], None]) -> None:

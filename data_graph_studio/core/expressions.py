@@ -233,6 +233,11 @@ class DataFunctionRegistry:
     """
 
     def __init__(self):
+        """Initialize the registry and pre-register the four built-in DataFunctions.
+
+        Output: None
+        Invariants: Normalize, ZScore, Percentile, and MovingAverage are registered after __init__
+        """
         self._functions: Dict[str, DataFunction] = {}
         self._register_builtins()
 
@@ -350,6 +355,11 @@ class ExpressionValidator:
     """
 
     def __init__(self):
+        """Initialize the validator with a fresh ExpressionParser instance.
+
+        Output: None
+        Invariants: _parser is ready to extract column references and validate expressions
+        """
         self._parser = ExpressionParser()
 
     def validate(

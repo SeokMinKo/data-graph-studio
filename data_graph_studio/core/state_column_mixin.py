@@ -21,7 +21,10 @@ class ColumnZoneMixin:
 
     @property
     def group_columns(self) -> List[GroupColumn]:
-        """Ordered list of columns currently in the Group Zone."""
+        """Ordered list of columns currently in the Group Zone.
+
+        Output: List[GroupColumn] — live reference; order matches display order
+        """
         return self._group_columns
 
     def add_group_column(self, name: str, index: int = -1):
@@ -90,7 +93,10 @@ class ColumnZoneMixin:
 
     @property
     def value_columns(self) -> List[ValueColumn]:
-        """Ordered list of columns currently in the Value Zone."""
+        """Ordered list of columns currently in the Value Zone.
+
+        Output: List[ValueColumn] — live reference; order matches display order
+        """
         return self._value_columns
 
     def add_value_column(
@@ -199,22 +205,34 @@ class ColumnZoneMixin:
         self.emit("value_zone_changed")
 
     def get_primary_values(self) -> List[ValueColumn]:
-        """Return Value Zone columns assigned to the primary (left) Y axis."""
+        """Return Value Zone columns assigned to the primary (left) Y axis.
+
+        Output: List[ValueColumn] — filtered subset of _value_columns where use_secondary_axis is False
+        """
         return [v for v in self._value_columns if not v.use_secondary_axis]
 
     def get_secondary_values(self) -> List[ValueColumn]:
-        """Return Value Zone columns assigned to the secondary (right) Y axis."""
+        """Return Value Zone columns assigned to the secondary (right) Y axis.
+
+        Output: List[ValueColumn] — filtered subset of _value_columns where use_secondary_axis is True
+        """
         return [v for v in self._value_columns if v.use_secondary_axis]
 
     def has_secondary_axis(self) -> bool:
-        """Return True if at least one Value Zone column is assigned to the secondary axis."""
+        """Return True if at least one Value Zone column is assigned to the secondary axis.
+
+        Output: bool — True when any ValueColumn has use_secondary_axis == True
+        """
         return any(v.use_secondary_axis for v in self._value_columns)
 
     # ==================== Hover Zone ====================
 
     @property
     def hover_columns(self) -> List[str]:
-        """Ordered list of column names shown in the chart hover tooltip."""
+        """Ordered list of column names shown in the chart hover tooltip.
+
+        Output: List[str] — live reference; names appear in tooltip in this order
+        """
         return self._hover_columns
 
     def add_hover_column(self, name: str):

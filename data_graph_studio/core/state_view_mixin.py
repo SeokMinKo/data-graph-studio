@@ -26,7 +26,10 @@ class ViewSettingsMixin:
 
     @property
     def chart_settings(self) -> ChartSettings:
-        """Current chart configuration including type, axes, and style options."""
+        """Current chart configuration including type, axes, and style options.
+
+        Output: ChartSettings — live reference; mutate via update_chart_settings for undo support
+        """
         return self._chart_settings
 
     def set_chart_type(self, chart_type: ChartType):
@@ -108,7 +111,10 @@ class ViewSettingsMixin:
 
     @property
     def tool_mode(self) -> ToolMode:
-        """Currently active chart interaction tool mode."""
+        """Currently active chart interaction tool mode.
+
+        Output: ToolMode — current enum value (e.g. PAN, SELECT, ZOOM)
+        """
         return self._tool_mode
 
     def set_tool_mode(self, mode: ToolMode):
@@ -126,7 +132,10 @@ class ViewSettingsMixin:
 
     @property
     def grid_view_settings(self) -> GridViewSettings:
-        """Current grid view configuration (split column, direction, column count, shared axis flags)."""
+        """Current grid view configuration (split column, direction, column count, shared axis flags).
+
+        Output: GridViewSettings — live reference embedded in chart_settings.grid_view
+        """
         return self._chart_settings.grid_view
 
     def set_grid_view_enabled(self, enabled: bool):
@@ -187,7 +196,10 @@ class ViewSettingsMixin:
 
     @property
     def layout_ratios(self) -> Dict[str, float]:
-        """Height ratios for 'summary', 'graph', and 'table' panels (sum to 1.0)."""
+        """Height ratios for 'summary', 'graph', and 'table' panels (sum to 1.0).
+
+        Output: Dict[str, float] — live reference with keys 'summary', 'graph', 'table'
+        """
         return self._layout_ratios
 
     def set_layout_ratio(self, section: str, ratio: float):
@@ -229,7 +241,10 @@ class ViewSettingsMixin:
 
     @property
     def hidden_columns(self) -> Set[str]:
-        """Read-only access to hidden columns set."""
+        """Read-only access to hidden columns set.
+
+        Output: frozenset[str] — immutable snapshot of currently hidden column names
+        """
         return frozenset(self._hidden_columns)
 
     def hide_column(self, column: str):

@@ -79,32 +79,53 @@ class ViewSyncManager(Observable):
 
     @property
     def sync_x(self) -> bool:
-        """Return True when X-axis range synchronisation is enabled."""
+        """Return True when X-axis range synchronisation is enabled.
+
+        Output: bool — current value of the _sync_x flag
+        """
         return self._sync_x
 
     @sync_x.setter
     def sync_x(self, value: bool) -> None:
-        """Enable or disable X-axis range synchronisation."""
+        """Enable or disable X-axis range synchronisation.
+
+        Input: value — bool; True enables X-axis sync across panels
+        Output: None
+        """
         self._sync_x = value
 
     @property
     def sync_y(self) -> bool:
-        """Return True when Y-axis range synchronisation is enabled."""
+        """Return True when Y-axis range synchronisation is enabled.
+
+        Output: bool — current value of the _sync_y flag
+        """
         return self._sync_y
 
     @sync_y.setter
     def sync_y(self, value: bool) -> None:
-        """Enable or disable Y-axis range synchronisation."""
+        """Enable or disable Y-axis range synchronisation.
+
+        Input: value — bool; True enables Y-axis sync across panels
+        Output: None
+        """
         self._sync_y = value
 
     @property
     def sync_selection(self) -> bool:
-        """Return True when selection synchronisation is enabled."""
+        """Return True when selection synchronisation is enabled.
+
+        Output: bool — current value of the _sync_selection flag
+        """
         return self._sync_selection
 
     @sync_selection.setter
     def sync_selection(self, value: bool) -> None:
-        """Enable or disable selection synchronisation across panels."""
+        """Enable or disable selection synchronisation across panels.
+
+        Input: value — bool; True propagates data-point selection to all panels
+        Output: None
+        """
         self._sync_selection = value
 
     @property

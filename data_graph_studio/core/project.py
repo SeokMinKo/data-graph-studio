@@ -28,7 +28,10 @@ class DataSourceRef:
 
     @property
     def is_absolute(self) -> bool:
-        """Return True if the stored path is absolute (POSIX or Windows drive-letter form)."""
+        """Return True if the stored path is absolute (POSIX or Windows drive-letter form).
+
+        Output: bool — True for absolute paths; False for relative paths
+        """
         if os.path.isabs(self.path):
             return True
         # Windows drive letter paths (e.g., C:/foo or C:\foo)
@@ -47,7 +50,10 @@ class DataSourceRef:
         return os.path.join(base_dir, self.path)
 
     def to_dict(self) -> Dict:
-        """Serialize this data source reference to a dictionary."""
+        """Serialize this data source reference to a dictionary.
+
+        Output: Dict — JSON-compatible mapping of all DataSourceRef fields
+        """
         return {
             'path': self.path,
             'file_type': self.file_type,
@@ -63,7 +69,11 @@ class DataSourceRef:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'DataSourceRef':
-        """Deserialize a DataSourceRef from a dictionary produced by to_dict."""
+        """Deserialize a DataSourceRef from a dictionary produced by to_dict.
+
+        Input: data — Dict, as produced by to_dict()
+        Output: DataSourceRef — fully populated instance; missing optional keys use defaults
+        """
         return cls(
             path=data['path'],
             file_type=data['file_type'],
@@ -88,7 +98,10 @@ class ComparisonState:
     sync_zoom: bool = True
 
     def to_dict(self) -> Dict:
-        """Serialize this comparison state to a dictionary."""
+        """Serialize this comparison state to a dictionary.
+
+        Output: Dict — JSON-compatible mapping of all ComparisonState fields
+        """
         return {
             'mode': self.mode,
             'comparison_datasets': self.comparison_datasets,
@@ -99,7 +112,11 @@ class ComparisonState:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'ComparisonState':
-        """Deserialize a ComparisonState from a dictionary produced by to_dict."""
+        """Deserialize a ComparisonState from a dictionary produced by to_dict.
+
+        Input: data — Dict, as produced by to_dict()
+        Output: ComparisonState — fully populated instance; missing keys use defaults
+        """
         return cls(
             mode=data.get('mode', 'single'),
             comparison_datasets=data.get('comparison_datasets', []),
@@ -255,7 +272,10 @@ class Project:
         return None
 
     def get_all_data_sources(self) -> List[DataSourceRef]:
-        """Return a shallow copy of all registered DataSourceRef entries."""
+        """Return a shallow copy of all registered DataSourceRef entries.
+
+        Output: List[DataSourceRef] — shallow copy of self.data_sources in insertion order
+        """
         return self.data_sources.copy()
     
     def to_json(self, indent: int = 2) -> str:
@@ -362,12 +382,18 @@ class ProjectManager:
     
     @property
     def current_project(self) -> Optional[Project]:
-        """The currently open Project, or None if no project is active."""
+        """The currently open Project, or None if no project is active.
+
+        Output: Optional[Project] — the active Project instance, or None
+        """
         return self._current
-    
+
     @property
     def is_dirty(self) -> bool:
-        """True if the current project has unsaved changes."""
+        """True if the current project has unsaved changes.
+
+        Output: bool — True when mark_dirty() has been called since the last save
+        """
         return self._dirty
     
     def new_project(self, name: str = "Untitled") -> Project:
@@ -382,7 +408,11 @@ class ProjectManager:
         return self._current
     
     def mark_dirty(self):
-        """Mark the current project as having unsaved changes."""
+        """Mark the current project as having unsaved changes.
+
+        Output: None
+        Invariants: self.is_dirty is True after this call
+        """
         self._dirty = True
     
     def save(self, path: Optional[str] = None):
@@ -441,11 +471,18 @@ class ProjectManager:
         self._recent_files = self._recent_files[:self.MAX_RECENT_FILES]
     
     def get_recent_files(self) -> List[str]:
-        """Return a copy of the recent files list, most recently used first."""
+        """Return a copy of the recent files list, most recently used first.
+
+        Output: List[str] — file paths in MRU order; never modifies the internal list
+        """
         return self._recent_files.copy()
-    
+
     def clear_recent_files(self):
-        """Clear the list of recently opened files."""
+        """Clear the list of recently opened files.
+
+        Output: None
+        Invariants: self._recent_files is empty after this call
+        """
         self._recent_files.clear()
     
     def get_autosave_path(self) -> Optional[str]:

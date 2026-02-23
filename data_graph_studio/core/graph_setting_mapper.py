@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 class GraphSettingMapper:
     @staticmethod
     def from_app_state(state: AppState, name: str, dataset_id: str) -> GraphSetting:
-        """Create GraphSetting from current AppState"""
+        """Create a GraphSetting snapshot from the current AppState.
+
+        Input: state — AppState, source of chart type, columns, filters, sorts, and settings
+               name — str, display name for the saved setting
+               dataset_id — str, dataset ID to associate with the setting
+        Output: GraphSetting — fully populated setting with a new UUID; group/value columns
+            are serialized to dicts for storage
+        """
         chart_type = state._chart_settings.chart_type
         if isinstance(chart_type, ChartType):
             chart_type = chart_type.value
@@ -143,7 +150,15 @@ class GraphSettingMapper:
 
     @staticmethod
     def to_app_state(setting: GraphSetting, state: AppState) -> None:
-        """Apply GraphSetting to AppState with signal batching."""
+        """Apply a GraphSetting to AppState, restoring all chart configuration.
+
+        Input: setting — GraphSetting, the snapshot to restore
+               state — AppState, the target whose chart type, columns, filters, and sorts are overwritten
+        Output: None
+        Raises: ValidationError — when any attribute from setting cannot be applied to state
+        Invariants: all signals (chart_settings_changed, value_zone_changed, etc.) are emitted
+            inside a batch update; state is unchanged on ValidationError
+        """
         state.begin_batch_update()
         try:
             state._chart_settings.chart_type = GraphSettingMapper._resolve_chart_type(

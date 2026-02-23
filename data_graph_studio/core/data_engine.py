@@ -69,6 +69,12 @@ class DataEngine(DatasetMixin, AnalysisMixin):
     """
 
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
+        """Initialize all sub-components of the DataEngine facade.
+
+        Input: precision_mode — PrecisionMode, controls float precision handling (default AUTO)
+        Output: None
+        Invariants: all sub-components are freshly initialized; no data is loaded; cache is empty
+        """
         from .transform_chain import TransformChain
 
         FL, DQ, DE, DM, CE = _import_submodules()
@@ -116,7 +122,10 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
     @property
     def df(self) -> Optional[pl.DataFrame]:
-        """Active DataFrame: returns the active dataset's DataFrame, or the loader's DataFrame if no dataset is active."""
+        """Active DataFrame: returns the active dataset's DataFrame, or the loader's DataFrame if no dataset is active.
+
+        Output: Optional[pl.DataFrame] — the current working DataFrame, or None if nothing is loaded
+        """
         if self._datasets_mgr.active_dataset_id:
             return self._datasets_mgr.get_dataset_df(self._datasets_mgr.active_dataset_id)
         return self._loader._df
@@ -233,22 +242,34 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
     @property
     def profile(self) -> Optional[DataProfile]:
-        """Current DataProfile for the loaded file, or None if no file is loaded."""
+        """Current DataProfile for the loaded file, or None if no file is loaded.
+
+        Output: Optional[DataProfile] — column-level statistics snapshot, or None
+        """
         return self._loader.profile
 
     @property
     def progress(self) -> LoadingProgress:
-        """Current LoadingProgress snapshot for any in-progress file load operation."""
+        """Current LoadingProgress snapshot for any in-progress file load operation.
+
+        Output: LoadingProgress — live progress state; never None
+        """
         return self._loader.progress
 
     @property
     def is_loaded(self) -> bool:
-        """True if a DataFrame is currently loaded and available."""
+        """True if a DataFrame is currently loaded and available.
+
+        Output: bool — True when df is not None
+        """
         return self.df is not None
 
     @property
     def row_count(self) -> int:
-        """Total number of rows: uses the full file row count when windowed, otherwise the in-memory DataFrame length."""
+        """Total number of rows: uses the full file row count when windowed, otherwise the in-memory DataFrame length.
+
+        Output: int — row count, never negative
+        """
         if self._loader.is_windowed and self._loader._total_rows > 0:
             return self._loader._total_rows
         return len(self.df) if self.df is not None else 0

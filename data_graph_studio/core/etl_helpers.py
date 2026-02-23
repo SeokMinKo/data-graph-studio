@@ -123,12 +123,21 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
 
     class _EtlEventCollector(IEtlFileObserver):
         def __init__(self):
+            """Initialize the collector with empty event lists and zero error count.
+
+            Output: None
+            Invariants: events and etw_events are empty; _error_count is 0
+            """
             self.events: List[Dict[str, Any]] = []
             self.etw_events: List[Dict[str, Any]] = []
             self._error_count = 0
 
         def on_system_trace(self, event):
-            """Handle a system-level ETW trace event and append a record to events."""
+            """Handle a system-level ETW trace event and append a record to events.
+
+            Input: event — ETW system trace event object from etl-parser
+            Output: None; on parse failure increments _error_count and logs at DEBUG
+            """
             try:
                 system = System(event)
                 mof = system.get_mof()
@@ -154,7 +163,11 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 self._error_count += 1
 
         def on_event_record(self, event):
-            """Handle a generic ETW event record and append it to etw_events."""
+            """Handle a generic ETW event record and append it to etw_events.
+
+            Input: event — generic ETW event record object from etl-parser
+            Output: None; attempts ETW then TraceLogging parse; silently skips if both fail
+            """
             try:
                 try:
                     msg = event.parse_etw()
@@ -185,13 +198,25 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 self._error_count += 1
 
         def on_perfinfo_trace(self, event):
-            """Handle a performance-info trace event (no-op)."""
+            """Handle a performance-info trace event (no-op).
+
+            Input: event — perf-info ETW event; intentionally ignored
+            Output: None
+            """
 
         def on_trace_record(self, event):
-            """Handle a generic trace record event (no-op)."""
+            """Handle a generic trace record event (no-op).
+
+            Input: event — generic trace record; intentionally ignored
+            Output: None
+            """
 
         def on_win_trace(self, event):
-            """Handle a Windows-specific trace event (no-op)."""
+            """Handle a Windows-specific trace event (no-op).
+
+            Input: event — Windows-specific ETW event; intentionally ignored
+            Output: None
+            """
 
     try:
         with open(path, 'rb') as f:

@@ -65,6 +65,11 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
     """
 
     def __init__(self):
+        """Initialize AppState with all zones, settings, and sub-managers at their defaults.
+
+        Output: None
+        Invariants: no data is loaded; all zones are empty; ComparisonManager is in SINGLE mode
+        """
         super().__init__()
 
         # Undo/Redo (session-only)
@@ -143,7 +148,10 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
 
     @property
     def selection(self) -> SelectionState:
-        """Current row selection state."""
+        """Current row selection state.
+
+        Output: SelectionState — live reference; contains selected_rows and highlighted_rows
+        """
         return self._selection
 
     def select_rows(self, rows: List[int], add: bool = False):
@@ -200,7 +208,10 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
 
     @property
     def limit_to_marking(self) -> bool:
-        """When True, table shows only marked/selected rows"""
+        """When True, table shows only marked/selected rows.
+
+        Output: bool — True when the table is filtered to marked rows only
+        """
         return self._limit_to_marking
 
     def set_limit_to_marking(self, enabled: bool):
@@ -244,17 +255,26 @@ class AppState(DatasetMixin, ColumnZoneMixin, FilterSortMixin, ViewSettingsMixin
 
     @property
     def current_profile(self) -> Optional['Profile']:
-        """The currently loaded Profile, or None if no profile is active."""
+        """The currently loaded Profile, or None if no profile is active.
+
+        Output: Optional[Profile] — live Profile instance, or None
+        """
         return self._current_profile
 
     @property
     def current_setting_id(self) -> Optional[str]:
-        """ID of the currently active GraphSetting, or None if not set."""
+        """ID of the currently active GraphSetting, or None if not set.
+
+        Output: Optional[str] — GraphSetting UUID string, or None
+        """
         return self._current_setting_id
 
     @property
     def current_setting(self) -> Optional['GraphSetting']:
-        """The currently active GraphSetting resolved from the current profile, or None."""
+        """The currently active GraphSetting resolved from the current profile, or None.
+
+        Output: Optional[GraphSetting] — active setting, or None when no profile/setting is active
+        """
         if self._current_profile and self._current_setting_id:
             return self._current_profile.get_setting(self._current_setting_id)
         return None

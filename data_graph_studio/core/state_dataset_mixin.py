@@ -119,32 +119,50 @@ class DatasetMixin:
 
     @property
     def dataset_states(self) -> Dict[str, DatasetState]:
-        """Mapping of dataset ID to DatasetState for all loaded datasets."""
+        """Mapping of dataset ID to DatasetState for all loaded datasets.
+
+        Output: Dict[str, DatasetState] — delegated from ComparisonManager; live reference
+        """
         return self.comparison_manager.dataset_states
 
     @property
     def dataset_metadata(self) -> Dict[str, DatasetMetadata]:
-        """Mapping of dataset ID to DatasetMetadata for all loaded datasets."""
+        """Mapping of dataset ID to DatasetMetadata for all loaded datasets.
+
+        Output: Dict[str, DatasetMetadata] — delegated from ComparisonManager; live reference
+        """
         return self.comparison_manager.dataset_metadata
 
     @property
     def active_dataset_id(self) -> Optional[str]:
-        """ID of the currently active dataset, or None if no dataset is active."""
+        """ID of the currently active dataset, or None if no dataset is active.
+
+        Output: Optional[str] — dataset ID string, or None
+        """
         return self.comparison_manager.active_dataset_id
 
     @property
     def active_dataset_state(self) -> Optional[DatasetState]:
-        """DatasetState of the currently active dataset, or None if none is active."""
+        """DatasetState of the currently active dataset, or None if none is active.
+
+        Output: Optional[DatasetState] — live state object, or None
+        """
         return self.comparison_manager.active_dataset_state
 
     @property
     def comparison_settings(self) -> ComparisonSettings:
-        """Current comparison mode configuration."""
+        """Current comparison mode configuration.
+
+        Output: ComparisonSettings — live reference containing mode, sync flags, and dataset IDs
+        """
         return self.comparison_manager.comparison_settings
 
     @property
     def comparison_mode(self) -> ComparisonMode:
-        """Active comparison mode (SINGLE or MULTI)."""
+        """Active comparison mode (SINGLE or MULTI).
+
+        Output: ComparisonMode — current enum value
+        """
         return self.comparison_manager.comparison_mode
 
     @property

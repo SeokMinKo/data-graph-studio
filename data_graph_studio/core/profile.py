@@ -74,7 +74,12 @@ class GraphSetting:
         )
 
     def with_name(self, name: str) -> 'GraphSetting':
-        """Return a new GraphSetting with the given name and an updated modified timestamp."""
+        """Return a new GraphSetting with the given name and an updated modified timestamp.
+
+        Input: name — str, new display name for the setting
+        Output: GraphSetting — frozen copy of self with name and modified_at updated
+        Invariants: all other fields are identical to the original
+        """
         return dataclasses.replace(self, name=name, modified_at=time.time())
 
     def update_modified(self) -> 'GraphSetting':
@@ -86,7 +91,10 @@ class GraphSetting:
         return dataclasses.replace(self, modified_at=time.time())
 
     def to_dict(self) -> Dict:
-        """Serialize this graph setting to a JSON-compatible dictionary."""
+        """Serialize this graph setting to a JSON-compatible dictionary.
+
+        Output: Dict — all GraphSetting fields in a JSON-safe format; round-trips with from_dict
+        """
         return {
             "id": self.id,
             "name": self.name,
@@ -111,7 +119,11 @@ class GraphSetting:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'GraphSetting':
-        """Deserialize a GraphSetting from a dictionary produced by to_dict."""
+        """Deserialize a GraphSetting from a dictionary produced by to_dict.
+
+        Input: data — Dict, as produced by to_dict()
+        Output: GraphSetting — fully populated frozen instance; missing keys use defaults
+        """
         return cls(
             id=data["id"],
             name=data["name"],
@@ -510,6 +522,11 @@ class ProfileManager:
     DEFAULT_PROFILES_DIR = "profiles"
 
     def __init__(self):
+        """Initialize the ProfileManager and set up the profiles directory.
+
+        Output: None
+        Invariants: _current is None; _dirty is False; recent profiles are loaded from disk if available
+        """
         self._current: Optional[Profile] = None
         self._dirty: bool = False
         self._recent_profiles: List[str] = []

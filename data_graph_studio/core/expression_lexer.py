@@ -225,11 +225,18 @@ class Parser:
 
     @property
     def current(self) -> Token:
-        """Return the token at the current parse position."""
+        """Return the token at the current parse position.
+
+        Output: Token — the token at self.pos (never past the EOF token)
+        """
         return self.tokens[self.pos]
 
     def advance(self) -> Token:
-        """Return the current token and advance the position by one."""
+        """Return the current token and advance the position by one.
+
+        Output: Token — the token that was current before advancing
+        Invariants: pos is not incremented past len(tokens) - 1 (EOF is the last token)
+        """
         token = self.current
         if self.pos < len(self.tokens) - 1:
             self.pos += 1
