@@ -104,7 +104,13 @@ def _detect_encoding_impl(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) ->
 
 
 def detect_encoding(path: str, sample_size: int = ENCODING_SAMPLE_SIZE) -> str:
-    """파일 인코딩을 자동 감지한다. FILE_ENCODING_DETECT_TIMEOUT 초 초과 시 DataLoadError."""
+    """Detect the character encoding of a file by sampling its first bytes.
+
+    Input: path — str, readable file path; sample_size — int, bytes to sample (default 64 KB)
+    Output: str — encoding name compatible with Python's open(); falls back to 'utf-8' on timeout or error
+    Raises: nothing — all failures are caught internally and the default encoding is returned
+    Invariants: always returns a non-empty string
+    """
     try:
         return _run_with_timeout(
             lambda: _detect_encoding_impl(path, sample_size),
@@ -140,8 +146,12 @@ class FileLoader:
     ]
 
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
-        """FileLoader를 초기화한다.
-            precision_mode: 부동소수점 정밀도 모드."""
+        """Initialize a FileLoader with no data loaded.
+
+        Input: precision_mode — PrecisionMode, controls float precision handling (default AUTO)
+        Output: None
+        Invariants: _df and _lazy_df are None; _cancel_loading is False; _progress is a fresh LoadingProgress
+        """
         self._df: Optional[pl.DataFrame] = None
         self._lazy_df: Optional[pl.LazyFrame] = None
         self._source: Optional[DataSource] = None
@@ -162,104 +172,128 @@ class FileLoader:
 
     @property
     def df(self) -> Optional[pl.DataFrame]:
-        """현재 로딩된 DataFrame."""
+        """Return the currently loaded DataFrame, or None if no file has been loaded."""
         return self._df
 
     @property
     def profile(self) -> Optional[DataProfile]:
-        """데이터 프로파일."""
+        """Return the DataProfile computed after the last successful load, or None."""
         return self._profile
 
     @property
     def progress(self) -> LoadingProgress:
-        """로딩 진행 상태."""
+        """Return the current loading progress state object."""
         return self._progress
 
     @property
     def source(self) -> Optional[DataSource]:
-        """데이터 소스 정보."""
+        """Return the DataSource descriptor for the last loaded file, or None."""
         return self._source
 
     @property
     def is_loaded(self) -> bool:
-        """데이터 로드 여부."""
+        """Return True if a DataFrame is currently held in memory."""
         return self._df is not None
 
     @property
     def row_count(self) -> int:
-        """총 행 수 (windowed인 경우 전체 행 수)."""
+        """Return total row count: full file size when windowed, len(df) otherwise, 0 if not loaded."""
         if self._windowed and self._total_rows > 0:
             return self._total_rows
         return len(self._df) if self._df is not None else 0
 
     @property
     def column_count(self) -> int:
-        """총 컬럼 수."""
+        """Return the number of columns in the current DataFrame, or 0 if not loaded."""
         return len(self._df.columns) if self._df is not None else 0
 
     @property
     def columns(self) -> List[str]:
-        """컬럼 이름 목록."""
+        """Return the list of column names, or an empty list if not loaded."""
         return self._df.columns if self._df is not None else []
 
     @property
     def dtypes(self) -> Dict[str, str]:
-        """컬럼별 데이터 타입."""
+        """Return a mapping of column name to Polars dtype string, or {} if not loaded."""
         if self._df is None:
             return {}
         return {col: str(dtype) for col, dtype in zip(self._df.columns, self._df.dtypes)}
 
     @property
     def is_windowed(self) -> bool:
-        """windowed 모드 여부."""
+        """Return True if the current DataFrame is a window slice of a larger LazyFrame."""
         return self._windowed
 
     @property
     def total_rows(self) -> int:
-        """전체 행 수."""
+        """Return the total row count of the source file (falls back to row_count if unknown)."""
         return self._total_rows if self._total_rows else self.row_count
 
     @property
     def window_start(self) -> int:
-        """현재 윈도우 시작 행."""
+        """Return the 0-based row index where the current window begins."""
         return self._window_start
 
     @property
     def window_size(self) -> int:
-        """현재 윈도우 크기."""
+        """Return the maximum number of rows in the current window slice."""
         return self._window_size
 
     @property
     def has_lazy(self) -> bool:
-        """LazyFrame 존재 여부."""
+        """Return True if a LazyFrame is available for deferred computation."""
         return self._lazy_df is not None
 
     @property
     def warning_message(self) -> Optional[str]:
-        """마지막 로딩 중 발생한 사용자 표시 경고 메시지."""
+        """Return a user-facing warning from the last load operation, or None if none occurred."""
         return self._warning_message
 
     def set_progress_callback(self, callback: Callable[[LoadingProgress], None]) -> None:
-        """진행률 콜백을 설정한다."""
+        """Register a callback invoked with each LoadingProgress update during a load.
+
+        Input: callback — Callable[[LoadingProgress], None], must be thread-safe if async_load is used
+        Output: None
+        Invariants: replaces any previously registered callback
+        """
         self._progress_callback = callback
 
     def set_precision_mode(self, mode: PrecisionMode) -> None:
-        """정밀도 모드를 설정한다."""
+        """Set the float precision mode used when optimizing memory after a load.
+
+        Input: mode — PrecisionMode enum value
+        Output: None
+        Invariants: takes effect on the next load_file or collect_lazy call
+        """
         self._precision_mode = mode
 
     def add_precision_column(self, column: str) -> None:
-        """정밀도 유지가 필요한 컬럼을 추가한다."""
+        """Mark a column as precision-sensitive so it is never downcast to float32.
+
+        Input: column — str, non-empty column name
+        Output: None
+        Raises: ValueError — if column is empty or not a string
+        Invariants: column is present in _precision_columns after this call
+        """
         if not isinstance(column, str) or not column.strip():
             raise ValueError(f"column must be a non-empty string, got {column!r}")
         self._precision_columns.add(column)
 
     def cancel_loading(self) -> None:
-        """진행 중인 로딩을 취소한다."""
+        """Signal an in-progress async load to stop at its next cancellation checkpoint.
+
+        Output: None
+        Invariants: _cancel_loading is True after this call; the load thread checks this flag
+        """
         self._cancel_loading = True
 
     @staticmethod
     def detect_file_type(path: str) -> FileType:
-        """파일 형식을 확장자로 감지한다."""
+        """Infer the FileType from the file extension.
+
+        Input: path — str, any file path (file need not exist)
+        Output: FileType — matched enum value; defaults to FileType.TXT for unknown extensions
+        """
         ext = Path(path).suffix.lower()
         mapping = {
             '.csv': FileType.CSV,
@@ -278,7 +312,12 @@ class FileLoader:
 
     @staticmethod
     def detect_delimiter(path: str, encoding: str = DEFAULT_ENCODING, sample_lines: int = DELIMITER_SAMPLE_LINES) -> str:
-        """구분자를 자동 감지한다. FILE_ENCODING_DETECT_TIMEOUT 초 초과 시 기본값(쉼표) 반환."""
+        """Detect the most likely column delimiter by counting candidates in sampled lines.
+
+        Input: path — str, readable file path; encoding — str; sample_lines — int, lines to inspect
+        Output: str — one of ',', '\t', ';', '|', ' '; defaults to ',' on timeout or OS error
+        Invariants: always returns a non-empty single-character string
+        """
         delimiters = [',', '\t', ';', '|', ' ']
 
         try:
@@ -313,10 +352,15 @@ class FileLoader:
         precision_mode: Optional[PrecisionMode] = None,
         sample_n: Optional[int] = None,
     ) -> bool:
-        """파일을 로드한다.
+        """Load a file into _df, resolving encoding, delimiter, and optional Parquet conversion.
 
-        Args:
-            sample_n: 로드 후 N개 행만 샘플링 (None이면 전체 로드).
+        Input: path — str, must be readable; file_type — FileType or None (auto-detected);
+               encoding — str (auto-detected when 'utf-8' and file is text); delimiter — str
+               (auto-detected when delimiter_type is AUTO); async_load — bool, starts a background
+               thread and returns immediately; sample_n — int or None, row limit applied after load
+        Output: bool — True if load started (async) or completed successfully (sync)
+        Raises: DataLoadError — if path does not exist or is not readable
+        Invariants: _source is set before any IO; on sync success _df is non-None
         """
         if precision_mode is not None:
             self._precision_mode = precision_mode
@@ -362,7 +406,12 @@ class FileLoader:
         return self._load_file_internal(*load_args)
 
     def set_window(self, start: int, size: int) -> bool:
-        """현재 window 구간을 변경한다."""
+        """Slide the window view to [start, start+size) rows from the existing LazyFrame.
+
+        Input: start — int, 0-based row offset (clamped to >= 0); size — int, row count (clamped to >= 1)
+        Output: bool — True if window was applied; False if no LazyFrame exists
+        Invariants: _windowed is True and _df holds the requested slice on success
+        """
         if self._lazy_df is None:
             return False
 
@@ -376,7 +425,13 @@ class FileLoader:
         return True
 
     def load_lazy(self, path: str, **kwargs: Any) -> bool:
-        """LazyFrame으로 파일을 로드한다."""
+        """Open a file as a Polars LazyFrame without materializing it into memory.
+
+        Input: path — str, must be readable; kwargs — passed through to pl.scan_csv / scan_parquet / read_json
+        Output: bool — True on success
+        Raises: DataLoadError — if path is inaccessible, or Polars fails to create the LazyFrame
+        Invariants: _lazy_df is non-None on success; falls back to load_file for non-CSV/Parquet/JSON types
+        """
         if not self._retry_file_access(path):
             raise DataLoadError(
                 f"File not found or not accessible: {path}",
@@ -411,7 +466,13 @@ class FileLoader:
             ) from e
 
     def collect_lazy(self, limit: Optional[int] = None, optimize_memory: bool = True) -> bool:
-        """LazyFrame을 DataFrame으로 수집한다."""
+        """Materialize _lazy_df into _df, optionally capping rows and optimizing dtypes.
+
+        Input: limit — int or None, if set collects only the first N rows; optimize_memory — bool
+        Output: bool — True on success; False if no LazyFrame is present
+        Raises: DataLoadError — if Polars collection fails (OOM, IO error, schema mismatch)
+        Invariants: _df and _profile are set on success; gc.collect() is called before returning
+        """
         if self._lazy_df is None:
             logger.warning("No LazyFrame to collect")
             return False
@@ -443,13 +504,25 @@ class FileLoader:
             ) from e
 
     def query_lazy(self, expr: pl.Expr) -> Optional[pl.LazyFrame]:
-        """LazyFrame에 표현식을 적용한다."""
+        """Apply a Polars filter expression to the current LazyFrame and return the result.
+
+        Input: expr — pl.Expr, a valid Polars boolean expression
+        Output: pl.LazyFrame with the filter applied, or None if no LazyFrame exists
+        """
         if self._lazy_df is None:
             return None
         return self._lazy_df.filter(expr)
 
     def clear(self) -> None:
-        """모든 로딩 상태를 초기화한다."""
+        """Reset loaded data, lazy frame, source path, and profile — does NOT reset window settings or warning messages.
+
+        Output: None
+        Invariants: _df, _lazy_df, _source, _profile are None; _precision_columns is empty;
+                    _progress is a fresh LoadingProgress; _total_rows and _window_start are 0;
+                    _windowed is False; _window_size, _warning_message, _precision_mode,
+                    _progress_callback, _cancel_loading, and _loading_thread are unchanged;
+                    gc.collect() is called
+        """
         self._df = None
         self._lazy_df = None
         self._source = None
@@ -463,12 +536,16 @@ class FileLoader:
 
     @staticmethod
     def is_binary_etl(path: str) -> bool:
-        """ETL 파일이 바이너리인지 확인한다."""
+        """Return True if the ETL file at path uses a binary encoding rather than plain text."""
         return _is_binary_etl(path)
 
     @staticmethod
     def parse_etl_binary(path: str) -> pl.DataFrame:
-        """etl-parser로 바이너리 ETL 파일을 파싱한다."""
+        """Parse a binary ETL file using etl-parser and return it as a Polars DataFrame.
+
+        Input: path — str, path to a binary ETL file
+        Output: pl.DataFrame — parsed contents
+        """
         return _parse_etl_binary(path)
 
     @staticmethod
