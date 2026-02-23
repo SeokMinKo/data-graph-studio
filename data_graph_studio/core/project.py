@@ -377,6 +377,12 @@ class ProjectManager:
     MAX_RECENT_FILES = 10
     
     def __init__(self):
+        """Initialise the ProjectManager with no active project.
+
+        Input: None
+        Output: None
+        Invariants: _current is None, _dirty is False, _recent_files is empty, _autosave_path is None
+        """
         self._current: Optional[Project] = None
         self._dirty: bool = False
         self._recent_files: List[str] = []

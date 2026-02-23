@@ -112,6 +112,12 @@ class DatasetState:
     profiles: List = field(default_factory=list)               # List[GraphSetting]
 
     def __post_init__(self):
+        """Initialise runtime fields with their default objects after dataclass construction.
+
+        Output: None
+        Invariants: self.selection is a SelectionState and self.chart_settings is a ChartSettings
+                    instance after this call; lazy imports avoid circular dependencies
+        """
         # Import lazily to avoid circular dependency at class definition time
         from .state import SelectionState, ChartSettings
         if self.selection is None:

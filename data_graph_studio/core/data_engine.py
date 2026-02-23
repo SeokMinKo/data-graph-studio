@@ -8,11 +8,10 @@ ComparisonEngine)을 조합하여 기존 API를 100% 유지하는 Facade 패턴.
     from data_graph_studio.core.data_engine import DataEngine, FileType, ...
 """
 
-import warnings
 import logging
 import time
 from collections import OrderedDict
-from typing import Optional, List, Dict, Any, Set
+from typing import Any, Dict, List, Optional, Set
 
 import polars as pl
 
@@ -40,6 +39,10 @@ except ImportError:
 from .constants import LRU_CACHE_MAXSIZE
 from .data_engine_dataset_mixin import DatasetMixin
 from .data_engine_analysis_mixin import AnalysisMixin
+from ._data_engine_cache_mixin import _DataEngineCacheMixin
+from ._data_engine_loader_mixin import _DataEngineLoaderMixin
+from ._data_engine_query_mixin import _DataEngineQueryMixin
+from ._data_engine_export_mixin import _DataEngineExportMixin
 from .exceptions import QueryError, ValidationError
 from .metrics import get_metrics
 
@@ -56,7 +59,7 @@ def _import_submodules():
     return FileLoader, DataQuery, DataExporter, DatasetManager, ComparisonEngine
 
 
-class DataEngine(DatasetMixin, AnalysisMixin):
+class DataEngine(_DataEngineCacheMixin, _DataEngineLoaderMixin, _DataEngineQueryMixin, _DataEngineExportMixin, DatasetMixin, AnalysisMixin):
     """빅데이터 처리 엔진 Facade.
 
     Attributes:
@@ -90,33 +93,6 @@ class DataEngine(DatasetMixin, AnalysisMixin):
         self._transform_chain = TransformChain()
         self._virtual_columns: Set[str] = set()
         self._current_file_path: Optional[str] = None
-
-    # -- Cache (real LRU via OrderedDict) ------------------------------------
-
-    def _get_cache(self, key: str) -> Any:
-        """캐시에서 값을 가져온다 (LRU: 접근 시 끝으로 이동)."""
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            return self._cache[key]
-        return None
-
-    def _set_cache(self, key: str, value: Any) -> None:
-        """캐시에 값을 저장한다."""
-        self._cache[key] = value
-        self._cache.move_to_end(key)
-        self._evict_cache()
-
-    def _evict_cache(self) -> None:
-        while len(self._cache) > self._cache_maxsize:
-            self._cache.popitem(last=False)  # 가장 오래 안 쓴 것 제거
-
-    def _clear_cache(self) -> None:
-        self._cache.clear()
-
-    def _cache_key(self, operation: str, *args) -> str:
-        """dataset별 캐시 키 생성 (F5)."""
-        dataset_id = self._datasets_mgr.active_dataset_id if self._datasets_mgr else "default"
-        return f"{dataset_id}:{operation}:{hash(args)}"
 
     # -- Properties: FileLoader -----------------------------------------------
 
@@ -605,369 +581,6 @@ class DataEngine(DatasetMixin, AnalysisMixin):
         """
         from .file_loader import FileLoader as FL
         return FL.parse_etl_binary(path)
-
-    # -- DataQuery delegation -------------------------------------------------
-
-    def get_filtered_df(self, filter_map: Dict[str, list]) -> Optional[pl.DataFrame]:
-        """Apply a ``{column: [values]}`` filter map via Polars lazy layer and return the result.
-
-        Input:
-            filter_map: Dict mapping column names to lists of allowed values.
-                Keys must be existing column names in the active DataFrame.
-
-        Output:
-            Filtered pl.DataFrame with the same columns, or None if no data is loaded.
-            Missing columns in filter_map are silently ignored.
-
-        Raises:
-            None
-
-        Invariants:
-            - Result row count <= active DataFrame row count.
-            - Column set is unchanged.
-        """
-        return self._query.filter_by_map(self.df, filter_map)
-
-    def filter(self, column, operator, value):
-        """Filter the active DataFrame on a single column.
-
-        Input:
-            column: Name of the column to filter on; must exist in the active DataFrame.
-            operator: Filter operator string (e.g., "eq", "gt", "contains").
-            value: Value to compare against; type must be compatible with the column dtype.
-
-        Output:
-            Filtered pl.DataFrame, or None if no data is loaded.
-
-        Raises:
-            QueryError: if operator is invalid or column does not exist.
-
-        Invariants:
-            - Result row count <= active DataFrame row count.
-            - Column set is unchanged.
-        """
-        return self._query.filter(self.df, column, operator, value)
-
-    def sort(self, columns, descending=False):
-        """Sort the active DataFrame by one or more columns.
-
-        Input:
-            columns: Column name string or list of column name strings to sort by.
-            descending: If True, sort in descending order (default False).
-
-        Output:
-            Sorted pl.DataFrame with the same shape, or None if no data is loaded.
-
-        Raises:
-            pl.exceptions.InvalidOperationError: if any column does not exist in the DataFrame.
-
-        Invariants:
-            - Row count and column set are unchanged.
-        """
-        return self._query.sort(self.df, columns, descending)
-
-    def group_aggregate(self, group_columns, value_columns, agg_funcs):
-        """Group and aggregate the active DataFrame.
-
-        Input:
-            group_columns: List of column names to group by.
-            value_columns: List of column names to aggregate.
-            agg_funcs: List of aggregation function strings (e.g., ["sum", "mean"]).
-
-        Output:
-            Aggregated pl.DataFrame; one row per unique combination of group_columns.
-
-        Raises:
-            QueryError: if any specified column does not exist.
-
-        Invariants:
-            - Result row count <= active DataFrame row count.
-            - Result contains group_columns plus one column per (value_col, agg_func) pair.
-        """
-        return self._query.group_aggregate(self.df, group_columns, value_columns, agg_funcs)
-
-    def get_statistics(self, column):
-        """Compute descriptive statistics for a single column.
-
-        Input:
-            column: Name of the column to analyse; must exist in the active DataFrame.
-
-        Output:
-            Dict mapping stat name to value (e.g., mean, std, min, max, q1, q3),
-            or None if no data is loaded. Returns {} silently if column does not exist.
-
-        Raises:
-            None
-
-        Invariants:
-            - Does not modify engine state.
-            - Result is cached; repeat calls with the same column are O(1).
-        """
-        return self._query.get_statistics(self.df, column, self._loader._lazy_df, self._loader.is_windowed, self._cache)
-
-    def get_all_statistics(self, value_columns=None):
-        """Compute descriptive statistics for all (or a subset of) numeric columns.
-
-        Input:
-            value_columns: Optional list of column names to restrict to; if None, all
-                numeric columns are included.
-
-        Output:
-            Dict mapping column name to its statistics dict, or None if no data is loaded.
-            Missing or non-existent columns are silently skipped.
-
-        Raises:
-            None
-
-        Invariants:
-            - Does not modify engine state.
-            - Only numeric columns produce entries; non-numeric columns are skipped.
-        """
-        return self._query.get_all_statistics(self.df, value_columns, self._loader._lazy_df, self._loader.is_windowed, self._cache)
-
-    def get_full_profile_summary(self):
-        """Return a comprehensive profile summary combining per-column statistics and the DataProfile.
-
-        Input:
-            None
-
-        Output:
-            Dict with profile-level metadata and per-column statistics, or None if no data is loaded.
-
-        Raises:
-            None
-
-        Invariants:
-            - Does not modify engine state.
-        """
-        return self._query.get_full_profile_summary(self.df, self._loader.profile, self._loader._lazy_df, self._loader.is_windowed)
-
-    def is_column_categorical(self, col, max_unique_ratio=0.05, max_unique_count=100):
-        """Determine whether a column should be treated as categorical based on its cardinality.
-
-        Input:
-            col: Column name string; must exist in the active DataFrame.
-            max_unique_ratio: Fraction threshold — columns with unique/total <= this are
-                categorical (default 0.05).
-            max_unique_count: Absolute threshold — columns with unique count <= this are
-                categorical (default 100).
-
-        Output:
-            True if the column is classified as categorical, False otherwise.
-
-        Raises:
-            None
-
-        Invariants:
-            - Does not modify engine state.
-            - Returns False if no data is loaded or column does not exist.
-        """
-        return self._query.is_column_categorical(self.df, col, max_unique_ratio, max_unique_count)
-
-    def get_unique_values(self, col, limit=1000):
-        """Return the distinct values present in a column, up to a specified limit.
-
-        Input:
-            col: Column name string; must exist in the active DataFrame.
-            limit: Maximum number of distinct values to return (default 1000).
-
-        Output:
-            List of unique values for the column, or an empty list if no data is loaded
-            or if the column does not exist.
-
-        Raises:
-            None
-
-        Invariants:
-            - Result length <= limit.
-            - Does not modify engine state.
-        """
-        return self._query.get_unique_values(self.df, col, limit)
-
-    def sample(self, n=10000, seed=42):
-        """Draw a random sample of rows from the active DataFrame.
-
-        Input:
-            n: Number of rows to sample (default 10000); capped at the actual row count.
-            seed: Random seed for reproducibility (default 42).
-
-        Output:
-            pl.DataFrame of sampled rows with the same columns, or None if no data is loaded.
-
-        Raises:
-            None
-
-        Invariants:
-            - Result row count <= min(n, active row count).
-            - Column set is unchanged.
-        """
-        return self._query.sample(self.df, n, seed)
-
-    def get_slice(self, start, end):
-        """Return a contiguous row slice from the active DataFrame.
-
-        Input:
-            start: Zero-based index of the first row to include (>= 0).
-            end: Zero-based exclusive end index (end > start).
-
-        Output:
-            pl.DataFrame slice with rows [start, end), or None if no data is loaded.
-
-        Raises:
-            None
-
-        Invariants:
-            - Result row count == min(end, row_count) - start (or 0 if out of range).
-            - Column set is unchanged.
-        """
-        return self._query.get_slice(self.df, start, end)
-
-    def search(self, query, columns=None, case_sensitive=False, max_columns=20):
-        """Search for a string query across columns in the active DataFrame.
-
-        Input:
-            query: Non-empty search string.
-            columns: Optional list of column names to restrict the search to; if None,
-                up to max_columns columns are searched.
-            case_sensitive: If True, search is case-sensitive (default False).
-            max_columns: Maximum number of columns to scan (default 20).
-
-        Output:
-            pl.DataFrame of matching rows, or None if no data is loaded.
-
-        Raises:
-            None
-
-        Invariants:
-            - Result row count <= active DataFrame row count.
-            - Column set is unchanged.
-        """
-        return self._query.search(self.df, query, columns, case_sensitive, max_columns)
-
-    def create_index(self, column) -> None:
-        """Build and cache an index for a column (deprecated — use Polars native filtering).
-
-        Input:
-            column: Name of the column to index; must exist in the active DataFrame.
-
-        Output:
-            None. Side effect: index stored in self._indexes[column].
-
-        Raises:
-            DeprecationWarning: always raised as a warning at call time.
-
-        Invariants:
-            - No-op if no data is loaded or column does not exist.
-        """
-        warnings.warn("create_index is deprecated. Use Polars native filtering.", DeprecationWarning, stacklevel=2)
-        if self.df is None or column not in self.df.columns:
-            return
-        self._indexes[column] = self._query.create_index(self.df, column)
-
-    # -- DataExporter delegation ----------------------------------------------
-
-    def export_csv(self, path, selected_rows=None) -> None:
-        """Export the active DataFrame (or a row subset) to a CSV file.
-
-        Input:
-            path: Destination filesystem path string for the output CSV file.
-            selected_rows: Optional list of zero-based row indices to export; if None,
-                all rows are exported.
-
-        Output:
-            None. Side effect: CSV file is written to path.
-
-        Raises:
-            ExportError: if the file cannot be written.
-
-        Invariants:
-            - No-op if no data is loaded.
-            - Exported column set matches the active DataFrame.
-        """
-        if self.df is not None:
-            self._exporter.export_csv(self.df, path, selected_rows)
-
-    def export_excel(self, path, selected_rows=None) -> None:
-        """Export the active DataFrame (or a row subset) to an Excel (.xlsx) file.
-
-        Input:
-            path: Destination filesystem path string for the output .xlsx file.
-            selected_rows: Optional list of zero-based row indices to export; if None,
-                all rows are exported.
-
-        Output:
-            None. Side effect: Excel file is written to path.
-
-        Raises:
-            ExportError: if the file cannot be written or openpyxl is not installed.
-
-        Invariants:
-            - No-op if no data is loaded.
-            - Exported column set matches the active DataFrame.
-        """
-        if self.df is not None:
-            self._exporter.export_excel(self.df, path, selected_rows)
-
-    def export_parquet(self, path, selected_rows=None) -> None:
-        """Export the active DataFrame (or a row subset) to a Parquet file.
-
-        Input:
-            path: Destination filesystem path string for the output .parquet file.
-            selected_rows: Optional list of zero-based row indices to export; if None,
-                all rows are exported.
-
-        Output:
-            None. Side effect: Parquet file is written to path.
-
-        Raises:
-            ExportError: if the file cannot be written.
-
-        Invariants:
-            - No-op if no data is loaded.
-            - Exported column set matches the active DataFrame.
-        """
-        if self.df is not None:
-            self._exporter.export_parquet(self.df, path, selected_rows)
-
-    # -- LazyFrame pipeline (F1) ---------------------------------------------
-
-    def lazy_query(self) -> Optional[pl.LazyFrame]:
-        """Return a LazyFrame built from the current active DataFrame.
-
-        Input:
-            None
-
-        Output:
-            pl.LazyFrame wrapping the active DataFrame, or None if no data is loaded.
-
-        Raises:
-            None
-
-        Invariants:
-            - Does not modify engine state.
-            - Returned LazyFrame reflects the DataFrame at call time; later mutations
-              to the active DataFrame are not reflected.
-        """
-        if self.df is None:
-            return None
-        return self.df.lazy()
-
-    def execute_query(self, lazy: pl.LazyFrame) -> pl.DataFrame:
-        """Collect a LazyFrame into a materialised DataFrame.
-
-        Input:
-            lazy: A valid pl.LazyFrame to execute; must not be None.
-
-        Output:
-            pl.DataFrame resulting from collecting the LazyFrame.
-
-        Raises:
-            None
-
-        Invariants:
-            - Schema of the result matches the schema declared by the LazyFrame.
-        """
-        return lazy.collect()
 
     # -- Column type casting (F3) ---------------------------------------------
 

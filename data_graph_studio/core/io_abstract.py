@@ -80,6 +80,13 @@ class _ThreadingTimerHandle:
     """
 
     def __init__(self, interval_s: float, callback: Callable) -> None:
+        """Initialise the recurring timer without starting it.
+
+        Input: interval_s — float, seconds between each callback invocation
+               callback — Callable, called with no arguments on each tick
+        Output: None
+        Invariants: timer is not running after construction; call start() to begin
+        """
         self._interval_s = interval_s
         self._callback = callback
         self._current: threading.Timer | None = None

@@ -24,7 +24,7 @@ from .types import (
     FileType, DelimiterType, LoadingProgress, DataProfile,
     DataSource, PrecisionMode, FilePath,
 )
-from .exceptions import DataLoadError
+from .exceptions import DataLoadError, ValidationError
 from .constants import (
     FILE_ENCODING_DETECT_TIMEOUT,
     DEFAULT_DELIMITER,
@@ -322,11 +322,11 @@ class FileLoader:
 
         Input: column — str, non-empty column name
         Output: None
-        Raises: ValueError — if column is empty or not a string
+        Raises: ValidationError — if column is empty or not a string
         Invariants: column is present in _precision_columns after this call
         """
         if not isinstance(column, str) or not column.strip():
-            raise ValueError(f"column must be a non-empty string, got {column!r}")
+            raise ValidationError(f"column must be a non-empty string, got {column!r}", operation="get_column_values", context={"column": repr(column)})
         self._precision_columns.add(column)
 
     def cancel_loading(self) -> None:

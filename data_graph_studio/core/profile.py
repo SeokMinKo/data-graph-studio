@@ -47,6 +47,12 @@ class GraphSetting:
     modified_at: float = field(default_factory=time.time)
 
     def __post_init__(self):
+        """Freeze all mutable fields into immutable types after dataclass construction.
+
+        Output: None
+        Invariants: group_columns, value_columns, hover_columns, filters, sorts are tuples;
+                    chart_settings is a MappingProxyType after this call
+        """
         object.__setattr__(self, "group_columns", tuple(self.group_columns))
         object.__setattr__(self, "value_columns", tuple(self.value_columns))
         object.__setattr__(self, "hover_columns", tuple(self.hover_columns))

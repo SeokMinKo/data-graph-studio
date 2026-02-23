@@ -28,8 +28,10 @@ from data_graph_studio.core.constants import (
     IPC_THREAD_NAME,
     IPC_HANDLER_TIMEOUT,
     IPC_SOCKET_BUFFER_SIZE,
+    IPC_MAX_MESSAGE_SIZE,
 )
 from data_graph_studio.core.ipc_protocol import make_error_response, parse_request
+from data_graph_studio.core.exceptions import ConfigError
 
 _PORT_FILE = Path.home() / IPC_PORT_DIR / IPC_PORT_FILE_NAME
 
@@ -166,7 +168,10 @@ class IpcServer:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         try:
-            data = await asyncio.wait_for(reader.read(65536), timeout=10.0)
+            data = await asyncio.wait_for(reader.read(IPC_MAX_MESSAGE_SIZE), timeout=10.0)
+            if len(data) > IPC_MAX_MESSAGE_SIZE:
+                logger.warning("ipc_server.message_too_large", extra={"size": len(data), "max": IPC_MAX_MESSAGE_SIZE})
+                return
             msg = json.loads(data.decode())
             loop = asyncio.get_event_loop()
             try:
@@ -235,7 +240,7 @@ class IPCServer(IpcServer):
         """Dispatch to the registered handler and return its result."""
         try:
             req = parse_request(msg)
-        except ValueError as e:
+        except (ValueError, ConfigError) as e:
             logger.warning("ipc_server.invalid_request", extra={"error": str(e)})
             return make_error_response(str(e))
         command = req[IPC_KEY_COMMAND]
@@ -348,6 +353,9 @@ class IPCClient:
             while True:
                 chunk = self._socket.recv(IPC_SOCKET_BUFFER_SIZE)
                 response += chunk
+                if len(response) > IPC_MAX_MESSAGE_SIZE:
+                    logger.warning("ipc_server.message_too_large", extra={"size": len(response), "max": IPC_MAX_MESSAGE_SIZE})
+                    break
                 if b"\n" in response:
                     break
 

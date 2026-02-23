@@ -34,13 +34,15 @@ class TestParseRequestAdditional:
         assert req["args"] == payload
 
     def test_list_command_raises_value_error(self):
-        """A list value for 'command' is rejected with ValueError."""
-        with pytest.raises(ValueError):
+        """A list value for 'command' is rejected with ConfigError."""
+        from data_graph_studio.core.exceptions import ConfigError
+        with pytest.raises(ConfigError):
             parse_request({"command": ["not", "a", "string"]})
 
     def test_none_command_raises_value_error(self):
         """None is not a valid command value."""
-        with pytest.raises(ValueError):
+        from data_graph_studio.core.exceptions import ConfigError
+        with pytest.raises(ConfigError):
             parse_request({"command": None})
 
     def test_int_args_type_is_accepted_at_parse_level(self):

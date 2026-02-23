@@ -11,6 +11,8 @@ from enum import Enum
 import numpy as np
 from scipy import stats
 
+from .constants import SHAPIRO_WILK_MAX_SAMPLE
+
 logger = logging.getLogger(__name__)
 
 
@@ -229,16 +231,16 @@ class HypothesisTester:
         """Run a Shapiro-Wilk normality test.
 
         H0: the data are drawn from a normal distribution.
-        Samples larger than 5000 are randomly subsampled to 5000.
+        Samples larger than SHAPIRO_WILK_MAX_SAMPLE are randomly subsampled to that limit.
 
         Input: sample — np.ndarray, 1-D array of observations (n >= 3)
         Output: HypothesisTestResult with test_type=NORMALITY, no effect_size
         Raises: ValueError — if sample has fewer than 3 observations (scipy raises)
         Invariants: input sample is not mutated; subsampling uses random.choice without replacement
         """
-        # Sample size limit (Shapiro-Wilk supports up to 5000)
-        if len(sample) > 5000:
-            sample = np.random.choice(sample, 5000, replace=False)
+        # Sample size limit (Shapiro-Wilk supports up to SHAPIRO_WILK_MAX_SAMPLE)
+        if len(sample) > SHAPIRO_WILK_MAX_SAMPLE:
+            sample = np.random.choice(sample, SHAPIRO_WILK_MAX_SAMPLE, replace=False)
 
         statistic, p_value = stats.shapiro(sample)
 

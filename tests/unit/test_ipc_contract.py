@@ -19,11 +19,13 @@ class TestParseRequest:
         assert result["args"] == {"key": "val"}
 
     def test_missing_command_raises_value_error(self):
-        with pytest.raises(ValueError, match="command"):
+        from data_graph_studio.core.exceptions import ConfigError
+        with pytest.raises(ConfigError, match="command"):
             parse_request({"args": {}})
 
     def test_non_string_command_raises_value_error(self):
-        with pytest.raises(ValueError, match="str"):
+        from data_graph_studio.core.exceptions import ConfigError
+        with pytest.raises(ConfigError, match="str"):
             parse_request({"command": 42})
 
     def test_missing_args_defaults_to_empty_dict(self):

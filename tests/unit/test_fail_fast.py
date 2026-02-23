@@ -49,26 +49,29 @@ def test_drop_column_accepts_valid_name():
 # ── FileLoader.add_precision_column ────────────────────────────────────────
 
 def test_add_precision_column_rejects_empty_string():
-    """add_precision_column() must raise ValueError for empty string."""
+    """add_precision_column() must raise ValidationError for empty string."""
     from data_graph_studio.core.file_loader import FileLoader
+    from data_graph_studio.core.exceptions import ValidationError
     loader = FileLoader()
-    with pytest.raises(ValueError, match="column"):
+    with pytest.raises(ValidationError, match="column"):
         loader.add_precision_column("")
 
 
 def test_add_precision_column_rejects_whitespace_only():
-    """add_precision_column() must raise ValueError for whitespace-only string."""
+    """add_precision_column() must raise ValidationError for whitespace-only string."""
     from data_graph_studio.core.file_loader import FileLoader
+    from data_graph_studio.core.exceptions import ValidationError
     loader = FileLoader()
-    with pytest.raises(ValueError, match="column"):
+    with pytest.raises(ValidationError, match="column"):
         loader.add_precision_column("   ")
 
 
 def test_add_precision_column_rejects_none():
-    """add_precision_column() must raise TypeError or ValueError for None."""
+    """add_precision_column() must raise ValidationError or TypeError for None."""
     from data_graph_studio.core.file_loader import FileLoader
+    from data_graph_studio.core.exceptions import ValidationError
     loader = FileLoader()
-    with pytest.raises((ValueError, TypeError)):
+    with pytest.raises((ValidationError, TypeError)):
         loader.add_precision_column(None)
 
 

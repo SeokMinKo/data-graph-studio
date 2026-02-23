@@ -28,6 +28,11 @@ class ParsingSettings:
     etl_selected_processes: List[str] = field(default_factory=list)  # Selected processes
 
     def __post_init__(self):
+        """Normalise mutable default fields after dataclass construction.
+
+        Output: None
+        Invariants: excluded_columns and etl_selected_processes are always lists (never None) after this call
+        """
         if self.excluded_columns is None:
             self.excluded_columns = []
         if self.etl_selected_processes is None:
