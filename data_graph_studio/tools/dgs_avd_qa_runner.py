@@ -76,15 +76,15 @@ def _wait_for_dataset(
     poll_interval: float = 0.5,
     timeout: float = 30.0,
 ) -> bool:
-    """Poll DGS via ping until a dataset loads (row_count > 0).
+    """Poll DGS via get_state until a dataset loads (data_loaded=True).
 
     Returns True if data appeared within timeout.
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            resp = _ipc_send({"command": "ping"}, timeout=5)
-            if resp.get("row_count", 0) > 0:
+            resp = _ipc_send({"command": "get_state"}, timeout=5)
+            if isinstance(resp, dict) and resp.get("data_loaded"):
                 return True
         except Exception:
             pass
@@ -168,12 +168,11 @@ def run_avd_qa(
     logger.info("step1: connect to DGS")
     try:
         resp = _ipc_send({"command": "ping"}, timeout=5)
-        if resp.get("status") != "ok":
+        if resp != "pong" and not (isinstance(resp, dict) and resp.get("status") != "error"):
             logger.error("DGS ping failed: %s", resp)
             print("Cannot connect to DGS. Start DGS first, then run this script.")
             return 1
-        scenarios.append({"name": "dgs_connect", "status": "PASS",
-                          "notes": f"row_count={resp.get('row_count', 0)}"})
+        scenarios.append({"name": "dgs_connect", "status": "PASS", "notes": "pong"})
     except Exception as e:
         print(f"Cannot connect to DGS IPC: {e}\nStart DGS first.")
         return 1
