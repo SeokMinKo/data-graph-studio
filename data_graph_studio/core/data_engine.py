@@ -464,7 +464,7 @@ class DataEngine(DatasetMixin, AnalysisMixin):
                 (default True).
 
         Output:
-            Collected pl.DataFrame, or None if no LazyFrame is available.
+            True if the LazyFrame was collected successfully, False if no LazyFrame is available.
 
         Raises:
             None
@@ -602,9 +602,10 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
         Output:
             Filtered pl.DataFrame with the same columns, or None if no data is loaded.
+            Missing columns in filter_map are silently ignored.
 
         Raises:
-            QueryError: if a column in filter_map does not exist in the DataFrame.
+            None
 
         Invariants:
             - Result row count <= active DataFrame row count.
@@ -643,7 +644,7 @@ class DataEngine(DatasetMixin, AnalysisMixin):
             Sorted pl.DataFrame with the same shape, or None if no data is loaded.
 
         Raises:
-            QueryError: if any column name does not exist.
+            pl.exceptions.InvalidOperationError: if any column does not exist in the DataFrame.
 
         Invariants:
             - Row count and column set are unchanged.
@@ -678,10 +679,10 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
         Output:
             Dict mapping stat name to value (e.g., mean, std, min, max, q1, q3),
-            or None if no data is loaded.
+            or None if no data is loaded. Returns {} silently if column does not exist.
 
         Raises:
-            QueryError: if column does not exist.
+            None
 
         Invariants:
             - Does not modify engine state.
@@ -698,9 +699,10 @@ class DataEngine(DatasetMixin, AnalysisMixin):
 
         Output:
             Dict mapping column name to its statistics dict, or None if no data is loaded.
+            Missing or non-existent columns are silently skipped.
 
         Raises:
-            QueryError: if any specified column does not exist.
+            None
 
         Invariants:
             - Does not modify engine state.
@@ -755,10 +757,11 @@ class DataEngine(DatasetMixin, AnalysisMixin):
             limit: Maximum number of distinct values to return (default 1000).
 
         Output:
-            List of unique values for the column, or an empty list if no data is loaded.
+            List of unique values for the column, or an empty list if no data is loaded
+            or if the column does not exist.
 
         Raises:
-            QueryError: if column does not exist in the active DataFrame.
+            None
 
         Invariants:
             - Result length <= limit.

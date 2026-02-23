@@ -204,7 +204,20 @@ class FilteringScheme:
 
     @property
     def has_active_filters(self) -> bool:
-        """활성 필터 존재 여부"""
+        """Return whether any enabled filter exists on this scheme.
+
+        Input:
+            self: FilteringScheme instance.
+
+        Output:
+            True if any enabled filter exists, False otherwise.
+
+        Raises:
+            None
+
+        Invariants:
+            - Result is True iff len(get_enabled_filters()) > 0.
+        """
         return any(f.enabled for f in self.filters)
 
     def get_filter_by_column(self, column: str) -> Optional[Filter]:
