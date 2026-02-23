@@ -1,8 +1,5 @@
 """Focus row navigation behavior for TablePanel."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    pass  # avoid circular imports
 
 from PySide6.QtWidgets import QAbstractItemView
 
@@ -14,6 +11,7 @@ class _TableFocusMixin:
       self.engine              - DataEngine
       self.state               - AppState
       self.table_view          - QTableView
+      self.focus_btn           - QPushButton (checkable; drives _on_focus_toggled)
       self.focus_prev_btn      - QPushButton
       self.focus_next_btn      - QPushButton
       self.focus_label         - QLabel
@@ -52,7 +50,7 @@ class _TableFocusMixin:
 
         # Highlight rows in model
         model = self.table_view.model()
-        if hasattr(model, 'set_focused_rows'):
+        if hasattr(model, 'set_focused_rows'):  # PolarsTableModel API
             model.set_focused_rows(set(valid))
 
         self._update_focus_nav()
@@ -67,7 +65,7 @@ class _TableFocusMixin:
         self.focus_label.setText("")
 
         model = self.table_view.model()
-        if hasattr(model, 'set_focused_rows'):
+        if hasattr(model, 'set_focused_rows'):  # PolarsTableModel API
             model.set_focused_rows(set())
 
     def _update_focus_nav(self):
