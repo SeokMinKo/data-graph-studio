@@ -419,12 +419,30 @@ class FilteringManager(Observable, IFilterApplier):
             get_metrics().increment("filter.applied")
             return result
 
+    _RANGE_OPERATORS = frozenset({
+        FilterOperator.GREATER_THAN,
+        FilterOperator.GREATER_THAN_OR_EQUALS,
+        FilterOperator.LESS_THAN,
+        FilterOperator.LESS_THAN_OR_EQUALS,
+    })
+
     def _apply_single_filter(self, data: pl.DataFrame, f: Filter) -> pl.DataFrame:
         expr = f.to_expression()
         if expr is None:
             return data
         try:
-            return data.filter(expr)
+            result = data.filter(expr)
+            # Exclude NaN rows for float columns with range operators.
+            # Polars treats NaN as greater than all finite values (IEEE 754
+            # total ordering), so NaN rows silently pass gt/ge filters.
+            # We explicitly remove them for consistent SQL-like semantics.
+            if (
+                f.operator in self._RANGE_OPERATORS
+                and f.column in result.columns
+                and result[f.column].dtype.is_float()
+            ):
+                result = result.filter(~pl.col(f.column).is_nan())
+            return result
         except QueryError:
             raise
         except Exception as e:
