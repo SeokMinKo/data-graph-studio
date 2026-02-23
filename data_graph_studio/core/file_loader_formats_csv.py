@@ -17,6 +17,7 @@ import polars as pl
 from .types import DelimiterType
 from .etl_helpers import HAS_ETL_PARSER
 from .exceptions import DataLoadError
+from .constants import INFER_SCHEMA_LENGTH
 
 if TYPE_CHECKING:
     from .file_loader import FileLoader
@@ -46,7 +47,7 @@ def load_csv(
     return pl.read_csv(
         path, encoding=encoding, separator=delimiter,
         has_header=has_header, skip_rows=skip_rows,
-        comment_prefix=comment_char, infer_schema_length=10000,
+        comment_prefix=comment_char, infer_schema_length=INFER_SCHEMA_LENGTH,
         ignore_errors=True,
     )
 

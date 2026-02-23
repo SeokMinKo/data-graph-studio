@@ -21,6 +21,7 @@ from .types import FileType, DelimiterType, PrecisionMode, DataProfile, ColumnIn
 from .etl_helpers import HAS_ETL_PARSER
 from .metrics import get_metrics
 from .exceptions import DataLoadError
+from .constants import INFER_SCHEMA_LENGTH
 
 # Format-specific helpers (re-exported for backward compatibility)
 from .file_loader_formats_csv import (
@@ -110,7 +111,7 @@ def prepare_parquet_from_csv(
         lf = pl.scan_csv(
             path, encoding=encoding, separator=delimiter,
             has_header=has_header, skip_rows=skip_rows,
-            comment_prefix=comment_char, infer_schema_length=10000,
+            comment_prefix=comment_char, infer_schema_length=INFER_SCHEMA_LENGTH,
             ignore_errors=True,
         )
         lf.sink_parquet(parquet_path, compression="zstd")
@@ -294,7 +295,7 @@ def load_windowed(
         lazy_df = pl.scan_csv(
             path, encoding=encoding, separator=sep,
             has_header=has_header, skip_rows=skip_rows,
-            comment_prefix=comment_char, infer_schema_length=10000,
+            comment_prefix=comment_char, infer_schema_length=INFER_SCHEMA_LENGTH,
             ignore_errors=True,
         )
     else:

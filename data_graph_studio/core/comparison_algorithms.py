@@ -20,6 +20,12 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
+from data_graph_studio.core.constants import (
+    SHAPIRO_WILK_MAX_SAMPLE,
+    NORMALITY_SIGNIFICANCE_LEVEL,
+    STATISTICAL_SAMPLE_THRESHOLD,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,15 +42,15 @@ def select_test_type(data_a: np.ndarray, data_b: np.ndarray) -> str:
     if not HAS_SCIPY:
         return "ttest"
 
-    if len(data_a) >= 30 and len(data_b) >= 30:
+    if len(data_a) >= STATISTICAL_SAMPLE_THRESHOLD and len(data_b) >= STATISTICAL_SAMPLE_THRESHOLD:
         return "ttest"
 
     try:
-        sample_a = data_a[:5000] if len(data_a) > 5000 else data_a
-        sample_b = data_b[:5000] if len(data_b) > 5000 else data_b
+        sample_a = data_a[:SHAPIRO_WILK_MAX_SAMPLE] if len(data_a) > SHAPIRO_WILK_MAX_SAMPLE else data_a
+        sample_b = data_b[:SHAPIRO_WILK_MAX_SAMPLE] if len(data_b) > SHAPIRO_WILK_MAX_SAMPLE else data_b
         _, p_a = scipy_stats.shapiro(sample_a) if len(sample_a) >= 3 else (0, 1)
         _, p_b = scipy_stats.shapiro(sample_b) if len(sample_b) >= 3 else (0, 1)
-        return "ttest" if p_a >= 0.05 and p_b >= 0.05 else "mannwhitney"
+        return "ttest" if p_a >= NORMALITY_SIGNIFICANCE_LEVEL and p_b >= NORMALITY_SIGNIFICANCE_LEVEL else "mannwhitney"
     except (ValueError, TypeError):
         logger.debug("comparison_algorithms.select_test_type.failed", exc_info=True)
         return "ttest"
@@ -116,14 +122,14 @@ def run_normality_test(data: np.ndarray) -> Dict[str, Any]:
         return {"error": "Not enough data points"}
 
     try:
-        if len(data) <= 5000:
-            stat, p_val = scipy_stats.shapiro(data[:5000])
+        if len(data) <= SHAPIRO_WILK_MAX_SAMPLE:
+            stat, p_val = scipy_stats.shapiro(data[:SHAPIRO_WILK_MAX_SAMPLE])
             test_name = "Shapiro-Wilk"
         else:
             stat, p_val = scipy_stats.normaltest(data)
             test_name = "D'Agostino-Pearson"
 
-        is_normal = p_val >= 0.05
+        is_normal = p_val >= NORMALITY_SIGNIFICANCE_LEVEL
         interpretation = (
             f"Data appears to be normally distributed (p = {p_val:.4f})"
             if is_normal else
