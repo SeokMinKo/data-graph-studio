@@ -122,7 +122,10 @@ class DatasetManager:
         Input: dataset_id — Optional[str], explicit ID; auto-generated if None
         Input: **load_kwargs — forwarded verbatim to FileLoader.load_file
         Output: Optional[str] — the assigned dataset_id on success, None on failure or when MAX_DATASETS is reached
-        Invariants: on success the dataset is stored in _datasets and _active_dataset_id is set if no other dataset was active; on failure _loader state is restored to its pre-call value
+        Invariants:
+            - on success the dataset is stored in _datasets
+            - _active_dataset_id is set if no other dataset was active
+            - on failure _loader state is restored to its pre-call value
         """
         # MAX_DATASETS 체크
         if len(self._datasets) >= self.MAX_DATASETS:
@@ -188,7 +191,10 @@ class DatasetManager:
         Input: dataset_id — Optional[str], explicit ID; auto-generated if None
         Input: source_path — Optional[str], original file path stored in DataSource metadata; empty string if None
         Output: Optional[str] — the assigned dataset_id
-        Invariants: dataset is added to _datasets and _active_dataset_id is set if no other dataset was active; a lazy frame is derived from df and stored alongside it
+        Invariants:
+            - dataset is added to _datasets
+            - _active_dataset_id is set if no other dataset was active
+            - a lazy frame is derived from df and stored alongside it
         """
         if dataset_id is None:
             dataset_id = str(uuid.uuid4())[:DATASET_ID_LENGTH]
@@ -220,7 +226,12 @@ class DatasetManager:
 
         Input: dataset_id — str, ID of the dataset to remove
         Output: bool — True if removed, False if dataset_id was not found
-        Invariants: _on_dataset_removing callback is called before deletion; df and lazy_df on the removed DatasetInfo are set to None; gc.collect() is called; if the removed dataset was active, _active_dataset_id advances to the next remaining dataset or becomes None
+        Invariants:
+            - _on_dataset_removing callback is called before deletion
+            - df and lazy_df on the removed DatasetInfo are set to None
+            - gc.collect() is called
+            - if the removed dataset was active, _active_dataset_id advances to
+              the next remaining dataset or becomes None
         """
         if dataset_id not in self._datasets:
             return False
@@ -300,7 +311,10 @@ class DatasetManager:
         """Check whether a new dataset of the given size can be loaded.
 
         Input: estimated_size — int, expected memory footprint in bytes of the prospective dataset
-        Output: Tuple[bool, str] — (True, "") if load is safe; (True, warning_msg) if near the memory ceiling; (False, reason_msg) if MAX_DATASETS or MAX_TOTAL_MEMORY would be exceeded
+        Output: Tuple[bool, str]
+            - (True, "") if load is safe
+            - (True, warning_msg) if near the memory ceiling
+            - (False, reason_msg) if MAX_DATASETS or MAX_TOTAL_MEMORY would be exceeded
         """
         if len(self._datasets) >= self.MAX_DATASETS:
             return False, f"최대 데이터셋 수({self.MAX_DATASETS})에 도달했습니다."
@@ -350,7 +364,11 @@ class DatasetManager:
         """Remove every loaded dataset and reset the color cycle.
 
         Output: None
-        Invariants: _datasets is empty, _active_dataset_id is None, and _color_index is 0 after this call; remove_dataset() (including its callback and gc logic) is called for each dataset
+        Invariants:
+            - _datasets is empty, _active_dataset_id is None, and _color_index is 0
+              after this call
+            - remove_dataset() (including its callback and gc logic) is called for
+              each dataset
         """
         for dataset_id in list(self._datasets.keys()):
             self.remove_dataset(dataset_id)
@@ -409,7 +427,10 @@ class DatasetManager:
         Input: paths — list of file path strings to load
         Input: max_workers — int, maximum number of concurrent threads; defaults to 4
         Output: Dict[str, Any] — mapping of each path to its dataset_id (str) on success, or a DatasetError instance on failure
-        Invariants: each successful path results in a registered dataset via load_dataset_from_dataframe; failed paths are recorded with an exception but do not abort other loads
+        Invariants:
+            - each successful path results in a registered dataset via
+              load_dataset_from_dataframe
+            - failed paths are recorded with an exception but do not abort other loads
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 

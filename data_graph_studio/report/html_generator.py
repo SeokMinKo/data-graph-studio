@@ -1110,7 +1110,11 @@ body {{
 
                 effect_text = ""
                 if comp.effect_size is not None:
-                    effect_text = f'<span class="stat-item"><span class="label">Effect Size:</span><span class="value">{comp.effect_size:.3f} ({comp.effect_size_interpretation})</span></span>'
+                    effect_text = (
+                        '<span class="stat-item"><span class="label">Effect Size:</span>'
+                        f'<span class="value">{comp.effect_size:.3f} '
+                        f'({comp.effect_size_interpretation})</span></span>'
+                    )
 
                 tests_html.append(f'''
                 <div class="test-result">
@@ -1149,7 +1153,9 @@ body {{
             <div class="diff-legend">
                 <span><span class="dot" style="background: #22c55e;"></span> {'증가' if is_ko else 'Positive'}: {pos_pct:.1f}% ({diff.positive_count})</span>
                 <span><span class="dot" style="background: #ef4444;"></span> {'감소' if is_ko else 'Negative'}: {neg_pct:.1f}% ({diff.negative_count})</span>
-                <span><span class="dot" style="background: #94a3b8;"></span> {'변화없음' if is_ko else 'No Change'}: {neu_pct:.1f}% ({diff.neutral_count})</span>
+                <span><span class="dot" style="background: #94a3b8;"></span>
+                    {'변화없음' if is_ko else 'No Change'}: {neu_pct:.1f}% ({diff.neutral_count})
+                </span>
             </div>
             <div class="metrics-grid" style="margin-top: 20px;">
                 <div class="metric-card">
@@ -1230,7 +1236,11 @@ body {{
             # 페이지네이션 정보
             pagination = ""
             if table.total_rows > table.shown_rows:
-                pagination = f'<p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-secondary);">{"표시" if is_ko else "Showing"} {table.shown_rows} / {table.total_rows} {"행" if is_ko else "rows"}</p>'
+                pagination = (
+                    '<p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-secondary);">'
+                    f'{"표시" if is_ko else "Showing"} {table.shown_rows} / {table.total_rows} '
+                    f'{"행" if is_ko else "rows"}</p>'
+                )
 
             tables_html.append(f'''
             <div class="chart-container">

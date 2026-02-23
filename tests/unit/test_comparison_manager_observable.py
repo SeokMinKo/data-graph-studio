@@ -42,3 +42,27 @@ def test_dataset_activated_event_fires():
     mgr.subscribe("dataset_activated", received.append)
     mgr.activate_dataset("ds2")
     assert "ds2" in received
+
+
+def test_set_comparison_datasets_filters_invalid_ids_contract():
+    """Contract: only loaded dataset IDs remain in comparison_datasets."""
+    mgr = ComparisonManager()
+    mgr.add_dataset("ds1", name="Dataset 1")
+    mgr.add_dataset("ds2", name="Dataset 2")
+
+    mgr.set_comparison_datasets(["ds1", "ghost", "ds2", "missing"])
+
+    assert mgr.comparison_settings.comparison_datasets == ["ds1", "ds2"]
+
+
+def test_clear_profile_comparison_resets_target_and_mode():
+    """Failure/rollback path: clear_profile_comparison returns to dataset+SINGLE mode."""
+    mgr = ComparisonManager()
+    mgr.add_dataset("ds1", name="Dataset 1")
+
+    mgr.set_profile_comparison("ds1", ["p1", "p2"])
+    mgr.clear_profile_comparison()
+
+    assert mgr.comparison_settings.comparison_target == "dataset"
+    assert mgr.comparison_settings.mode.value == "single"
+    assert mgr.comparison_settings.comparison_profile_ids == []

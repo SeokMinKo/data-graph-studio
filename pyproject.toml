@@ -21,6 +21,3 @@ select = ["E", "F"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["E402"]
-"data_graph_studio/core/comparison_manager.py" = ["E501"]
-"data_graph_studio/core/dataset_manager.py" = ["E501"]
-"data_graph_studio/report/html_generator.py" = ["E501"]

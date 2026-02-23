@@ -298,7 +298,11 @@ class ComparisonManager(Observable):
         Input: column_count — int, number of columns, stored in metadata
         Input: memory_bytes — int, estimated memory footprint in bytes
         Output: DatasetState — the newly created state object for this dataset
-        Invariants: dataset_id is added to _dataset_states and _dataset_metadata; appended to comparison_datasets if compare_enabled; "dataset_added" event is emitted; _active_dataset_id is set if this is the first dataset
+        Invariants:
+            - dataset_id is added to _dataset_states and _dataset_metadata
+            - appended to comparison_datasets if compare_enabled
+            - "dataset_added" event is emitted
+            - _active_dataset_id is set if this is the first dataset
         """
         color = DEFAULT_DATASET_COLORS[self._dataset_color_index % len(DEFAULT_DATASET_COLORS)]
         self._dataset_color_index += 1
@@ -334,7 +338,11 @@ class ComparisonManager(Observable):
 
         Input: dataset_id — str, ID of the dataset to remove
         Output: bool — True if removed, False if dataset_id was not found
-        Invariants: dataset_id is purged from _dataset_states, _dataset_metadata, and comparison_datasets; if the removed dataset was active, _active_dataset_id advances to the next remaining dataset or becomes None; "dataset_removed" event is emitted
+        Invariants:
+            - dataset_id is purged from _dataset_states, _dataset_metadata, and comparison_datasets
+            - if the removed dataset was active, _active_dataset_id advances to the next
+              remaining dataset or becomes None
+            - "dataset_removed" event is emitted
         """
         if dataset_id not in self._dataset_states:
             return False
@@ -362,7 +370,10 @@ class ComparisonManager(Observable):
 
         Input: dataset_id — str, ID of the dataset to activate; must exist in _dataset_states
         Output: bool — True if activated, False if dataset_id is not found
-        Invariants: previously active dataset's is_active flag is set to False; new dataset's is_active flag is set to True; "dataset_activated" event is emitted
+        Invariants:
+            - previously active dataset's is_active flag is set to False
+            - new dataset's is_active flag is set to True
+            - "dataset_activated" event is emitted
         """
         if dataset_id not in self._dataset_states:
             return False
@@ -394,7 +405,10 @@ class ComparisonManager(Observable):
         """Remove every dataset and reset the color cycle.
 
         Output: None
-        Invariants: _dataset_states and _dataset_metadata are empty after this call; _dataset_color_index is reset to 0; remove_dataset() is called for each entry, emitting "dataset_removed" per dataset
+        Invariants:
+            - _dataset_states and _dataset_metadata are empty after this call
+            - _dataset_color_index is reset to 0
+            - remove_dataset() is called for each entry, emitting "dataset_removed" per dataset
         """
         dataset_ids = list(self._dataset_states.keys())
         for did in dataset_ids:
@@ -408,7 +422,11 @@ class ComparisonManager(Observable):
 
         Input: mode — ComparisonMode, the desired comparison mode
         Output: None
-        Invariants: if profile comparison was active it is cleared (target reset to "dataset", profile IDs cleared); "comparison_mode_changed" is emitted only when the mode actually changes; "comparison_settings_changed" is always emitted when mode or profile state changes
+        Invariants:
+            - if profile comparison was active it is cleared
+              (target reset to "dataset", profile IDs cleared)
+            - "comparison_mode_changed" is emitted only when the mode actually changes
+            - "comparison_settings_changed" is always emitted when mode or profile state changes
         """
         was_profile = self._comparison_settings.comparison_target == "profile"
         if was_profile:
@@ -428,7 +446,10 @@ class ComparisonManager(Observable):
 
         Input: dataset_ids — List[str], desired dataset IDs; IDs not present in _dataset_states are filtered out
         Output: None
-        Invariants: comparison_datasets contains only valid, currently-loaded IDs after this call; profile comparison target is reset to "dataset" if it was active; "comparison_settings_changed" is emitted
+        Invariants:
+            - comparison_datasets contains only valid, currently-loaded IDs after this call
+            - profile comparison target is reset to "dataset" if it was active
+            - "comparison_settings_changed" is emitted
         """
         if self._comparison_settings.comparison_target == "profile":
             self._comparison_settings.comparison_target = "dataset"
@@ -477,7 +498,9 @@ class ComparisonManager(Observable):
     def get_comparison_colors(self) -> Dict[str, str]:
         """Return a color mapping for all datasets currently included in comparison.
 
-        Output: Dict[str, str] — mapping of dataset_id to hex color string for each ID in comparison_datasets that has metadata; omits IDs whose metadata is missing
+        Output: Dict[str, str] — mapping of dataset_id to hex color string
+            for each ID in comparison_datasets that has metadata;
+            omits IDs whose metadata is missing
         """
         return {
             did: self._dataset_metadata[did].color
@@ -505,7 +528,12 @@ class ComparisonManager(Observable):
         Input: dataset_id — str, the dataset whose profiles are being compared
         Input: profile_ids — List[str], IDs of the profiles to compare; at least two are needed for is_profile_comparison_active to return True
         Output: None
-        Invariants: comparison_target is set to "profile"; existing dataset comparison list is cleared; mode is promoted to SIDE_BY_SIDE if it was SINGLE; "comparison_mode_changed" is emitted when mode changes; "comparison_settings_changed" is always emitted
+        Invariants:
+            - comparison_target is set to "profile"
+            - existing dataset comparison list is cleared
+            - mode is promoted to SIDE_BY_SIDE if it was SINGLE
+            - "comparison_mode_changed" is emitted when mode changes
+            - "comparison_settings_changed" is always emitted
         """
         self._comparison_settings.comparison_datasets.clear()
         self._comparison_settings.comparison_target = "profile"
@@ -525,7 +553,12 @@ class ComparisonManager(Observable):
         """Exit profile comparison mode and return to SINGLE comparison mode.
 
         Output: None
-        Invariants: comparison_target is reset to "dataset", comparison_profile_ids is cleared, mode is set to SINGLE; "comparison_mode_changed" is emitted if mode changed; "comparison_settings_changed" is emitted if profile comparison was active or mode changed
+        Invariants:
+            - comparison_target is reset to "dataset"
+            - comparison_profile_ids is cleared, mode is set to SINGLE
+            - "comparison_mode_changed" is emitted if mode changed
+            - "comparison_settings_changed" is emitted if profile comparison
+              was active or mode changed
         """
         was_active = self.is_profile_comparison_active
 
