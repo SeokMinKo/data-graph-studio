@@ -214,6 +214,34 @@ class FtraceParser(BaseParser):
         r"(?P<sector>\d+)\s*\+\s*(?P<nr_sectors>\d+)"
     )
 
+    _BLK_PARSE_NULL_RATIO_THRESHOLD = 0.05
+    _BLK_PATTERN_NAMES = ("pattern1", "pattern2", "pattern3")
+    _BLK_FALLBACK_PATTERNS = (
+        (
+            "pattern1",
+            re.compile(
+                r"^(?P<device>\S+)\s+(?P<rwbs>\S+)\s+(?P<size_bytes>\d+)\s+\(\)\s+"
+                r"(?P<sector>\d+)\s*\+\s*(?P<nr_sectors>\d+)"
+            ),
+        ),
+        (
+            "pattern2",
+            re.compile(
+                r"^(?P<device>\S+)\s+(?P<rwbs>\S+)\s+\(\)\s+"
+                r"(?P<sector>\d+)\s*\+\s*(?P<nr_sectors>\d+)"
+            ),
+        ),
+        (
+            "pattern3",
+            re.compile(
+                r"\bdev=(?P<device>\S+)\b.*?\bsector=(?P<sector>\d+)\b"
+                r".*?\bnr_sector[s]?=(?P<nr_sectors>\d+)\b"
+                r"(?:.*?\brwbs=(?P<rwbs>\S+))?"
+                r"(?:.*?\bbytes=(?P<size_bytes>\d+))?"
+            ),
+        ),
+    )
+
     _RESULT_SCHEMA = {
         "send_time": pl.Float64,
         "complete_time": pl.Float64,
@@ -356,7 +384,7 @@ class FtraceParser(BaseParser):
             "idle_time_ms", "busy_time_ms",
             "iops", "bw_mbps", "rw_ratio",
             "seq_run_length", "latency_tier", "drain_time_ms",
-            "size_kb", pl.col("rwbs").alias("cmd"),
+            "size_kb", "cmd",
             "queue_depth", "sector", "nr_sectors", "device", "is_sequential",
         ])
         logger.info("[blocklayer-vec] result: %d rows", len(result))
@@ -365,6 +393,15 @@ class FtraceParser(BaseParser):
     @staticmethod
     def _blk_detail_parse_cols(is_perfetto_fmt: bool, complete: bool = False) -> list:
         """Return polars expressions to parse block event detail fields."""
+        def _extract_optional(pattern: str, group: int, alias: str) -> pl.Expr:
+            raw = pl.col("details").str.extract(pattern, group)
+            return (
+                pl.when(raw.is_not_null() & (raw.str.len_chars() > 0))
+                .then(raw)
+                .otherwise(None)
+                .alias(alias)
+            )
+
         if is_perfetto_fmt:
             cols = [
                 pl.col("details").str.extract(r"(?:^|\s)dev=([^\s]+)", 1).alias("device"),
@@ -381,13 +418,120 @@ class FtraceParser(BaseParser):
                 pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
                 pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
                 pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+                _extract_optional(r"\bcmd=(\S+)", 1, "cmd_from_detail"),
+                _extract_optional(r"^\S+\s+(\S+)", 1, "rwbs"),
             ]
             if not complete:
                 cols += [
-                    pl.col("details").str.extract(r"^\S+\s+(\S+)", 1).alias("rwbs"),
                     pl.col("details").str.extract(r"^\S+\s+\S+\s+(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
                 ]
+            ).cast(pl.Int64).alias("sector"),
+            pl.coalesce(
+                [
+                    pl.col("details").str.extract(raw_issue, 5),
+                    pl.col("details").str.extract(raw_complete, 4),
+                    pl.col("details").str.extract(perfetto, 3),
+                    pl.col("details").str.extract(r"\bnr_sector=(\d+)\b", 1),
+                ]
+            ).cast(pl.Int32).alias("nr_sectors"),
+        ]
+        if not complete:
+            cols += [
+                pl.coalesce(
+                    [
+                        pl.col("details").str.extract(raw_issue, 2),
+                        pl.col("details").str.extract(raw_complete, 2),
+                        pl.col("details").str.extract(r"\brwbs=(\S+)", 1),
+                    ]
+                ).alias("rwbs"),
+                pl.coalesce(
+                    [
+                        pl.col("details").str.extract(raw_issue, 3),
+                        pl.col("details").str.extract(r"\bbytes=(\d+)", 1),
+                    ]
+                ).cast(pl.Int64).alias("size_bytes"),
+            ]
         return cols
+
+    @classmethod
+    def _blk_parse_detail_fallback(cls, details: Optional[str], complete: bool = False) -> Dict[str, Any]:
+        """Parse detail text with Python regex fallback, trying patterns in order."""
+        parsed: Dict[str, Any] = {
+            "device": None,
+            "sector": None,
+            "nr_sectors": None,
+            "rwbs": None,
+            "size_bytes": None,
+            "matched_pattern": None,
+        }
+        if not details:
+            return parsed
+
+        for pattern_name, pattern in cls._BLK_FALLBACK_PATTERNS:
+            match = pattern.search(details)
+            if not match:
+                continue
+            groups = match.groupdict()
+            parsed["device"] = groups.get("device")
+            parsed["sector"] = int(groups["sector"]) if groups.get("sector") else None
+            parsed["nr_sectors"] = int(groups["nr_sectors"]) if groups.get("nr_sectors") else None
+            if not complete:
+                parsed["rwbs"] = groups.get("rwbs")
+                parsed["size_bytes"] = int(groups["size_bytes"]) if groups.get("size_bytes") else None
+            parsed["matched_pattern"] = pattern_name
+            return parsed
+        return parsed
+
+    @staticmethod
+    def _blk_required_null_ratio(df: pl.DataFrame) -> float:
+        if len(df) == 0:
+            return 0.0
+        required = ["device", "sector", "nr_sectors"]
+        return float(df.select(pl.any_horizontal([pl.col(c).is_null() for c in required]).mean()).item())
+
+    def _blk_parse_with_fallback(self, df: pl.DataFrame, event_name: str, complete: bool = False) -> pl.DataFrame:
+        """Apply Python regex fallback and log matched pattern counts."""
+        struct_fields = [
+            pl.Field("device", pl.Utf8),
+            pl.Field("sector", pl.Int64),
+            pl.Field("nr_sectors", pl.Int32),
+            pl.Field("rwbs", pl.Utf8),
+            pl.Field("size_bytes", pl.Int64),
+            pl.Field("matched_pattern", pl.Utf8),
+        ]
+        parsed = (
+            df.with_columns(
+                pl.col("details")
+                .map_elements(
+                    lambda d: self._blk_parse_detail_fallback(d, complete=complete),
+                    return_dtype=pl.Struct(struct_fields),
+                )
+                .alias("_parsed_detail")
+            )
+            .unnest("_parsed_detail")
+        )
+
+        counts_row = parsed.select([
+            pl.col("matched_pattern").eq(name).sum().alias(f"{name}_hits") for name in self._BLK_PATTERN_NAMES
+        ]).to_dicts()[0]
+        logger.info("[blocklayer-vec] fallback parser (%s) pattern hits: %s", event_name, counts_row)
+        return parsed.drop("matched_pattern")
+
+    @staticmethod
+    def _blk_drop_invalid_required(df: pl.DataFrame, event_name: str) -> pl.DataFrame:
+        """Log and drop rows missing required join fields before key generation."""
+        required = ["device", "sector", "nr_sectors"]
+        invalid_mask = pl.any_horizontal([pl.col(c).is_null() for c in required])
+        invalid_count = int(df.select(invalid_mask.sum()).item())
+        if invalid_count > 0:
+            null_stats = df.select([pl.col(c).is_null().sum().alias(c) for c in required]).to_dicts()[0]
+            logger.warning(
+                "[blocklayer-vec] dropping %d %s rows with null required fields before key build: %s",
+                invalid_count,
+                event_name,
+                null_stats,
+            )
+        return df.filter(~invalid_mask)
 
     @staticmethod
     def _blk_add_key(df: pl.DataFrame) -> pl.DataFrame:
@@ -404,17 +548,39 @@ class FtraceParser(BaseParser):
         inserts: pl.DataFrame,
     ):
         """Parse the 'details' field for all three event types, add join keys."""
-        sample_detail = issues["details"].drop_nulls().head(1).to_list()
-        is_perfetto_fmt = bool(sample_detail and "dev=" in sample_detail[0])
-        logger.debug("ftrace_parser.detail_format", extra={"format": "perfetto" if is_perfetto_fmt else "raw"})
+        issues = issues.with_columns(self._blk_detail_parse_cols(complete=False))
+        issue_null_ratio = self._blk_required_null_ratio(issues)
+        if issue_null_ratio >= self._BLK_PARSE_NULL_RATIO_THRESHOLD:
+            logger.info(
+                "[blocklayer-vec] fallback parser triggered for issue events: null_ratio=%.3f threshold=%.3f",
+                issue_null_ratio,
+                self._BLK_PARSE_NULL_RATIO_THRESHOLD,
+            )
+            issues = self._blk_parse_with_fallback(issues, event_name="issue", complete=False)
 
-        issue_cols = self._blk_detail_parse_cols(is_perfetto_fmt, complete=False)
-        complete_cols = self._blk_detail_parse_cols(is_perfetto_fmt, complete=True)
+        completes = completes.with_columns(self._blk_detail_parse_cols(complete=True))
+        complete_null_ratio = self._blk_required_null_ratio(completes)
+        if complete_null_ratio >= self._BLK_PARSE_NULL_RATIO_THRESHOLD:
+            logger.info(
+                "[blocklayer-vec] fallback parser triggered for complete events: null_ratio=%.3f threshold=%.3f",
+                complete_null_ratio,
+                self._BLK_PARSE_NULL_RATIO_THRESHOLD,
+            )
+            completes = self._blk_parse_with_fallback(completes, event_name="complete", complete=True)
 
-        issues = self._blk_add_key(issues.with_columns(issue_cols)).with_row_index("issue_idx")
-        completes = self._blk_add_key(completes.with_columns(complete_cols))
+        issues = self._blk_add_key(self._blk_drop_invalid_required(issues, "issue")).with_row_index("issue_idx")
+        completes = self._blk_add_key(self._blk_drop_invalid_required(completes, "complete"))
         if len(inserts) > 0:
-            inserts = self._blk_add_key(inserts.with_columns(issue_cols))
+            inserts = inserts.with_columns(self._blk_detail_parse_cols(complete=False))
+            insert_null_ratio = self._blk_required_null_ratio(inserts)
+            if insert_null_ratio >= self._BLK_PARSE_NULL_RATIO_THRESHOLD:
+                logger.info(
+                    "[blocklayer-vec] fallback parser triggered for insert events: null_ratio=%.3f threshold=%.3f",
+                    insert_null_ratio,
+                    self._BLK_PARSE_NULL_RATIO_THRESHOLD,
+                )
+                inserts = self._blk_parse_with_fallback(inserts, event_name="insert", complete=False)
+            inserts = self._blk_add_key(self._blk_drop_invalid_required(inserts, "insert"))
         return issues, completes, inserts
 
     @staticmethod
@@ -428,14 +594,29 @@ class FtraceParser(BaseParser):
         matched = (
             issues.select(["issue_idx", "key", "timestamp"])
             .join(
-                completes.select(["key", "timestamp"]).rename({"timestamp": "complete_time"}),
+                completes.select(["key", "timestamp", "rwbs", "cmd_from_detail"]).rename(
+                    {
+                        "timestamp": "complete_time",
+                        "rwbs": "complete_rwbs",
+                        "cmd_from_detail": "complete_cmd_from_detail",
+                    }
+                ),
                 on="key", how="left",
             )
             .filter(pl.col("complete_time") > pl.col("timestamp"))
             .group_by("issue_idx")
-            .agg(pl.col("complete_time").min())
+            .agg([
+                pl.col("complete_time").min(),
+                pl.col("complete_rwbs").drop_nulls().first(),
+                pl.col("complete_cmd_from_detail").drop_nulls().first(),
+            ])
         )
         result = issues.join(matched, on="issue_idx", how="inner")
+        result = result.with_columns([
+            pl.coalesce([pl.col("cmd_from_detail"), pl.col("complete_cmd_from_detail")]).alias("cmd_from_detail"),
+            pl.coalesce([pl.col("rwbs"), pl.col("complete_rwbs")]).alias("rwbs"),
+        ])
+        result = result.with_columns(pl.coalesce([pl.col("cmd_from_detail"), pl.col("rwbs")]).alias("cmd"))
 
         # insert → issue (latest insert before issue timestamp per key)
         if len(inserts) > 0:
@@ -654,6 +835,8 @@ class FtraceParser(BaseParser):
                     "sector": sector,
                     "nr_sectors": nr_sectors,
                     "rwbs": m.group("rwbs"),
+                    "cmd_from_detail": (re.search(r"\bcmd=(\S+)", details).group(1)
+                                        if re.search(r"\bcmd=(\S+)", details) else None),
                     "size_bytes": int(m.group("bytes")),
                     "device": dev,
                     "queue_depth": outstanding,
@@ -671,6 +854,12 @@ class FtraceParser(BaseParser):
                 key = f"{m.group('dev')}:{m.group('sector')}:{m.group('nr_sectors')}"
                 if key in issues:
                     issues[key]["complete_ts"] = ts
+                    complete_cmd = (re.search(r"\bcmd=(\S+)", details).group(1)
+                                    if re.search(r"\bcmd=(\S+)", details) else None)
+                    if issues[key].get("cmd_from_detail") is None and complete_cmd:
+                        issues[key]["cmd_from_detail"] = complete_cmd
+                    if issues[key].get("rwbs") is None and m.group("rwbs"):
+                        issues[key]["rwbs"] = m.group("rwbs")
                     outstanding = max(0, outstanding - 1)
 
         result_rows: List[Dict[str, Any]] = []
@@ -720,7 +909,7 @@ class FtraceParser(BaseParser):
                 "d2d_ms": d2d_ms,
                 "c2c_ms": c2c_ms,
                 "size_kb": entry["size_bytes"] / 1024.0,
-                "cmd": entry["rwbs"],
+                "cmd": entry.get("cmd_from_detail") or entry.get("rwbs"),
                 "queue_depth": entry["queue_depth"],
                 "sector": sector,
                 "nr_sectors": nr_sects,
