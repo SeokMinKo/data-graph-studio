@@ -219,13 +219,13 @@ class TestDataTab:
         # X-Axis should have all columns + (Index)
         assert tab._x_combo.count() == 5  # (Index) + 4 columns
 
-        # Y-Axis picker should only show numeric columns
-        numeric_items = []
+        # Y-Axis picker should now show both numeric and categorical columns
+        y_items = []
         for i in range(tab._y_picker._combo.count()):
-            numeric_items.append(tab._y_picker._combo.itemText(i))
-        # id, price, volume are numeric (Int64, Float64, Float64)
-        assert "category" not in numeric_items
-        assert "price" in numeric_items
+            y_items.append(tab._y_picker._combo.itemText(i))
+
+        assert "category" in y_items
+        assert "price" in y_items
 
     def test_clear(self, qtbot, mock_state, mock_engine):
         tab = DataTab(mock_state)

@@ -563,7 +563,7 @@ class DataTab(QWidget):
         )
         self._main_layout.addLayout(y_row)
 
-        self._y_picker = _SearchableColumnPicker("🔍 Search numeric columns...")
+        self._y_picker = _SearchableColumnPicker("🔍 Search columns...")
         self._y_picker.column_selected.connect(self._on_y_column_selected)
         self._main_layout.addWidget(self._y_picker)
 
@@ -719,8 +719,8 @@ class DataTab(QWidget):
 
     def _rebuild_pickers(self) -> None:
         """Rebuild the column pickers for Y-Axis, Group By, Hover."""
-        numeric_cols = [c for c in self._all_columns if c in self._numeric_columns]
-        self._y_picker.set_items(numeric_cols)
+        # Allow both numeric and categorical columns for Y-Axis selection.
+        self._y_picker.set_items(list(self._all_columns))
         self._group_picker.set_items(list(self._all_columns))
         self._hover_picker.set_items(list(self._all_columns))
 
