@@ -172,7 +172,7 @@ class DataTableView(QTableView):
         cond_fmt.triggered.connect(lambda: self.conditional_format_requested.emit(column_name))
         menu.addAction(cond_fmt)
 
-        split_col = QAction("✂️ Split Column (Regex Groups)...", self)
+        split_col = QAction("✂️ Split Column by Regex...", self)
         split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
         menu.addAction(split_col)
 

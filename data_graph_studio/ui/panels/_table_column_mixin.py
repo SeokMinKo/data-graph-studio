@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import logging
-import polars as pl
+import re
+import time
 
+import polars as pl
 
 from PySide6.QtWidgets import QMessageBox, QDialog
 
+from ...core.undo_manager import UndoActionType, UndoCommand
+from ..dialogs.split_column_dialog import SplitColumnDialog
 from .conditional_formatting import ConditionalFormatDialog
 
 
@@ -178,11 +182,117 @@ class _TableColumnMixin:
             else:
                 self.table_model.remove_conditional_format(column_name)
 
+
+    # ==================== Split Column (Regex) ====================
+
     def _on_split_column_requested(self, column_name: str):
-        """Handle split-column request from table context menus."""
-        if not column_name:
+        """Split a string column into new columns using regex capture groups."""
+        if not self.engine.is_loaded:
+            QMessageBox.information(self, "Split Column", "No data loaded.")
             return
-        logger.info("table_column_mixin.split_column.requested", extra={"column": column_name})
+
+        df = self.engine.df
+        if df is None or column_name not in df.columns:
+            QMessageBox.warning(self, "Split Column", f"Column '{column_name}' was not found.")
+            return
+
+        sample_values = (
+            df.select(pl.col(column_name).cast(pl.Utf8).head(5).alias(column_name))
+            .to_series(0)
+            .to_list()
+        )
+
+        dialog = SplitColumnDialog(
+            source_column=column_name,
+            sample_values=sample_values,
+            existing_columns=df.columns,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        try:
+            payload = dialog.get_payload()
+            pattern = str(payload["pattern"])
+            mapping = payload["mapping"]
+
+            compiled = re.compile(pattern)
+            if compiled.groups <= 0:
+                QMessageBox.warning(self, "Split Column", "Pattern must include at least one capture group.")
+                return
+
+            if not mapping:
+                QMessageBox.warning(self, "Split Column", "No output columns were configured.")
+                return
+
+            target_names = list(mapping.values())
+            if len(set(target_names)) != len(target_names):
+                QMessageBox.warning(self, "Split Column", "Output column names must be unique.")
+                return
+
+            collisions = [name for name in target_names if name in df.columns and name != column_name]
+            if collisions:
+                QMessageBox.warning(
+                    self,
+                    "Split Column",
+                    "Target column name already exists: " + ", ".join(collisions),
+                )
+                return
+
+            new_df = self._build_split_dataframe(df, column_name, pattern, mapping)
+        except re.error as e:
+            QMessageBox.warning(self, "Split Column", f"Invalid regex pattern:\n{e}")
+            return
+        except ValueError as e:
+            QMessageBox.warning(self, "Split Column", str(e))
+            return
+        except Exception as e:
+            logger.exception("table_column_mixin.split_column.error")
+            QMessageBox.warning(self, "Split Column", f"Failed to split column:\n{e}")
+            return
+
+        self._apply_split_with_undo(before_df=df, after_df=new_df, source_column=column_name, target_names=target_names)
+
+    def _build_split_dataframe(self, df: pl.DataFrame, column_name: str, pattern: str, mapping: dict[int, str]) -> pl.DataFrame:
+        if not mapping:
+            raise ValueError("Pattern must include at least one capture group.")
+
+        exprs = []
+        for group_index, new_name in mapping.items():
+            exprs.append(
+                pl.col(column_name)
+                .cast(pl.Utf8)
+                .str.extract(pattern, group_index=int(group_index))
+                .alias(new_name)
+            )
+
+        return df.with_columns(exprs)
+
+    def _apply_split_with_undo(self, before_df: pl.DataFrame, after_df: pl.DataFrame, source_column: str, target_names: list[str]):
+        def _apply(df: pl.DataFrame):
+            self.engine.update_dataframe(df)
+            self.set_data(df)
+            self.graph_panel.refresh()
+
+        _apply(after_df)
+
+        if hasattr(self.window(), '_undo_stack') and self.window()._undo_stack is not None:
+            self.window()._undo_stack.record(
+                UndoCommand(
+                    action_type=UndoActionType.COLUMN_ADD,
+                    description=f"Split column '{source_column}' into {', '.join(target_names)}",
+                    do=lambda: _apply(after_df),
+                    undo=lambda: _apply(before_df),
+                    timestamp=time.time(),
+                )
+            )
+
+        main_window = self.window()
+        if main_window and hasattr(main_window, 'statusbar'):
+            main_window.statusbar.showMessage(
+                f"Split '{source_column}' into {len(target_names)} column(s)",
+                3000,
+            )
 
     # ==================== F7: Freeze Columns ====================
 
