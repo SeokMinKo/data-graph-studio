@@ -23,6 +23,7 @@ class DataTableView(QTableView):
     column_freeze = Signal(str)  # column name
     column_unfreeze = Signal(str)  # column name
     conditional_format_requested = Signal(str)  # column name
+    split_column_requested = Signal(str)  # column name
     multi_sort_requested = Signal(int, object)  # column, Qt.SortOrder
 
     def __init__(self):
@@ -170,6 +171,10 @@ class DataTableView(QTableView):
         cond_fmt = QAction("🎨 Conditional Formatting...", self)
         cond_fmt.triggered.connect(lambda: self.conditional_format_requested.emit(column_name))
         menu.addAction(cond_fmt)
+
+        split_col = QAction("✂️ Split Column by Regex...", self)
+        split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
+        menu.addAction(split_col)
 
         # F7: Freeze/Unfreeze Column
         freeze_act = QAction("📌 Freeze Column", self)
