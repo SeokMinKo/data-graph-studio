@@ -7,7 +7,7 @@ import time
 
 import polars as pl
 
-from PySide6.QtWidgets import QMessageBox, QDialog
+from PySide6.QtWidgets import QMessageBox, QDialog, QInputDialog
 
 from ...core.undo_manager import UndoActionType, UndoCommand
 from ..dialogs.split_column_dialog import SplitColumnDialog
@@ -138,6 +138,96 @@ class _TableColumnMixin:
         """Update hidden columns bar"""
         hidden = list(self.state.hidden_columns)
         self.hidden_bar.update_hidden_columns(hidden)
+
+
+    def _on_rename_column_requested(self, old_name: str):
+        """Rename a column from header double-click request."""
+        if not self.engine.is_loaded:
+            return
+
+        df = self.engine.df
+        if df is None or old_name not in df.columns:
+            QMessageBox.warning(self, "Rename Column", f"Column '{old_name}' was not found.")
+            return
+
+        new_name, ok = QInputDialog.getText(self, "Rename Column", "New column name:", text=old_name)
+        if not ok:
+            return
+
+        new_name = new_name.strip()
+        if not new_name:
+            QMessageBox.warning(self, "Rename Column", "Column name cannot be empty.")
+            return
+
+        if new_name == old_name:
+            QMessageBox.information(self, "Rename Column", "New name is the same as the current name.")
+            return
+
+        if new_name in df.columns:
+            QMessageBox.warning(self, "Rename Column", f"Column '{new_name}' already exists.")
+            return
+
+        try:
+            new_df = df.rename({old_name: new_name})
+            self.engine.update_dataframe(new_df)
+
+            if self.state.x_column == old_name:
+                self.state.set_x_column(new_name)
+
+            group_changed = False
+            for group_col in self.state.group_columns:
+                if group_col.name == old_name:
+                    group_col.name = new_name
+                    group_changed = True
+            if group_changed:
+                self.state.emit("group_zone_changed")
+
+            value_changed = False
+            for value_col in self.state.value_columns:
+                if value_col.name == old_name:
+                    value_col.name = new_name
+                    value_changed = True
+            if value_changed:
+                self.state.emit("value_zone_changed")
+
+            hover_columns = self.state.hover_columns
+            if old_name in hover_columns:
+                for idx, col_name in enumerate(hover_columns):
+                    if col_name == old_name:
+                        hover_columns[idx] = new_name
+                self.state.emit("hover_zone_changed")
+
+            if old_name in self.state.hidden_columns:
+                self.state.unhide_column(old_name)
+                self.state.hide_column(new_name)
+
+            order = self.state.get_column_order()
+            if old_name in order:
+                self.state.set_column_order([new_name if c == old_name else c for c in order])
+
+            self._update_hidden_bar()
+            self._update_table_model(new_df)
+
+            if hasattr(self, "graph_panel"):
+                try:
+                    if hasattr(self.graph_panel, "set_columns"):
+                        self.graph_panel.set_columns(new_df.columns)
+                    self.graph_panel.refresh()
+                except Exception:
+                    logger.exception("table_column_mixin.rename_column.graph_refresh.error")
+
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    f"Renamed column '{old_name}' to '{new_name}'", 3000
+                )
+            elif main_window and hasattr(main_window, 'statusbar'):
+                main_window.statusbar.showMessage(
+                    f"Renamed column '{old_name}' to '{new_name}'", 3000
+                )
+        except Exception as e:
+            logger.exception("table_column_mixin.rename_column.error")
+            QMessageBox.warning(self, "Rename Column", f"Failed to rename column: {e}")
 
     # ==================== F5: Column Type Conversion ====================
 

@@ -25,6 +25,7 @@ class DataTableView(QTableView):
     conditional_format_requested = Signal(str)  # column name
     split_column_requested = Signal(str)  # column name
     multi_sort_requested = Signal(int, object)  # column, Qt.SortOrder
+    rename_column_requested = Signal(str)  # old column name
 
     def __init__(self):
         super().__init__()
@@ -47,6 +48,7 @@ class DataTableView(QTableView):
         self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_menu)
         self.horizontalHeader().sectionPressed.connect(self._on_header_pressed)
+        self.horizontalHeader().sectionDoubleClicked.connect(self._on_header_double_clicked)
         self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
         self.horizontalHeader().installEventFilter(self)
 
@@ -89,6 +91,19 @@ class DataTableView(QTableView):
     def _on_header_pressed(self, logical_index: int):
         # Store column name for context menu / reorder
         pass
+
+    def _on_header_double_clicked(self, logical_index: int):
+        model = self.model()
+        if not model or logical_index < 0:
+            return
+
+        get_column_name = getattr(model, "get_column_name", None)
+        if not callable(get_column_name):
+            return
+
+        column_name = get_column_name(logical_index)
+        if column_name:
+            self.rename_column_requested.emit(column_name)
 
     def _on_header_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int):
         model = self.model()
