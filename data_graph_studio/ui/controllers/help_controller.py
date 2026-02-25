@@ -269,6 +269,16 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             return
 
         settings = QSettings("Godol", "DataGraphStudio")
+        update_checks_enabled = settings.value("updates/enabled", False, type=bool)
+        if not update_checks_enabled:
+            if force_ui:
+                QMessageBox.information(
+                    self.w,
+                    "Updates",
+                    "Update checking is currently disabled.",
+                )
+            return
+
         auto = settings.value("updates/auto", True, type=bool)
         if not auto and not force_ui:
             return
@@ -321,5 +331,4 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             self.w.close()
         except Exception as e:
             QMessageBox.warning(self.w, "Updates", f"Update failed:\n{e}")
-
 
