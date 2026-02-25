@@ -2,12 +2,14 @@
 MainGraph - 메인 그래프 위젯 with hover tooltip support
 """
 
-from typing import Optional, List, Dict, Any
+import math
+from typing import List
 
 import numpy as np
 import csv
 
-from PySide6.QtWidgets import QDialog, QMenu, QFileDialog, QInputDialog
+import numpy as np
+import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QAction
 from PySide6.QtWidgets import QApplication
@@ -120,6 +122,27 @@ class MainGraph(pg.PlotWidget):
     """메인 그래프 위젯 with hover tooltip support"""
 
     points_selected = Signal(list)
+
+    @staticmethod
+    def _normalize_range_for_log(min_val: float, max_val: float):
+        """Convert a linear-domain range to log10-domain for pyqtgraph log axes."""
+        try:
+            lo = float(min_val)
+            hi = float(max_val)
+        except (TypeError, ValueError):
+            return None
+
+        if not math.isfinite(lo) or not math.isfinite(hi):
+            return None
+
+        lo, hi = sorted((lo, hi))
+        if hi <= 0:
+            return None
+
+        tiny = np.nextafter(0.0, 1.0)
+        lo = max(lo, tiny)
+        hi = max(hi, tiny)
+        return math.log10(lo), math.log10(hi)
 
     def __init__(self, state: AppState):
         # Create custom axes
@@ -879,6 +902,26 @@ class MainGraph(pg.PlotWidget):
         except Exception:
             self.autoRange()
         self.setLogMode(x=False, y=False)
+
+    def setXRange(self, min: float, max: float, padding=None, update=True):  # noqa: A002
+        """Set X range safely when log mode is enabled."""
+        axis = self.getAxis('bottom')
+        if getattr(axis, 'logMode', False):
+            normalized = self._normalize_range_for_log(min, max)
+            if normalized is None:
+                return
+            min, max = normalized
+        return super().setXRange(min, max, padding=padding, update=update)
+
+    def setYRange(self, min: float, max: float, padding=None, update=True):  # noqa: A002
+        """Set Y range safely when log mode is enabled."""
+        axis = self.getAxis('left')
+        if getattr(axis, 'logMode', False):
+            normalized = self._normalize_range_for_log(min, max)
+            if normalized is None:
+                return
+            min, max = normalized
+        return super().setYRange(min, max, padding=padding, update=update)
 
     def _fit_to_selection(self):
         """Fit view range to selected points (best-effort)."""
