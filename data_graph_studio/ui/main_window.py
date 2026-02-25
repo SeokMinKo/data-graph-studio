@@ -1116,15 +1116,51 @@ class MainWindow(QMainWindow):
         """마법사 결과 적용 (로딩 완료 후)"""
         if not hasattr(self, '_pending_wizard_result') or self._pending_wizard_result is None:
             return
-        
+
         result = self._pending_wizard_result
         self._pending_wizard_result = None
-        
+
         graph_setting = result.get('graph_setting')
-        project_name = result.get('project_name')
-        
+        project_name = (result.get('project_name') or "").strip()
+
+        active_id = self.engine.active_dataset_id
+        if active_id and project_name:
+            # Ensure this dataset exists in AppState metadata, then rename as project name.
+            dataset = self.engine.get_dataset(active_id)
+            if self.state.get_dataset_metadata(active_id) is None and dataset is not None:
+                try:
+                    row_count = dataset.row_count
+                except Exception:
+                    row_count = len(dataset.df) if getattr(dataset, "df", None) is not None else 0
+                try:
+                    column_count = dataset.column_count
+                except Exception:
+                    column_count = len(dataset.df.columns) if getattr(dataset, "df", None) is not None else 0
+                try:
+                    memory_bytes = dataset.memory_bytes
+                except Exception:
+                    memory_bytes = dataset.df.estimated_size() if getattr(dataset, "df", None) is not None else 0
+
+                source_path = None
+                if getattr(dataset, "source", None) is not None:
+                    source_path = getattr(dataset.source, "path", None)
+
+                self.state.add_dataset(
+                    dataset_id=active_id,
+                    name=project_name,
+                    file_path=source_path,
+                    row_count=row_count,
+                    column_count=column_count,
+                    memory_bytes=memory_bytes,
+                )
+
+            # Rename in both engine metadata and AppState metadata.
+            self.engine.rename_dataset(active_id, project_name)
+            self.state.update_dataset_metadata(active_id, name=project_name)
+            self.state.activate_dataset(active_id)
+            self.profile_model.refresh()
+
         if graph_setting:
-            active_id = self.engine.active_dataset_id
             logger.debug("active_id=%s, graph_setting=%s", active_id, graph_setting)
             if active_id:
                 # 프로젝트 탐색창에 추가
@@ -1132,15 +1168,19 @@ class MainWindow(QMainWindow):
                 graph_setting = replace(graph_setting, dataset_id=active_id)
                 self.profile_store.add(graph_setting)
                 self.profile_model.add_profile_incremental(active_id, graph_setting)
-                
+
                 # 그래프 설정 적용
                 try:
                     self.profile_controller.apply_profile(graph_setting.id)
                     self._schedule_autofit()
                 except Exception as e:
                     logger.warning(f"Failed to apply profile: {e}", exc_info=True)
-                
-                logger.info(f"Wizard result applied: {graph_setting.name}")
+
+                logger.info(
+                    "Wizard result applied: project=%s, profile=%s",
+                    project_name or "(unchanged)",
+                    graph_setting.name,
+                )
 
     def _schedule_autofit(self):
         """프로파일 전환/생성 후 그래프를 자동으로 Fit (데이터에 맞춤)."""

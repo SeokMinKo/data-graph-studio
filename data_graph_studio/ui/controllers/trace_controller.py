@@ -183,6 +183,43 @@ class TraceController:
             pl.col("details_norm").cast(pl.Utf8).fill_null("").alias("details"),
         ])
 
+    def _register_loaded_dataset(self, dataset_id: str, name: str, source_path: str, df: "pl.DataFrame") -> None:
+        """Register engine dataset into AppState and activate as current project.
+
+        This keeps Project Explorer(dataset tree) and profile ownership aligned
+        for trace/logging paths that use `load_dataset_from_dataframe` directly.
+        """
+        if not dataset_id:
+            return
+
+        metadata = self.w.state.get_dataset_metadata(dataset_id)
+        row_count = len(df)
+        column_count = len(df.columns)
+        memory_bytes = df.estimated_size() if hasattr(df, "estimated_size") else 0
+
+        if metadata is None:
+            self.w.state.add_dataset(
+                dataset_id=dataset_id,
+                name=name,
+                file_path=source_path,
+                row_count=row_count,
+                column_count=column_count,
+                memory_bytes=memory_bytes,
+            )
+        else:
+            self.w.state.update_dataset_metadata(
+                dataset_id,
+                name=name,
+                file_path=source_path,
+                row_count=row_count,
+                column_count=column_count,
+                memory_bytes=memory_bytes,
+            )
+
+        self.w.state.activate_dataset(dataset_id)
+        if hasattr(self.w, "profile_model"):
+            self.w.profile_model.refresh()
+
     def _on_configure_trace(self) -> None:
         """Open the Trace Configuration dialog (always)."""
         from data_graph_studio.ui.dialogs.trace_config_dialog import TraceConfigDialog
@@ -405,6 +442,7 @@ class TraceController:
             )
             if did:
                 logger.info("trace_controller.dataset.created", extra={"id": did, "dataset_name": name})
+                self._register_loaded_dataset(did, name=name, source_path=csv_path, df=df)
                 # Store TraceContext for re-conversion (same as ftrace path)
                 self.w._trace_context = TraceContext(raw_df, settings, did)
                 self.w._on_data_loaded()
@@ -495,6 +533,7 @@ class TraceController:
             )
             if dataset_id:
                 logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
+                self._register_loaded_dataset(dataset_id, name=dataset_name, source_path=file_path, df=df)
                 # Store TraceContext for re-conversion
                 self.w._trace_context = TraceContext(raw_df, settings, dataset_id)
                 self.w._on_data_loaded()
@@ -735,7 +774,7 @@ class TraceController:
                 first_profile_id = profile_id
 
         # Refresh project tree to show new profiles
-        if created_count > 0 and hasattr(self, 'profile_model'):
+        if created_count > 0 and hasattr(self.w, 'profile_model'):
             self.w.profile_model.refresh()
             logger.info("[Logger] %d profiles created for dataset %s", created_count, dataset_id)
 

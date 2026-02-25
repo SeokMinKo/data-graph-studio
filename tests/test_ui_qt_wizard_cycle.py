@@ -78,6 +78,14 @@ def test_apply_pending_wizard_result_profile_cycle(qtbot, monkeypatch, sample_cs
     assert stored is not None
     assert stored.dataset_id == dataset_id
 
+    # Project name from wizard should be reflected in project(dataset) node.
+    metadata = w.state.get_dataset_metadata(dataset_id)
+    assert metadata is not None
+    assert metadata.name == "Wizard Project"
+    ds = w.engine.get_dataset(dataset_id)
+    assert ds is not None
+    assert ds.name == "Wizard Project"
+
     # After apply_profile, AppState should reflect GraphSetting.
     assert w.state.x_column == "age"
     assert any(v.name == "score" for v in w.state.value_columns)
