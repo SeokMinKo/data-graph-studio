@@ -367,14 +367,14 @@ class FtraceParser(BaseParser):
         """Return polars expressions to parse block event detail fields."""
         if is_perfetto_fmt:
             cols = [
-                pl.col("details").str.extract(r"dev=(\S+)", 1).alias("device"),
-                pl.col("details").str.extract(r"sector=(\d+)", 1).cast(pl.Int64).alias("sector"),
-                pl.col("details").str.extract(r"nr_sector=(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+                pl.col("details").str.extract(r"(?:^|\s)dev=([^\s]+)", 1).alias("device"),
+                pl.col("details").str.extract(r"(?:^|\s)sector=(\d+)\b", 1).cast(pl.Int64).alias("sector"),
+                pl.col("details").str.extract(r"(?:^|\s)nr_sector=(\d+)\b", 1).cast(pl.Int32).alias("nr_sectors"),
             ]
             if not complete:
                 cols += [
-                    pl.col("details").str.extract(r"rwbs=(\S+)", 1).alias("rwbs"),
-                    pl.col("details").str.extract(r"bytes=(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
+                    pl.col("details").str.extract(r"(?:^|\s)rwbs=([^\s]+)", 1).alias("rwbs"),
+                    pl.col("details").str.extract(r"(?:^|\s)bytes=(\d+)\b", 1).cast(pl.Int64).alias("size_bytes"),
                 ]
         else:
             cols = [
