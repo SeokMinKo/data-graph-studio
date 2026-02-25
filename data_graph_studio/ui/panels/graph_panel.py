@@ -87,6 +87,7 @@ class GraphPanel(QWidget):
         # Minimap state
         self._minimap_enabled = False
         self._minimap_syncing = False  # guard against infinite loop
+        self._minimap_lock_y = False
 
         # Debounced refresh timer
         self._refresh_timer = QTimer(self)
@@ -125,8 +126,8 @@ class GraphPanel(QWidget):
         self._center_stack.addWidget(self._empty_state)
         
         # Page 1: Graph container with Y sliding window
-        graph_container = QWidget()
-        graph_layout = QHBoxLayout(graph_container)
+        self._graph_container = QWidget()
+        graph_layout = QHBoxLayout(self._graph_container)
         graph_layout.setContentsMargins(0, 0, 0, 0)
         graph_layout.setSpacing(2)
 
@@ -151,22 +152,59 @@ class GraphPanel(QWidget):
         self._grid_cells: List[pg.PlotWidget] = []
         self._grid_cell_labels: List[QLabel] = []
 
-        self._center_stack.addWidget(graph_container)
+        self._center_stack.addWidget(self._graph_container)
         
         # Default to empty state
         self._center_stack.setCurrentIndex(0)
         
         center_layout.addWidget(self._center_stack, 1)
 
-        # Minimap (below graph, above sliding window)
-        self.minimap = MinimapWidget()
-        self.minimap.setVisible(False)
-        center_layout.addWidget(self.minimap)
-
         # X-axis sliding window (below graph)
         self.x_sliding_window = SlidingWindowWidget(orientation='horizontal')
         self.x_sliding_window.setVisible(False)  # Hidden by default
         center_layout.addWidget(self.x_sliding_window)
+
+        # Floating minimap overlay (StarCraft-style)
+        self._minimap_overlay = QFrame(self._graph_container)
+        self._minimap_overlay.setObjectName("minimapOverlay")
+        self._minimap_overlay.setVisible(False)
+        self._minimap_overlay.setFrameShape(QFrame.StyledPanel)
+
+        overlay_layout = QVBoxLayout(self._minimap_overlay)
+        overlay_layout.setContentsMargins(8, 8, 8, 8)
+        overlay_layout.setSpacing(6)
+
+        self.minimap = MinimapWidget(self._minimap_overlay)
+        self.minimap.setVisible(True)
+        overlay_layout.addWidget(self.minimap)
+
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(6)
+
+        self._minimap_fit_btn = QPushButton("Fit")
+        self._minimap_fit_btn.setToolTip("Fit X/Y to full dataset")
+        self._minimap_fit_btn.clicked.connect(self._on_minimap_fit_clicked)
+        btn_row.addWidget(self._minimap_fit_btn)
+
+        self._minimap_fit_x_btn = QPushButton("Fit X")
+        self._minimap_fit_x_btn.setToolTip("Fit X axis to full dataset")
+        self._minimap_fit_x_btn.clicked.connect(self._on_minimap_fit_x_clicked)
+        btn_row.addWidget(self._minimap_fit_x_btn)
+
+        self._minimap_fit_y_btn = QPushButton("Fit Y")
+        self._minimap_fit_y_btn.setToolTip("Fit Y axis to full dataset")
+        self._minimap_fit_y_btn.clicked.connect(self._on_minimap_fit_y_clicked)
+        btn_row.addWidget(self._minimap_fit_y_btn)
+
+        self._minimap_lock_y_btn = QPushButton("Lock Y")
+        self._minimap_lock_y_btn.setToolTip("When enabled, minimap drag moves X only")
+        self._minimap_lock_y_btn.setCheckable(True)
+        self._minimap_lock_y_btn.toggled.connect(self._on_minimap_lock_y_toggled)
+        btn_row.addWidget(self._minimap_lock_y_btn)
+
+        overlay_layout.addLayout(btn_row)
+        self._minimap_overlay.resize(320, 170)
 
         self.splitter.addWidget(center_widget)
 
@@ -181,6 +219,9 @@ class GraphPanel(QWidget):
         self.splitter.setStretchFactor(2, 0)  # Stats: fixed (2x width)
 
         layout.addWidget(self.splitter)
+
+        # Initial placement for floating minimap overlay
+        self._position_minimap_overlay()
 
         # Initialize DrawingManager with a visible default color
         self._drawing_manager = DrawingManager(self.main_graph)
@@ -339,33 +380,73 @@ class GraphPanel(QWidget):
 
     # ==================== Minimap ====================
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_minimap_overlay()
+
+    def _position_minimap_overlay(self):
+        if not hasattr(self, "_minimap_overlay"):
+            return
+        margin = 12
+        w = self._minimap_overlay.width()
+        h = self._minimap_overlay.height()
+        container_w = self._graph_container.width()
+        container_h = self._graph_container.height()
+        x = max(margin, container_w - w - margin)
+        y = max(margin, container_h - h - margin)
+        self._minimap_overlay.move(x, y)
+
     def toggle_minimap(self, enabled: Optional[bool] = None):
-        """Toggle minimap visibility."""
+        """Toggle floating minimap visibility."""
         if enabled is None:
             enabled = not self._minimap_enabled
-        self._minimap_enabled = enabled
-        self.minimap.setVisible(enabled)
-        if enabled:
+        self._minimap_enabled = bool(enabled)
+        self._minimap_overlay.setVisible(self._minimap_enabled)
+        if self._minimap_enabled:
+            self._position_minimap_overlay()
             self._schedule_refresh()
 
-    def _on_minimap_region_changed(self, x_min: float, x_max: float):
-        """User dragged minimap region → update main graph."""
+    def _on_minimap_lock_y_toggled(self, checked: bool):
+        self._minimap_lock_y = bool(checked)
+
+    def _on_minimap_fit_clicked(self):
+        """Fit both X/Y to current dataset extent."""
+        self.main_graph.reset_view()
+
+    def _on_minimap_fit_x_clicked(self):
+        bounds = self.minimap.get_data_bounds()
+        if not bounds:
+            return
+        x_min, x_max, _, _ = bounds
+        self.main_graph.setXRange(x_min, x_max, padding=0.01)
+
+    def _on_minimap_fit_y_clicked(self):
+        bounds = self.minimap.get_data_bounds()
+        if not bounds:
+            return
+        _, _, y_min, y_max = bounds
+        self.main_graph.setYRange(y_min, y_max, padding=0.01)
+
+    def _on_minimap_region_changed(self, x_min: float, x_max: float, y_min: float, y_max: float):
+        """User dragged minimap viewport -> update main graph."""
         if self._minimap_syncing:
             return
         self._minimap_syncing = True
         try:
             self.main_graph.setXRange(x_min, x_max, padding=0)
+            if not self._minimap_lock_y:
+                self.main_graph.setYRange(y_min, y_max, padding=0)
         finally:
             self._minimap_syncing = False
 
     def _on_main_graph_range_for_minimap(self, vb, ranges):
-        """Main graph range changed → update minimap region."""
+        """Main graph range changed -> update minimap viewport rectangle."""
         if not self._minimap_enabled or self._minimap_syncing:
             return
         self._minimap_syncing = True
         try:
-            x_range = ranges[0]
-            self.minimap.set_region(x_range[0], x_range[1])
+            x_range, y_range = ranges
+            self.minimap.set_region(x_range[0], x_range[1], y_range[0], y_range[1])
         finally:
             self._minimap_syncing = False
 
@@ -410,6 +491,7 @@ class GraphPanel(QWidget):
         if not self.engine.is_loaded:
             _lg.debug("[DEBUG-CRASH] graph_panel.refresh() - showing empty state")
             self._center_stack.setCurrentIndex(0)  # Empty state
+            self._minimap_overlay.setVisible(False)
             return
         
         # Data is loaded - show graph view
@@ -803,17 +885,13 @@ class GraphPanel(QWidget):
 
         # Update minimap
         if self._minimap_enabled:
-            chart_type = options.get('chart_type', ChartType.LINE)
-            if chart_type in (ChartType.LINE, ChartType.SCATTER, ChartType.AREA):
-                self.minimap.set_data(x_sampled, y_sampled)
-                # Sync current view range to minimap
-                vr = self.main_graph.viewRange()
-                self.minimap.set_region(vr[0][0], vr[0][1])
-                self.minimap.setVisible(True)
-            else:
-                self.minimap.setVisible(False)
+            self.minimap.set_data(x_sampled, y_sampled)
+            # Sync current view range to minimap
+            vr = self.main_graph.viewRange()
+            self.minimap.set_region(vr[0][0], vr[0][1], vr[1][0], vr[1][1])
+            self._minimap_overlay.setVisible(True)
         else:
-            self.minimap.setVisible(False)
+            self._minimap_overlay.setVisible(False)
 
         # Update sampling status label
         displayed_points = len(x_sampled)
