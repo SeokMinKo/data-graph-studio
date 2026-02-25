@@ -347,16 +347,22 @@ class _TableColumnMixin:
         if not mapping:
             raise ValueError("Pattern must include at least one capture group.")
 
-        exprs = []
-        for group_index, new_name in mapping.items():
-            exprs.append(
-                pl.col(column_name)
-                .cast(pl.Utf8)
-                .str.extract(pattern, group_index=int(group_index))
-                .alias(new_name)
-            )
+        compiled = re.compile(pattern)
+        source_values = df.select(pl.col(column_name).cast(pl.Utf8)).to_series(0).to_list()
 
-        return df.with_columns(exprs)
+        new_columns = []
+        for group_index, new_name in mapping.items():
+            idx = int(group_index)
+            extracted = []
+            for value in source_values:
+                if value is None:
+                    extracted.append(None)
+                    continue
+                match = compiled.search(value)
+                extracted.append(match.group(idx) if match else None)
+            new_columns.append(pl.Series(new_name, extracted))
+
+        return df.with_columns(new_columns)
 
     def _apply_split_with_undo(self, before_df: pl.DataFrame, after_df: pl.DataFrame, source_column: str, target_names: list[str]):
         def _apply(df: pl.DataFrame):
