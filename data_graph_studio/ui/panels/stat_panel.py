@@ -7,11 +7,11 @@ from typing import Optional, Dict, Any
 import numpy as np
 
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QSpinBox, QScrollArea, QGroupBox, QGridLayout, QComboBox,
+    QHBoxLayout, QVBoxLayout, QLabel, QFrame,
+    QSpinBox, QScrollArea, QGroupBox, QGridLayout, QComboBox, QGraphicsPathItem,
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QRectF
+from PySide6.QtGui import QPainterPath
 
 from .graph_widgets import ClickablePlotWidget
 from ...core.state import AppState
@@ -276,14 +276,35 @@ class StatPanel(QFrame):
         if not labels or not values:
             return
         try:
-            from pyqtgraph.graphicsItems.PieChartItem import PieChartItem
-            pie = PieChartItem(values, brushes=[pg.mkBrush(c) for c in colors])
-            pie.setZValue(10)
-            self.pie_widget.addItem(pie)
+            total = float(sum(values))
+            if total <= 0:
+                return
+
             self.pie_widget.setAspectLocked(True)
             self.pie_widget.hideAxis('bottom')
             self.pie_widget.hideAxis('left')
+
+            pie_rect = QRectF(-1.0, -1.0, 2.0, 2.0)
+            start_angle = 90.0
+            for value, color in zip(values, colors):
+                if value <= 0:
+                    continue
+                span_angle = -(float(value) / total) * 360.0
+
+                path = QPainterPath()
+                path.moveTo(0.0, 0.0)
+                path.arcTo(pie_rect, start_angle, span_angle)
+                path.closeSubpath()
+
+                wedge = QGraphicsPathItem(path)
+                wedge.setBrush(pg.mkBrush(color))
+                wedge.setPen(pg.mkPen(color='w', width=1))
+                wedge.setZValue(10)
+                self.pie_widget.addItem(wedge)
+
+                start_angle += span_angle
         except Exception:
+            logger.warning("stat_panel.render_pie.error", exc_info=True)
             # Fallback: bar chart
             x = np.arange(len(labels))
             bars = pg.BarGraphItem(
@@ -500,4 +521,3 @@ class StatPanel(QFrame):
 
 
 # ==================== Main Graph ====================
-
