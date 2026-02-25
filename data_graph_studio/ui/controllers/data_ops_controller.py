@@ -72,7 +72,7 @@ class DataOpsController:
             return
         
         text, ok = QInputDialog.getText(
-            self, "Find Data", "Search for:",
+            self.w, "Find Data", "Search for:",
             text=""
         )
         if ok and text.strip():
@@ -95,7 +95,7 @@ class DataOpsController:
         
         max_row = self.w.engine.row_count
         row, ok = QInputDialog.getInt(
-            self, "Go to Row", f"Enter row number (1-{max_row}):",
+            self.w, "Go to Row", f"Enter row number (1-{max_row}):",
             value=1, min=1, max=max_row
         )
         if ok:
@@ -109,7 +109,7 @@ class DataOpsController:
     def _on_filter_data(self):
         """필터 패널 토글"""
         # 필터 패널이 있으면 토글, 없으면 생성
-        if hasattr(self, 'filter_panel') and self.w.filter_panel:
+        if hasattr(self.w, 'filter_panel') and self.w.filter_panel:
             self.w.filter_panel.setVisible(not self.w.filter_panel.isVisible())
         else:
             self.w.statusbar.showMessage("Filter panel toggled", 3000)
@@ -126,18 +126,18 @@ class DataOpsController:
         
         columns = self.w.engine.columns
         column, ok = QInputDialog.getItem(
-            self, "Sort Data", "Select column to sort by:",
+            self.w, "Sort Data", "Select column to sort by:",
             columns, 0, False
         )
         if ok and column:
             # 정렬 순서 선택
             orders = ["Ascending", "Descending"]
             order, ok2 = QInputDialog.getItem(
-                self, "Sort Order", "Select sort order:",
+                self.w, "Sort Order", "Select sort order:",
                 orders, 0, False
             )
             if ok2:
-                from ..core.undo_manager import UndoCommand, UndoActionType
+                from ...core.undo_manager import UndoCommand, UndoActionType
 
                 descending = (order == "Descending")
                 # Capture current sort state for undo (reverse operation, no df copy)
@@ -187,7 +187,7 @@ class DataOpsController:
 
     def _on_computed_column_created(self, defn, series):
         """Handle computed column result — add to engine and refresh UI (FR-B3.2)."""
-        from ..core.undo_manager import UndoCommand, UndoActionType
+        from ...core.undo_manager import UndoCommand, UndoActionType
 
         try:
             col_name = defn.name if hasattr(defn, 'name') else str(defn)
@@ -253,14 +253,14 @@ class DataOpsController:
             return
         
         reply = QMessageBox.question(
-            self, "Remove Duplicates",
+            self.w, "Remove Duplicates",
             f"This will remove duplicate rows from the data.\n"
             f"Current rows: {self.w.engine.row_count:,}\n\n"
             f"Continue?",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            from ..core.undo_manager import UndoCommand, UndoActionType
+            from ...core.undo_manager import UndoCommand, UndoActionType
             import polars as pl
 
             current_df = self.w.engine.df

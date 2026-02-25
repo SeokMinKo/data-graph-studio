@@ -634,7 +634,7 @@ class ViewActionsController:
         text, ok = QInputDialog.getText(self.w, "Add Annotation", "Annotation text:")
         if ok and text:
             import uuid
-            from ..core.annotation import Annotation
+            from ...core.annotation import Annotation
             ann = Annotation(
                 id=uuid.uuid4().hex[:12],
                 kind="point",

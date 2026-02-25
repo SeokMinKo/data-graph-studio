@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QProgressDialog
 from PySide6.QtCore import Qt, QThread
@@ -14,7 +14,18 @@ logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
+    import polars as pl
     from ..main_window import MainWindow
+
+
+class TraceContext:
+    """Holds raw ftrace data for re-conversion."""
+
+    def __init__(self, raw_df: "pl.DataFrame", settings: dict, dataset_id: str):
+        self.raw_df = raw_df
+        self.settings = dict(settings)
+        self.dataset_id = dataset_id
+
 
 class TraceController:
     """Controller extracted from MainWindow."""
@@ -258,6 +269,26 @@ class TraceController:
         worker.start()
 
 
+    def reconvert(self, converter_options: dict) -> None:
+        """Re-run converter with new options, replace dataset, refresh graph."""
+        ctx: Optional[TraceContext] = getattr(self.w, '_trace_context', None)
+        if ctx is None:
+            return
+
+        ctx.settings["converter_options"] = converter_options
+
+        from data_graph_studio.parsers import FtraceParser
+
+        parser = FtraceParser()
+        new_df = parser.convert(ctx.raw_df, ctx.settings)
+
+        self.w.engine.replace_dataset_df(ctx.dataset_id, new_df)
+        # Refresh all panels
+        self.w.graph_panel.refresh()
+        self.w.statusBar().showMessage(
+            f"Re-converted with new options ({len(new_df)} rows)", 3000,
+        )
+
     def _parse_ftrace_async(self, file_path: str, converter: str = "blocklayer") -> None:
         """Parse an ftrace text file in a background thread.
 
@@ -277,13 +308,15 @@ class TraceController:
         settings["converter"] = converter
 
         class _ParseWorker(QThread):
-            finished = QtSignal(object)
+            # Emits (raw_df, converted_df)
+            finished = QtSignal(object, object)
             error = QtSignal(str)
 
             def run(self_w):
                 try:
-                    df = parser.parse_raw(file_path, settings)
-                    self_w.finished.emit(df)
+                    raw_df = parser.parse_raw(file_path, settings)
+                    converted_df = parser.convert(raw_df, settings)
+                    self_w.finished.emit(raw_df, converted_df)
                 except Exception as e:
                     self_w.error.emit(str(e))
 
@@ -291,7 +324,7 @@ class TraceController:
         self.w.statusBar().showMessage("Parsing ftrace file...", 0)
         worker = _ParseWorker(self.w)
 
-        def on_finished(df):
+        def on_finished(raw_df, df):
             logger.info("[Logger] ftrace parsed: %d rows, %d cols, columns=%s",
                         len(df), len(df.columns), list(df.columns)[:10])
             dataset_name = Path(file_path).stem
@@ -300,8 +333,13 @@ class TraceController:
             )
             if dataset_id:
                 logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
+                # Store TraceContext for re-conversion
+                self.w._trace_context = TraceContext(raw_df, settings, dataset_id)
                 self.w._on_data_loaded()
                 self.w._apply_graph_presets(df, converter)
+                # Configure converter options panel if present
+                if hasattr(self.w, '_converter_options_panel'):
+                    self.w._converter_options_panel.set_converter(converter)
                 self.w.statusBar().showMessage(
                     f"Ftrace: loaded {len(df)} rows from {Path(file_path).name}",
                     5000,

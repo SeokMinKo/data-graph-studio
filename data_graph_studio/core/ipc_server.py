@@ -54,12 +54,18 @@ def write_port_file(port: int, token: str = "") -> None:
     tmp_fd, tmp_path = tempfile.mkstemp(
         dir=str(_PORT_FILE.parent), prefix=".ipc_port_"
     )
+    fd_closed = False
     try:
         os.write(tmp_fd, content.encode("utf-8"))
         os.close(tmp_fd)
+        fd_closed = True
         os.replace(tmp_path, str(_PORT_FILE))
     except Exception:
-        os.close(tmp_fd) if not os.get_inheritable(tmp_fd) else None
+        if not fd_closed:
+            try:
+                os.close(tmp_fd)
+            except OSError:
+                pass
         try:
             os.unlink(tmp_path)
         except OSError:

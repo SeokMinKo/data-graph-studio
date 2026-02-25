@@ -54,6 +54,7 @@ from .panels.profile_bar import ProfileBar
 from .panels.dataset_manager_panel import DatasetManagerPanel
 from .panels.side_by_side_layout import SideBySideLayout
 from .panels.comparison_stats_panel import ComparisonStatsPanel
+from .panels.converter_options_panel import ConverterOptionsPanel
 from .panels.overlay_stats_widget import OverlayStatsWidget
 from .panels.annotation_panel import AnnotationPanel
 from .panels.dashboard_panel import DashboardPanel
@@ -432,6 +433,9 @@ class MainWindow(QMainWindow):
 
         # History (Undo/Redo) dock
         self._setup_history_dock()
+
+        # Converter Options dock
+        self._setup_converter_options_dock()
     
     def _setup_history_dock(self):
         if self._history_dock is not None:
@@ -457,6 +461,36 @@ class MainWindow(QMainWindow):
                         view_menu.addSeparator()
                         toggle_action = dock.toggleViewAction()
                         toggle_action.setText("History Panel")
+                        view_menu.addAction(toggle_action)
+                    break
+        except Exception:
+            pass
+
+    def _setup_converter_options_dock(self):
+        """Set up the Converter Options dock widget."""
+        self._converter_options_panel = ConverterOptionsPanel(self)
+        self._converter_options_panel.options_changed.connect(
+            self._trace_ctrl.reconvert
+        )
+
+        dock = QDockWidget("Converter Options", self)
+        dock.setObjectName("ConverterOptionsDock")
+        dock.setWidget(self._converter_options_panel)
+        dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        dock.hide()  # Hidden by default until ftrace data loads
+        self._converter_options_dock = dock
+
+        # Add toggle action to View menu
+        try:
+            for action in self.menuBar().actions():
+                if action.text().replace("&", "") == "View":
+                    view_menu = action.menu()
+                    if view_menu:
+                        toggle_action = dock.toggleViewAction()
+                        toggle_action.setText("Converter Options Panel")
                         view_menu.addAction(toggle_action)
                     break
         except Exception:
@@ -1467,7 +1501,16 @@ class MainWindow(QMainWindow):
         # Stop IPC server
         if hasattr(self, '_ipc_server'):
             self._ipc_server.stop()
-        
+
+        # Stop export worker thread
+        if hasattr(self, '_export_controller'):
+            self._export_controller.shutdown()
+
+        # Wait for loader thread if running
+        if self._loader_thread is not None and self._loader_thread.isRunning():
+            self._loader_thread.quit()
+            self._loader_thread.wait(3000)
+
         # Close all floating graph windows
         if self._floating_graph_manager:
             self._floating_graph_manager.close_all()

@@ -131,6 +131,35 @@ class TestCpusFilter:
             os.unlink(path)
 
 
+class TestIntegerTimestamp:
+    """UT-5+: integer timestamp formats."""
+
+    def test_integer_timestamp(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+        text = """     kworker/0:1-12345 [000] .... 12345: block_rq_issue: 8,0 R 4096 () 1234 + 8 [kworker/0:1]\n"""
+        path = _write_tmp(text)
+        try:
+            df = parser.parse_raw(path, settings)
+            assert len(df) == 1
+            assert df["timestamp"][0] == pytest.approx(12345.0)
+            assert df["event"][0] == "block_rq_issue"
+        finally:
+            os.unlink(path)
+
+
+class TestEventFilterCategoryPrefix:
+    """UT-5+: event filter category prefix compatibility."""
+
+    def test_filter_with_prefix(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+        settings["events"] = ["block/block_rq_issue", "block/block_rq_complete"]
+        path = _write_tmp(SAMPLE_FTRACE)
+        try:
+            df = parser.parse_raw(path, settings)
+            assert len(df) == 2
+            assert set(df["event"].to_list()) == {"block_rq_issue", "block_rq_complete"}
+        finally:
+            os.unlink(path)
+
+
 class TestCombinedFilter:
     """UT-5: Events + CPUs combined filter."""
 

@@ -278,17 +278,17 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             info = check_github_latest()
         except Exception as e:
             if force_ui:
-                QMessageBox.information(self, "Updates", f"Update check failed:\n{e}")
+                QMessageBox.information(self.w, "Updates", f"Update check failed:\n{e}")
             return
 
         if not info:
             if force_ui:
-                QMessageBox.information(self, "Updates", "No installer asset found in the latest release.")
+                QMessageBox.information(self.w, "Updates", "No installer asset found in the latest release.")
             return
 
         if not is_update_available(current, info.latest_version):
             if force_ui:
-                QMessageBox.information(self, "Updates", f"You're up to date.\nCurrent: {current}")
+                QMessageBox.information(self.w, "Updates", f"You're up to date.\nCurrent: {current}")
             return
 
         # Update available
@@ -298,7 +298,7 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             "(The app may close and reopen after installation.)"
         )
         if not auto or force_ui:
-            res = QMessageBox.question(self, "Updates", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            res = QMessageBox.question(self.w, "Updates", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if res != QMessageBox.StandardButton.Yes:
                 return
 
@@ -320,6 +320,6 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             run_windows_installer(installer_path, silent=True)
             self.w.close()
         except Exception as e:
-            QMessageBox.warning(self, "Updates", f"Update failed:\n{e}")
+            QMessageBox.warning(self.w, "Updates", f"Update failed:\n{e}")
 
 

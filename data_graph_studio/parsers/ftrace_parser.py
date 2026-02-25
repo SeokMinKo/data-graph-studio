@@ -26,8 +26,8 @@ FTRACE_LINE_RE = re.compile(
     r"^\s*(?P<task>.+?)-(?P<pid>\d+)"
     r"\s+(?:\([\s\d-]+\)\s+)?"
     r"\[(?P<cpu>\d+)\]"
-    r"\s+(?P<flags>\S{4,5})"
-    r"\s+(?P<timestamp>\d+\.\d+):"
+    r"\s+(?P<flags>\S{3,6})"
+    r"\s+(?P<timestamp>\d+(?:\.\d+)?):"
     r"\s+(?P<event>[\w:]+):"
     r"\s+(?P<details>.*?)$",
     re.MULTILINE,
@@ -51,6 +51,38 @@ class FtraceParser(BaseParser):
     name = "Ftrace Parser"
     key = "ftrace"
     file_filter = "Ftrace Files (*.txt *.dat *.log);;All Files (*)"
+
+    # Converter option definitions: converter name → list of option defs
+    _converter_option_defs: Dict[str, list] = {
+        "blocklayer": [
+            {"key": "busy_queue_depth", "type": "int", "default": 32,
+             "label": "Busy Queue Depth",
+             "description": "Queue depth threshold to classify I/O as 'busy'"},
+            {"key": "idle_queue_depth", "type": "int", "default": 4,
+             "label": "Idle Queue Depth",
+             "description": "Queue depth threshold to classify I/O as 'idle'"},
+            {"key": "window_sec", "type": "float", "default": 1.0,
+             "label": "Window (sec)",
+             "description": "Sliding window size in seconds for time-based aggregation"},
+            {"key": "latency_percentiles", "type": "str", "default": "50,90,99",
+             "label": "Latency Percentiles",
+             "description": "Comma-separated percentile values to compute (e.g. 50,90,99)"},
+            {"key": "drain_target_depth", "type": "int", "default": 0,
+             "label": "Drain Target Depth",
+             "description": "Target queue depth for drain analysis (0 = fully drained)"},
+        ],
+        "sched": [],
+    }
+
+    @classmethod
+    def get_option_defs(cls, converter: str) -> list:
+        """Return option definitions for a converter."""
+        return cls._converter_option_defs.get(converter, [])
+
+    @classmethod
+    def get_default_options(cls, converter: str) -> Dict[str, Any]:
+        """Return default converter_options dict for a converter."""
+        return {d["key"]: d["default"] for d in cls.get_option_defs(converter)}
 
     def default_settings(self) -> Dict[str, Any]:
         return {
@@ -161,7 +193,12 @@ class FtraceParser(BaseParser):
         cpu_filter: List[int] = settings.get("cpus", [])
 
         if evt_filter:
-            df = df.filter(pl.col("event").is_in(evt_filter))
+            # ftrace events from UI may include category prefix (e.g. "block/block_rq_issue")
+            normalized_evt_filter = [
+                e.split("/", 1)[-1] if "/" in e else e
+                for e in evt_filter
+            ]
+            df = df.filter(pl.col("event").is_in(normalized_evt_filter))
         if cpu_filter:
             df = df.filter(pl.col("cpu").is_in(cpu_filter))
 

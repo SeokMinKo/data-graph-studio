@@ -1496,6 +1496,8 @@ class AppState(QObject):
             diff = ratio - old_ratio
 
             other_sections = [k for k in self._layout_ratios if k != section]
+            if not other_sections:
+                return
             for other in other_sections:
                 self._layout_ratios[other] -= diff / len(other_sections)
 

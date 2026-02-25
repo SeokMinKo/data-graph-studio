@@ -462,6 +462,28 @@ class DataEngine:
             self._loader._df, self._loader._lazy_df = ds.df, ds.lazy_df
             self._loader._source, self._loader._profile = ds.source, ds.profile
 
+    def replace_dataset_df(self, dataset_id: str, df: pl.DataFrame) -> bool:
+        """Replace DataFrame for an existing dataset (used for re-conversion).
+
+        Args:
+            dataset_id: ID of the dataset to update.
+            df: New polars DataFrame.
+
+        Returns:
+            True if successful.
+        """
+        ds = self._datasets_mgr.get_dataset(dataset_id)
+        if ds is None:
+            return False
+        ds.df = df
+        ds.row_count = len(df)
+        ds.column_count = len(df.columns)
+        # Sync loader if this is the active dataset
+        if self._datasets_mgr.active_dataset_id == dataset_id:
+            self._loader._df = df
+        self._clear_cache()
+        return True
+
     def clear_all_datasets(self):
         self._clear_cache()
         self._datasets_mgr.clear_all_datasets()

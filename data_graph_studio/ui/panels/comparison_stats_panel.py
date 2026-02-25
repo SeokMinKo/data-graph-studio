@@ -499,22 +499,27 @@ class ComparisonStatsPanel(QWidget):
         name_b = metadata_b.name if metadata_b else dataset_b_id
 
         diff_values = diff_df["diff"].to_numpy()
+        n_diff = len(diff_values)
         positive_count = (diff_values > 0).sum()
         negative_count = (diff_values < 0).sum()
         zero_count = (diff_values == 0).sum()
 
         import numpy as np
-        mean_diff = np.nanmean(diff_values)
-        total_diff = np.nansum(diff_values)
+        mean_diff = np.nanmean(diff_values) if n_diff > 0 else 0.0
+        total_diff = np.nansum(diff_values) if n_diff > 0 else 0.0
+
+        pos_pct = positive_count / n_diff * 100 if n_diff > 0 else 0.0
+        neg_pct = negative_count / n_diff * 100 if n_diff > 0 else 0.0
+        zero_pct = zero_count / n_diff * 100 if n_diff > 0 else 0.0
 
         summary_text = f"""
 <b>Comparison: {name_a} vs {name_b}</b><br>
 <b>Column:</b> {value_column}<br><br>
 <b>Total Difference:</b> {total_diff:+,.2f}<br>
 <b>Mean Difference:</b> {mean_diff:+,.2f}<br><br>
-<b>Positive (A > B):</b> {positive_count} ({positive_count / len(diff_values) * 100:.1f}%)<br>
-<b>Negative (A < B):</b> {negative_count} ({negative_count / len(diff_values) * 100:.1f}%)<br>
-<b>No Change:</b> {zero_count} ({zero_count / len(diff_values) * 100:.1f}%)
+<b>Positive (A > B):</b> {positive_count} ({pos_pct:.1f}%)<br>
+<b>Negative (A < B):</b> {negative_count} ({neg_pct:.1f}%)<br>
+<b>No Change:</b> {zero_count} ({zero_pct:.1f}%)
 """
         self.diff_summary.setText(summary_text)
 
