@@ -247,7 +247,7 @@ class TraceController:
                 df, name=name, source_path=csv_path
             )
             if did:
-                logger.info("[Logger] dataset created: id=%s, name=%s", did, name)
+                logger.info("trace_controller.dataset.created", extra={"id": did, "dataset_name": name})
                 self.w._on_data_loaded()
                 self.w._apply_graph_presets(df, converter="blocklayer")
                 self.w.statusBar().showMessage(
@@ -259,7 +259,8 @@ class TraceController:
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
-            logger.error("[Logger] CSV load failed: %s", msg)
+            """Handle CSV load failure by showing an error dialog."""
+            logger.error("trace_controller.csv.load_failed", extra={"error_message": msg})
             QMessageBox.critical(self.w, "Logger", f"CSV load failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
@@ -350,7 +351,8 @@ class TraceController:
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
-            logger.error("[Logger] ftrace parse failed: %s", msg)
+            """Handle ftrace parse failure by showing an error dialog."""
+            logger.error("trace_controller.ftrace.parse_failed", extra={"error_message": msg})
             QMessageBox.critical(self.w, "Ftrace Parser", f"Parse failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
