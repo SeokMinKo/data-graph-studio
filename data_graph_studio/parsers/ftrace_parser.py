@@ -419,12 +419,16 @@ class FtraceParser(BaseParser):
             _extract_optional(r"\bcomm=(\S+)", 1, "comm_from_detail"),
         ]
         cols += [
-            pl.coalesce(
-                [
-                    pl.col("details").str.extract(r"\brwbs=(\S+)", 1),
-                    pl.col("details").str.extract(r"^\S+\s+(\S+)", 1),
-                ]
-            ).alias("rwbs"),
+            pl.when(pl.col("details").str.contains(r"(?:^|\s)rwbs="))
+            .then(
+                pl.when(
+                    pl.col("details").str.extract(r"\brwbs=([^\s]*)", 1).str.len_chars() > 0
+                )
+                .then(pl.col("details").str.extract(r"\brwbs=([^\s]*)", 1))
+                .otherwise(None)
+            )
+            .otherwise(pl.col("details").str.extract(r"^\S+\s+(\S+)", 1))
+            .alias("rwbs"),
         ]
         if not complete:
             cols += [
@@ -604,7 +608,7 @@ class FtraceParser(BaseParser):
             pl.coalesce([pl.col("rwbs"), pl.col("complete_rwbs")]).alias("rwbs"),
         ])
         result = result.with_columns(
-            pl.coalesce([pl.col("cmd_from_detail"), pl.col("rwbs"), pl.col("comm_from_detail")]).alias("cmd")
+            pl.coalesce([pl.col("cmd_from_detail"), pl.col("rwbs")]).alias("cmd")
         )
 
         # insert → issue (latest insert before issue timestamp per key)
