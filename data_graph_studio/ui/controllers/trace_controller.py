@@ -33,6 +33,156 @@ class TraceController:
     def __init__(self, main_window: 'MainWindow'):
         self.w = main_window
 
+    @staticmethod
+    def _normalize_event_name(event_name: Any) -> str:
+        """Normalize Perfetto event names to ftrace-style names.
+
+        Examples:
+            - "block_rq_issue" -> "block_rq_issue"
+            - "block/block_rq_issue" -> "block_rq_issue"
+        """
+        if not isinstance(event_name, str):
+            return ""
+        event = event_name.strip()
+        if "/" in event:
+            event = event.split("/", 1)[1]
+        return event
+
+    @staticmethod
+    def _parse_perfetto_kv_details(details: Any) -> Dict[str, str]:
+        """Parse Perfetto `key=value` detail string into a dict."""
+        if not isinstance(details, str):
+            return {}
+
+        result: Dict[str, str] = {}
+        for token in details.split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip(",")
+            if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+                value = value[1:-1]
+            if key:
+                result[key] = value
+        return result
+
+    @classmethod
+    def _coerce_perfetto_details_for_blocklayer(
+        cls, event_name: str, details: Any
+    ) -> str:
+        """Convert Perfetto args into blocklayer converter-compatible details.
+
+        Blocklayer converter expects legacy ftrace-like details format:
+            issue/insert: <dev> <rwbs> <bytes> () <sector> + <nr_sectors>
+            complete:     <dev> <rwbs> () <sector> + <nr_sectors>
+        """
+        event = cls._normalize_event_name(event_name)
+        if not isinstance(details, str):
+            return ""
+
+        if event not in {"block_rq_insert", "block_rq_issue", "block_rq_complete"}:
+            return details
+
+        kv = cls._parse_perfetto_kv_details(details)
+
+        dev = kv.get("dev")
+        if not dev:
+            major = kv.get("major")
+            minor = kv.get("minor") or kv.get("first_minor")
+            if major is not None and minor is not None:
+                dev = f"{major},{minor}"
+
+        rwbs = kv.get("rwbs") or kv.get("rw_bs") or "R"
+        sector = kv.get("sector")
+        nr_sectors = kv.get("nr_sector") or kv.get("nr_sectors")
+
+        if not dev or sector is None or nr_sectors is None:
+            # If we cannot build legacy format safely, keep original details.
+            return details
+
+        if event in {"block_rq_insert", "block_rq_issue"}:
+            size_bytes = kv.get("bytes") or kv.get("nr_bytes")
+            if size_bytes is None:
+                try:
+                    size_bytes = str(int(nr_sectors) * 512)
+                except Exception:
+                    size_bytes = "0"
+            return f"{dev} {rwbs} {size_bytes} () {sector} + {nr_sectors}"
+
+        return f"{dev} {rwbs} () {sector} + {nr_sectors}"
+
+    @classmethod
+    def _normalize_perfetto_csv_for_ftrace_converter(cls, df: "pl.DataFrame") -> "pl.DataFrame":
+        """Normalize Perfetto CSV rows into FtraceParser raw schema.
+
+        Output columns are aligned to parse_raw schema:
+            timestamp, cpu, task, pid, flags, event, details
+        """
+        import polars as pl
+
+        schema = {
+            "timestamp": pl.Float64,
+            "cpu": pl.Int32,
+            "task": pl.Utf8,
+            "pid": pl.Int32,
+            "flags": pl.Utf8,
+            "event": pl.Utf8,
+            "details": pl.Utf8,
+        }
+
+        if df is None or len(df) == 0:
+            return pl.DataFrame(schema=schema)
+
+        work = df
+
+        if "timestamp" not in work.columns:
+            if "ts" in work.columns:
+                work = work.with_columns(
+                    (pl.col("ts").cast(pl.Float64) / 1e9).alias("timestamp")
+                )
+            else:
+                work = work.with_columns(pl.lit(0.0).alias("timestamp"))
+
+        event_source = "event" if "event" in work.columns else ("name" if "name" in work.columns else None)
+        if event_source is None:
+            work = work.with_columns(pl.lit("").alias("__event_raw"))
+        else:
+            work = work.with_columns(pl.col(event_source).cast(pl.Utf8).alias("__event_raw"))
+
+        if "details" not in work.columns:
+            work = work.with_columns(pl.lit("").alias("details"))
+        if "cpu" not in work.columns:
+            work = work.with_columns(pl.lit(0).alias("cpu"))
+        if "task" not in work.columns:
+            work = work.with_columns(pl.lit("").alias("task"))
+        if "pid" not in work.columns:
+            work = work.with_columns(pl.lit(-1).alias("pid"))
+
+        work = work.with_columns([
+            pl.col("__event_raw")
+            .map_elements(cls._normalize_event_name, return_dtype=pl.Utf8)
+            .alias("event"),
+            pl.struct(["__event_raw", "details"])
+            .map_elements(
+                lambda row: cls._coerce_perfetto_details_for_blocklayer(
+                    row["__event_raw"], row["details"]
+                ),
+                return_dtype=pl.Utf8,
+            )
+            .alias("details_norm"),
+        ])
+
+        return work.select([
+            pl.col("timestamp").cast(pl.Float64).fill_null(0.0).alias("timestamp"),
+            pl.col("cpu").cast(pl.Int32, strict=False).fill_null(0).alias("cpu"),
+            pl.col("task").cast(pl.Utf8).fill_null("").alias("task"),
+            pl.col("pid").cast(pl.Int32, strict=False).fill_null(-1).alias("pid"),
+            pl.lit("....").alias("flags"),
+            pl.col("event").cast(pl.Utf8).fill_null("").alias("event"),
+            pl.col("details_norm").cast(pl.Utf8).fill_null("").alias("details"),
+        ])
+
     def _on_configure_trace(self) -> None:
         """Open the Trace Configuration dialog (always)."""
         from data_graph_studio.ui.dialogs.trace_config_dialog import TraceConfigDialog
@@ -220,18 +370,23 @@ class TraceController:
         import polars as pl
 
         class _CsvWorker(QThread):
-            finished = QtSignal(object)
+            # Emits (raw_df_for_converter, converted_df, settings)
+            finished = QtSignal(object, object, object)
             error = QtSignal(str)
 
             def run(self_w):
                 try:
-                    df = pl.read_csv(csv_path)
-                    # ts is in nanoseconds, convert to seconds
-                    if "ts" in df.columns:
-                        df = df.with_columns(
-                            (pl.col("ts").cast(pl.Float64) / 1e9).alias("timestamp")
-                        ).drop("ts")
-                    self_w.finished.emit(df)
+                    perfetto_df = pl.read_csv(csv_path)
+                    raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+
+                    from data_graph_studio.parsers import FtraceParser
+
+                    parser = FtraceParser()
+                    settings = parser.default_settings()
+                    settings["converter"] = "blocklayer"
+                    converted_df = parser.convert(raw_df, settings)
+
+                    self_w.finished.emit(raw_df, converted_df, settings)
                 except Exception as e:
                     self_w.error.emit(str(e))
 
@@ -239,23 +394,29 @@ class TraceController:
         self.w.statusBar().showMessage("Loading CSV...", 0)
         worker = _CsvWorker(self.w)
 
-        def on_finished(df):
-            logger.info("[Logger] CSV loaded: %d rows, %d cols, columns=%s",
-                        len(df), len(df.columns), list(df.columns)[:10])
+        def on_finished(raw_df, df, settings):
+            logger.info(
+                "[Logger] Perfetto converted: raw=%d rows, converted=%d rows, columns=%s",
+                len(raw_df), len(df), list(df.columns)[:10],
+            )
             name = Path(csv_path).stem
             did = self.w.engine.load_dataset_from_dataframe(
                 df, name=name, source_path=csv_path
             )
             if did:
                 logger.info("trace_controller.dataset.created", extra={"id": did, "dataset_name": name})
+                # Store TraceContext for re-conversion (same as ftrace path)
+                self.w._trace_context = TraceContext(raw_df, settings, did)
                 self.w._on_data_loaded()
                 self.w._apply_graph_presets(df, converter="blocklayer")
+                if hasattr(self.w, '_converter_options_panel'):
+                    self.w._converter_options_panel.set_converter("blocklayer")
                 self.w.statusBar().showMessage(
-                    f"Perfetto trace: loaded {len(df)} rows", 5000,
+                    f"Perfetto trace: converted {len(raw_df)} events → {len(df)} rows", 5000,
                 )
             else:
                 logger.error("[Logger] load_dataset_from_dataframe returned None for %s", csv_path)
-                QMessageBox.warning(self.w, "Logger", "Failed to load CSV data.")
+                QMessageBox.warning(self.w, "Logger", "Failed to load converted trace data.")
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
