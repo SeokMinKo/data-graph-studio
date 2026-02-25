@@ -5,6 +5,7 @@ Table Panel - 테이블 뷰 + X Zone + Group Zone + Value Zone
 from typing import Optional, List, Dict, Any, Set, Tuple
 from collections import OrderedDict
 import json
+import re
 import polars as pl
 
 from PySide6.QtWidgets import (
@@ -13,7 +14,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QPushButton, QMessageBox,
     QSplitter, QSizePolicy, QApplication, QListWidget,
     QListWidgetItem, QGroupBox, QSlider, QDialog,
-    QDialogButtonBox, QFormLayout, QColorDialog
+    QDialogButtonBox, QFormLayout, QColorDialog, QInputDialog
 )
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
@@ -25,6 +26,7 @@ from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnter
 from ...core.state import AppState, AggregationType, GroupColumn, ValueColumn
 from ...core.data_engine import DataEngine
 from .grouped_table_model import GroupedTableModel
+from ..dialogs.split_column_dialog import SplitColumnDialog
 from ..floatable import FloatButton, FloatWindow
 
 
@@ -1404,6 +1406,8 @@ class DataTableView(QTableView):
     column_freeze = Signal(str)  # column name
     column_unfreeze = Signal(str)  # column name
     conditional_format_requested = Signal(str)  # column name
+    split_column_requested = Signal(str)  # column name
+    rename_column_requested = Signal(str)  # old column name
     multi_sort_requested = Signal(int, object)  # column, Qt.SortOrder
     
     def __init__(self):
@@ -1427,6 +1431,7 @@ class DataTableView(QTableView):
         self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self._show_header_menu)
         self.horizontalHeader().sectionPressed.connect(self._on_header_pressed)
+        self.horizontalHeader().sectionDoubleClicked.connect(self._on_header_double_clicked)
         self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
         self.horizontalHeader().installEventFilter(self)
         
@@ -1469,6 +1474,19 @@ class DataTableView(QTableView):
     def _on_header_pressed(self, logical_index: int):
         # Store column name for context menu / reorder
         pass
+
+    def _on_header_double_clicked(self, logical_index: int):
+        model = self.model()
+        if not model or logical_index < 0:
+            return
+
+        get_column_name = getattr(model, "get_column_name", None)
+        if not callable(get_column_name):
+            return
+
+        column_name = get_column_name(logical_index)
+        if column_name:
+            self.rename_column_requested.emit(column_name)
 
     def _on_header_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int):
         model = self.model()
@@ -1552,6 +1570,10 @@ class DataTableView(QTableView):
         cond_fmt.triggered.connect(lambda: self.conditional_format_requested.emit(column_name))
         menu.addAction(cond_fmt)
 
+        split_col = QAction("✂️ Split Column (Regex Groups)...", self)
+        split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
+        menu.addAction(split_col)
+
         # F7: Freeze/Unfreeze Column
         freeze_act = QAction("📌 Freeze Column", self)
         freeze_act.triggered.connect(lambda: self.column_freeze.emit(column_name))
@@ -1599,6 +1621,10 @@ class DataTableView(QTableView):
         copy_action = QAction("📋 Copy", self)
         copy_action.triggered.connect(lambda: QApplication.clipboard().setText(str(cell_value) if cell_value else ""))
         menu.addAction(copy_action)
+
+        split_col = QAction("✂️ Split Column (Regex Groups)...", self)
+        split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
+        menu.addAction(split_col)
         
         menu.exec(self.viewport().mapToGlobal(pos))
 
@@ -2492,6 +2518,187 @@ class TablePanel(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Exclude Column", f"Failed to exclude column: {e}")
     
+    def _build_split_dataframe(
+        self,
+        df: pl.DataFrame,
+        column_name: str,
+        pattern: str,
+        mapping: Dict[int, str],
+    ) -> pl.DataFrame:
+        if column_name not in df.columns:
+            raise ValueError(f"Source column not found: {column_name}")
+        if not mapping:
+            raise ValueError("Pattern must include at least one capture group.")
+
+        compiled = re.compile(pattern)
+        source_values = df.select(pl.col(column_name).cast(pl.Utf8)).to_series(0).to_list()
+
+        new_columns: List[pl.Series] = []
+        for group_index, new_name in mapping.items():
+            idx = int(group_index)
+            extracted: List[Optional[str]] = []
+            for value in source_values:
+                if value is None:
+                    extracted.append(None)
+                    continue
+                match = compiled.search(str(value))
+                if not match:
+                    extracted.append(None)
+                    continue
+                try:
+                    extracted.append(match.group(idx))
+                except IndexError:
+                    extracted.append(None)
+            new_columns.append(pl.Series(new_name, extracted))
+
+        return df.with_columns(new_columns)
+
+    def _on_split_column_requested(self, column_name: str):
+        """Handle split-column request from table menus."""
+        if not self.engine.is_loaded or not column_name:
+            return
+
+        df = self.engine.df
+        if df is None or column_name not in df.columns:
+            QMessageBox.warning(self, "Split Column", f"Column '{column_name}' was not found.")
+            return
+
+        sample_values = df.select(pl.col(column_name).cast(pl.Utf8)).to_series(0).head(30).to_list()
+        dialog = SplitColumnDialog(
+            source_column=column_name,
+            sample_values=sample_values,
+            existing_columns=df.columns,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        try:
+            payload = dialog.get_payload()
+            pattern = str(payload["pattern"])
+            mapping = payload["mapping"]
+            new_df = self._build_split_dataframe(df, column_name, pattern, mapping)
+
+            self.engine.update_dataframe(new_df)
+
+            # Keep column-order settings stable while appending new columns.
+            order = self.state.get_column_order()
+            if order:
+                merged_order = [c for c in order if c in new_df.columns]
+                merged_order += [c for c in new_df.columns if c not in merged_order]
+                self.state.set_column_order(merged_order)
+
+            self._populate_group_combos()
+            self._sync_group_combos_from_state()
+            self._update_table_model(new_df)
+
+            if self.graph_panel is not None and hasattr(self.graph_panel, "refresh"):
+                self.graph_panel.refresh()
+
+            target_names = list(mapping.values())
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    f"Split '{column_name}' into {', '.join(target_names)}", 3000
+                )
+            elif main_window and hasattr(main_window, 'statusbar'):
+                main_window.statusbar.showMessage(
+                    f"Split '{column_name}' into {', '.join(target_names)}", 3000
+                )
+        except Exception as e:
+            QMessageBox.warning(self, "Split Column", f"Failed to split column: {e}")
+
+    def _on_rename_column_requested(self, old_name: str):
+        """Rename a column from header double-click."""
+        if not self.engine.is_loaded:
+            return
+
+        df = self.engine.df
+        if df is None or old_name not in df.columns:
+            QMessageBox.warning(self, "Rename Column", f"Column '{old_name}' was not found.")
+            return
+
+        new_name, ok = QInputDialog.getText(self, "Rename Column", "New column name:", text=old_name)
+        if not ok:
+            return
+
+        new_name = new_name.strip()
+        if not new_name:
+            QMessageBox.warning(self, "Rename Column", "Column name cannot be empty.")
+            return
+
+        if new_name == old_name:
+            return
+
+        if new_name in df.columns:
+            QMessageBox.warning(self, "Rename Column", f"Column '{new_name}' already exists.")
+            return
+
+        try:
+            new_df = df.rename({old_name: new_name})
+            self.engine.update_dataframe(new_df)
+
+            if self.state.x_column == old_name:
+                self.state.set_x_column(new_name)
+
+            group_changed = False
+            for group_col in self.state.group_columns:
+                if group_col.name == old_name:
+                    group_col.name = new_name
+                    group_changed = True
+            if group_changed:
+                self.state.group_zone_changed.emit()
+
+            value_changed = False
+            for value_col in self.state.value_columns:
+                if value_col.name == old_name:
+                    value_col.name = new_name
+                    value_changed = True
+            if value_changed:
+                self.state.value_zone_changed.emit()
+
+            hover_changed = False
+            for idx, col_name in enumerate(self.state.hover_columns):
+                if col_name == old_name:
+                    self.state.hover_columns[idx] = new_name
+                    hover_changed = True
+            if hover_changed:
+                self.state.hover_zone_changed.emit()
+
+            if old_name in self.state.hidden_columns:
+                self.state.unhide_column(old_name)
+                self.state.hide_column(new_name)
+
+            order = self.state.get_column_order()
+            if old_name in order:
+                self.state.set_column_order([new_name if c == old_name else c for c in order])
+
+            self._populate_group_combos()
+            self._sync_group_combos_from_state()
+            self._update_hidden_bar()
+            self._update_table_model(new_df)
+
+            if self.graph_panel is not None:
+                try:
+                    if hasattr(self.graph_panel, "set_columns"):
+                        self.graph_panel.set_columns(new_df.columns)
+                    if hasattr(self.graph_panel, "refresh"):
+                        self.graph_panel.refresh()
+                except Exception:
+                    pass
+
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    f"Renamed column '{old_name}' to '{new_name}'", 3000
+                )
+            elif main_window and hasattr(main_window, 'statusbar'):
+                main_window.statusbar.showMessage(
+                    f"Renamed column '{old_name}' to '{new_name}'", 3000
+                )
+        except Exception as e:
+            QMessageBox.warning(self, "Rename Column", f"Failed to rename column: {e}")
+
     def _on_column_action(self, action: str):
         """Handle column actions from header context menu (Set as X/Y/Group/Hover)"""
         feedback = ""
