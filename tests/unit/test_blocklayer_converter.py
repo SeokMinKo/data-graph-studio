@@ -89,6 +89,12 @@ BLOCK_TRACE_PERFETTO_COMPLETE_FALLBACK = """\
 """
 
 
+BLOCK_TRACE_PERFETTO_EMPTY_CMD_COMM_FALLBACK = """\
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: dev=8,0 sector=1000 nr_sector=8 bytes=4096 rwbs=WS comm=bd_tracker_w:77 cmd=
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: dev=8,0 sector=1000 nr_sector=8 rwbs=WS comm=bd_tracker_w:77 cmd=
+"""
+
+
 @pytest.fixture
 def parser() -> FtraceParser:
     return FtraceParser()
@@ -179,6 +185,23 @@ class TestBlocklayerCmdDerivation:
         assert len(df) == 1
         assert df["cmd"][0] == "COMPLETE_WRITE"
 
+
+    def test_cmd_falls_back_to_comm_when_cmd_is_empty(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_PERFETTO_EMPTY_CMD_COMM_FALLBACK)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert len(df) == 1
+        assert df["cmd"][0] == "WS"
+
+    def test_perfetto_rwbs_uses_key_value_not_second_token(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_PERFETTO_CMD_PRIORITY)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert len(df) == 1
+        assert df["cmd"][0] == "READ"
+        assert df["rw_ratio"][0] == pytest.approx(1.0)
 
 class TestBlocklayerMulti:
     """Multiple I/O requests."""
