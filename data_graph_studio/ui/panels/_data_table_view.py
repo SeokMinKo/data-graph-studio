@@ -224,4 +224,8 @@ class DataTableView(QTableView):
         copy_action.triggered.connect(lambda: QApplication.clipboard().setText(str(cell_value) if cell_value else ""))
         menu.addAction(copy_action)
 
+        split_col = QAction("✂️ Split Column (Regex Groups)...", self)
+        split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
+        menu.addAction(split_col)
+
         menu.exec(self.viewport().mapToGlobal(pos))
