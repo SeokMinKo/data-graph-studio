@@ -38,10 +38,10 @@ def get_current_version() -> str:
         logger.debug("updater.get_current_version.build_version_unavailable", exc_info=True)
 
     try:
-        from importlib.metadata import version
+        from importlib.metadata import PackageNotFoundError, version
 
         return version("data-graph-studio")
-    except OSError:
+    except (PackageNotFoundError, OSError):
         logger.debug("updater.get_current_version.metadata_unavailable", exc_info=True)
         return "0.0.0"
 
