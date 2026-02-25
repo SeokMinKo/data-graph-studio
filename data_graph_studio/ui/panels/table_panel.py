@@ -324,6 +324,7 @@ class TablePanel(_TableColumnMixin, _TableWindowMixin, _TableFocusMixin, _TableS
         self.table_view.column_type_convert.connect(self._on_column_type_convert)
         self.table_view.conditional_format_requested.connect(self._on_conditional_format_requested)
         self.table_view.split_column_requested.connect(self._on_split_column_requested)
+        self.table_view.rename_column_requested.connect(self._on_rename_column_requested)
         self.table_view.column_freeze.connect(self._on_freeze_column)
         self.table_view.column_unfreeze.connect(self._on_unfreeze_column)
         self._state_adapter.selection_changed.connect(self._on_state_selection_changed)
