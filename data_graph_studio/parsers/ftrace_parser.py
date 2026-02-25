@@ -384,32 +384,47 @@ class FtraceParser(BaseParser):
             "idle_time_ms", "busy_time_ms",
             "iops", "bw_mbps", "rw_ratio",
             "seq_run_length", "latency_tier", "drain_time_ms",
-            "size_kb", pl.col("rwbs").alias("cmd"),
+            "size_kb", "cmd",
             "queue_depth", "sector", "nr_sectors", "device", "is_sequential",
         ])
         logger.info("[blocklayer-vec] result: %d rows", len(result))
         return result
 
     @staticmethod
-    def _blk_detail_parse_cols(complete: bool = False) -> list:
-        """Return fast-path polars expressions using multi-format regex candidates."""
-        raw_issue = r"^(\S+)\s+(\S+)\s+(\d+)\s+\(\)\s+(\d+)\s*\+\s*(\d+)"
-        raw_complete = r"^(\S+)\s+(\S+)\s+\(\)\s+(\d+)\s*\+\s*(\d+)"
-        perfetto = r"\bdev=(\S+)\b.*?\bsector=(\d+)\b.*?\bnr_sector[s]?=(\d+)\b"
+    def _blk_detail_parse_cols(is_perfetto_fmt: bool, complete: bool = False) -> list:
+        """Return polars expressions to parse block event detail fields."""
+        def _extract_optional(pattern: str, group: int, alias: str) -> pl.Expr:
+            raw = pl.col("details").str.extract(pattern, group)
+            return (
+                pl.when(raw.is_not_null() & (raw.str.len_chars() > 0))
+                .then(raw)
+                .otherwise(None)
+                .alias(alias)
+            )
 
-        cols = [
-            pl.coalesce(
-                [
-                    pl.col("details").str.extract(raw_issue, 1),
-                    pl.col("details").str.extract(raw_complete, 1),
-                    pl.col("details").str.extract(perfetto, 1),
+        if is_perfetto_fmt:
+            cols = [
+                pl.col("details").str.extract(r"dev=(\S+)", 1).alias("device"),
+                pl.col("details").str.extract(r"sector=(\d+)", 1).cast(pl.Int64).alias("sector"),
+                pl.col("details").str.extract(r"nr_sector=(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+                _extract_optional(r"cmd=(\S+)", 1, "cmd_from_detail"),
+                _extract_optional(r"rwbs=(\S+)", 1, "rwbs"),
+            ]
+            if not complete:
+                cols += [
+                    pl.col("details").str.extract(r"bytes=(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
                 ]
-            ).alias("device"),
-            pl.coalesce(
-                [
-                    pl.col("details").str.extract(raw_issue, 4),
-                    pl.col("details").str.extract(raw_complete, 3),
-                    pl.col("details").str.extract(perfetto, 2),
+        else:
+            cols = [
+                pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
+                pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
+                pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+                _extract_optional(r"\bcmd=(\S+)", 1, "cmd_from_detail"),
+                _extract_optional(r"^\S+\s+(\S+)", 1, "rwbs"),
+            ]
+            if not complete:
+                cols += [
+                    pl.col("details").str.extract(r"^\S+\s+\S+\s+(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
                 ]
             ).cast(pl.Int64).alias("sector"),
             pl.coalesce(
@@ -580,14 +595,29 @@ class FtraceParser(BaseParser):
         matched = (
             issues.select(["issue_idx", "key", "timestamp"])
             .join(
-                completes.select(["key", "timestamp"]).rename({"timestamp": "complete_time"}),
+                completes.select(["key", "timestamp", "rwbs", "cmd_from_detail"]).rename(
+                    {
+                        "timestamp": "complete_time",
+                        "rwbs": "complete_rwbs",
+                        "cmd_from_detail": "complete_cmd_from_detail",
+                    }
+                ),
                 on="key", how="left",
             )
             .filter(pl.col("complete_time") > pl.col("timestamp"))
             .group_by("issue_idx")
-            .agg(pl.col("complete_time").min())
+            .agg([
+                pl.col("complete_time").min(),
+                pl.col("complete_rwbs").drop_nulls().first(),
+                pl.col("complete_cmd_from_detail").drop_nulls().first(),
+            ])
         )
         result = issues.join(matched, on="issue_idx", how="inner")
+        result = result.with_columns([
+            pl.coalesce([pl.col("cmd_from_detail"), pl.col("complete_cmd_from_detail")]).alias("cmd_from_detail"),
+            pl.coalesce([pl.col("rwbs"), pl.col("complete_rwbs")]).alias("rwbs"),
+        ])
+        result = result.with_columns(pl.coalesce([pl.col("cmd_from_detail"), pl.col("rwbs")]).alias("cmd"))
 
         # insert → issue (latest insert before issue timestamp per key)
         if len(inserts) > 0:
@@ -806,6 +836,8 @@ class FtraceParser(BaseParser):
                     "sector": sector,
                     "nr_sectors": nr_sectors,
                     "rwbs": m.group("rwbs"),
+                    "cmd_from_detail": (re.search(r"\bcmd=(\S+)", details).group(1)
+                                        if re.search(r"\bcmd=(\S+)", details) else None),
                     "size_bytes": int(m.group("bytes")),
                     "device": dev,
                     "queue_depth": outstanding,
@@ -823,6 +855,12 @@ class FtraceParser(BaseParser):
                 key = f"{m.group('dev')}:{m.group('sector')}:{m.group('nr_sectors')}"
                 if key in issues:
                     issues[key]["complete_ts"] = ts
+                    complete_cmd = (re.search(r"\bcmd=(\S+)", details).group(1)
+                                    if re.search(r"\bcmd=(\S+)", details) else None)
+                    if issues[key].get("cmd_from_detail") is None and complete_cmd:
+                        issues[key]["cmd_from_detail"] = complete_cmd
+                    if issues[key].get("rwbs") is None and m.group("rwbs"):
+                        issues[key]["rwbs"] = m.group("rwbs")
                     outstanding = max(0, outstanding - 1)
 
         result_rows: List[Dict[str, Any]] = []
@@ -872,7 +910,7 @@ class FtraceParser(BaseParser):
                 "d2d_ms": d2d_ms,
                 "c2c_ms": c2c_ms,
                 "size_kb": entry["size_bytes"] / 1024.0,
-                "cmd": entry["rwbs"],
+                "cmd": entry.get("cmd_from_detail") or entry.get("rwbs"),
                 "queue_depth": entry["queue_depth"],
                 "sector": sector,
                 "nr_sectors": nr_sects,

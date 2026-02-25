@@ -78,6 +78,17 @@ BLOCK_TRACE_C2C = """\
 """
 
 
+BLOCK_TRACE_PERFETTO_CMD_PRIORITY = """\
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: dev=8,0 sector=1000 nr_sector=8 rwbs=R bytes=4096 cmd=READ
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: dev=8,0 sector=1000 nr_sector=8 rwbs=R cmd=COMPLETE_READ
+"""
+
+BLOCK_TRACE_PERFETTO_COMPLETE_FALLBACK = """\
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: dev=8,0 sector=1000 nr_sector=8 bytes=4096
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: dev=8,0 sector=1000 nr_sector=8 rwbs=W cmd=COMPLETE_WRITE
+"""
+
+
 @pytest.fixture
 def parser() -> FtraceParser:
     return FtraceParser()
@@ -146,6 +157,27 @@ class TestBlocklayerBasic:
         df = parser.parse(path, settings)
         assert len(df) == 1
         assert df["sector"][0] == 1000
+
+
+
+class TestBlocklayerCmdDerivation:
+    """cmd derivation priority and fallback behavior."""
+
+    def test_cmd_prefers_cmd_from_detail_over_rwbs(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_PERFETTO_CMD_PRIORITY)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert len(df) == 1
+        assert df["cmd"][0] == "READ"
+
+    def test_cmd_falls_back_from_complete_when_issue_missing(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_PERFETTO_COMPLETE_FALLBACK)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+        assert len(df) == 1
+        assert df["cmd"][0] == "COMPLETE_WRITE"
 
 
 class TestBlocklayerMulti:
