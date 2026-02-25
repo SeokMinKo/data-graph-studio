@@ -396,6 +396,16 @@ class GraphPanel(QWidget):
         y = max(margin, container_h - h - margin)
         self._minimap_overlay.move(x, y)
 
+    def _is_streaming_active(self) -> bool:
+        """Best-effort check for live/paused streaming state."""
+        try:
+            root = self.window()
+            controller = getattr(root, "_streaming_controller", None)
+            state = getattr(controller, "state", None)
+            return state in ("live", "paused")
+        except Exception:
+            return False
+
     def toggle_minimap(self, enabled: Optional[bool] = None):
         """Toggle floating minimap visibility."""
         if enabled is None:
@@ -885,7 +895,22 @@ class GraphPanel(QWidget):
 
         # Update minimap
         if self._minimap_enabled:
-            self.minimap.set_data(x_sampled, y_sampled)
+            if self._is_streaming_active():
+                # Streaming path: lightweight sampled minimap (10k)
+                self.minimap.set_data(
+                    x_data,
+                    y_data,
+                    use_image_overview=False,
+                    sample_limit=MinimapWidget.STREAMING_OVERVIEW_POINTS,
+                )
+            else:
+                # Non-streaming path: all-data density image overview
+                self.minimap.set_data(
+                    x_data,
+                    y_data,
+                    use_image_overview=True,
+                )
+
             # Sync current view range to minimap
             vr = self.main_graph.viewRange()
             self.minimap.set_region(vr[0][0], vr[0][1], vr[1][0], vr[1][1])

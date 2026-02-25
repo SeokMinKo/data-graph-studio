@@ -11,7 +11,7 @@ from data_graph_studio.ui.panels.minimap_widget import MinimapWidget
 
 
 @pytest.mark.qt
-def test_minimap_downsamples_to_50k_max(qtbot) -> None:
+def test_minimap_default_uses_all_data_image_overview(qtbot) -> None:
     w = MinimapWidget()
     qtbot.addWidget(w)
 
@@ -19,10 +19,28 @@ def test_minimap_downsamples_to_50k_max(qtbot) -> None:
     y = np.sin(x / 1000.0)
     w.set_data(x, y)
 
+    assert w._image_item is not None
+    assert w._data_item is None
+    assert w._last_render_mode == "image_density"
+    assert w._last_input_points == 120_000
+    assert w._last_render_points == 120_000
+
+
+@pytest.mark.qt
+def test_minimap_streaming_mode_downsamples_to_10k(qtbot) -> None:
+    w = MinimapWidget()
+    qtbot.addWidget(w)
+
+    x = np.arange(120_000, dtype=np.float64)
+    y = np.sin(x / 1000.0)
+    w.set_data(x, y, use_image_overview=False, sample_limit=10_000)
+
     assert w._data_item is not None
+    assert w._image_item is None
     x_plot, y_plot = w._data_item.getData()
-    assert len(x_plot) <= 50_000
-    assert len(y_plot) <= 50_000
+    assert len(x_plot) <= 10_000
+    assert len(y_plot) <= 10_000
+    assert w._last_render_mode == "sampled_line"
 
 
 @pytest.mark.qt
@@ -74,6 +92,13 @@ def test_graph_panel_minimap_overlay_fit_and_region_sync(qtbot) -> None:
 
     assert panel._minimap_overlay.isVisible()
     assert panel.minimap.get_data_bounds() is not None
+    assert panel.minimap._last_render_mode == "image_density"
+
+    # In streaming mode, minimap should use sampled-line mode with 10k cap.
+    panel._is_streaming_active = lambda: True
+    panel.refresh()
+    assert panel.minimap._last_render_mode == "sampled_line"
+    assert panel.minimap._last_render_points <= 10_000
 
     # Narrow current range, then Fit should expand the visible window.
     panel.main_graph.setXRange(100.0, 200.0, padding=0)
