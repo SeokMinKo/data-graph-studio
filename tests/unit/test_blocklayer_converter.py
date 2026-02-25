@@ -138,6 +138,15 @@ class TestBlocklayerBasic:
         df = parser.parse(path, settings)
         assert df["cmd"][0] == "R"
 
+    def test_forced_fallback_parser_still_parses(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_SIMPLE)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        parser._BLK_PARSE_NULL_RATIO_THRESHOLD = 0.0
+        df = parser.parse(path, settings)
+        assert len(df) == 1
+        assert df["sector"][0] == 1000
+
 
 class TestBlocklayerMulti:
     """Multiple I/O requests."""
