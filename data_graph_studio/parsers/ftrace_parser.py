@@ -391,7 +391,7 @@ class FtraceParser(BaseParser):
         return result
 
     @staticmethod
-    def _blk_detail_parse_cols(is_perfetto_fmt: bool, complete: bool = False) -> list:
+    def _blk_detail_parse_cols(complete: bool = False) -> list:
         """Return polars expressions to parse block event detail fields."""
         def _extract_optional(pattern: str, group: int, alias: str) -> pl.Expr:
             raw = pl.col("details").str.extract(pattern, group)
@@ -402,51 +402,35 @@ class FtraceParser(BaseParser):
                 .alias(alias)
             )
 
-        if is_perfetto_fmt:
-            cols = [
-                pl.col("details").str.extract(r"(?:^|\s)dev=([^\s]+)", 1).alias("device"),
-                pl.col("details").str.extract(r"(?:^|\s)sector=(\d+)\b", 1).cast(pl.Int64).alias("sector"),
-                pl.col("details").str.extract(r"(?:^|\s)nr_sector=(\d+)\b", 1).cast(pl.Int32).alias("nr_sectors"),
-            ]
-            if not complete:
-                cols += [
-                    pl.col("details").str.extract(r"(?:^|\s)rwbs=([^\s]+)", 1).alias("rwbs"),
-                    pl.col("details").str.extract(r"(?:^|\s)bytes=(\d+)\b", 1).cast(pl.Int64).alias("size_bytes"),
-                ]
-        else:
-            cols = [
-                pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
-                pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
-                pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
-                _extract_optional(r"\bcmd=(\S+)", 1, "cmd_from_detail"),
-                _extract_optional(r"^\S+\s+(\S+)", 1, "rwbs"),
-            ]
-            if not complete:
-                cols += [
-                    pl.col("details").str.extract(r"^\S+\s+\S+\s+(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
-                ]
-            ).cast(pl.Int64).alias("sector"),
+        cols = [
+            pl.coalesce([
+                pl.col("details").str.extract(r"(?:^|\s)dev=([^\s]+)", 1),
+                pl.col("details").str.extract(r"^(\S+)\s+", 1),
+            ]).alias("device"),
+            pl.coalesce([
+                pl.col("details").str.extract(r"(?:^|\s)sector=(\d+)\b", 1),
+                pl.col("details").str.extract(r"\(\)\s+(\d+)", 1),
+            ]).cast(pl.Int64).alias("sector"),
+            pl.coalesce([
+                pl.col("details").str.extract(r"(?:^|\s)nr_sector[s]?=(\d+)\b", 1),
+                pl.col("details").str.extract(r"\+\s*(\d+)", 1),
+            ]).cast(pl.Int32).alias("nr_sectors"),
+            _extract_optional(r"\bcmd=(\S*)", 1, "cmd_from_detail"),
+            _extract_optional(r"\bcomm=(\S+)", 1, "comm_from_detail"),
+        ]
+        cols += [
             pl.coalesce(
                 [
-                    pl.col("details").str.extract(raw_issue, 5),
-                    pl.col("details").str.extract(raw_complete, 4),
-                    pl.col("details").str.extract(perfetto, 3),
-                    pl.col("details").str.extract(r"\bnr_sector=(\d+)\b", 1),
+                    pl.col("details").str.extract(r"\brwbs=(\S+)", 1),
+                    pl.col("details").str.extract(r"^\S+\s+(\S+)", 1),
                 ]
-            ).cast(pl.Int32).alias("nr_sectors"),
+            ).alias("rwbs"),
         ]
         if not complete:
             cols += [
                 pl.coalesce(
                     [
-                        pl.col("details").str.extract(raw_issue, 2),
-                        pl.col("details").str.extract(raw_complete, 2),
-                        pl.col("details").str.extract(r"\brwbs=(\S+)", 1),
-                    ]
-                ).alias("rwbs"),
-                pl.coalesce(
-                    [
-                        pl.col("details").str.extract(raw_issue, 3),
+                        pl.col("details").str.extract(r"^\S+\s+\S+\s+(\d+)", 1),
                         pl.col("details").str.extract(r"\bbytes=(\d+)", 1),
                     ]
                 ).cast(pl.Int64).alias("size_bytes"),
@@ -594,11 +578,12 @@ class FtraceParser(BaseParser):
         matched = (
             issues.select(["issue_idx", "key", "timestamp"])
             .join(
-                completes.select(["key", "timestamp", "rwbs", "cmd_from_detail"]).rename(
+                completes.select(["key", "timestamp", "rwbs", "cmd_from_detail", "comm_from_detail"]).rename(
                     {
                         "timestamp": "complete_time",
                         "rwbs": "complete_rwbs",
                         "cmd_from_detail": "complete_cmd_from_detail",
+                        "comm_from_detail": "complete_comm_from_detail",
                     }
                 ),
                 on="key", how="left",
@@ -609,14 +594,18 @@ class FtraceParser(BaseParser):
                 pl.col("complete_time").min(),
                 pl.col("complete_rwbs").drop_nulls().first(),
                 pl.col("complete_cmd_from_detail").drop_nulls().first(),
+                pl.col("complete_comm_from_detail").drop_nulls().first(),
             ])
         )
         result = issues.join(matched, on="issue_idx", how="inner")
         result = result.with_columns([
             pl.coalesce([pl.col("cmd_from_detail"), pl.col("complete_cmd_from_detail")]).alias("cmd_from_detail"),
+            pl.coalesce([pl.col("comm_from_detail"), pl.col("complete_comm_from_detail")]).alias("comm_from_detail"),
             pl.coalesce([pl.col("rwbs"), pl.col("complete_rwbs")]).alias("rwbs"),
         ])
-        result = result.with_columns(pl.coalesce([pl.col("cmd_from_detail"), pl.col("rwbs")]).alias("cmd"))
+        result = result.with_columns(
+            pl.coalesce([pl.col("cmd_from_detail"), pl.col("rwbs"), pl.col("comm_from_detail")]).alias("cmd")
+        )
 
         # insert → issue (latest insert before issue timestamp per key)
         if len(inserts) > 0:
