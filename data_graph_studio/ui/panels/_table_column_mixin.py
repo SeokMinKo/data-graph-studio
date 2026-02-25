@@ -178,6 +178,12 @@ class _TableColumnMixin:
             else:
                 self.table_model.remove_conditional_format(column_name)
 
+    def _on_split_column_requested(self, column_name: str):
+        """Handle split-column request from table context menus."""
+        if not column_name:
+            return
+        logger.info("table_column_mixin.split_column.requested", extra={"column": column_name})
+
     # ==================== F7: Freeze Columns ====================
 
     def _on_freeze_column(self, column_name: str):
