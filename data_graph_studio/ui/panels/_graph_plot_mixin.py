@@ -92,16 +92,16 @@ class _GraphPlotMixin:
         if title:
             self.setTitle(title)
 
+        # Log scale
+        x_log = bool(options.get('x_log'))
+        y_log = bool(options.get('y_log'))
+        self.setLogMode(x=x_log, y=y_log)
+
         # Y-axis range
         y_min = options.get('y_min')
         y_max = options.get('y_max')
         if y_min is not None and y_max is not None:
             self.setYRange(y_min, y_max)
-
-        # Log scale
-        x_log = bool(options.get('x_log'))
-        y_log = bool(options.get('y_log'))
-        self.setLogMode(x=x_log, y=y_log)
 
         # Reverse axes
         x_reverse = bool(options.get('x_reverse'))
