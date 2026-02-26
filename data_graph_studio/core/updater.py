@@ -9,6 +9,10 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
+
+class UpdatePayloadError(RuntimeError):
+    """Raised when downloaded update artifacts are invalid or unsafe to launch."""
+
 from packaging.version import Version, InvalidVersion
 
 
@@ -153,6 +157,40 @@ def sha256sum(path: str) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest().lower()
+
+
+def validate_downloaded_update_assets(installer_path: str, sha_path: str) -> None:
+    """Validate downloaded installer/checksum artifacts before launch.
+
+    Raises UpdatePayloadError with a user-facing message when validation fails.
+    """
+
+    if not os.path.isfile(installer_path):
+        raise UpdatePayloadError(f"Installer file not found: {installer_path}")
+    if not os.path.isfile(sha_path):
+        raise UpdatePayloadError(f"Checksum file not found: {sha_path}")
+
+    if os.path.getsize(installer_path) <= 0:
+        raise UpdatePayloadError("Downloaded installer is empty (0 bytes).")
+
+    # Basic PE signature guard for corrupted/offline-cached HTML payloads.
+    with open(installer_path, "rb") as f:
+        mz = f.read(2)
+    if mz != b"MZ":
+        raise UpdatePayloadError(
+            "Downloaded installer is not a valid Windows executable (MZ header missing)."
+        )
+
+    expected = read_sha256_file(sha_path)
+    if not expected:
+        raise UpdatePayloadError("Checksum file is empty or malformed.")
+
+    actual = sha256sum(installer_path)
+    if expected != actual:
+        raise UpdatePayloadError(
+            "Checksum verification failed. "
+            f"Expected: {expected} / Actual: {actual}"
+        )
 
 
 def run_windows_installer(installer_path: str, silent: bool = True) -> None:

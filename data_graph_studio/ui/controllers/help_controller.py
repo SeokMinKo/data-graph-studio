@@ -9,7 +9,8 @@ from PySide6.QtCore import Qt
 
 from ...core.updater import (
     get_current_version, check_github_latest, is_update_available,
-    download_asset, read_sha256_file, sha256sum, run_windows_installer,
+    download_asset, run_windows_installer, validate_downloaded_update_assets,
+    UpdatePayloadError,
 )
 from ..dialogs.command_palette_dialog import CommandPaletteDialog
 
@@ -317,18 +318,23 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
             installer_path = download_asset(info.asset_url, info.asset_name)
             sha_path = download_asset(info.sha256_url, info.sha256_name)
 
-            expected = read_sha256_file(sha_path)
-            actual = sha256sum(installer_path)
-            if not expected or expected != actual:
-                raise RuntimeError(
-                    "Checksum verification failed.\n"
-                    f"Expected: {expected}\n"
-                    f"Actual:   {actual}"
-                )
+            validate_downloaded_update_assets(installer_path, sha_path)
 
             self.w.statusbar.showMessage("Launching installer...", 5000)
             run_windows_installer(installer_path, silent=True)
             self.w.close()
+        except UpdatePayloadError as e:
+            logger.warning("help_controller.run_installer.payload_invalid", exc_info=True)
+            QMessageBox.warning(
+                self,
+                "Updates",
+                "Update package validation failed.\n\n"
+                f"{e}\n\n"
+                "Recovery guide:\n"
+                "1) Check internet connection and retry update.\n"
+                "2) If this repeats, download installer manually from the Releases page.\n"
+                "3) Compare .sha256 file with installer before running."
+            )
         except Exception as e:
             QMessageBox.warning(self.w, "Updates", f"Update failed:\n{e}")
 
