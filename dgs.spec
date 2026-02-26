@@ -123,7 +123,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,                    # UPX 압축 활성화
-    console=False,               # GUI 앱 — 콘솔 창 숨김
+    # Windows 배포는 디버깅 편의를 위해 콘솔 표시, 그 외 플랫폼은 GUI 전용
+    console=(sys.platform == "win32"),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
