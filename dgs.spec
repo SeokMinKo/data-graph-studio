@@ -43,6 +43,7 @@ hiddenimports = [
     "sqlite3",
     "decimal",
     "statistics",
+    "pydoc",
     # DGS 내부 모듈
     *collect_submodules("data_graph_studio"),
 ]
@@ -61,7 +62,6 @@ excludes = [
     "unittest",
     "test",
     "xmlrpc",
-    "pydoc",
     "doctest",
     "pip",
     "setuptools",
