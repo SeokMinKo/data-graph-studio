@@ -67,7 +67,12 @@ class GraphOptionsPanel(QFrame):
         # Tabs
         self.tabs = QTabWidget()
         self.tabs.setUsesScrollButtons(True)
-        self.tabs.setElideMode(Qt.ElideNone)
+        # 좁은 패널에서 우측 탭(Axes/Style)이 잘리지 않도록 스크롤 기반 탭바 강제
+        tab_bar = self.tabs.tabBar()
+        tab_bar.setExpanding(False)
+        tab_bar.setUsesScrollButtons(True)
+        tab_bar.setElideMode(Qt.ElideRight)
+        self.tabs.setElideMode(Qt.ElideRight)
         # Tab bar styling handled by ThemeManager.generate_stylesheet()
         main_layout.addWidget(self.tabs)
 
