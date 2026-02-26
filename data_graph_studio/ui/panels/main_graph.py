@@ -3,7 +3,7 @@ MainGraph - 메인 그래프 위젯 with hover tooltip support
 """
 
 import math
-from typing import List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import csv
