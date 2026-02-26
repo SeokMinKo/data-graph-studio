@@ -6,7 +6,6 @@ Raw ftrace / Perfetto 캡처를 위한 ADB 명령 컨트롤러와 진행 상황 
 from __future__ import annotations
 
 import logging
-import platform as _platform
 import shlex
 import shutil
 import subprocess

@@ -108,7 +108,7 @@ def main():
     try:
         # Qt 임포트 테스트
         logger.info("Importing PySide6...")
-        from PySide6.QtWidgets import QApplication, QMessageBox
+        from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import Qt
         from PySide6.QtGui import QFont
         logger.info("PySide6 imported successfully")

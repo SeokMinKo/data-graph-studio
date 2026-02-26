@@ -37,6 +37,12 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Inject build version
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.ver.outputs.ver }}"
+          "__version__ = `"$ver`"" | Out-File -Encoding utf8 data_graph_studio\_build_version.py
+
       - name: Build (PyInstaller)
         shell: pwsh
         run: |
@@ -46,12 +52,6 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
-
-      - name: Inject build version
-        shell: pwsh
-        run: |
-          $ver = "${{ steps.ver.outputs.ver }}"
-          "__version__ = `"$ver`"" | Out-File -Encoding utf8 data_graph_studio\_build_version.py
 
       - name: Build installer (Inno Setup)
         shell: pwsh
