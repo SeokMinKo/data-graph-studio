@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ...core.profile_store import ProfileStore
     from ...core.profile import GraphSetting
 
+import pyqtgraph as pg
 
 # Distinct color palette for overlay series
 OVERLAY_COLORS = [

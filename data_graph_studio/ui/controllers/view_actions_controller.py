@@ -11,6 +11,7 @@ from PySide6.QtGui import QAction
 
 from ..panels.annotation_panel import AnnotationPanel
 from ..panels.dashboard_panel import DashboardPanel
+from ..floatable import FloatWindow
 from ...core.undo_manager import UndoActionType
 
 logger = logging.getLogger(__name__)

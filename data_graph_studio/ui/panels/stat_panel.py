@@ -3,6 +3,7 @@ StatPanel - Statistics Panel with 2x2 Grid Layout
 """
 
 from typing import Optional, Dict, Any
+import logging
 
 import numpy as np
 
@@ -17,8 +18,7 @@ from .graph_widgets import ClickablePlotWidget
 from ...core.state import AppState
 import pyqtgraph as pg
 
-
-
+logger = logging.getLogger(__name__)
 
 # ==================== Stat Panel ====================
 

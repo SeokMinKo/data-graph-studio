@@ -12,7 +12,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QAction
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QFileDialog, QMenu, QDialog
 
 from .graph_widgets import FormattedAxisItem
 from ...core.state import AppState, ChartType, ToolMode

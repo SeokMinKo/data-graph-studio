@@ -3,6 +3,7 @@ Graph Panel - 메인 그래프 + 옵션 + 범례 + 통계
 """
 
 from typing import Optional, List, Dict, Any
+import logging
 import numpy as np
 
 from PySide6.QtWidgets import (
@@ -43,8 +44,8 @@ from .stat_panel import StatPanel
 from .main_graph import MainGraph
 from .minimap_widget import MinimapWidget
 
-
-
+logger = logging.getLogger(__name__)
+_lg = logger
 
 # ==================== Graph Panel ====================
 
