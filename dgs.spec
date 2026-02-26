@@ -54,9 +54,14 @@ datas = [
     *collect_data_files("polars"),
     *collect_data_files("pyarrow"),
     *collect_data_files("pyqtgraph"),
-    # DGS 패키지 데이터 (trace_processor_shell 번들 포함)
-    *collect_data_files("data_graph_studio", includes=["assets/bin/**/*"]),
 ]
+
+# DGS 번들 바이너리(trace_processor_shell) 강제 포함
+# collect_data_files 패턴 매칭 실패를 대비해 명시 경로를 직접 추가한다.
+for _bin in (ROOT / "data_graph_studio" / "assets" / "bin").rglob("*"):
+    if _bin.is_file():
+        rel_dir = _bin.parent.relative_to(ROOT / "data_graph_studio")
+        datas.append((str(_bin), str(rel_dir)))
 
 # ── 제외 모듈 (빌드 크기 축소) ──
 excludes = [
