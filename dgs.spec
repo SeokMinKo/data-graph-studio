@@ -61,8 +61,6 @@ excludes = [
     "tkinter",
     "unittest",
     "test",
-    "xmlrpc",
-    "doctest",
     "pip",
     "setuptools",
     "distutils",
