@@ -266,31 +266,38 @@ class PerfettoTraceController(QObject):
             FileNotFoundError: 다운로드도 실패했을 때.
         """
         names = ["trace_processor_shell", "trace_processor"]
+        if sys.platform == "win32":
+            names.extend(["trace_processor_shell.exe", "trace_processor.exe"])
 
         # 1. 사용자 로컬 캐시
         user_bin = Path.home() / ".data_graph_studio" / "bin"
         for name in names:
             cached = user_bin / name
             if cached.exists():
+                logger.debug("[trace_processor] found user cache: %s", cached)
                 return str(cached)
 
-        # 2. 패키지 내부 assets — 플랫폼별 바이너리
-        pkg_bin = Path(__file__).resolve().parent.parent.parent / "assets" / "bin"
+        # 2. 패키지/실행 경로 기반 assets — 플랫폼별 바이너리
         plat_dir = PerfettoTraceController._platform_bin_dir()
-        if plat_dir:
-            plat_bin = pkg_bin / plat_dir
-            exe_name = "trace_processor_shell.exe" if sys.platform == "win32" else "trace_processor_shell"
-            bundled = plat_bin / exe_name
-            if bundled.exists():
-                logger.debug("[trace_processor] found bundled: %s", bundled)
-                return str(bundled)
+        exe_name = "trace_processor_shell.exe" if sys.platform == "win32" else "trace_processor_shell"
 
-        # 2b. 프로젝트 루트 assets (개발 모드 레거시)
-        project_root = Path(__file__).resolve().parent.parent.parent.parent
-        if plat_dir:
-            bundled = project_root / "assets" / "bin" / plat_dir / ("trace_processor_shell.exe" if sys.platform == "win32" else "trace_processor_shell")
-            if bundled.exists():
-                return str(bundled)
+        candidate_roots = [
+            Path(__file__).resolve().parent.parent.parent,  # .../data_graph_studio
+            Path(__file__).resolve().parent.parent.parent.parent,  # project root (dev)
+            Path(sys.executable).resolve().parent,  # frozen exe dir
+            Path(sys.executable).resolve().parent / "_internal",  # PyInstaller onedir
+            Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "_MEIPASS", "") else None,
+        ]
+
+        for root in [p for p in candidate_roots if p]:
+            for rel in [
+                Path("assets") / "bin" / plat_dir / exe_name,
+                Path("data_graph_studio") / "assets" / "bin" / plat_dir / exe_name,
+            ]:
+                bundled = root / rel
+                if bundled.exists():
+                    logger.debug("[trace_processor] found bundled: %s", bundled)
+                    return str(bundled)
 
         # 3. PATH 탐색
         for name in ["trace_processor_shell", "trace_processor_shell.exe",
