@@ -54,6 +54,8 @@ datas = [
     *collect_data_files("polars"),
     *collect_data_files("pyarrow"),
     *collect_data_files("pyqtgraph"),
+    # DGS 패키지 데이터 (trace_processor_shell 번들 포함)
+    *collect_data_files("data_graph_studio", includes=["assets/bin/**/*"]),
 ]
 
 # ── 제외 모듈 (빌드 크기 축소) ──
