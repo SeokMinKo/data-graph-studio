@@ -3,52 +3,80 @@
 Data Graph Studio IPC Client
 외부에서 실행 중인 앱 제어
 
+Uses Unix Domain Socket to communicate with the running DGS instance.
+
 Usage:
     python dgs_client.py ping
     python dgs_client.py state
     python dgs_client.py data
     python dgs_client.py chart line
     python dgs_client.py load path/to/file.csv
-    python dgs_client.py exec "window.windowTitle()"
 """
 import sys
 import json
 import os
 import socket
 
-DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 52849
 _PORT_FILE = os.path.expanduser("~/.dgs/ipc_port")
+_SOCKET_NAME = "dgs-ipc"
 
 
-def _discover_port() -> int:
-    """Read port from ~/.dgs/ipc_port (pid:port). Falls back to DEFAULT_PORT."""
+def _read_port_file():
+    """Read port and token from ~/.dgs/ipc_port (pid:port:token).
+
+    Returns (port, token) if the owning process is alive, else None.
+    """
     try:
         with open(_PORT_FILE) as f:
             text = f.read().strip()
-        pid_s, port_s = text.split(":", 1)
-        pid, port = int(pid_s), int(port_s)
+        parts = text.split(":")
+        if len(parts) >= 3:
+            pid, port, token = int(parts[0]), int(parts[1]), parts[2]
+        elif len(parts) == 2:
+            pid, port = int(parts[0]), int(parts[1])
+            token = ""
+        else:
+            return None
         # Check if owning process is alive
         try:
             os.kill(pid, 0)
         except (OSError, ProcessLookupError):
-            return DEFAULT_PORT  # stale
-        return port
+            return None  # stale
+        return (port, token)
     except (FileNotFoundError, ValueError, OSError):
-        return DEFAULT_PORT
+        return None
+
+
+def _get_socket_path():
+    """Resolve the abstract/filesystem socket path used by QLocalServer."""
+    # QLocalServer on Linux uses abstract namespace: '\0' + name
+    # For a raw Python socket, we connect to the abstract namespace.
+    # On macOS, QLocalServer uses /tmp/<name>
+    if sys.platform == 'darwin':
+        return f"/tmp/{_SOCKET_NAME}"
+    # Linux: abstract namespace
+    return f"\0{_SOCKET_NAME}"
 
 
 def send_command(command: str, **args) -> dict:
-    """명령 전송"""
-    port = _discover_port()
+    """명령 전송 (Unix Domain Socket)"""
+    port_info = _read_port_file()
+    token = port_info[1] if port_info else ""
+
+    socket_path = _get_socket_path()
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((DEFAULT_HOST, port))
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(socket_path)
         sock.settimeout(5.0)
-        
-        data = json.dumps({'command': command, 'args': args}, ensure_ascii=False)
+
+        data = json.dumps({
+            'command': command,
+            'args': args,
+            'token': token,
+        }, ensure_ascii=False)
         sock.sendall((data + '\n').encode('utf-8'))
-        
+
         response = b''
         while True:
             chunk = sock.recv(4096)
@@ -57,11 +85,13 @@ def send_command(command: str, **args) -> dict:
             response += chunk
             if b'\n' in response:
                 break
-        
+
         sock.close()
         return json.loads(response.decode('utf-8').strip())
     except ConnectionRefusedError:
         return {'status': 'error', 'error': 'App not running or IPC server not started'}
+    except FileNotFoundError:
+        return {'status': 'error', 'error': 'IPC socket not found. Is the app running?'}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}
 
@@ -70,44 +100,38 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         return 1
-    
+
     cmd = sys.argv[1].lower()
-    
+
     if cmd == 'ping':
         result = send_command('ping')
-    
+
     elif cmd == 'state':
         result = send_command('get_state')
-    
+
     elif cmd == 'data':
         result = send_command('get_data_info')
-    
+
     elif cmd == 'panels':
         result = send_command('get_panels')
-    
+
     elif cmd == 'chart':
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py chart <type>")
             print("Types: LINE, BAR, SCATTER, PIE, AREA, HISTOGRAM")
             return 1
         result = send_command('set_chart_type', chart_type=sys.argv[2])
-    
+
     elif cmd == 'columns':
         x = sys.argv[2] if len(sys.argv) > 2 else None
         y = sys.argv[3:] if len(sys.argv) > 3 else None
         result = send_command('set_columns', x=x, y=y)
-    
+
     elif cmd == 'load':
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py load <file_path>")
             return 1
         result = send_command('load_file', path=sys.argv[2])
-    
-    elif cmd == 'exec':
-        if len(sys.argv) < 3:
-            print("Usage: python dgs_client.py exec <code>")
-            return 1
-        result = send_command('execute', code=sys.argv[2])
 
     # ==================== Profile Comparison ====================
 
@@ -174,10 +198,10 @@ def main():
         print(f"Unknown command: {cmd}")
         print(__doc__)
         return 1
-    
+
     # Pretty print result
     print(json.dumps(result, indent=2, ensure_ascii=False))
-    
+
     return 0 if result.get('status') == 'ok' else 1
 
 

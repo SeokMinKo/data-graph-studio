@@ -138,7 +138,7 @@ class DataEngine:
     def _cache_key(self, operation: str, *args) -> str:
         """dataset별 캐시 키 생성 (F5)."""
         dataset_id = self._datasets_mgr.active_dataset_id if self._datasets_mgr else "default"
-        return f"{dataset_id}:{operation}:{hash(args)}"
+        return f"{dataset_id}:{operation}:{repr(args)}"
 
     # -- Properties: FileLoader -----------------------------------------------
 
@@ -276,29 +276,13 @@ class DataEngine:
         return self._loader.has_lazy
 
     # -- FileLoader delegation ------------------------------------------------
+    # Simple 1:1 methods are auto-delegated via __getattr__ (see bottom).
+    # Only methods that need extra logic (cache clear, etc.) are explicit.
 
     @staticmethod
     def _normalize_encoding(encoding: str) -> str:
         from .file_loader import FileLoader as FL
         return FL._normalize_encoding(encoding)
-
-    def set_progress_callback(self, cb): self._loader.set_progress_callback(cb)
-    def detect_file_type(self, path: str) -> FileType: return self._loader.detect_file_type(path)
-    def detect_delimiter(self, path, encoding="utf-8", sample_lines=10): return self._loader.detect_delimiter(path, encoding, sample_lines)
-    def set_precision_mode(self, mode): self._loader.set_precision_mode(mode)
-    def add_precision_column(self, column): self._loader.add_precision_column(column)
-    def cancel_loading(self): self._loader.cancel_loading()
-    def set_window(self, start, size): return self._loader.set_window(start, size)
-    def load_lazy(self, path, **kw): return self._loader.load_lazy(path, **kw)
-    def collect_lazy(self, limit=None, optimize_memory=True): return self._loader.collect_lazy(limit, optimize_memory)
-    def query_lazy(self, expr): return self._loader.query_lazy(expr)
-    def _update_progress(self, **kw): self._loader._update_progress(**kw)
-    def _prepare_parquet_from_csv(self, *a, **kw): return self._loader._prepare_parquet_from_csv(*a, **kw)
-    def _load_window_from_lazy(self, *a, **kw): return self._loader._load_window_from_lazy(*a, **kw)
-    def _collect_streaming(self, lf): return self._loader._collect_streaming(lf)
-    def _create_profile(self, df, t): return self._loader._create_profile(df, t)
-    def _optimize_memory(self, df): return self._loader._optimize_memory(df)
-    def _is_precision_sensitive_column(self, c): return self._loader._is_precision_sensitive_column(c)
 
     def load_file(self, path: str, **kwargs) -> bool:
         self._clear_cache()
@@ -326,7 +310,8 @@ class DataEngine:
             self.update_dataframe(merged)
             self._clear_cache()
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug("Incremental append failed, trying scan_csv fallback: %s", e)
             try:
                 # Fallback: scan_csv + tail
                 new_rows = pl.scan_csv(file_path).tail(new_row_count).collect()
@@ -334,7 +319,8 @@ class DataEngine:
                 self.update_dataframe(merged)
                 self._clear_cache()
                 return True
-            except Exception:
+            except Exception as e2:
+                logger.debug("scan_csv fallback also failed, doing full reload: %s", e2)
                 return self.load_file(file_path, optimize_memory=True)
 
     def trim(self, max_rows: int) -> None:
@@ -354,6 +340,7 @@ class DataEngine:
         return FL.parse_etl_binary(path)
 
     # -- DataQuery delegation -------------------------------------------------
+    # DataQuery methods inject self.df as the first arg — kept explicit.
 
     def filter(self, column, operator, value): return self._query.filter(self.df, column, operator, value)
     def sort(self, columns, descending=False): return self._query.sort(self.df, columns, descending)
@@ -373,7 +360,7 @@ class DataEngine:
             return
         self._indexes[column] = self._query.create_index(self.df, column)
 
-    # -- DataExporter delegation ----------------------------------------------
+    # -- DataExporter delegation (df-guard wrappers) --------------------------
 
     def export_csv(self, path, selected_rows=None):
         if self.df is not None: self._exporter.export_csv(self.df, path, selected_rows)
@@ -385,6 +372,8 @@ class DataEngine:
         if self.df is not None: self._exporter.export_parquet(self.df, path, selected_rows)
 
     # -- DatasetManager delegation --------------------------------------------
+    # Properties must be explicit (Python descriptors don't work with __getattr__).
+    # Simple methods are auto-delegated via __getattr__.
 
     @property
     def datasets(self): return self._datasets_mgr.datasets
@@ -412,16 +401,6 @@ class DataEngine:
 
     @_color_index.setter
     def _color_index(self, value): self._datasets_mgr._color_index = value
-
-    def get_dataset(self, did): return self._datasets_mgr.get_dataset(did)
-    def get_dataset_df(self, did): return self._datasets_mgr.get_dataset_df(did)
-    def list_datasets(self): return self._datasets_mgr.list_datasets()
-    def get_total_memory_usage(self): return self._datasets_mgr.get_total_memory_usage()
-    def can_load_dataset(self, sz): return self._datasets_mgr.can_load_dataset(sz)
-    def set_dataset_color(self, did, c): self._datasets_mgr.set_dataset_color(did, c)
-    def rename_dataset(self, did, n): self._datasets_mgr.rename_dataset(did, n)
-    def get_common_columns(self, ids=None): return self._datasets_mgr.get_common_columns(ids)
-    def get_numeric_columns(self, did): return self._datasets_mgr.get_numeric_columns(did)
 
     def load_dataset(self, path, name=None, dataset_id=None, **kw):
         self._clear_cache()
@@ -490,20 +469,9 @@ class DataEngine:
         self._loader._df = self._loader._lazy_df = None
         self._loader._source = self._loader._profile = None
 
-    # -- ComparisonEngine delegation ------------------------------------------
+    # -- ComparisonEngine delegation (auto via __getattr__) --------------------
 
-    def align_datasets(self, dataset_ids, key_column, fill_strategy="null"): return self._comparison.align_datasets(dataset_ids, key_column, fill_strategy)
-    def calculate_difference(self, dataset_a_id, dataset_b_id, value_column, key_column=None): return self._comparison.calculate_difference(dataset_a_id, dataset_b_id, value_column, key_column)
-    def get_comparison_statistics(self, dataset_ids, value_column): return self._comparison.get_comparison_statistics(dataset_ids, value_column)
-    def merge_datasets(self, dataset_ids, key_column=None, how="full"): return self._comparison.merge_datasets(dataset_ids, key_column, how)
-    def perform_statistical_test(self, dataset_a_id, dataset_b_id, value_column, test_type="auto"): return self._comparison.perform_statistical_test(dataset_a_id, dataset_b_id, value_column, test_type)
-    def _select_test_type(self, data_a, data_b): return self._comparison._select_test_type(data_a, data_b)
-    def _interpret_test_result(self, *args): return self._comparison._interpret_test_result(*args)
-    def calculate_correlation(self, dataset_a_id, dataset_b_id, column_a, column_b=None, method="pearson"): return self._comparison.calculate_correlation(dataset_a_id, dataset_b_id, column_a, column_b, method)
-    def calculate_descriptive_comparison(self, dataset_ids, value_column): return self._comparison.calculate_descriptive_comparison(dataset_ids, value_column)
-    def get_normality_test(self, dataset_id, value_column): return self._comparison.get_normality_test(dataset_id, value_column)
-
-    # -- clear ----------------------------------------------------------------
+    # -- Chart recommendation ---------------------------------------------------
 
     def recommend_chart_type(
         self,
@@ -595,7 +563,8 @@ class DataEngine:
                 timestamp=time.time(),
             ))
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug("Column cast failed for '%s': %s", col_name, e)
             return False
 
     # -- Data quality report (F4) ---------------------------------------------
@@ -666,6 +635,32 @@ class DataEngine:
     @property
     def DEFAULT_COLORS(self):
         return self._datasets_mgr.DEFAULT_COLORS
+
+    # -- Auto-delegation via __getattr__ ---------------------------------------
+    #
+    # Any attribute not found on DataEngine is looked up on the sub-modules
+    # in order: _loader → _datasets_mgr → _comparison.
+    # This eliminates ~60 lines of boilerplate 1:1 forwarding methods.
+    #
+    # Explicitly defined methods/properties above always take priority
+    # (Python resolves them before __getattr__ is called).
+
+    def __getattr__(self, name: str):
+        # Avoid infinite recursion during __init__ (sub-modules not yet set)
+        if name.startswith('__') and name.endswith('__'):
+            raise AttributeError(name)
+
+        for delegate in ('_loader', '_datasets_mgr', '_comparison'):
+            try:
+                obj = object.__getattribute__(self, delegate)
+            except AttributeError:
+                continue
+            if hasattr(obj, name):
+                return getattr(obj, name)
+
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
 
     # -- clear ----------------------------------------------------------------
 

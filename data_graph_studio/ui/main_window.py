@@ -20,70 +20,45 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QShortcut
 
+# -- Essential imports (used in __init__, type annotations, base classes) ------
 from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
 from ..core.state import AppState, ToolMode, ChartType, ComparisonMode, AggregationType
-from ..core.comparison_report import ComparisonReport
-from ..core.ipc_server import IPCServer
-from ..core.clipboard_manager import ClipboardManager, DragDropHandler
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
 from ..core.undo_manager import UndoStack
-from .panels.history_panel import HistoryPanel
 from ..core.dashboard_controller import DashboardController
 from ..core.annotation_controller import AnnotationController
 from ..core.shortcut_controller import ShortcutController
-from ..core.export_controller import ExportController, ExportFormat
-from ..utils.memory import MemoryMonitor
-from ..core.updater import (
-    get_current_version,
-    check_github_latest,
-    is_update_available,
-    download_asset,
-    read_sha256_file,
-    sha256sum,
-    run_windows_installer,
-)
+from ..core.export_controller import ExportController
+from ..core.parsing import ParsingSettings
+from ..core.profile_store import ProfileStore
+from ..core.profile_controller import ProfileController
+from ..core.profile_comparison_controller import ProfileComparisonController
 
-# 에러 로깅 설정
 logger = logging.getLogger(__name__)
 
+# -- Panels (instantiated in __init__) ----------------------------------------
 from .panels.summary_panel import SummaryPanel
 from .panels.graph_panel import GraphPanel
 from .panels.table_panel import TablePanel
 from .panels.profile_bar import ProfileBar
 from .panels.dataset_manager_panel import DatasetManagerPanel
+from .panels.history_panel import HistoryPanel
 from .panels.side_by_side_layout import SideBySideLayout
 from .panels.comparison_stats_panel import ComparisonStatsPanel
 from .panels.converter_options_panel import ConverterOptionsPanel
 from .panels.overlay_stats_widget import OverlayStatsWidget
 from .panels.annotation_panel import AnnotationPanel
 from .panels.dashboard_panel import DashboardPanel
-from .dialogs.parsing_preview_dialog import ParsingPreviewDialog
-from .dialogs.computed_column_dialog import ComputedColumnDialog
-from ..core.parsing import ParsingSettings
-from .dialogs.save_setting_dialog import SaveSettingDialog
-from .dialogs.streaming_dialog import StreamingDialog
-from .dialogs.command_palette_dialog import CommandPaletteDialog
-from .dialogs.profile_manager_dialog import ProfileManagerDialog
-from .dialogs.multi_file_dialog import open_multi_file_dialog
 from .floatable import FloatWindow
-from .floating_graph import FloatingGraphWindow, FloatingGraphManager
-from ..core.profile import Profile, GraphSetting, ProfileManager
-from ..core.profile_store import ProfileStore
-from ..core.profile_controller import ProfileController
-from ..core.profile_comparison_controller import ProfileComparisonController
+from .floating_graph import FloatingGraphManager
 from .models.profile_model import ProfileModel
-from .panels.profile_side_by_side import ProfileSideBySideLayout
-from .panels.profile_overlay import ProfileOverlayRenderer
-from .panels.profile_difference import ProfileDifferenceRenderer
-from .toolbars.compare_toolbar import CompareToolbar
 from .views.project_tree_view import ProjectTreeView
-from .wizards.new_project_wizard import NewProjectWizard
 
-# Controllers (extracted from MainWindow)
+# -- Controllers (instantiated in __init__) -----------------------------------
 from .controllers.ipc_controller import IPCController
 from .controllers.file_loading_controller import (
-    FileLoadingController, DataLoaderThread, DataLoaderThreadWithSettings,
+    FileLoadingController, DataLoaderThread,
 )
 from .controllers.dataset_controller import DatasetController
 from .controllers.profile_ui_controller import ProfileUIController
@@ -97,6 +72,12 @@ from .controllers.view_actions_controller import ViewActionsController
 from .controllers.help_controller import HelpController
 from .controllers.export_ui_controller import ExportUIController
 from .controllers.autorecovery_controller import AutorecoveryController
+
+# -- Lazy imports (only used in specific method bodies) -----------------------
+# ClipboardManager, DragDropHandler: from ..core.clipboard_manager  (drag & drop)
+# MemoryMonitor: from ..utils.memory  (_update_memory)
+# updater functions: from ..core.updater  (check_for_updates)
+# Dialog classes: imported in controller methods that open them
 
 
 class _QtTimerWrapper:
@@ -793,9 +774,6 @@ class MainWindow(QMainWindow):
     def _ipc_get_summary(self, *a, **kw):
         return self._ipc_controller._ipc_get_summary(*a, **kw)
 
-    def _ipc_execute(self, *a, **kw):
-        return self._ipc_controller._ipc_execute(*a, **kw)
-
     def _ipc_set_x_column(self, *a, **kw):
         return self._ipc_controller._ipc_set_x_column(*a, **kw)
 
@@ -856,6 +834,7 @@ class MainWindow(QMainWindow):
     def _update_memory_status(self):
         """상태바 메모리 사용량 업데이트"""
         try:
+            from ..utils.memory import MemoryMonitor
             proc_mem = MemoryMonitor.get_process_memory()
             sys_mem = MemoryMonitor.get_system_memory()
 
@@ -1564,6 +1543,7 @@ class MainWindow(QMainWindow):
         """드래그 진입 이벤트"""
         if event.mimeData().hasUrls():
             # 지원하는 파일인지 확인
+            from ..core.clipboard_manager import DragDropHandler
             urls = event.mimeData().urls()
             supported = DragDropHandler.get_supported_files(urls)
             if supported:
@@ -1589,6 +1569,7 @@ class MainWindow(QMainWindow):
         
         # 파일 드롭
         if mime.hasUrls():
+            from ..core.clipboard_manager import DragDropHandler
             files = DragDropHandler.get_supported_files(mime.urls())
             if files:
                 event.acceptProposedAction()
@@ -1609,6 +1590,7 @@ class MainWindow(QMainWindow):
             return
         
         if len(files) == 1:
+            from ..core.clipboard_manager import DragDropHandler
             file_path = files[0]
             file_type = DragDropHandler.get_file_type(file_path)
             
@@ -1726,6 +1708,7 @@ class MainWindow(QMainWindow):
                     
                     image = QImage(temp_path)
                     if not image.isNull():
+                        from ..core.clipboard_manager import ClipboardManager
                         msg = ClipboardManager.copy_image(image)
                         self.statusBar().showMessage(f"✓ {msg}", 3000)
                     
@@ -1762,6 +1745,7 @@ class MainWindow(QMainWindow):
                             data.append('\t'.join(row_data))
                         
                         text = '\n'.join(data)
+                        from ..core.clipboard_manager import ClipboardManager
                         msg = ClipboardManager.copy_text(text)
                         self.statusBar().showMessage(f"✓ Copied {len(rows)} rows", 3000)
                         return
