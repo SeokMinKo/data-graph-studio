@@ -87,6 +87,8 @@ class GraphSetting:
             "marker_size": 6,
             "opacity": 1.0,
             "color_palette": "default",
+            "title": None,
+            "subtitle": None,
         }
         result = dict(defaults)
         if self.chart_settings:

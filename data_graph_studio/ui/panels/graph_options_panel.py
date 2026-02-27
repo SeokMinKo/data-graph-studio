@@ -980,7 +980,9 @@ class GraphOptionsPanel(QFrame):
             fill_opacity=self.fill_opacity_spin.value(),
             show_data_labels=self.show_labels_check.isChecked(),
             x_log_scale=self.x_log_check.isChecked(),
-            y_log_scale=self.y_log_check.isChecked()
+            y_log_scale=self.y_log_check.isChecked(),
+            title=self.chart_title_edit.text() or None,
+            subtitle=self.chart_subtitle_edit.text() or None,
         )
         self.option_changed.emit()
     

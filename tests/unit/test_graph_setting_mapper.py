@@ -8,7 +8,7 @@ import pytest
 
 from data_graph_studio.core.graph_setting_mapper import GraphSettingMapper
 from data_graph_studio.core.profile import GraphSetting
-from data_graph_studio.core.state import AppState, ChartType, GroupColumn, ValueColumn
+from data_graph_studio.core.state import AppState, ChartType
 
 
 @pytest.fixture
@@ -128,3 +128,25 @@ def test_signal_batching(state):
     GraphSettingMapper.to_app_state(setting, state)
 
     assert order == ["begin", "end"]
+
+
+def test_from_app_state_includes_title_subtitle_in_chart_settings(state):
+    state.update_chart_settings(title="T-A", subtitle="S-A")
+    setting = GraphSettingMapper.from_app_state(state, name="WithTitle", dataset_id="ds1")
+    assert setting.chart_settings.get("title") == "T-A"
+    assert setting.chart_settings.get("subtitle") == "S-A"
+
+
+def test_to_app_state_applies_title_subtitle_from_chart_settings(state):
+    state.begin_batch_update = MagicMock()
+    state.end_batch_update = MagicMock()
+    setting = GraphSetting(
+        id="setting-title",
+        name="Setting",
+        dataset_id="ds1",
+        chart_type="line",
+        chart_settings={"title": "P1 Title", "subtitle": "P1 Sub"},
+    )
+    GraphSettingMapper.to_app_state(setting, state)
+    assert state.chart_settings.title == "P1 Title"
+    assert state.chart_settings.subtitle == "P1 Sub"

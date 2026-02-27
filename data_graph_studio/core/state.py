@@ -204,6 +204,10 @@ class ChartSettings:
     fill_opacity: float = 0.3
     show_data_labels: bool = False
 
+    # 제목/텍스트
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+
     # Primary Y축 설정
     x_log_scale: bool = False
     y_log_scale: bool = False

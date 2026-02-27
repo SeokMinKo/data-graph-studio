@@ -25,7 +25,7 @@ class GraphSettingMapper:
         if hasattr(state, '_chart_settings') and state._chart_settings:
             cs = state._chart_settings
             for attr in ['show_legend', 'show_grid', 'show_markers', 'line_width', 
-                         'marker_size', 'opacity', 'color_palette']:
+                         'marker_size', 'opacity', 'color_palette', 'title', 'subtitle']:
                 if hasattr(cs, attr):
                     chart_settings_dict[attr] = getattr(cs, attr)
 

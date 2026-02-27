@@ -436,10 +436,17 @@ class MainGraph(pg.PlotWidget):
         bg_color = options.get('bg_color', default_bg)
         self.setBackground(bg_color.name())
         
-        # Title
+        # Title + subtitle
         title = options.get('title')
-        if title:
+        subtitle = options.get('subtitle')
+        if title and subtitle:
+            self.setTitle(f"{title}<br><span style='font-size:10pt;color:#94A3B8'>{subtitle}</span>")
+        elif title:
             self.setTitle(title)
+        elif subtitle:
+            self.setTitle(f"<span style='font-size:10pt;color:#94A3B8'>{subtitle}</span>")
+        else:
+            self.setTitle("")
         
         # Y-axis range
         y_min = options.get('y_min')

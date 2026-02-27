@@ -1937,15 +1937,28 @@ class GraphPanel(QWidget):
             self.options_panel.set_series(series_names)
 
     def _on_chart_settings_changed(self):
-        """Sync chart type from state to options panel and refresh"""
+        """Sync chart settings from state to options panel and refresh."""
         try:
-            ct = self.state.chart_settings.chart_type
+            cs = self.state.chart_settings
+            ct = cs.chart_type
             if ct and self.options_panel.chart_type_combo.currentData() != ct:
                 idx = self.options_panel.chart_type_combo.findData(ct)
                 if idx >= 0:
                     self.options_panel.chart_type_combo.blockSignals(True)
                     self.options_panel.chart_type_combo.setCurrentIndex(idx)
                     self.options_panel.chart_type_combo.blockSignals(False)
+
+            # Profile-specific title/subtitle synchronization
+            title_text = getattr(cs, 'title', None) or ''
+            subtitle_text = getattr(cs, 'subtitle', None) or ''
+            if self.options_panel.chart_title_edit.text() != title_text:
+                self.options_panel.chart_title_edit.blockSignals(True)
+                self.options_panel.chart_title_edit.setText(title_text)
+                self.options_panel.chart_title_edit.blockSignals(False)
+            if self.options_panel.chart_subtitle_edit.text() != subtitle_text:
+                self.options_panel.chart_subtitle_edit.blockSignals(True)
+                self.options_panel.chart_subtitle_edit.setText(subtitle_text)
+                self.options_panel.chart_subtitle_edit.blockSignals(False)
         except Exception:
             pass
         self.refresh()
@@ -2155,11 +2168,11 @@ class GraphPanel(QWidget):
         if not options:
             return
 
-        # Apply chart title
-        if 'title' in options and options['title']:
-            self.options_panel.chart_title_edit.setText(options['title'])
-        if 'subtitle' in options and options['subtitle']:
-            self.options_panel.chart_subtitle_edit.setText(options['subtitle'])
+        # Apply chart title/subtitle (explicit clear on empty)
+        if 'title' in options:
+            self.options_panel.chart_title_edit.setText(options.get('title') or '')
+        if 'subtitle' in options:
+            self.options_panel.chart_subtitle_edit.setText(options.get('subtitle') or '')
 
         # Apply X-axis options
         if 'x_title' in options and options['x_title']:
