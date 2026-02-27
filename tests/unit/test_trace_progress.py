@@ -15,6 +15,7 @@ if not app:
 
 from data_graph_studio.ui.dialogs.trace_progress_dialog import (
     AdbTraceController,
+    PerfettoTraceController,
     TraceProgressDialog,
 )
 
@@ -172,4 +173,37 @@ class TestTraceProgressDialog:
         assert not dlg._stop_btn.isEnabled()
 
 
-# UT-16, UT-17: Removed (android_logger_wizard deleted, replaced by TraceConfigDialog)
+# UT-16: Perfetto config push permission/fallback
+class TestPerfettoConfigPush:
+    def test_push_perfetto_config_uses_tmp_and_chmod(self) -> None:
+        ctrl = PerfettoTraceController()
+
+        push_ok = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
+        chmod_ok = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=[push_ok, chmod_ok]) as mock_run:
+            path = ctrl._push_perfetto_config(["adb", "-s", "SERIAL"], "/tmp/cfg.pbtxt")
+
+        assert path == "/data/local/tmp/dgs_perfetto.pbtxt"
+        assert mock_run.call_args_list[0].args[0][-2:] == ["/tmp/cfg.pbtxt", "/data/local/tmp/dgs_perfetto.pbtxt"]
+        assert mock_run.call_args_list[1].args[0][-3:] == ["chmod", "644", "/data/local/tmp/dgs_perfetto.pbtxt"]
+
+    def test_push_perfetto_config_falls_back_to_sdcard(self) -> None:
+        ctrl = PerfettoTraceController()
+
+        push_fail = subprocess.CalledProcessError(
+            returncode=1,
+            cmd=["adb", "push"],
+            stderr="Permission denied",
+        )
+        push_ok = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
+        chmod_ok = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=[push_fail, push_ok, chmod_ok]) as mock_run:
+            path = ctrl._push_perfetto_config(["adb", "-s", "SERIAL"], "/tmp/cfg.pbtxt")
+
+        assert path == "/sdcard/Download/dgs_perfetto.pbtxt"
+        assert mock_run.call_args_list[1].args[0][-2:] == ["/tmp/cfg.pbtxt", "/sdcard/Download/dgs_perfetto.pbtxt"]
+
+
+# UT-17: Removed (android_logger_wizard deleted, replaced by TraceConfigDialog)
