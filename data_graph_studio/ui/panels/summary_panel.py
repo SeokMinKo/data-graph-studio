@@ -16,53 +16,76 @@ from ..floatable import FloatButton
 
 
 class StatCard(QFrame):
-    """Compact stat card - minimal design"""
-    
+    """Compact stat card with colored left accent bar and hover shadow"""
+
     def __init__(self, icon: str, title: str, value: str = "-", subtitle: str = "", color: str = "#59B8E3"):
         super().__init__()
         self.color = color
-        
+
         self.setObjectName("StatCard")
-        self.setMinimumWidth(100)
-        self.setMaximumWidth(160)
-        
+        self.setMinimumWidth(120)
+        self.setMaximumWidth(180)
+
         self._setup_style()
         self._setup_ui(icon, title, value, subtitle)
-    
+
     def _setup_style(self):
         # Styles now handled by global theme stylesheet
         self.setProperty("class", "statCard")
-    
+
     def _setup_ui(self, icon: str, title: str, value: str, subtitle: str):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setContentsMargins(14, 8, 10, 8)  # extra left for accent bar
         layout.setSpacing(2)
-        
+
         # Title row with icon
         header = QHBoxLayout()
         header.setSpacing(4)
-        
+
         # Small icon
         icon_label = QLabel(icon)
         icon_label.setObjectName("cardIcon")
         header.addWidget(icon_label)
-        
+
         # Title
         self.title_label = QLabel(title)
         self.title_label.setObjectName("cardTitle")
         header.addWidget(self.title_label, 1)
         layout.addLayout(header)
-        
+
         # Value (compact)
         self.value_label = QLabel(value)
         self.value_label.setObjectName("cardValue")
         layout.addWidget(self.value_label)
-        
+
         # Subtitle
         self.subtitle_label = QLabel(subtitle if subtitle else "")
         self.subtitle_label.setObjectName("cardSubtitle")
         self.subtitle_label.setVisible(bool(subtitle))
         layout.addWidget(self.subtitle_label)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        # Draw colored left accent bar
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(self.color))
+        bar_h = self.height() - 10
+        painter.drawRoundedRect(2, 5, 3, bar_h, 1.5, 1.5)
+        painter.end()
+
+    def enterEvent(self, event):
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(14)
+        shadow.setColor(QColor(0, 0, 0, 35))
+        shadow.setOffset(0, 3)
+        self.setGraphicsEffect(shadow)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setGraphicsEffect(None)
+        super().leaveEvent(event)
     
     def set_value(self, value: str, subtitle: str = ""):
         self.value_label.setText(value)

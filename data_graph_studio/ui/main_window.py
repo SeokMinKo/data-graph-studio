@@ -72,6 +72,7 @@ from .controllers.view_actions_controller import ViewActionsController
 from .controllers.help_controller import HelpController
 from .controllers.export_ui_controller import ExportUIController
 from .controllers.autorecovery_controller import AutorecoveryController
+from .toolbars.toolbar_manager import ToolbarManager
 
 # -- Lazy imports (only used in specific method bodies) -----------------------
 # ClipboardManager, DragDropHandler: from ..core.clipboard_manager  (drag & drop)
@@ -209,6 +210,7 @@ class MainWindow(QMainWindow):
         self._help_ctrl = HelpController(self)
         self._export_ui_ctrl = ExportUIController(self)
         self._autorecovery_ctrl = AutorecoveryController(self)
+        self._toolbar_manager = ToolbarManager(self)
 
         # Setup UI
         self._setup_window()
@@ -217,6 +219,7 @@ class MainWindow(QMainWindow):
         self._setup_toolbar()
         self._setup_streaming_toolbar()
         self._setup_compare_toolbar()
+        self._toolbar_manager.restore_state()
         self._setup_statusbar()
 
         # Accessibility setup (items 1-3)
@@ -254,6 +257,7 @@ class MainWindow(QMainWindow):
     
     def _setup_window(self):
         """윈도우 기본 설정"""
+        self.setObjectName("DataGraphStudioMainWindow")
         self.setWindowTitle("Data Graph Studio")
         self.setMinimumSize(1200, 800)
 
@@ -707,7 +711,30 @@ class MainWindow(QMainWindow):
 
         self._status_selection_label = QLabel("")
         self._status_memory_label = QLabel("💾 --")
+        self._status_memory_label.setObjectName("statusMemoryLabel")
         self._status_memory_label.setToolTip("Memory Usage (Process / System)")
+
+        # Separator
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.VLine)
+        sep1.setObjectName("statusSeparator")
+
+        # Theme indicator
+        self._status_theme_label = QLabel("Midnight")
+        self._status_theme_label.setObjectName("statusThemeLabel")
+        self._status_theme_label.setCursor(Qt.PointingHandCursor)
+        self._status_theme_label.setToolTip("Current theme (click to cycle)")
+        self._status_theme_label.mousePressEvent = self._on_cycle_theme
+
+        # Separator
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.VLine)
+        sep2.setObjectName("statusSeparator")
+
+        # Version badge
+        from data_graph_studio import __version__
+        self._status_version_label = QLabel(f"v{__version__}")
+        self._status_version_label.setObjectName("statusVersionLabel")
 
         self.statusbar.setAccessibleName("Status Bar")
         self._status_data_label.setAccessibleName("Data Status")
@@ -716,6 +743,21 @@ class MainWindow(QMainWindow):
         self.statusbar.addWidget(self._status_data_label)
         self.statusbar.addWidget(self._status_selection_label, 1)
         self.statusbar.addPermanentWidget(self._status_memory_label)
+        self.statusbar.addPermanentWidget(sep1)
+        self.statusbar.addPermanentWidget(self._status_theme_label)
+        self.statusbar.addPermanentWidget(sep2)
+        self.statusbar.addPermanentWidget(self._status_version_label)
+
+    def _on_cycle_theme(self, event=None):
+        """Cycle through themes when clicking the theme label."""
+        theme_order = ['midnight', 'dark', 'light', 'tailwind', 'tailwind-dark', 'high-contrast']
+        current = getattr(self, '_current_theme', 'midnight')
+        try:
+            idx = theme_order.index(current)
+        except ValueError:
+            idx = 0
+        next_theme = theme_order[(idx + 1) % len(theme_order)]
+        self._on_theme_changed(next_theme)
 
     def _setup_memory_monitor(self):
         """메모리 모니터링 타이머 설정"""
@@ -841,19 +883,18 @@ class MainWindow(QMainWindow):
             proc_str = MemoryMonitor.format_memory(proc_mem['rss_mb'])
             sys_pct = sys_mem['percent']
 
-            # 색상 결정 (메모리 사용량에 따라)
+            # 레벨 결정 (메모리 사용량에 따라)
             if sys_pct > 85:
-                color = "#EF4444"  # 빨강 - 위험
-                emoji = "🔴"
+                level = "danger"
             elif sys_pct > 70:
-                color = "#F59E0B"  # 노랑 - 경고
-                emoji = "🟡"
+                level = "warning"
             else:
-                color = "#10B981"  # 녹색 - 정상
-                emoji = "🟢"
+                level = "normal"
 
-            self._status_memory_label.setText(f"{emoji} {proc_str} ({sys_pct:.0f}%)")
-            # Memory status color is dynamic, keep minimal styling
+            self._status_memory_label.setText(f"  {proc_str} ({sys_pct:.0f}%)  ")
+            self._status_memory_label.setProperty("level", level)
+            self._status_memory_label.style().unpolish(self._status_memory_label)
+            self._status_memory_label.style().polish(self._status_memory_label)
             self._status_memory_label.setToolTip(
                 f"Process Memory: {proc_str}\n"
                 f"System Memory: {sys_pct:.1f}% used\n"
@@ -1533,6 +1574,10 @@ class MainWindow(QMainWindow):
         # Close all floating graph windows
         if self._floating_graph_manager:
             self._floating_graph_manager.close_all()
+
+        # Save toolbar state
+        if hasattr(self, '_toolbar_manager'):
+            self._toolbar_manager._save_state()
 
         # TODO: 저장 확인
         event.accept()
