@@ -138,7 +138,7 @@ class DataEngine:
     def _cache_key(self, operation: str, *args) -> str:
         """dataset별 캐시 키 생성 (F5)."""
         dataset_id = self._datasets_mgr.active_dataset_id if self._datasets_mgr else "default"
-        return f"{dataset_id}:{operation}:{hash(args)}"
+        return f"{dataset_id}:{operation}:{repr(args)}"
 
     # -- Properties: FileLoader -----------------------------------------------
 

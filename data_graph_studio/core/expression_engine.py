@@ -380,7 +380,7 @@ class ExpressionEngine:
         if node_type == 'binary':
             left = self._evaluate_ast(node['left'], df)
             right = self._evaluate_ast(node['right'], df)
-            
+
             op = node['op']
             if op == '+':
                 return left + right
@@ -394,6 +394,8 @@ class ExpressionEngine:
                 return left % right
             elif op == '^':
                 return left.pow(right)
+            else:
+                raise ExpressionError(f"Unknown binary operator: {op}")
         
         if node_type == 'comparison':
             left = self._evaluate_ast(node['left'], df)
@@ -570,15 +572,16 @@ class ExpressionEngine:
             condition = args[0]
             then_value = args[1]
             else_value = args[2] if len(args) > 2 else pl.Series([None] * len(df))
-            
-            # Build result using numpy-style conditional
-            result = []
-            for i in range(len(condition)):
-                if condition[i]:
-                    result.append(then_value[i] if isinstance(then_value, pl.Series) else then_value)
-                else:
-                    result.append(else_value[i] if isinstance(else_value, pl.Series) else else_value)
-            return pl.Series(result)
+
+            # Vectorized: use pl.when().then().otherwise() via temporary DataFrame
+            tmp = pl.DataFrame({"__cond__": condition, "__then__": then_value, "__else__": else_value})
+            result_df = tmp.select(
+                pl.when(pl.col("__cond__"))
+                .then(pl.col("__then__"))
+                .otherwise(pl.col("__else__"))
+                .alias("__result__")
+            )
+            return result_df["__result__"]
         
         if func_name == 'COALESCE':
             result = args[0]

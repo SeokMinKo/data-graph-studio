@@ -143,7 +143,13 @@ class Filter:
                 return col.cast(pl.Utf8).str.to_lowercase().str.ends_with(str(self.value).lower())
 
         elif self.operator == FilterOperator.MATCHES_REGEX:
-            return col.cast(pl.Utf8).str.contains(str(self.value))
+            import re as _re
+            pattern = str(self.value)
+            try:
+                _re.compile(pattern)
+            except _re.error:
+                return None
+            return col.cast(pl.Utf8).str.contains(pattern)
 
         elif self.operator == FilterOperator.IS_NULL:
             return col.is_null()
@@ -463,14 +469,22 @@ class FilteringManager(QObject):
 
         return result
 
-    def _get_all_filters(self, scheme: FilteringScheme) -> List[Filter]:
-        """상속 포함 모든 필터 조회"""
+    def _get_all_filters(self, scheme: FilteringScheme, _visited: Optional[Set[str]] = None) -> List[Filter]:
+        """상속 포함 모든 필터 조회 (순환 상속 방어)"""
+        if _visited is None:
+            _visited = set()
+
+        # 순환 상속 방지
+        if scheme.name in _visited:
+            return []
+        _visited.add(scheme.name)
+
         filters = []
 
         # 상속된 스킴의 필터 먼저 추가
         if scheme.inherit_from and scheme.inherit_from in self._schemes:
             parent = self._schemes[scheme.inherit_from]
-            filters.extend(self._get_all_filters(parent))
+            filters.extend(self._get_all_filters(parent, _visited))
 
         # 현재 스킴의 필터 추가
         filters.extend(scheme.filters)

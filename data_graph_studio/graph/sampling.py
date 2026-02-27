@@ -174,13 +174,13 @@ class DataSampler:
             (sampled_x, sampled_y)
         """
         n = len(x)
-        
+
         if n_samples >= n:
             return x, y
-        
-        np.random.seed(seed)
-        indices = np.sort(np.random.choice(n, n_samples, replace=False))
-        
+
+        rng = np.random.default_rng(seed)
+        indices = np.sort(rng.choice(n, n_samples, replace=False))
+
         return x[indices], y[indices]
     
     @staticmethod
@@ -214,9 +214,9 @@ class DataSampler:
         
         if n_samples >= n:
             return x.copy(), y.copy(), groups.copy()
-        
-        np.random.seed(seed)
-        
+
+        rng = np.random.default_rng(seed)
+
         unique_groups = np.unique(groups)
         
         result_indices = []
@@ -233,7 +233,7 @@ class DataSampler:
             group_n_samples = max(1, int(n_samples * group_size / n))
             group_n_samples = min(group_n_samples, group_size)
             
-            sampled = np.random.choice(group_indices, group_n_samples, replace=False)
+            sampled = rng.choice(group_indices, group_n_samples, replace=False)
             result_indices.extend(sampled)
         
         if not result_indices:
