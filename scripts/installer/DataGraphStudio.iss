@@ -21,6 +21,7 @@ ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\..\resources\icons\dgs.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

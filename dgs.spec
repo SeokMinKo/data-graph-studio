@@ -63,6 +63,12 @@ for _bin in (ROOT / "data_graph_studio" / "assets" / "bin").rglob("*"):
         rel_dir = _bin.parent.relative_to(ROOT / "data_graph_studio")
         datas.append((str(_bin), str(rel_dir)))
 
+# 앱 아이콘 리소스 포함
+for _icon in (ROOT / "resources" / "icons").rglob("*"):
+    if _icon.is_file():
+        rel_dir = _icon.parent.relative_to(ROOT)
+        datas.append((str(_icon), str(rel_dir)))
+
 # ── 제외 모듈 (빌드 크기 축소) ──
 excludes = [
     "tkinter",
@@ -135,7 +141,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon="resources/dgs.ico",  # Windows용 아이콘 (있을 때 활성화)
+    icon="resources/icons/dgs.ico",
 )
 
 # ── COLLECT (onedir 모드) ──

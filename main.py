@@ -110,7 +110,7 @@ def main():
         logger.info("Importing PySide6...")
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import Qt
-        from PySide6.QtGui import QFont
+        from PySide6.QtGui import QFont, QIcon
         logger.info("PySide6 imported successfully")
         
         # 모듈 임포트 테스트
@@ -131,6 +131,12 @@ def main():
         app.setApplicationName("Data Graph Studio")
         app.setApplicationVersion("0.1.0")
         app.setOrganizationName("Godol")
+
+        # 앱 아이콘 (소스 실행 + PyInstaller 배포 공통)
+        base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+        icon_path = os.path.join(base_dir, "resources", "icons", "dgs.ico")
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
         
         # 기본 폰트
         font = QFont()
