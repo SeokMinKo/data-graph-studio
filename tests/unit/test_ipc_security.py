@@ -6,9 +6,7 @@ single-instance detection, atomic port file, and deleteLater on disconnect.
 
 import json
 import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,8 +14,6 @@ from data_graph_studio.core.ipc_server import (
     IPCServer,
     IPCClient,
     _MAX_BUFFER_SIZE,
-    _PORT_FILE,
-    _pid_is_alive,
     is_another_instance_running,
     read_port_file,
     remove_port_file,
@@ -189,8 +185,8 @@ class TestExecuteDisabled:
 
         assert "execute" not in registered
 
-    def test_execute_registered_in_debug_mode(self):
-        """execute handler IS registered when debug=True."""
+    def test_execute_not_registered_even_in_debug_mode(self):
+        """execute handler is removed for security even when debug=True."""
         from data_graph_studio.ui.controllers.ipc_controller import IPCController
 
         mock_window = MagicMock()
@@ -206,7 +202,7 @@ class TestExecuteDisabled:
         with patch("data_graph_studio.core.ipc_server.IPCServer", return_value=mock_server):
             controller.setup()
 
-        assert "execute" in registered
+        assert "execute" not in registered
 
 
 # ---------------------------------------------------------------------------
