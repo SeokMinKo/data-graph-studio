@@ -496,8 +496,7 @@ class GraphPanel(QWidget):
         """Refresh graph"""
         import logging as _logging
         _lg = _logging.getLogger(__name__)
-        _lg.debug("[DEBUG-CRASH] graph_panel.refresh() called")
-        
+                
         # Show empty state if no data loaded
         if not self.engine.is_loaded:
             _lg.debug("[DEBUG-CRASH] graph_panel.refresh() - showing empty state")
@@ -535,6 +534,22 @@ class GraphPanel(QWidget):
         # Get options including legend settings
         options = self.options_panel.get_chart_options()
         legend_settings = self.options_panel.get_legend_settings()
+
+        # Ensure axis tick-label contrast (fix: Y-axis numbers invisible on dark bg)
+        try:
+            bg = options.get('bg_color', QColor('#323D4A'))
+            if not isinstance(bg, QColor):
+                bg = QColor(str(bg))
+            luma = (0.2126 * bg.redF()) + (0.7152 * bg.greenF()) + (0.0722 * bg.blueF())
+            tick_color = '#111827' if luma > 0.6 else '#E2E8F0'
+            grid_color = '#9CA3AF' if luma > 0.6 else '#64748B'
+            for axis_name in ('bottom', 'left'):
+                axis = self.main_graph.getAxis(axis_name)
+                if axis is not None:
+                    axis.setTextPen(pg.mkPen(tick_color))
+                    axis.setPen(pg.mkPen(grid_color))
+        except Exception:
+            pass
 
         # Check if Grid View is enabled
         grid_enabled = options.get('enabled', False)  # from get_grid_view_settings()
@@ -1022,6 +1037,9 @@ class GraphPanel(QWidget):
 
         self.x_sliding_window.setVisible(sliding_window_enabled and x_window_enabled)
         self.y_sliding_window.setVisible(sliding_window_enabled and y_window_enabled)
+
+        # Minimap follows sliding-window master toggle
+        self.toggle_minimap(sliding_window_enabled and (x_window_enabled or y_window_enabled))
 
         if sliding_window_enabled:
             # Use plotted data (sampled) to keep distribution aligned with visible points

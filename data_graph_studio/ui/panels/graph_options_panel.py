@@ -772,14 +772,15 @@ class GraphOptionsPanel(QFrame):
         self.option_changed.emit()
 
     def _on_sliding_window_changed(self, state: int):
-        """Handle sliding window enable/disable"""
+        """Handle sliding window enable/disable.
+
+        NOTE:
+        - Master OFF 시 하위 체크 상태(x/y)는 보존하고 enable 상태만 비활성화한다.
+        - 다시 ON 시 기존 체크 상태를 그대로 복원해 즉시 동작 가능하게 한다.
+        """
         enabled = state == Qt.Checked
         self.x_sliding_window_check.setEnabled(enabled)
         self.y_sliding_window_check.setEnabled(enabled)
-        if not enabled:
-            # Force-disable sub windows when master is off
-            self.x_sliding_window_check.setChecked(False)
-            self.y_sliding_window_check.setChecked(False)
         self.option_changed.emit()
 
     def _show_chart_recommendations(self):
