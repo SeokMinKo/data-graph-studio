@@ -233,6 +233,7 @@ class PerfettoTraceController(QObject):
         self._tracing: bool = False
         self._trace_device_path = "/data/local/tmp/dgs_trace.perfetto-trace"
         self._tp_shell: str = ""
+        self._used_oneshot: bool = False
 
     @staticmethod
     def _platform_bin_dir() -> str:
@@ -433,12 +434,14 @@ class PerfettoTraceController(QObject):
         self._tp_shell = self.find_trace_processor()
         logger.debug("[Perfetto] trace_processor: %s", self._tp_shell)
 
-        buffer_kb = config.get("buffer_size_mb", 64) * 1024
+        buffer_mb = int(config.get("buffer_size_mb", 64))
+        buffer_kb = buffer_mb * 1024
         events = config.get("events", [
             "block/block_rq_issue",
             "block/block_rq_complete",
             "ufs/ufshcd_command",
         ])
+        duration_s = int(config.get("duration_s", 10))
 
         events_str = "\n".join(f'            ftrace_events: "{e}"' for e in events)
         perfetto_config = (
@@ -476,6 +479,8 @@ class PerfettoTraceController(QObject):
         # NOTE: non-root Android builds can deny direct -c /path reads due to SELinux.
         # Use stdin piping with -c - for broader compatibility.
         self.progress.emit("Starting perfetto...")
+        self._used_oneshot = False
+        self._trace_device_path = "/data/local/tmp/dgs_trace.perfetto-trace"
         shell_cmd = (
             f"cat {shlex.quote(device_config)} | "
             f"perfetto --txt -c - -o {shlex.quote(self._trace_device_path)}"
@@ -497,13 +502,40 @@ class PerfettoTraceController(QObject):
             # Exited immediately — read stderr for error
             _, stderr = self._process.communicate(timeout=5)
             err_msg = stderr.decode(errors="replace").strip() if stderr else "unknown error"
-            logger.error("[Perfetto] exited immediately: rc=%s, stderr=%s",
-                         self._process.returncode, err_msg)
+            logger.warning("[Perfetto] config mode failed, trying oneshot fallback: rc=%s, stderr=%s",
+                           self._process.returncode, err_msg)
             self._process = None
-            raise RuntimeError(f"Perfetto failed to start: {err_msg}")
+
+            # Fallback: known-working command path/format from field validation
+            self._used_oneshot = True
+            self._trace_device_path = "/data/misc/perfetto-traces/blocktrace.pftrace"
+            oneshot_cmd = adb + [
+                "shell", "perfetto",
+                "--time", f"{duration_s}s",
+                "--buffer", f"{buffer_mb}mb",
+                *events,
+                "-o", self._trace_device_path,
+            ]
+            self.log_message.emit(
+                f"$ adb -s {serial} shell perfetto --time {duration_s}s --buffer {buffer_mb}mb "
+                f"{' '.join(events)} -o {self._trace_device_path}"
+            )
+            self._process = subprocess.Popen(
+                oneshot_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            time.sleep(1)
+            if self._process.poll() is not None:
+                _, stderr2 = self._process.communicate(timeout=5)
+                err_msg2 = stderr2.decode(errors="replace").strip() if stderr2 else "unknown error"
+                logger.error("[Perfetto] oneshot fallback failed: rc=%s, stderr=%s",
+                             self._process.returncode, err_msg2)
+                self._process = None
+                raise RuntimeError(f"Perfetto failed to start: {err_msg2}")
 
         self._tracing = True
-        logger.info("[Perfetto] tracing started (pid=%s)", self._process.pid)
+        logger.info("[Perfetto] tracing started (pid=%s, oneshot=%s)", self._process.pid, self._used_oneshot)
         self.log_message.emit("Perfetto tracing started.")
 
     def stop_trace(self, save_path: str) -> None:
@@ -517,30 +549,40 @@ class PerfettoTraceController(QObject):
         logger.info("[Perfetto] stop_trace: save_path=%s, trace_local=%s", save_path, trace_local)
 
         try:
-            # 1. Stop perfetto (SIGINT)
+            # 1. Stop perfetto (SIGINT) or wait for oneshot completion
             self.progress.emit("Stopping perfetto...")
-            pid_result = subprocess.run(
-                adb + ["shell", "pidof", "perfetto"],
-                capture_output=True, text=True, timeout=5,
-            )
-            perfetto_pid = pid_result.stdout.strip()
-            if perfetto_pid:
-                logger.debug("[Perfetto] sending SIGINT to pid %s", perfetto_pid)
-                kill_result = subprocess.run(
-                    adb + ["shell", "kill", "-SIGINT", perfetto_pid],
+            if self._used_oneshot:
+                logger.debug("[Perfetto] oneshot mode: waiting for perfetto to finish")
+                if self._process:
+                    try:
+                        rc = self._process.wait(timeout=30)
+                        logger.debug("[Perfetto] oneshot process exited: rc=%s", rc)
+                    except subprocess.TimeoutExpired:
+                        logger.warning("[Perfetto] oneshot timeout, killing")
+                        self._process.kill()
+            else:
+                pid_result = subprocess.run(
+                    adb + ["shell", "pidof", "perfetto"],
                     capture_output=True, text=True, timeout=5,
                 )
-                logger.debug("[Perfetto] kill result: rc=%d, stderr=%s",
-                             kill_result.returncode, kill_result.stderr.strip())
-            else:
-                logger.warning("[Perfetto] perfetto process not found on device")
-            if self._process:
-                try:
-                    rc = self._process.wait(timeout=20)
-                    logger.debug("[Perfetto] local process exited: rc=%s", rc)
-                except subprocess.TimeoutExpired:
-                    logger.warning("[Perfetto] local process timeout, killing")
-                    self._process.kill()
+                perfetto_pid = pid_result.stdout.strip()
+                if perfetto_pid:
+                    logger.debug("[Perfetto] sending SIGINT to pid %s", perfetto_pid)
+                    kill_result = subprocess.run(
+                        adb + ["shell", "kill", "-SIGINT", perfetto_pid],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    logger.debug("[Perfetto] kill result: rc=%d, stderr=%s",
+                                 kill_result.returncode, kill_result.stderr.strip())
+                else:
+                    logger.warning("[Perfetto] perfetto process not found on device")
+                if self._process:
+                    try:
+                        rc = self._process.wait(timeout=20)
+                        logger.debug("[Perfetto] local process exited: rc=%s", rc)
+                    except subprocess.TimeoutExpired:
+                        logger.warning("[Perfetto] local process timeout, killing")
+                        self._process.kill()
             self._tracing = False
 
             # 2. Wait for trace file to be flushed, then pull
@@ -611,6 +653,7 @@ class PerfettoTraceController(QObject):
             self.error.emit(str(e))
         finally:
             self._process = None
+            self._used_oneshot = False
 
     def cleanup(self) -> None:
         """Perfetto 프로세스를 정리한다 (idempotent)."""

@@ -1,5 +1,22 @@
 # Changelog
 
+## [v0.23.12] — 2026-02-27
+
+### 🐛 Bug Fixes
+
+- **Perfetto Permission denied 대응 강화**
+  - 기본 config-mode(`--txt -c ...`) 시작 실패 시, 현장 검증된 one-shot 명령으로 자동 fallback
+  - fallback 명령 형식:
+    - `adb shell perfetto --time 10s --buffer 64mb block/block_rq_issue block/block_rq_complete -o /data/misc/perfetto-traces/blocktrace.pftrace`
+  - stop 단계에서 one-shot 모드 처리 분기(불필요한 pid kill 대신 종료 대기)
+
+### ✅ Tests
+
+- `test_perfetto_oneshot_fallback.py` 추가
+- Perfetto 파이프라인 테스트와 함께 통과 확인
+
+---
+
 ## [v0.23.11] — 2026-02-09
 
 ### 🐛 Bug Fixes
