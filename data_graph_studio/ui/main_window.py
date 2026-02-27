@@ -793,9 +793,6 @@ class MainWindow(QMainWindow):
     def _ipc_get_summary(self, *a, **kw):
         return self._ipc_controller._ipc_get_summary(*a, **kw)
 
-    def _ipc_execute(self, *a, **kw):
-        return self._ipc_controller._ipc_execute(*a, **kw)
-
     def _ipc_set_x_column(self, *a, **kw):
         return self._ipc_controller._ipc_set_x_column(*a, **kw)
 

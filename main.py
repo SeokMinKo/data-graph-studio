@@ -128,8 +128,9 @@ def main():
         app = QApplication(sys.argv)
         
         # 앱 정보
+        from data_graph_studio import __version__
         app.setApplicationName("Data Graph Studio")
-        app.setApplicationVersion("0.1.0")
+        app.setApplicationVersion(__version__)
         app.setOrganizationName("Godol")
 
         # 앱 아이콘 (소스 실행 + PyInstaller 배포 공통)

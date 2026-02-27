@@ -43,10 +43,8 @@ class IPCController:
         server.register_handler('get_panels', self._ipc_get_panels)
         server.register_handler('get_summary', self._ipc_get_summary)
 
-        # execute handler: only registered in debug mode (RCE risk)
-        if self._debug:
-            server.register_handler('execute', self._ipc_execute)
-            logger.warning("[IPC] 'execute' handler enabled (debug mode)")
+        # execute handler removed — eval() on arbitrary code is an RCE risk
+        # even in debug mode. Use structured IPC commands instead.
 
         # Zone control handlers
         server.register_handler('set_x_column', self._ipc_set_x_column)
@@ -198,20 +196,6 @@ class IPCController:
             summary['file_name'] = Path(w.engine._source.path).name
 
         return summary
-
-    def _ipc_execute(self, code: str) -> Any:
-        """Python 코드 실행 (디버깅용)"""
-        w = self._w
-        local_vars = {
-            'window': w,
-            'state': w.state,
-            'engine': w.engine,
-            'table_panel': w.table_panel,
-            'graph_panel': w.graph_panel,
-            'summary_panel': w.summary_panel,
-        }
-        import builtins as _builtins
-        return eval(code, {'__builtins__': _builtins}, local_vars)
 
     # ==================== IPC Zone Control Handlers ====================
 

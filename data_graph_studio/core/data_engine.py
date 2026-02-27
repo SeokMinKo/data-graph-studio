@@ -326,7 +326,8 @@ class DataEngine:
             self.update_dataframe(merged)
             self._clear_cache()
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug("Incremental append failed, trying scan_csv fallback: %s", e)
             try:
                 # Fallback: scan_csv + tail
                 new_rows = pl.scan_csv(file_path).tail(new_row_count).collect()
@@ -334,7 +335,8 @@ class DataEngine:
                 self.update_dataframe(merged)
                 self._clear_cache()
                 return True
-            except Exception:
+            except Exception as e2:
+                logger.debug("scan_csv fallback also failed, doing full reload: %s", e2)
                 return self.load_file(file_path, optimize_memory=True)
 
     def trim(self, max_rows: int) -> None:
@@ -503,7 +505,7 @@ class DataEngine:
     def calculate_descriptive_comparison(self, dataset_ids, value_column): return self._comparison.calculate_descriptive_comparison(dataset_ids, value_column)
     def get_normality_test(self, dataset_id, value_column): return self._comparison.get_normality_test(dataset_id, value_column)
 
-    # -- clear ----------------------------------------------------------------
+    # -- Chart recommendation ---------------------------------------------------
 
     def recommend_chart_type(
         self,
@@ -595,7 +597,8 @@ class DataEngine:
                 timestamp=time.time(),
             ))
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug("Column cast failed for '%s': %s", col_name, e)
             return False
 
     # -- Data quality report (F4) ---------------------------------------------

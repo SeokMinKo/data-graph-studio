@@ -67,7 +67,8 @@ class DataQuery:
 
         try:
             return self._collect_streaming(df.lazy().filter(ops[operator]))
-        except Exception:
+        except Exception as e:
+            logger.debug("Streaming filter failed, falling back to eager: %s", e)
             return df.filter(ops[operator])
 
     def sort(
@@ -90,7 +91,8 @@ class DataQuery:
             return None
         try:
             return self._collect_streaming(df.lazy().sort(columns, descending=descending))
-        except Exception:
+        except Exception as e:
+            logger.debug("Streaming sort failed, falling back to eager: %s", e)
             return df.sort(columns, descending=descending)
 
     def group_aggregate(
@@ -135,7 +137,8 @@ class DataQuery:
 
         try:
             return self._collect_streaming(df.lazy().group_by(group_columns).agg(agg_exprs))
-        except Exception:
+        except Exception as e:
+            logger.debug("Streaming group_by failed, falling back to eager: %s", e)
             return df.group_by(group_columns).agg(agg_exprs)
 
     def get_statistics(
@@ -519,8 +522,8 @@ class DataQuery:
                 stats_df = self._collect_streaming(lazy_df.select(exprs))
                 if stats_df is not None and stats_df.height > 0:
                     return stats_df.to_dicts()[0]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Windowed statistics failed for column '%s': %s", column, e)
 
         if df is None or column not in df.columns:
             return {}
@@ -551,5 +554,6 @@ class DataQuery:
         """LazyFrame을 streaming 모드로 수집한다."""
         try:
             return lazy_df.collect(engine="streaming")
-        except Exception:
+        except Exception as e:
+            logger.debug("Streaming collect failed, using default engine: %s", e)
             return lazy_df.collect()

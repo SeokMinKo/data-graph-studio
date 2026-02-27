@@ -463,9 +463,11 @@ class FilteringManager(QObject):
                 if expr is not None:
                     try:
                         result = result.filter(expr)
-                    except Exception:
-                        # 필터 적용 실패 시 무시
-                        pass
+                    except Exception as e:
+                        import logging as _logging
+                        _logging.getLogger(__name__).debug(
+                            "Filter on column '%s' failed, skipping: %s", f.column, e
+                        )
 
         return result
 
