@@ -706,6 +706,43 @@ class GraphPanel(QWidget):
         if groups is None and self.state.group_columns:
             groups = self._build_group_masks(working_df)
 
+        # Independent style encoding maps for grouped series
+        color_by_col = options.get('color_by_column')
+        mark_by_col = options.get('mark_by_column')
+        if groups:
+            palette = [
+                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+                '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
+            ]
+            symbols = ['o', 's', 't', 'd', '+', 'x', 'star', 'p', 'h', 't1', 't2', 't3']
+            color_map = {}
+            marker_map = {}
+            group_color_map = {}
+            group_marker_map = {}
+            for g_name, g_mask in groups.items():
+                c_key = g_name
+                m_key = g_name
+                try:
+                    if color_by_col and color_by_col in working_df.columns:
+                        cvals = working_df[color_by_col].to_numpy()[g_mask]
+                        if len(cvals) > 0:
+                            c_key = str(cvals[0])
+                    if mark_by_col and mark_by_col in working_df.columns:
+                        mvals = working_df[mark_by_col].to_numpy()[g_mask]
+                        if len(mvals) > 0:
+                            m_key = str(mvals[0])
+                except Exception:
+                    pass
+                if c_key not in color_map:
+                    color_map[c_key] = palette[len(color_map) % len(palette)]
+                if m_key not in marker_map:
+                    marker_map[m_key] = symbols[len(marker_map) % len(symbols)]
+                group_color_map[g_name] = color_map[c_key]
+                group_marker_map[g_name] = marker_map[m_key]
+            options['group_color_map'] = group_color_map
+            options['group_marker_map'] = group_marker_map
+
         # Total points for status display
         total_points = len(x_data)
 
@@ -1101,7 +1138,7 @@ class GraphPanel(QWidget):
     # ==================== Combo Chart (Item 14) ====================
 
     def _render_combo_series(self, x_data, y_data, col_chart_type, color, pen, label,
-                             line_width, marker_size, marker_border, graph, options):
+                             line_width, marker_size, marker_border, graph, options, marker_symbol=None):
         """Render a single series in combo chart on the given graph widget."""
         if col_chart_type == "bar":
             w = (x_data.max() - x_data.min()) / len(x_data) * 0.8 if len(x_data) > 1 else 0.8
@@ -1114,7 +1151,7 @@ class GraphPanel(QWidget):
         elif col_chart_type == "scatter":
             sc_pen = pg.mkPen(color, width=1) if marker_border else pg.mkPen(None)
             sc = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
-                                    pen=sc_pen, brush=pg.mkBrush(color), name=label)
+                                    pen=sc_pen, brush=pg.mkBrush(color), symbol=(marker_symbol or options.get('marker_symbol', 'o')), name=label)
             graph.addItem(sc)
             graph._scatter_items.append(sc)
         elif col_chart_type == "area":
@@ -1128,7 +1165,7 @@ class GraphPanel(QWidget):
             graph._plot_items.append(item)
 
     def _render_combo_series_vb(self, x_data, y_data, col_chart_type, color, pen, label,
-                                line_width, marker_size, marker_border, vb, graph, options):
+                                line_width, marker_size, marker_border, vb, graph, options, marker_symbol=None):
         """Render a single series in combo chart on a secondary ViewBox."""
         item = None
         if col_chart_type == "bar":
@@ -1140,7 +1177,7 @@ class GraphPanel(QWidget):
         elif col_chart_type == "scatter":
             sc_pen = pg.mkPen(color, width=1) if marker_border else pg.mkPen(None)
             item = pg.ScatterPlotItem(x_data, y_data, size=marker_size,
-                                    pen=sc_pen, brush=pg.mkBrush(color), name=label)
+                                    pen=sc_pen, brush=pg.mkBrush(color), symbol=(marker_symbol or options.get('marker_symbol', 'o')), name=label)
         elif col_chart_type == "area":
             item = pg.PlotCurveItem(x_data, y_data, pen=pen, name=label,
                                      fillLevel=0, brush=pg.mkBrush(QColor(color).red(), QColor(color).green(), QColor(color).blue(), 80))
@@ -1215,6 +1252,11 @@ class GraphPanel(QWidget):
             '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
             '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
         ]
+        marker_symbols = ['o', 's', 't', 'd', '+', 'x', 'star', 't1', 't2', 't3']
+        color_by_col = options.get('color_by_column')
+        mark_by_col = options.get('mark_by_column')
+        color_map = {}
+        symbol_map = {}
 
         for idx, vc in enumerate(value_cols):
             y_col_name = vc.name
@@ -1237,8 +1279,28 @@ class GraphPanel(QWidget):
                     if len(x_group) == 0:
                         continue
 
-                    # Color: use group index for distinct colors
-                    color = group_colors[g_idx % len(group_colors)]
+                    # Color/Mark: independently encodable by selected columns
+                    color_key = group_name
+                    mark_key = group_name
+                    try:
+                        if color_by_col and color_by_col in working_df.columns:
+                            vals = working_df[color_by_col].to_numpy()[mask]
+                            if len(vals) > 0:
+                                color_key = str(vals[0])
+                        if mark_by_col and mark_by_col in working_df.columns:
+                            vals_m = working_df[mark_by_col].to_numpy()[mask]
+                            if len(vals_m) > 0:
+                                mark_key = str(vals_m[0])
+                    except Exception:
+                        pass
+
+                    if color_key not in color_map:
+                        color_map[color_key] = group_colors[len(color_map) % len(group_colors)]
+                    if mark_key not in symbol_map:
+                        symbol_map[mark_key] = marker_symbols[len(symbol_map) % len(marker_symbols)]
+
+                    color = color_map[color_key]
+                    marker_symbol = symbol_map[mark_key]
                     pen = pg.mkPen(color, width=line_width)
                     label = f"{y_col_name} ({group_name})"
 
@@ -1251,7 +1313,7 @@ class GraphPanel(QWidget):
                             self.main_graph._data_y = y_data_full
                         self._render_combo_series(x_group, y_group, col_chart_type, color, pen, label,
                                                   line_width, marker_size, marker_border,
-                                                  self.main_graph, options)
+                                                  self.main_graph, options, marker_symbol=marker_symbol)
                     elif idx == 1:
                         # Secondary axis
                         if g_idx == 0:
@@ -1274,12 +1336,12 @@ class GraphPanel(QWidget):
 
                         self._render_combo_series_vb(x_group, y_group, col_chart_type, color, pen, label,
                                                      line_width, marker_size, marker_border,
-                                                     secondary_vb, self.main_graph, options)
+                                                     secondary_vb, self.main_graph, options, marker_symbol=marker_symbol)
                     else:
                         # 3rd+ column: primary axis
                         self._render_combo_series(x_group, y_group, col_chart_type, color, pen, label,
                                                   line_width, marker_size, marker_border,
-                                                  self.main_graph, options)
+                                                  self.main_graph, options, marker_symbol=marker_symbol)
             else:
                 # No groups: original behavior
                 color = base_color

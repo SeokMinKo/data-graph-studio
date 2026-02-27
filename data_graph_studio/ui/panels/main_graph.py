@@ -513,12 +513,17 @@ class MainGraph(pg.PlotWidget):
         _marker_shapes = ['o', 's', 't', 'd', '+', 'x', 'star', 'p', 'h']
 
         if groups:
+            group_color_map = options.get('group_color_map', {})
+            group_marker_map = options.get('group_marker_map', {})
             for i, (group_name, mask) in enumerate(groups.items()):
                 if not series_visible.get(group_name, True):
                     continue  # Skip hidden series
-                
-                color = series_colors.get(group_name, default_colors[i % len(default_colors)])
-                series_marker = _marker_shapes[i % len(_marker_shapes)]
+
+                color = group_color_map.get(
+                    group_name,
+                    series_colors.get(group_name, default_colors[i % len(default_colors)])
+                )
+                series_marker = group_marker_map.get(group_name, _marker_shapes[i % len(_marker_shapes)])
                 self._plot_series(
                     x_data[mask], y_data[mask],
                     chart_type, color, group_name,
