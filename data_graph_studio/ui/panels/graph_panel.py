@@ -266,13 +266,38 @@ class GraphPanel(QWidget):
         # Empty state signals (will be connected by MainWindow to handle file open)
         # self._empty_state.open_file_requested is exposed for external connection
 
+    def _sync_chart_options_to_state(self):
+        """Sync current UI chart options to state cache for profile persistence.
+
+        Serializes non-JSON-safe types (QColor → hex, ChartType → str)
+        so that the dict can be stored in GraphSetting.chart_settings.
+        """
+        try:
+            options = self.options_panel.get_chart_options()
+        except Exception:
+            return
+        serializable = {}
+        for key, value in options.items():
+            if isinstance(value, QColor):
+                serializable[key] = value.name()
+            elif isinstance(value, ChartType):
+                serializable[key] = value.value
+            elif isinstance(value, (int, float)):
+                serializable[key] = value
+            elif value is None or isinstance(value, (str, bool, list, dict)):
+                serializable[key] = value
+            # Skip non-serializable values (Qt.PenStyle instances that aren't int, etc.)
+        self.state._chart_options_cache = serializable
+
     def _schedule_refresh(self, *args):
         """Debounced refresh - coalesces rapid changes into single refresh.
-        
+
         TODO (P1-1): Tag change type (data_changed vs style_changed) and skip
         data recomputation when only style/color/line-width options change.
         Currently every change triggers full clear → rebuild in _do_refresh().
         """
+        if not getattr(self, '_restoring_options', False):
+            self._sync_chart_options_to_state()
         self._refresh_timer.start()
 
     def _on_grid_view_changed(self):
@@ -1229,8 +1254,16 @@ class GraphPanel(QWidget):
         self.main_graph.showGrid(x=grid_x, y=grid_y, alpha=grid_alpha)
 
         title = options.get('title')
-        if title:
+        subtitle = options.get('subtitle')
+        if title and subtitle:
+            self.main_graph.setTitle(
+                f"<span style='font-size:14pt'>{title}</span><br>"
+                f"<span style='font-size:10pt; color:#94a3b8'>{subtitle}</span>"
+            )
+        elif title:
             self.main_graph.setTitle(title)
+        else:
+            self.main_graph.setTitle("")
 
         # Legend
         if legend_settings.get('show', True):
@@ -1577,7 +1610,13 @@ class GraphPanel(QWidget):
         pw.setLabel('bottom', cat_col or '')
         pw.setLabel('left', y_col)
         title = options.get('title')
-        if title:
+        subtitle = options.get('subtitle')
+        if title and subtitle:
+            pw.setTitle(
+                f"<span style='font-size:14pt'>{title}</span><br>"
+                f"<span style='font-size:10pt; color:#94a3b8'>{subtitle}</span>"
+            )
+        elif title:
             pw.setTitle(title)
 
         # Auto-fit view range to show all boxes
@@ -1689,7 +1728,13 @@ class GraphPanel(QWidget):
         pw.setLabel('bottom', cat_col or '')
         pw.setLabel('left', y_col)
         title = options.get('title')
-        if title:
+        subtitle = options.get('subtitle')
+        if title and subtitle:
+            pw.setTitle(
+                f"<span style='font-size:14pt'>{title}</span><br>"
+                f"<span style='font-size:10pt; color:#94a3b8'>{subtitle}</span>"
+            )
+        elif title:
             pw.setTitle(title)
 
         # Auto-fit view range for violin
@@ -1788,7 +1833,13 @@ class GraphPanel(QWidget):
         pw.setLabel('left', row_col)
 
         title = options.get('title')
-        if title:
+        subtitle = options.get('subtitle')
+        if title and subtitle:
+            pw.setTitle(
+                f"<span style='font-size:14pt'>{title}</span><br>"
+                f"<span style='font-size:10pt; color:#94a3b8'>{subtitle}</span>"
+            )
+        elif title:
             pw.setTitle(title)
 
         # Auto-fit view range for heatmap
@@ -1937,7 +1988,7 @@ class GraphPanel(QWidget):
             self.options_panel.set_series(series_names)
 
     def _on_chart_settings_changed(self):
-        """Sync chart type from state to options panel and refresh"""
+        """Sync chart type and all chart options from state to options panel and refresh"""
         try:
             ct = self.state.chart_settings.chart_type
             if ct and self.options_panel.chart_type_combo.currentData() != ct:
@@ -1948,6 +1999,20 @@ class GraphPanel(QWidget):
                     self.options_panel.chart_type_combo.blockSignals(False)
         except Exception:
             pass
+
+        # Restore all chart options from cache to UI widgets (profile switch).
+        # Guard flag prevents _schedule_refresh → _sync_chart_options_to_state
+        # from overwriting the just-restored cache during apply_options().
+        cache = getattr(self.state, '_chart_options_cache', None)
+        if cache:
+            self._restoring_options = True
+            try:
+                self.apply_options(cache)
+            except Exception:
+                pass
+            finally:
+                self._restoring_options = False
+
         self.refresh()
 
     def _on_selection_changed(self):
@@ -2151,19 +2216,20 @@ class GraphPanel(QWidget):
         return self.options_panel.get_legend_settings()
 
     def apply_options(self, options: Dict[str, Any]):
-        """Apply chart options to the options panel"""
+        """Apply chart options to the options panel.
+
+        When called during profile switching, always sets values (including
+        empty strings) so that stale values from the previous profile are cleared.
+        """
         if not options:
             return
 
-        # Apply chart title
-        if 'title' in options and options['title']:
-            self.options_panel.chart_title_edit.setText(options['title'])
-        if 'subtitle' in options and options['subtitle']:
-            self.options_panel.chart_subtitle_edit.setText(options['subtitle'])
+        # Apply chart title — always set (clear when not present)
+        self.options_panel.chart_title_edit.setText(options.get('title') or '')
+        self.options_panel.chart_subtitle_edit.setText(options.get('subtitle') or '')
 
-        # Apply X-axis options
-        if 'x_title' in options and options['x_title']:
-            self.options_panel.x_title_edit.setText(options['x_title'])
+        # Apply X-axis options — always set (clear when not present)
+        self.options_panel.x_title_edit.setText(options.get('x_title') or '')
         if 'x_format' in options:
             x_format = options['x_format']
             if x_format:
@@ -2193,9 +2259,8 @@ class GraphPanel(QWidget):
         if 'x_reverse' in options:
             self.options_panel.x_reverse_check.setChecked(options['x_reverse'])
 
-        # Apply Y-axis options
-        if 'y_title' in options and options['y_title']:
-            self.options_panel.y_title_edit.setText(options['y_title'])
+        # Apply Y-axis options — always set (clear when not present)
+        self.options_panel.y_title_edit.setText(options.get('y_title') or '')
         if 'y_format' in options:
             y_format = options['y_format']
             if y_format:
@@ -2219,10 +2284,18 @@ class GraphPanel(QWidget):
             else:
                 self.options_panel.y_format_combo.setCurrentIndex(0)  # Auto
 
-        if 'y_min' in options and options['y_min'] is not None:
-            self.options_panel.y_min_spin.setValue(options['y_min'])
-        if 'y_max' in options and options['y_max'] is not None:
-            self.options_panel.y_max_spin.setValue(options['y_max'])
+        if 'y_min' in options:
+            val = options['y_min']
+            if val is not None:
+                self.options_panel.y_min_spin.setValue(val)
+            else:
+                self.options_panel.y_min_spin.setValue(self.options_panel.y_min_spin.minimum())
+        if 'y_max' in options:
+            val = options['y_max']
+            if val is not None:
+                self.options_panel.y_max_spin.setValue(val)
+            else:
+                self.options_panel.y_max_spin.setValue(self.options_panel.y_max_spin.minimum())
         if 'y_log' in options:
             self.options_panel.y_log_check.setChecked(options['y_log'])
         if 'y_reverse' in options:

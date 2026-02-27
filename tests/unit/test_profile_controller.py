@@ -194,3 +194,166 @@ def test_import_profile_overrides_dataset_id():
 
     assert profile_id == "setting-1"
     assert store.get("setting-1").dataset_id == "new"
+
+
+# ==================== Chart Options Per-Profile Tests ====================
+
+
+def test_chart_options_saved_per_profile():
+    """title/subtitle이 프로파일별로 독립적으로 저장/복원되어야 한다."""
+    store = ProfileStore()
+    state = make_state()
+    controller = ProfileController(store, state)
+
+    # Profile A 생성 및 적용
+    pid_a = controller.create_profile("ds-1", "Profile A")
+    assert pid_a is not None
+    # Simulate UI setting title/subtitle into the options cache
+    state._chart_options_cache = {'title': 'Title A', 'subtitle': 'Sub A', 'x_title': 'X-A'}
+    controller.save_active_profile()
+
+    # Profile B 생성 및 적용
+    pid_b = controller.create_profile("ds-1", "Profile B")
+    assert pid_b is not None
+    state._chart_options_cache = {'title': 'Title B', 'subtitle': 'Sub B', 'x_title': 'X-B'}
+    controller.save_active_profile()
+
+    # A로 전환 → title이 A로 복원되어야 함
+    controller.apply_profile(pid_a)
+    assert state._chart_options_cache.get('title') == 'Title A'
+    assert state._chart_options_cache.get('subtitle') == 'Sub A'
+    assert state._chart_options_cache.get('x_title') == 'X-A'
+
+    # B로 전환 → title이 B로 복원되어야 함
+    controller.apply_profile(pid_b)
+    assert state._chart_options_cache.get('title') == 'Title B'
+    assert state._chart_options_cache.get('subtitle') == 'Sub B'
+    assert state._chart_options_cache.get('x_title') == 'X-B'
+
+
+def test_chart_options_cleared_for_empty_profile():
+    """빈 프로파일로 전환 시 chart_options_cache가 빈 dict로 초기화되어야 한다."""
+    store = ProfileStore()
+    state = make_state()
+    controller = ProfileController(store, state)
+
+    # Profile with title
+    pid_with_title = controller.create_profile("ds-1", "With Title")
+    state._chart_options_cache = {'title': 'My Title', 'subtitle': 'My Sub'}
+    controller.save_active_profile()
+
+    # Profile without title (empty chart_settings)
+    pid_empty = controller.create_profile("ds-1", "Empty")
+    state._chart_options_cache = {}
+    controller.save_active_profile()
+
+    # Apply profile with title → verify title present
+    controller.apply_profile(pid_with_title)
+    assert state._chart_options_cache.get('title') == 'My Title'
+
+    # Apply empty profile → title should be cleared
+    controller.apply_profile(pid_empty)
+    assert state._chart_options_cache.get('title') is None or state._chart_options_cache.get('title') == ''
+
+
+def test_from_app_state_includes_chart_options_cache():
+    """from_app_state()가 _chart_options_cache의 내용을 chart_settings에 포함해야 한다."""
+    state = make_state()
+    state._chart_settings.chart_type = ChartType.LINE
+    state._x_column = "x_col"
+    state._chart_options_cache = {
+        'title': 'Test Title',
+        'subtitle': 'Test Subtitle',
+        'x_title': 'X Axis',
+        'y_title': 'Y Axis',
+        'grid_x': True,
+        'grid_y': False,
+        'bg_color': '#ffffff',
+    }
+
+    gs = GraphSettingMapper.from_app_state(state, "test", "ds-1")
+
+    assert gs.chart_settings.get('title') == 'Test Title'
+    assert gs.chart_settings.get('subtitle') == 'Test Subtitle'
+    assert gs.chart_settings.get('x_title') == 'X Axis'
+    assert gs.chart_settings.get('y_title') == 'Y Axis'
+    assert gs.chart_settings.get('grid_x') is True
+    assert gs.chart_settings.get('grid_y') is False
+    assert gs.chart_settings.get('bg_color') == '#ffffff'
+
+
+def test_to_app_state_restores_chart_options_cache():
+    """to_app_state()가 chart_settings를 _chart_options_cache에 복원해야 한다."""
+    state = make_state()
+    setting = make_setting(
+        chart_type="line",
+        chart_settings={
+            'title': 'Restored Title',
+            'subtitle': 'Restored Sub',
+            'x_title': 'Restored X',
+            'line_width': 3,
+        },
+    )
+
+    GraphSettingMapper.to_app_state(setting, state)
+
+    assert state._chart_options_cache.get('title') == 'Restored Title'
+    assert state._chart_options_cache.get('subtitle') == 'Restored Sub'
+    assert state._chart_options_cache.get('x_title') == 'Restored X'
+    assert state._chart_options_cache.get('line_width') == 3
+
+
+def test_chart_options_round_trip():
+    """from_app_state → to_app_state 왕복 시 chart options이 보존되어야 한다."""
+    state = make_state()
+    state._chart_settings.chart_type = ChartType.SCATTER
+    state._x_column = "time"
+    state._chart_options_cache = {
+        'title': 'Round Trip Test',
+        'subtitle': 'Subtitle',
+        'x_title': 'Time (s)',
+        'y_title': 'Value',
+        'grid_x': True,
+        'grid_y': True,
+        'grid_opacity': 0.5,
+        'show_labels': False,
+        'show_points': True,
+        'line_width': 3,
+        'marker_size': 8,
+        'fill_opacity': 0.7,
+        'bg_color': '#1e1e2e',
+    }
+
+    # Save: AppState → GraphSetting
+    gs = GraphSettingMapper.from_app_state(state, "test", "ds-1")
+
+    # Restore: GraphSetting → fresh AppState
+    state2 = make_state()
+    GraphSettingMapper.to_app_state(gs, state2)
+
+    # Verify all options survived the round trip
+    assert state2._chart_options_cache.get('title') == 'Round Trip Test'
+    assert state2._chart_options_cache.get('subtitle') == 'Subtitle'
+    assert state2._chart_options_cache.get('x_title') == 'Time (s)'
+    assert state2._chart_options_cache.get('y_title') == 'Value'
+    assert state2._chart_options_cache.get('grid_x') is True
+    assert state2._chart_options_cache.get('grid_opacity') == 0.5
+    assert state2._chart_options_cache.get('show_points') is True
+    assert state2._chart_options_cache.get('line_width') == 3
+    assert state2._chart_options_cache.get('bg_color') == '#1e1e2e'
+
+
+def test_chart_type_excluded_from_cache_in_chart_settings():
+    """chart_type은 GraphSetting의 top-level 필드이므로 chart_settings에 중복 저장되지 않아야 한다."""
+    state = make_state()
+    state._chart_settings.chart_type = ChartType.BAR
+    state._chart_options_cache = {
+        'chart_type': 'bar',  # This should be excluded
+        'title': 'Test',
+    }
+
+    gs = GraphSettingMapper.from_app_state(state, "test", "ds-1")
+
+    # chart_type should be at top level, not in chart_settings
+    assert gs.chart_type == 'bar'
+    assert 'chart_type' not in gs.chart_settings

@@ -408,6 +408,11 @@ class AppState(QObject):
         # 차트 설정
         self._chart_settings = ChartSettings()
 
+        # Chart options cache: stores serialized UI chart options (title, subtitle,
+        # axis titles, formats, grid, style, etc.) for profile persistence.
+        # Synced from GraphOptionsPanel via GraphPanel._sync_chart_options_to_state().
+        self._chart_options_cache: Dict[str, Any] = {}
+
         # 툴 모드
         self._tool_mode = ToolMode.PAN
 

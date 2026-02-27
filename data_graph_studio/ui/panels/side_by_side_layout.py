@@ -282,7 +282,7 @@ class MiniGraphWidget(QWidget):
         # Store hover columns for future tooltip support
         self._hover_columns = self.effective_hover_columns
 
-        # Apply chart style settings (grid, legend) to plot widget
+        # Apply chart style settings (grid, legend, title) to plot widget
         cs = self.effective_chart_settings
         if self.plot_widget is not None:
             show_grid = cs.get('show_grid', True)
@@ -290,6 +290,16 @@ class MiniGraphWidget(QWidget):
             show_legend = cs.get('show_legend', False)
             if show_legend:
                 self.plot_widget.addLegend()
+            # Render title/subtitle from profile chart_settings
+            title = cs.get('title')
+            subtitle = cs.get('subtitle')
+            if title and subtitle:
+                self.plot_widget.setTitle(
+                    f"<span style='font-size:10pt'>{title}</span><br>"
+                    f"<span style='font-size:8pt; color:#94a3b8'>{subtitle}</span>"
+                )
+            elif title:
+                self.plot_widget.setTitle(title, size='10pt')
 
         # --- Resolve X data ---
         if x_col and x_col in df.columns:

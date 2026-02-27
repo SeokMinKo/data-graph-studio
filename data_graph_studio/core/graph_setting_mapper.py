@@ -24,10 +24,19 @@ class GraphSettingMapper:
         chart_settings_dict = {}
         if hasattr(state, '_chart_settings') and state._chart_settings:
             cs = state._chart_settings
-            for attr in ['show_legend', 'show_grid', 'show_markers', 'line_width', 
+            for attr in ['show_legend', 'show_grid', 'show_markers', 'line_width',
                          'marker_size', 'opacity', 'color_palette']:
                 if hasattr(cs, attr):
                     chart_settings_dict[attr] = getattr(cs, attr)
+
+        # Merge UI chart options from cache (title, subtitle, axis titles,
+        # formats, grid, style, etc.) for per-profile persistence.
+        if hasattr(state, '_chart_options_cache') and state._chart_options_cache:
+            for key, value in state._chart_options_cache.items():
+                if key == 'chart_type':
+                    continue  # chart_type is stored at top level
+                if isinstance(value, (str, int, float, bool, type(None), list, dict)):
+                    chart_settings_dict[key] = value
 
         # Serialize GroupColumn/ValueColumn objects to dicts for storage
         group_cols = []
@@ -188,6 +197,14 @@ class GraphSettingMapper:
                             logger.warning("Failed to apply chart_setting '%s': %s", key, e)
         except Exception as e:
             logger.warning("Failed to apply chart_settings: %s", e)
+
+        # Restore chart options cache for UI restoration on profile switch.
+        # GraphPanel._on_chart_settings_changed() reads this to update UI widgets.
+        try:
+            if hasattr(state, '_chart_options_cache'):
+                state._chart_options_cache = dict(setting.chart_settings) if setting.chart_settings else {}
+        except Exception as e:
+            logger.warning("Failed to restore chart_options_cache: %s", e)
 
         # 변경 완료 후 시그널 발행 (UI 갱신 트리거)
         try:
