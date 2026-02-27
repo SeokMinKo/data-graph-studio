@@ -308,14 +308,16 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
         except UpdatePayloadError as e:
             logger.warning("help_controller.run_installer.payload_invalid", exc_info=True)
             QMessageBox.warning(
-                self,
+                self.w,
                 "Updates",
                 "Update package validation failed.\n\n"
-                f"{e}\n\n"
+                f"Reason: {e}\n\n"
                 "Recovery guide:\n"
-                "1) Check internet connection and retry update.\n"
-                "2) If this repeats, download installer manually from the Releases page.\n"
-                "3) Compare .sha256 file with installer before running."
+                "1) Retry update after confirming network connection.\n"
+                "2) Disable VPN/proxy temporarily if downloads are being rewritten.\n"
+                f"3) Download installer + .sha256 manually from:\n{info.html_url}\n"
+                "4) Verify the checksum file references the same installer filename.\n"
+                "5) Run installer as Administrator if SmartScreen blocks execution."
             )
         except Exception as e:
             QMessageBox.warning(self.w, "Updates", f"Update failed:\n{e}")

@@ -139,14 +139,20 @@ def download_asset(url: str, filename: str) -> str:
     return out_path
 
 
-def read_sha256_file(path: str) -> str:
-    """Parse a .sha256 file content like: '<hash>  <filename>'"""
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+def read_sha256_file(path: str) -> tuple[str, str]:
+    """Parse a .sha256 line like: '<hash>  <filename>'.
+
+    Returns (hash, filename). filename may be empty if it is not present.
+    """
+    with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
         line = f.readline().strip()
     if not line:
-        return ""
-    # split on whitespace, first token is hash
-    return line.split()[0].lower()
+        return "", ""
+
+    parts = line.split()
+    digest = parts[0].lower() if parts else ""
+    filename = parts[-1].strip() if len(parts) >= 2 else ""
+    return digest, filename
 
 
 def sha256sum(path: str) -> str:
@@ -181,9 +187,19 @@ def validate_downloaded_update_assets(installer_path: str, sha_path: str) -> Non
             "Downloaded installer is not a valid Windows executable (MZ header missing)."
         )
 
-    expected = read_sha256_file(sha_path)
+    expected, checksum_target = read_sha256_file(sha_path)
     if not expected:
         raise UpdatePayloadError("Checksum file is empty or malformed.")
+
+    if len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
+        raise UpdatePayloadError("Checksum file format is invalid (sha256 digest not found).")
+
+    expected_name = os.path.basename(installer_path)
+    if checksum_target and os.path.basename(checksum_target) != expected_name:
+        raise UpdatePayloadError(
+            "Checksum file points to a different installer. "
+            f"Expected: {expected_name} / Found: {checksum_target}"
+        )
 
     actual = sha256sum(installer_path)
     if expected != actual:
