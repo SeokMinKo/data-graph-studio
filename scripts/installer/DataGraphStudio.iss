@@ -22,6 +22,9 @@ PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\..\resources\icons\dgs.ico
+CloseApplications=yes
+CloseApplicationsFilter=DataGraphStudio.exe
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

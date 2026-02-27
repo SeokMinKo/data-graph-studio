@@ -32,3 +32,15 @@ def test_format_startup_failure_contains_recovery_header():
 
     assert "IMPORT ERROR" in msg
     assert "Recovery Guide:" in msg
+
+
+def test_file_not_found_recovery_guide_windows_frozen():
+    steps = main._startup_recovery_guide(
+        FileNotFoundError("resources/icons/dgs.ico"),
+        is_frozen=True,
+        platform_name="win32",
+    )
+
+    assert any("setup-log.txt" in step for step in steps)
+    assert any("resources" in step for step in steps)
+    assert any("Repair" in step for step in steps)

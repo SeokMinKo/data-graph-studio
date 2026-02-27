@@ -74,6 +74,9 @@ def _startup_recovery_guide(exc: Exception, *, is_frozen: bool, platform_name: s
         f"로그 파일 확인: {log_file}",
     ]
 
+    if platform_name == "win32" and is_frozen:
+        steps.append("오프라인 설치 문제 진단: 설치본과 같은 폴더에 setup-log.txt를 생성해 재설치하세요 (`Setup.exe /LOG=setup-log.txt`).")
+
     lowered = msg.lower()
     if platform_name == "win32" and is_frozen:
         steps.append("설치 파일(Setup.exe)을 다시 실행해 'Repair/재설치'를 시도하세요.")
@@ -87,6 +90,11 @@ def _startup_recovery_guide(exc: Exception, *, is_frozen: bool, platform_name: s
             steps.append("오프라인 배포본 누락 가능성: 설치본을 다시 받아 재설치하세요.")
         else:
             steps.append("개발환경에서는 `pip install -r requirements.txt` 후 재실행하세요.")
+
+    if isinstance(exc, FileNotFoundError):
+        steps.append("필수 리소스 파일 누락 가능성: 설치 폴더의 resources 디렉터리가 존재하는지 확인하세요.")
+        if is_frozen:
+            steps.append("Windows 오프라인 설치본 손상 가능성: Setup.exe로 Repair 실행 후 재시도하세요.")
 
     if isinstance(exc, NameError):
         steps.append("런타임 NameError 감지: 최신 버전으로 업데이트 후 같은 입력으로 재시도하세요.")
@@ -221,6 +229,11 @@ def main():
     except NameError as e:
         logger.critical("Startup NameError", exc_info=True)
         print("\n" + _format_startup_failure("RUNTIME NAME ERROR", e))
+        sys.exit(1)
+
+    except FileNotFoundError as e:
+        logger.critical("Startup resource missing", exc_info=True)
+        print("\n" + _format_startup_failure("STARTUP RESOURCE MISSING", e))
         sys.exit(1)
 
     except Exception as e:
