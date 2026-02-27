@@ -10,7 +10,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -231,7 +230,7 @@ class PerfettoTraceController(QObject):
         self._serial: str = ""
         self._process: subprocess.Popen | None = None
         self._tracing: bool = False
-        self._trace_device_path = "/data/local/tmp/dgs_trace.perfetto-trace"
+        self._trace_device_path = "/data/misc/perfetto-traces/dgs_blocktrace.pftrace"
         self._tp_shell: str = ""
         self._used_oneshot: bool = False
 
@@ -435,7 +434,6 @@ class PerfettoTraceController(QObject):
         logger.debug("[Perfetto] trace_processor: %s", self._tp_shell)
 
         buffer_mb = int(config.get("buffer_size_mb", 64))
-        buffer_kb = buffer_mb * 1024
         events = config.get("events", [
             "block/block_rq_issue",
             "block/block_rq_complete",
@@ -443,52 +441,20 @@ class PerfettoTraceController(QObject):
         ])
         duration_s = int(config.get("duration_s", 10))
 
-        events_str = "\n".join(f'            ftrace_events: "{e}"' for e in events)
-        perfetto_config = (
-            f"buffers: {{\n"
-            f"    size_kb: {buffer_kb}\n"
-            f"    fill_policy: RING_BUFFER\n"
-            f"}}\n"
-            f"data_sources: {{\n"
-            f"    config {{\n"
-            f'        name: "linux.ftrace"\n'
-            f"        ftrace_config {{\n"
-            f"{events_str}\n"
-            f"            buffer_size_kb: {buffer_kb // 2}\n"
-            f"        }}\n"
-            f"    }}\n"
-            f"}}\n"
-            f"duration_ms: 0\n"
-        )
-
-        # Push config
-        self.progress.emit("Pushing perfetto config...")
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".pbtxt", delete=False
-        ) as f:
-            f.write(perfetto_config)
-            config_path = f.name
-
+        # 사용자 검증 명령 기반 실행
+        # adb shell perfetto --time 10s --buffer 64mb block\block_rq_issue block\block_rq_complete -o /data/misc/perfetto-traces/blocktrace.pftrace
         adb = ["adb", "-s", serial]
-        try:
-            device_config = self._push_perfetto_config(adb, config_path)
-        finally:
-            Path(config_path).unlink(missing_ok=True)
-
-        # Start perfetto (--txt for text-format config)
-        # NOTE: non-root Android builds can deny direct -c /path reads due to SELinux.
-        # Use stdin piping with -c - for broader compatibility.
         self.progress.emit("Starting perfetto...")
-        self._used_oneshot = False
-        self._trace_device_path = "/data/local/tmp/dgs_trace.perfetto-trace"
-        shell_cmd = (
-            f"cat {shlex.quote(device_config)} | "
-            f"perfetto --txt -c - -o {shlex.quote(self._trace_device_path)}"
-        )
-        perfetto_cmd = adb + ["shell", shell_cmd]
-        self.log_message.emit(
-            f"$ adb -s {serial} shell '{shell_cmd}'"
-        )
+        self._used_oneshot = True
+        self._trace_device_path = "/data/misc/perfetto-traces/blocktrace.pftrace"
+        perfetto_cmd = adb + [
+            "shell", "perfetto",
+            "--time", f"{duration_s}s",
+            "--buffer", f"{buffer_mb}mb",
+            *events,
+            "-o", self._trace_device_path,
+        ]
+        self.log_message.emit("$ " + " ".join(perfetto_cmd))
         self._process = subprocess.Popen(
             perfetto_cmd,
             stdout=subprocess.PIPE,
@@ -499,40 +465,12 @@ class PerfettoTraceController(QObject):
         import time
         time.sleep(1)
         if self._process.poll() is not None:
-            # Exited immediately — read stderr for error
             _, stderr = self._process.communicate(timeout=5)
             err_msg = stderr.decode(errors="replace").strip() if stderr else "unknown error"
-            logger.warning("[Perfetto] config mode failed, trying oneshot fallback: rc=%s, stderr=%s",
-                           self._process.returncode, err_msg)
+            logger.error("[Perfetto] oneshot start failed: rc=%s, stderr=%s",
+                         self._process.returncode, err_msg)
             self._process = None
-
-            # Fallback: known-working command path/format from field validation
-            self._used_oneshot = True
-            self._trace_device_path = "/data/misc/perfetto-traces/blocktrace.pftrace"
-            oneshot_cmd = adb + [
-                "shell", "perfetto",
-                "--time", f"{duration_s}s",
-                "--buffer", f"{buffer_mb}mb",
-                *events,
-                "-o", self._trace_device_path,
-            ]
-            self.log_message.emit(
-                f"$ adb -s {serial} shell perfetto --time {duration_s}s --buffer {buffer_mb}mb "
-                f"{' '.join(events)} -o {self._trace_device_path}"
-            )
-            self._process = subprocess.Popen(
-                oneshot_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            time.sleep(1)
-            if self._process.poll() is not None:
-                _, stderr2 = self._process.communicate(timeout=5)
-                err_msg2 = stderr2.decode(errors="replace").strip() if stderr2 else "unknown error"
-                logger.error("[Perfetto] oneshot fallback failed: rc=%s, stderr=%s",
-                             self._process.returncode, err_msg2)
-                self._process = None
-                raise RuntimeError(f"Perfetto failed to start: {err_msg2}")
+            raise RuntimeError(f"Perfetto failed to start: {err_msg}")
 
         self._tracing = True
         logger.info("[Perfetto] tracing started (pid=%s, oneshot=%s)", self._process.pid, self._used_oneshot)
