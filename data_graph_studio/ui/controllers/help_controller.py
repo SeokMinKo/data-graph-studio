@@ -28,27 +28,9 @@ class HelpController:
 
     def _show_about(self):
         """About 다이얼로그"""
-        QMessageBox.about(
-            self,
-            "About Data Graph Studio",
-            """<h2>Data Graph Studio</h2>
-            <p><b>Version 0.2.0</b></p>
-            <p>Big Data Visualization & Analysis Tool</p>
-            <hr>
-            <p>Features:</p>
-            <ul>
-                <li>📊 Multiple chart types (Line, Bar, Scatter, Pie, Area, Histogram)</li>
-                <li>📁 Support for CSV, Excel, Parquet, JSON</li>
-                <li>🔄 Drag & Drop file loading</li>
-                <li>📋 Clipboard paste from Excel/Google Sheets</li>
-                <li>💾 Profile save/load</li>
-                <li>🖥️ CLI & Python API</li>
-            </ul>
-            <hr>
-            <p>© 2026 Godol</p>
-            <p><a href='https://github.com/SeokMinKo/data-graph-studio'>GitHub</a></p>
-            """
-        )
+        from ..dialogs.about_dialog import AboutDialog
+        dialog = AboutDialog(self.w)
+        dialog.exec()
     
 
     def _show_quick_start(self):

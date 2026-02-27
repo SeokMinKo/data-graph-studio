@@ -201,6 +201,10 @@ class ViewActionsController:
         except Exception:
             pass
         
+        # Update theme label in status bar
+        if hasattr(self.w, '_status_theme_label'):
+            self.w._status_theme_label.setText(theme_id.replace('-', ' ').title())
+
         self.w.statusbar.showMessage(f"Theme changed to {theme_id.title()}", 3000)
 
 

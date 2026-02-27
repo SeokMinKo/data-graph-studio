@@ -2151,6 +2151,222 @@ class ThemeManager:
                 background-color: {t.background};
                 border-radius: 8px;
             }}
+
+            /* ============ Empty State Shortcut Hint ============ */
+            #emptyStateShortcutHint {{
+                color: {t.text_muted};
+                font-size: 11px;
+                font-weight: 500;
+                background-color: {t.surface_hover};
+                border: 1px solid {t.border};
+                border-radius: 6px;
+                padding: 3px 10px;
+                max-width: 80px;
+            }}
+
+            /* ============ Status Bar Enhancements ============ */
+            #statusVersionLabel {{
+                color: {t.text_muted};
+                font-size: 11px;
+                padding: 2px 8px;
+                background: transparent;
+                border: none;
+            }}
+
+            #statusThemeLabel {{
+                color: {t.primary};
+                font-size: 11px;
+                font-weight: 500;
+                padding: 2px 8px;
+                background: transparent;
+                border: none;
+            }}
+
+            #statusThemeLabel:hover {{
+                color: {t.accent};
+            }}
+
+            #statusSeparator {{
+                color: {t.border};
+                background-color: {t.border};
+                max-width: 1px;
+                margin: 4px 4px;
+                border: none;
+                border-radius: 0px;
+            }}
+
+            #statusMemoryLabel {{
+                font-size: 11px;
+                font-weight: 500;
+                padding: 2px 8px;
+                border-radius: 8px;
+                border: none;
+                background: transparent;
+            }}
+
+            #statusMemoryLabel[level="normal"] {{
+                color: {t.success};
+                background-color: {"#ECFDF5" if t.is_light() else "rgba(16, 185, 129, 0.12)"};
+            }}
+
+            #statusMemoryLabel[level="warning"] {{
+                color: {t.warning};
+                background-color: {"#FFFBEB" if t.is_light() else "rgba(245, 158, 11, 0.12)"};
+            }}
+
+            #statusMemoryLabel[level="danger"] {{
+                color: {t.error};
+                background-color: {"#FEF2F2" if t.is_light() else "rgba(239, 68, 68, 0.12)"};
+            }}
+
+            /* ============ Toolbar Group Labels ============ */
+            #toolbarGroupLabel {{
+                color: {t.text_muted};
+                font-size: 11px;
+                font-weight: 600;
+                padding: 0px 4px;
+                background: transparent;
+                border: none;
+            }}
+
+            /* ============ About Dialog ============ */
+            #aboutDialog {{
+                background-color: {t.background};
+            }}
+
+            #aboutContent {{
+                background-color: {t.background};
+            }}
+
+            #aboutTagline {{
+                font-size: 14px;
+                color: {t.text_secondary};
+                background: transparent;
+                border: none;
+            }}
+
+            #aboutFeaturesFrame {{
+                background: transparent;
+                border: none;
+            }}
+
+            #aboutFeatureCard {{
+                background-color: {t.surface};
+                border: 1px solid {t.border};
+                border-radius: 8px;
+            }}
+
+            #aboutFeatureCard:hover {{
+                background-color: {t.surface_hover};
+            }}
+
+            #aboutFeatureTitle {{
+                font-weight: 600;
+                font-size: 12px;
+                color: {t.foreground};
+                background: transparent;
+                border: none;
+            }}
+
+            #aboutFeatureDesc {{
+                font-size: 11px;
+                color: {t.text_secondary};
+                background: transparent;
+                border: none;
+            }}
+
+            #aboutBuiltLabel {{
+                font-size: 11px;
+                font-weight: 600;
+                color: {t.text_muted};
+                background: transparent;
+                border: none;
+            }}
+
+            #aboutTechChip {{
+                font-size: 11px;
+                color: {t.text_secondary};
+                background-color: {t.surface_hover};
+                border: 1px solid {t.border};
+                border-radius: 6px;
+                padding: 3px 8px;
+            }}
+
+            #aboutCopyright {{
+                font-size: 11px;
+                color: {t.text_muted};
+                background: transparent;
+                border: none;
+            }}
+
+            #aboutCloseBtn {{
+                min-width: 80px;
+            }}
+
+            /* ============ Enhanced Stat Cards ============ */
+            #StatCard {{
+                background-color: {t.surface};
+                border: 1px solid {t.border};
+                border-radius: 10px;
+            }}
+
+            #StatCard:hover {{
+                background-color: {t.surface_hover};
+            }}
+
+            #cardValue {{
+                color: {t.foreground};
+                font-size: 20px;
+                font-weight: 700;
+                background: transparent;
+                border: none;
+            }}
+
+            /* ============ Enhanced Toolbar ============ */
+            QToolButton:checked {{
+                background-color: {t.selected};
+                color: {t.primary};
+                border: 1px solid {t.primary}40;
+            }}
+
+            QToolBar::separator {{
+                width: 1px;
+                background-color: {t.border};
+                margin: 8px 12px;
+            }}
+
+            QToolButton {{
+                background-color: transparent;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 15px;
+            }}
+
+            /* ============ Thinner Scrollbars ============ */
+            QScrollBar:vertical {{
+                background-color: transparent;
+                width: 8px;
+                margin: 4px;
+            }}
+
+            QScrollBar::handle:vertical {{
+                background-color: {t.text_muted};
+                border-radius: 4px;
+                min-height: 30px;
+            }}
+
+            QScrollBar:horizontal {{
+                background-color: transparent;
+                height: 8px;
+                margin: 4px;
+            }}
+
+            QScrollBar::handle:horizontal {{
+                background-color: {t.text_muted};
+                border-radius: 4px;
+                min-width: 30px;
+            }}
         """
     
     def _hex_to_rgb(self, hex_color: str) -> str:

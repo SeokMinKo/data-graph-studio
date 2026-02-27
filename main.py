@@ -147,14 +147,22 @@ def main():
         
         # 스타일
         app.setStyle("Fusion")
-        
+
+        # 스플래시 스크린
+        from data_graph_studio.ui.splash_screen import SplashScreen
+        splash = SplashScreen(version=__version__)
+        splash.show()
+        splash.set_status("Loading modules...", 20)
+
         # 메인 윈도우
         logger.info("Creating MainWindow...")
+        splash.set_status("Initializing UI...", 50)
         window = MainWindow()
         logger.info("MainWindow created successfully")
-        
+
+        splash.set_status("Preparing workspace...", 80)
         logger.info("Showing MainWindow...")
-        window.show()
+        splash.finish(window)
         logger.info("MainWindow shown")
         
         # 커맨드라인 인자로 파일 열기

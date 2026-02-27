@@ -23,6 +23,14 @@ class ToolbarController:
     def __init__(self, main_window: 'MainWindow'):
         self.w = main_window
 
+    @staticmethod
+    def _make_group_label(text: str) -> QLabel:
+        """Create a small group label for toolbar sections."""
+        label = QLabel(text)
+        label.setObjectName("toolbarGroupLabel")
+        label.setAlignment(Qt.AlignCenter)
+        return label
+
     def _setup_toolbar(self):
         """Main toolbar setup (Line 1)"""
         toolbar = QToolBar("Main Toolbar")
@@ -31,6 +39,8 @@ class ToolbarController:
         self.w.addToolBar(toolbar)
 
         # === Project/Profile I/O Section ===
+        toolbar.addWidget(self._make_group_label("FILE"))
+
         open_project_btn = QAction("📂 Open Project", self.w)
         open_project_btn.setToolTip(self.w._format_tooltip("Open Project (.dgs)", "Ctrl+O"))
         open_project_btn.triggered.connect(self.w._on_open_file)
@@ -54,6 +64,7 @@ class ToolbarController:
         toolbar.addSeparator()
 
         # === Navigation/Selection Tools ===
+        toolbar.addWidget(self._make_group_label("NAV"))
         self.w._tool_actions = {}
 
         tools = [
@@ -76,6 +87,7 @@ class ToolbarController:
         toolbar.addSeparator()
 
         # === Drawing Tools ===
+        toolbar.addWidget(self._make_group_label("DRAW"))
         draw_tools = [
             (ToolMode.LINE_DRAW, "🖊️", "Line Draw", "Shift+L"),
             (ToolMode.ARROW_DRAW, "➡", "Arrow Draw", "Shift+A"),
@@ -110,6 +122,7 @@ class ToolbarController:
         toolbar.addSeparator()
 
         # === Chart Type Selector ===
+        toolbar.addWidget(self._make_group_label("CHART"))
         chart_types = [
             (ChartType.LINE, "📈", "<b>Line Chart</b><br>Best for: Time series, trends<br>Shortcut: 1"),
             (ChartType.BAR, "📊", "<b>Bar Chart</b><br>Best for: Comparing categories<br>Shortcut: 2"),
