@@ -320,5 +320,16 @@ plot("data.csv", x="Time", y="Value", output="chart.png")
                 "5) Run installer as Administrator if SmartScreen blocks execution."
             )
         except Exception as e:
-            QMessageBox.warning(self.w, "Updates", f"Update failed:\n{e}")
+            logger.warning("help_controller.run_installer.failed", exc_info=True)
+            QMessageBox.warning(
+                self.w,
+                "Updates",
+                "Update failed before installer launch.\n\n"
+                f"Reason: {e}\n\n"
+                "Recovery guide:\n"
+                "1) Retry from Help > Check for Updates.\n"
+                "2) If network is unstable, download installer manually from:\n"
+                "   https://github.com/SeokMinKo/data-graph-studio/releases/latest\n"
+                "3) Keep this app open until installer starts."
+            )
 

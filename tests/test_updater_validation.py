@@ -6,6 +6,7 @@ import pytest
 
 from data_graph_studio.core.updater import (
     UpdatePayloadError,
+    download_asset,
     validate_downloaded_update_assets,
 )
 
@@ -77,3 +78,13 @@ def test_validate_downloaded_update_assets_rejects_checksum_for_other_installer(
 
     with pytest.raises(UpdatePayloadError, match="different installer"):
         validate_downloaded_update_assets(str(installer), str(sha))
+
+
+def test_download_asset_rejects_non_http_url() -> None:
+    with pytest.raises(UpdatePayloadError, match="Invalid download URL"):
+        download_asset("file:///tmp/installer.exe", "installer.exe")
+
+
+def test_download_asset_rejects_unsafe_filename() -> None:
+    with pytest.raises(UpdatePayloadError, match="Unsafe asset filename"):
+        download_asset("https://example.com/installer.exe", "../installer.exe")

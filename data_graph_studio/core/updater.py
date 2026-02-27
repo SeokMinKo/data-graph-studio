@@ -133,6 +133,11 @@ def is_update_available(current_version: str, latest_version: str) -> bool:
 
 def download_asset(url: str, filename: str) -> str:
     """Download asset to temp dir and return full path."""
+    if not url.startswith(("http://", "https://")):
+        raise UpdatePayloadError(f"Invalid download URL: {url!r}")
+    if not filename or any(sep in filename for sep in ("/", "\\")):
+        raise UpdatePayloadError(f"Unsafe asset filename: {filename!r}")
+
     tmp_dir = tempfile.mkdtemp(prefix="dgs-update-")
     out_path = os.path.join(tmp_dir, filename)
     urllib.request.urlretrieve(url, out_path)
