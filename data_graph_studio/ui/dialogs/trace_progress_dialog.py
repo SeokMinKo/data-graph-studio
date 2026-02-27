@@ -366,60 +366,6 @@ class PerfettoTraceController(QObject):
             f"  mv trace_processor {dest_dir}/"
         ) from last_error
 
-    def _push_perfetto_config(self, adb: list[str], local_config_path: str) -> str:
-        """Push perfetto config to device and ensure readable permission.
-
-        우선 /data/local/tmp 경로를 사용하고, 실패 시 /sdcard/Download로 fallback 한다.
-        Returns:
-            Device config path used.
-        Raises:
-            RuntimeError: 모든 경로에서 push 실패 시.
-        """
-        candidates = [
-            "/data/local/tmp/dgs_perfetto.pbtxt",
-            "/sdcard/Download/dgs_perfetto.pbtxt",
-        ]
-        last_error = ""
-
-        for device_config in candidates:
-            try:
-                push_result = subprocess.run(
-                    adb + ["push", local_config_path, device_config],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    check=True,
-                )
-                logger.debug("[Perfetto] config pushed to %s: %s", device_config, push_result.stdout.strip())
-
-                # shell user가 소유한 파일이면 root 없이 chmod 가능
-                chmod_result = subprocess.run(
-                    adb + ["shell", "chmod", "644", device_config],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if chmod_result.returncode != 0:
-                    logger.warning(
-                        "[Perfetto] chmod failed for %s (non-fatal): %s",
-                        device_config,
-                        chmod_result.stderr.strip(),
-                    )
-                else:
-                    logger.debug("[Perfetto] chmod 644 applied: %s", device_config)
-
-                return device_config
-            except subprocess.CalledProcessError as e:
-                last_error = e.stderr or str(e)
-                logger.warning(
-                    "[Perfetto] config push failed for %s: rc=%s stderr=%s",
-                    device_config,
-                    e.returncode,
-                    (e.stderr or "").strip(),
-                )
-
-        raise RuntimeError(f"Failed to push perfetto config to device paths: {last_error}")
-
     def start_trace(self, serial: str, config: dict[str, Any]) -> None:
         """Perfetto 트레이스를 시작한다.
 
