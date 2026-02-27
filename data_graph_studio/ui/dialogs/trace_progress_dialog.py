@@ -473,16 +473,16 @@ class PerfettoTraceController(QObject):
             Path(config_path).unlink(missing_ok=True)
 
         # Start perfetto (--txt for text-format config)
+        # NOTE: non-root Android builds can deny direct -c /path reads due to SELinux.
+        # Use stdin piping with -c - for broader compatibility.
         self.progress.emit("Starting perfetto...")
-        perfetto_cmd = adb + [
-            "shell", "perfetto",
-            "--txt",
-            "-c", device_config,
-            "-o", self._trace_device_path,
-        ]
+        shell_cmd = (
+            f"cat {shlex.quote(device_config)} | "
+            f"perfetto --txt -c - -o {shlex.quote(self._trace_device_path)}"
+        )
+        perfetto_cmd = adb + ["shell", shell_cmd]
         self.log_message.emit(
-            f"$ adb -s {serial} shell perfetto --txt -c {device_config} "
-            f"-o {self._trace_device_path}"
+            f"$ adb -s {serial} shell '{shell_cmd}'"
         )
         self._process = subprocess.Popen(
             perfetto_cmd,
