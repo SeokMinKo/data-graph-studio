@@ -34,38 +34,53 @@ class ToolbarController:
     def _setup_toolbar(self):
         """Main toolbar setup (Line 1)"""
         toolbar = QToolBar("Main Toolbar")
-        toolbar.setMovable(False)
+        toolbar.setObjectName("mainToolbar")
         toolbar.setIconSize(QSize(16, 16))
         self.w.addToolBar(toolbar)
+        self.w._main_toolbar = toolbar
+
+        mgr = self.w._toolbar_manager
+        mgr.register_toolbar("main", toolbar, "Main Toolbar")
 
         # === Project/Profile I/O Section ===
-        toolbar.addWidget(self._make_group_label("FILE"))
+        file_label = self._make_group_label("FILE")
+        toolbar.addWidget(file_label)
+        file_actions = []
 
         open_project_btn = QAction("📂 Open Project", self.w)
         open_project_btn.setToolTip(self.w._format_tooltip("Open Project (.dgs)", "Ctrl+O"))
         open_project_btn.triggered.connect(self.w._on_open_file)
         toolbar.addAction(open_project_btn)
+        file_actions.append(open_project_btn)
 
         open_profile_btn = QAction("📂 Open Profile", self.w)
         open_profile_btn.setToolTip(self.w._format_tooltip("Load Graph Profile", ""))
         open_profile_btn.triggered.connect(lambda: self.w.dataset_manager._on_load_profile())
         toolbar.addAction(open_profile_btn)
+        file_actions.append(open_profile_btn)
 
         save_project_btn = QAction("💾 Save Project", self.w)
         save_project_btn.setToolTip(self.w._format_tooltip("Save Project", "Ctrl+Alt+S"))
         save_project_btn.triggered.connect(self.w._on_save_project_file)
         toolbar.addAction(save_project_btn)
+        file_actions.append(save_project_btn)
 
         save_profile_btn = QAction("💾 Save Profile", self.w)
         save_profile_btn.setToolTip(self.w._format_tooltip("Save Graph Profile", ""))
         save_profile_btn.triggered.connect(lambda: self.w.dataset_manager._on_save_profile())
         toolbar.addAction(save_profile_btn)
+        file_actions.append(save_profile_btn)
 
-        toolbar.addSeparator()
+        file_sep = toolbar.addSeparator()
+        mgr.register_group("main", "main.file", "File",
+                           actions=file_actions, widgets=[],
+                           separator=file_sep, label_widget=file_label, order=0)
 
         # === Navigation/Selection Tools ===
-        toolbar.addWidget(self._make_group_label("NAV"))
+        nav_label = self._make_group_label("NAV")
+        toolbar.addWidget(nav_label)
         self.w._tool_actions = {}
+        nav_actions = []
 
         tools = [
             (ToolMode.ZOOM, "🔍", "Zoom Mode", "Z"),
@@ -81,13 +96,21 @@ class ToolbarController:
             action.triggered.connect(lambda checked, m=mode: self.w.state.set_tool_mode(m))
             toolbar.addAction(action)
             self.w._tool_actions[mode] = action
+            nav_actions.append(action)
 
         self.w._tool_actions[ToolMode.PAN].setChecked(True)
 
-        toolbar.addSeparator()
+        nav_sep = toolbar.addSeparator()
+        mgr.register_group("main", "main.nav", "Navigation",
+                           actions=nav_actions, widgets=[],
+                           separator=nav_sep, label_widget=nav_label, order=1)
 
         # === Drawing Tools ===
-        toolbar.addWidget(self._make_group_label("DRAW"))
+        draw_label = self._make_group_label("DRAW")
+        toolbar.addWidget(draw_label)
+        draw_actions = []
+        draw_widgets = []
+
         draw_tools = [
             (ToolMode.LINE_DRAW, "🖊️", "Line Draw", "Shift+L"),
             (ToolMode.ARROW_DRAW, "➡", "Arrow Draw", "Shift+A"),
@@ -103,6 +126,7 @@ class ToolbarController:
             action.triggered.connect(lambda checked, m=mode: self.w.state.set_tool_mode(m))
             toolbar.addAction(action)
             self.w._tool_actions[mode] = action
+            draw_actions.append(action)
 
         # Draw color picker
         self.w._draw_color = QColor("#FF0000")
@@ -113,16 +137,24 @@ class ToolbarController:
         self.w._draw_color_btn.clicked.connect(self.w._on_draw_color_pick)
         self.w._update_draw_color_btn()
         toolbar.addWidget(self.w._draw_color_btn)
+        draw_widgets.append(self.w._draw_color_btn)
 
         clear_drawing_btn = QAction("🗑️", self.w)
         clear_drawing_btn.setToolTip(self.w._format_tooltip("Clear All Drawings", "Del"))
         clear_drawing_btn.triggered.connect(self.w._on_clear_drawings)
         toolbar.addAction(clear_drawing_btn)
+        draw_actions.append(clear_drawing_btn)
 
-        toolbar.addSeparator()
+        draw_sep = toolbar.addSeparator()
+        mgr.register_group("main", "main.draw", "Drawing",
+                           actions=draw_actions, widgets=draw_widgets,
+                           separator=draw_sep, label_widget=draw_label, order=2)
 
         # === Chart Type Selector ===
-        toolbar.addWidget(self._make_group_label("CHART"))
+        chart_label = self._make_group_label("CHART")
+        toolbar.addWidget(chart_label)
+        chart_actions = []
+
         chart_types = [
             (ChartType.LINE, "📈", "<b>Line Chart</b><br>Best for: Time series, trends<br>Shortcut: 1"),
             (ChartType.BAR, "📊", "<b>Bar Chart</b><br>Best for: Comparing categories<br>Shortcut: 2"),
@@ -135,6 +167,11 @@ class ToolbarController:
             action.setToolTip(tooltip)
             action.triggered.connect(lambda checked, c=ct: self.w.state.set_chart_type(c))
             toolbar.addAction(action)
+            chart_actions.append(action)
+
+        mgr.register_group("main", "main.chart", "Chart Types",
+                           actions=chart_actions, widgets=[],
+                           separator=None, label_widget=chart_label, order=3)
 
         # Store references for view actions
         self.w._reset_btn_action = None
@@ -146,17 +183,24 @@ class ToolbarController:
         self.w.addToolBarBreak(Qt.TopToolBarArea)  # Force new line after main toolbar
 
         toolbar = QToolBar("Secondary Toolbar")
-        toolbar.setMovable(False)
+        toolbar.setObjectName("secondaryToolbar")
         toolbar.setIconSize(QSize(16, 16))
         self.w.addToolBar(Qt.TopToolBarArea, toolbar)
+        self.w._secondary_toolbar = toolbar
+
+        mgr = self.w._toolbar_manager
+        mgr.register_toolbar("secondary", toolbar, "Secondary Toolbar")
 
         # === Streaming Controls (hidden by default, shown when streaming) ===
         self.w._streaming_widgets = []
+        streaming_actions = []
+        streaming_widgets = []
 
         streaming_label = QLabel(" Streaming: ")
         streaming_label.setObjectName("toolbarLabel")
         toolbar.addWidget(streaming_label)
         self.w._streaming_widgets.append(streaming_label)
+        streaming_widgets.append(streaming_label)
 
         # Play/Pause
         self.w._streaming_play_action = QAction("▶", self.w)
@@ -165,18 +209,21 @@ class ToolbarController:
         self.w._streaming_play_action.triggered.connect(self.w._on_streaming_play)
         toolbar.addAction(self.w._streaming_play_action)
         self.w._streaming_widgets.append(self.w._streaming_play_action)
+        streaming_actions.append(self.w._streaming_play_action)
 
         self.w._streaming_pause_action = QAction("⏸", self.w)
         self.w._streaming_pause_action.setToolTip("Pause Streaming")
         self.w._streaming_pause_action.triggered.connect(self.w._on_streaming_pause)
         toolbar.addAction(self.w._streaming_pause_action)
         self.w._streaming_widgets.append(self.w._streaming_pause_action)
+        streaming_actions.append(self.w._streaming_pause_action)
 
         self.w._streaming_stop_action = QAction("⏹", self.w)
         self.w._streaming_stop_action.setToolTip("Stop Streaming")
         self.w._streaming_stop_action.triggered.connect(self.w._on_streaming_stop)
         toolbar.addAction(self.w._streaming_stop_action)
         self.w._streaming_widgets.append(self.w._streaming_stop_action)
+        streaming_actions.append(self.w._streaming_stop_action)
 
         # Speed control
         from PySide6.QtWidgets import QComboBox
@@ -184,6 +231,7 @@ class ToolbarController:
         speed_label.setObjectName("toolbarLabel")
         toolbar.addWidget(speed_label)
         self.w._streaming_widgets.append(speed_label)
+        streaming_widgets.append(speed_label)
 
         self.w._streaming_speed_combo = QComboBox()
         self.w._streaming_speed_combo.addItems(["0.5x", "1x", "2x", "5x", "10x"])
@@ -192,12 +240,14 @@ class ToolbarController:
         self.w._streaming_speed_combo.setFixedWidth(60)
         toolbar.addWidget(self.w._streaming_speed_combo)
         self.w._streaming_widgets.append(self.w._streaming_speed_combo)
+        streaming_widgets.append(self.w._streaming_speed_combo)
 
         # Window size
         window_label = QLabel(" Window: ")
         window_label.setObjectName("toolbarLabel")
         toolbar.addWidget(window_label)
         self.w._streaming_widgets.append(window_label)
+        streaming_widgets.append(window_label)
 
         self.w._streaming_window_combo = QComboBox()
         self.w._streaming_window_combo.addItems(["100", "500", "1000", "5000", "All"])
@@ -206,46 +256,65 @@ class ToolbarController:
         self.w._streaming_window_combo.setFixedWidth(70)
         toolbar.addWidget(self.w._streaming_window_combo)
         self.w._streaming_widgets.append(self.w._streaming_window_combo)
+        streaming_widgets.append(self.w._streaming_window_combo)
 
         # Hide streaming controls initially
         self._hide_streaming_controls()
 
-        toolbar.addSeparator()
+        streaming_sep = toolbar.addSeparator()
+        mgr.register_group("secondary", "secondary.streaming", "Streaming",
+                           actions=streaming_actions, widgets=streaming_widgets,
+                           separator=streaming_sep, label_widget=None, order=0)
 
         # === View Controls (always visible) ===
         view_label = QLabel(" View: ")
         view_label.setObjectName("toolbarLabel")
         toolbar.addWidget(view_label)
+        view_actions = []
 
         deselect_btn = QAction("✕ Clear", self.w)
         deselect_btn.setToolTip(self.w._format_tooltip("Clear Selection", "Esc"))
         deselect_btn.triggered.connect(self.w._on_clear_selection)
         toolbar.addAction(deselect_btn)
+        view_actions.append(deselect_btn)
 
         reset_btn = QAction("↺ Reset", self.w)
         reset_btn.setToolTip(self.w._format_tooltip("Reset View", "Home"))
         reset_btn.triggered.connect(self.w._reset_graph_view)
         toolbar.addAction(reset_btn)
         self.w._reset_btn_action = reset_btn
+        view_actions.append(reset_btn)
 
         autofit_btn = QAction("⊡ Fit", self.w)
         autofit_btn.setToolTip(self.w._format_tooltip("Auto Fit to Data", "F"))
         autofit_btn.triggered.connect(self.w._autofit_graph)
         toolbar.addAction(autofit_btn)
         self.w._autofit_btn_action = autofit_btn
+        view_actions.append(autofit_btn)
 
-        toolbar.addSeparator()
+        view_sep = toolbar.addSeparator()
+        mgr.register_group("secondary", "secondary.view", "View Controls",
+                           actions=view_actions, widgets=[],
+                           separator=view_sep, label_widget=view_label, order=1)
 
         # === Quick Actions ===
+        quick_actions = []
+
         theme_toggle_btn = QAction("🌓", self.w)
         theme_toggle_btn.setToolTip(self.w._format_tooltip("Cycle Theme", "Ctrl+T"))
         theme_toggle_btn.triggered.connect(self.w._on_cycle_theme)
         toolbar.addAction(theme_toggle_btn)
+        quick_actions.append(theme_toggle_btn)
 
         export_btn = QAction("📤", self.w)
         export_btn.setToolTip(self.w._format_tooltip("Export", "Ctrl+E"))
         export_btn.triggered.connect(self.w._on_export_dialog)
         toolbar.addAction(export_btn)
+        quick_actions.append(export_btn)
+
+        mgr.register_group("secondary", "secondary.quick", "Quick Actions",
+                           actions=quick_actions, widgets=[],
+                           separator=None, label_widget=None, order=2)
 
     def _show_streaming_controls(self):
         """Show streaming-related toolbar widgets."""
@@ -269,19 +338,6 @@ class ToolbarController:
         self.w.addToolBar(Qt.TopToolBarArea, self.w._compare_toolbar)
         self.w._compare_toolbar.hide()
 
-        # View menu: "Compare Toolbar" toggle action
-        # Find View menu
-        view_menu = None
-        for action in self.w.menuBar().actions():
-            if action.text().replace("&", "") == "View":
-                view_menu = action.menu()
-                break
-
-        if view_menu is not None:
-            view_menu.addSeparator()
-            self.w._compare_toolbar_action = self.w._compare_toolbar.toggleViewAction()
-            self.w._compare_toolbar_action.setText("Compare Toolbar")
-            self.w._compare_toolbar_action.setToolTip("Show/hide the compare toolbar")
-            view_menu.addAction(self.w._compare_toolbar_action)
-
-
+        # Register with ToolbarManager (single group — custom widget toolbar)
+        mgr = self.w._toolbar_manager
+        mgr.register_toolbar("compare", self.w._compare_toolbar, "Compare Toolbar")

@@ -72,6 +72,7 @@ from .controllers.view_actions_controller import ViewActionsController
 from .controllers.help_controller import HelpController
 from .controllers.export_ui_controller import ExportUIController
 from .controllers.autorecovery_controller import AutorecoveryController
+from .toolbars.toolbar_manager import ToolbarManager
 
 # -- Lazy imports (only used in specific method bodies) -----------------------
 # ClipboardManager, DragDropHandler: from ..core.clipboard_manager  (drag & drop)
@@ -209,6 +210,7 @@ class MainWindow(QMainWindow):
         self._help_ctrl = HelpController(self)
         self._export_ui_ctrl = ExportUIController(self)
         self._autorecovery_ctrl = AutorecoveryController(self)
+        self._toolbar_manager = ToolbarManager(self)
 
         # Setup UI
         self._setup_window()
@@ -217,6 +219,7 @@ class MainWindow(QMainWindow):
         self._setup_toolbar()
         self._setup_streaming_toolbar()
         self._setup_compare_toolbar()
+        self._toolbar_manager.restore_state()
         self._setup_statusbar()
 
         # Accessibility setup (items 1-3)
@@ -254,6 +257,7 @@ class MainWindow(QMainWindow):
     
     def _setup_window(self):
         """윈도우 기본 설정"""
+        self.setObjectName("DataGraphStudioMainWindow")
         self.setWindowTitle("Data Graph Studio")
         self.setMinimumSize(1200, 800)
 
@@ -1570,6 +1574,10 @@ class MainWindow(QMainWindow):
         # Close all floating graph windows
         if self._floating_graph_manager:
             self._floating_graph_manager.close_all()
+
+        # Save toolbar state
+        if hasattr(self, '_toolbar_manager'):
+            self._toolbar_manager._save_state()
 
         # TODO: 저장 확인
         event.accept()

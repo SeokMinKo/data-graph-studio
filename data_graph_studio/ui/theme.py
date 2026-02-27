@@ -2335,6 +2335,17 @@ class ThemeManager:
                 margin: 8px 12px;
             }}
 
+            QToolBar::handle {{
+                background: {t.border};
+                width: 6px;
+                border-radius: 3px;
+                margin: 6px 2px;
+            }}
+
+            #toolbarCustomizeDialog {{
+                background-color: {t.background};
+            }}
+
             QToolButton {{
                 background-color: transparent;
                 border: none;

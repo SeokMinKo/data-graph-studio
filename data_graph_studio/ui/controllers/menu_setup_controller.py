@@ -469,6 +469,12 @@ class MenuSetupController:
 
         view_menu.addSeparator()
 
+        # Toolbars submenu (via ToolbarManager)
+        if hasattr(self.w, '_toolbar_manager'):
+            self.w._toolbar_manager.populate_view_menu(view_menu)
+
+        view_menu.addSeparator()
+
         # Theme submenu
         theme_menu = view_menu.addMenu("&Theme")
         self.w._theme_actions = {}
