@@ -446,7 +446,9 @@ class PerfettoTraceController(QObject):
         adb = ["adb", "-s", serial]
         self.progress.emit("Starting perfetto...")
         self._used_oneshot = True
-        self._trace_device_path = "/data/misc/perfetto-traces/blocktrace.pftrace"
+        self._trace_device_path = config.get(
+            "device_trace_path", "/data/misc/perfetto-traces/blocktrace.pftrace"
+        )
         perfetto_cmd = adb + [
             "shell", "perfetto",
             "--time", f"{duration_s}s",

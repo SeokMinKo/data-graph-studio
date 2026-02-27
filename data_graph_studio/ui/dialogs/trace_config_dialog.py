@@ -60,6 +60,8 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "capture_mode": "perfetto",
     "sysfs_path": "/sys/kernel/tracing",
     "buffer_size_mb": 64,
+    "duration_s": 10,
+    "device_trace_path": "/data/misc/perfetto-traces/blocktrace.pftrace",
     "events": [name for name, on in DEFAULT_EVENTS if on],
     "save_path": "",
 }
@@ -80,6 +82,10 @@ def migrate_config(config: dict[str, Any]) -> dict[str, Any]:
         config.setdefault("capture_mode", "perfetto")
         config.setdefault("sysfs_path", "/sys/kernel/tracing")
         config["version"] = 1
+
+    # Backfill newer perfetto runtime params
+    config.setdefault("duration_s", 10)
+    config.setdefault("device_trace_path", "/data/misc/perfetto-traces/blocktrace.pftrace")
     return config
 
 
@@ -588,18 +594,37 @@ class OutputPanel(QWidget):
         ))
         layout.addSpacing(8)
 
-        # Buffer size
-        buf_group = QGroupBox("Buffer Size")
-        buf_layout = QHBoxLayout(buf_group)
-        buf_layout.addWidget(QLabel("Ring buffer:"))
+        # Buffer size + duration
+        run_group = QGroupBox("Capture Runtime")
+        run_layout = QHBoxLayout(run_group)
+        run_layout.addWidget(QLabel("Ring buffer:"))
         self._buffer_spin = QSpinBox()
         self._buffer_spin.setRange(4, 512)
         self._buffer_spin.setValue(64)
         self._buffer_spin.setSuffix(" MB")
         self._buffer_spin.valueChanged.connect(lambda *_: self.output_changed.emit())
-        buf_layout.addWidget(self._buffer_spin)
-        buf_layout.addStretch()
-        layout.addWidget(buf_group)
+        run_layout.addWidget(self._buffer_spin)
+
+        run_layout.addSpacing(16)
+        run_layout.addWidget(QLabel("Duration:"))
+        self._duration_spin = QSpinBox()
+        self._duration_spin.setRange(1, 3600)
+        self._duration_spin.setValue(10)
+        self._duration_spin.setSuffix(" s")
+        self._duration_spin.valueChanged.connect(lambda *_: self.output_changed.emit())
+        run_layout.addWidget(self._duration_spin)
+        run_layout.addStretch()
+        layout.addWidget(run_group)
+
+        # Device trace path
+        dev_path_group = QGroupBox("Device Trace Path")
+        dev_path_layout = QHBoxLayout(dev_path_group)
+        self._device_trace_path_edit = QLineEdit()
+        self._device_trace_path_edit.setPlaceholderText("/data/misc/perfetto-traces/blocktrace.pftrace")
+        self._device_trace_path_edit.setText("/data/misc/perfetto-traces/blocktrace.pftrace")
+        self._device_trace_path_edit.textChanged.connect(lambda *_: self.output_changed.emit())
+        dev_path_layout.addWidget(self._device_trace_path_edit, stretch=1)
+        layout.addWidget(dev_path_group)
 
         # Save path
         path_group = QGroupBox("Output File")
@@ -630,6 +655,18 @@ class OutputPanel(QWidget):
 
     def set_buffer_size_mb(self, val: int) -> None:
         self._buffer_spin.setValue(max(4, min(512, val)))
+
+    def duration_s(self) -> int:
+        return self._duration_spin.value()
+
+    def set_duration_s(self, val: int) -> None:
+        self._duration_spin.setValue(max(1, min(3600, val)))
+
+    def device_trace_path(self) -> str:
+        return self._device_trace_path_edit.text().strip()
+
+    def set_device_trace_path(self, path: str) -> None:
+        self._device_trace_path_edit.setText(path)
 
     def save_path(self) -> str:
         return self._save_path_edit.text()
@@ -803,6 +840,8 @@ class TraceConfigDialog(QDialog):
             "capture_mode": self.capture_panel.capture_mode(),
             "sysfs_path": "/sys/kernel/tracing",
             "buffer_size_mb": self.output_panel.buffer_size_mb(),
+            "duration_s": self.output_panel.duration_s(),
+            "device_trace_path": self.output_panel.device_trace_path(),
             "events": self.events_panel.selected_events(),
             "save_path": self.output_panel.save_path(),
         }
@@ -819,6 +858,10 @@ class TraceConfigDialog(QDialog):
             self.events_panel.set_events(config["events"])
         if "buffer_size_mb" in config:
             self.output_panel.set_buffer_size_mb(config["buffer_size_mb"])
+        if "duration_s" in config:
+            self.output_panel.set_duration_s(config["duration_s"])
+        if "device_trace_path" in config:
+            self.output_panel.set_device_trace_path(config["device_trace_path"])
         if config.get("save_path"):
             self.output_panel.set_save_path(config["save_path"])
 
