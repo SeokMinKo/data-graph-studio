@@ -66,6 +66,42 @@ logger = logging.getLogger('DataGraphStudio')
 # 프로젝트 루트를 path에 추가
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+def _startup_recovery_guide(exc: Exception, *, is_frozen: bool, platform_name: str) -> list[str]:
+    """Return actionable startup recovery steps for users."""
+    msg = str(exc)
+    steps = [
+        "앱을 완전히 종료한 뒤 다시 실행하세요.",
+        f"로그 파일 확인: {log_file}",
+    ]
+
+    lowered = msg.lower()
+    if platform_name == "win32" and is_frozen:
+        steps.append("설치 파일(Setup.exe)을 다시 실행해 'Repair/재설치'를 시도하세요.")
+        if "dll load failed" in lowered or "vcruntime" in lowered or "msvcp" in lowered:
+            steps.append("Microsoft Visual C++ 2015-2022 재배포 패키지(x64)를 설치한 뒤 재실행하세요.")
+
+    if isinstance(exc, ModuleNotFoundError):
+        missing = getattr(exc, "name", None) or msg
+        steps.append(f"누락 모듈: {missing}")
+        if is_frozen:
+            steps.append("오프라인 배포본 누락 가능성: 설치본을 다시 받아 재설치하세요.")
+        else:
+            steps.append("개발환경에서는 `pip install -r requirements.txt` 후 재실행하세요.")
+
+    if isinstance(exc, NameError):
+        steps.append("런타임 NameError 감지: 최신 버전으로 업데이트 후 같은 입력으로 재시도하세요.")
+        steps.append("재현 가능하면 logs/app_*.log + ~/.dgs/crash.log를 첨부해 이슈를 등록하세요.")
+
+    return steps
+
+
+def _format_startup_failure(title: str, exc: Exception) -> str:
+    is_frozen = bool(getattr(sys, "frozen", False))
+    guide = _startup_recovery_guide(exc, is_frozen=is_frozen, platform_name=sys.platform)
+    lines = [title, "=" * 60, f"{type(exc).__name__}: {exc}", "", "Recovery Guide:"]
+    lines.extend(f"{idx}. {step}" for idx, step in enumerate(guide, start=1))
+    return "\n".join(lines)
+
 
 def exception_hook(exc_type, exc_value, exc_tb):
     """전역 예외 핸들러 — logs to stderr, app log, and ~/.dgs/crash.log"""
@@ -177,16 +213,16 @@ def main():
         logger.info(f"Application exited with code: {result}")
         sys.exit(result)
         
-    except ImportError as e:
-        error_msg = f"Import Error: {e}\n\n{traceback.format_exc()}"
-        logger.critical(error_msg)
-        print(f"\n{'='*60}")
-        print("IMPORT ERROR - Missing dependencies?")
-        print("Run: pip install -r requirements.txt")
-        print('='*60)
-        print(error_msg)
+    except (ImportError, ModuleNotFoundError) as e:
+        logger.critical("Startup import failure", exc_info=True)
+        print("\n" + _format_startup_failure("IMPORT ERROR", e))
         sys.exit(1)
-        
+
+    except NameError as e:
+        logger.critical("Startup NameError", exc_info=True)
+        print("\n" + _format_startup_failure("RUNTIME NAME ERROR", e))
+        sys.exit(1)
+
     except Exception as e:
         error_msg = f"Startup Error: {e}\n\n{traceback.format_exc()}"
         logger.critical(error_msg)
