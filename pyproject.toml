@@ -11,3 +11,10 @@ qt_api = "pyside6"
 markers = [
   "qt: headless Qt smoke tests (widget construction)",
 ]
+
+
+[tool.ruff]
+exclude = [".worktrees", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]

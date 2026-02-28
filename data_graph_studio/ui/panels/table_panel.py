@@ -249,7 +249,7 @@ class PolarsTableModel(QAbstractTableModel):
             self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
             return True
         except Exception as e:
-            logger.debug("setData failed at row=%d col=%d: %s", row, col, e)
+            logger.debug("setData failed at row=%d col=%d: %s", row_idx, col_idx, e)
             return False
 
     def set_editable(self, editable: bool):
