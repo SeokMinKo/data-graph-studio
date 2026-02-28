@@ -87,11 +87,27 @@ class TestExpressionEngineMissingFunctions:
 
         engine = ExpressionEngine()
         df = pl.DataFrame({"text": ["hello", "world"]})
-        
+
         # SUBSTRING uses 1-based indexing like SQL
         result = engine.evaluate("SUBSTRING(text, 1, 3)", df)
-        
+
         assert result.to_list() == ["hel", "wor"]
+
+    def test_unknown_comparison_operator_raises_expression_error(self):
+        """Unsupported comparison operators should raise a clear ExpressionError."""
+        from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
+
+        engine = ExpressionEngine()
+        df = pl.DataFrame({"x": [1, 2, 3]})
+        ast = {
+            "type": "comparison",
+            "op": "===",
+            "left": {"type": "number", "value": 1},
+            "right": {"type": "number", "value": 1},
+        }
+
+        with pytest.raises(ExpressionError, match="Unknown comparison operator: ==="):
+            engine._evaluate_ast(ast, df)
 
 
 class TestSamplingEdgeCases:

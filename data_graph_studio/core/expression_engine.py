@@ -400,7 +400,7 @@ class ExpressionEngine:
         if node_type == 'comparison':
             left = self._evaluate_ast(node['left'], df)
             right = self._evaluate_ast(node['right'], df)
-            
+
             op = node['op']
             if op == '==':
                 return left == right
@@ -414,6 +414,8 @@ class ExpressionEngine:
                 return left >= right
             elif op == '<=':
                 return left <= right
+            else:
+                raise ExpressionError(f"Unknown comparison operator: {op}")
         
         if node_type == 'function':
             return self._evaluate_function(node, df)
