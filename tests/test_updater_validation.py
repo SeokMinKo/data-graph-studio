@@ -4,10 +4,12 @@ import hashlib
 
 import pytest
 
+
 from data_graph_studio.core.updater import (
     UpdatePayloadError,
     download_asset,
     validate_downloaded_update_assets,
+    run_windows_installer,
 )
 
 
@@ -88,3 +90,41 @@ def test_download_asset_rejects_non_http_url() -> None:
 def test_download_asset_rejects_unsafe_filename() -> None:
     with pytest.raises(UpdatePayloadError, match="Unsafe asset filename"):
         download_asset("https://example.com/installer.exe", "../installer.exe")
+
+
+def test_run_windows_installer_rejects_non_exe_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("data_graph_studio.core.updater.sys.platform", "win32")
+
+    txt_path = tmp_path / "not-installer.txt"
+    txt_path.write_text("hello", encoding="utf-8")
+
+    with pytest.raises(UpdatePayloadError, match="must be an .exe file"):
+        run_windows_installer(str(txt_path))
+
+
+def test_run_windows_installer_rejects_missing_mz_header(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("data_graph_studio.core.updater.sys.platform", "win32")
+
+    installer = tmp_path / "DataGraphStudio-Setup-1.2.3.exe"
+    installer.write_bytes(b"<!doctype html>")
+
+    with pytest.raises(UpdatePayloadError, match="MZ header missing"):
+        run_windows_installer(str(installer))
+
+
+def test_run_windows_installer_launches_with_silent_flags(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("data_graph_studio.core.updater.sys.platform", "win32")
+
+    installer = tmp_path / "DataGraphStudio-Setup-1.2.3.exe"
+    installer.write_bytes(b"MZ" + b"\x00" * 32)
+
+    calls: list[tuple[list[str], bool]] = []
+
+    def _fake_popen(args, close_fds=True):
+        calls.append((list(args), close_fds))
+
+    monkeypatch.setattr("data_graph_studio.core.updater.subprocess.Popen", _fake_popen)
+
+    run_windows_installer(str(installer), silent=True)
+
+    assert calls == [([str(installer), "/VERYSILENT", "/NORESTART"], True)]

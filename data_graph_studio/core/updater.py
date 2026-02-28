@@ -214,6 +214,21 @@ def validate_downloaded_update_assets(installer_path: str, sha_path: str) -> Non
         )
 
 
+def _validate_installer_path_for_launch(installer_path: str) -> None:
+    if not installer_path:
+        raise UpdatePayloadError("Installer path is empty.")
+
+    if not installer_path.lower().endswith(".exe"):
+        raise UpdatePayloadError(f"Installer path must be an .exe file: {installer_path}")
+
+    if not os.path.isfile(installer_path):
+        raise UpdatePayloadError(f"Installer file not found: {installer_path}")
+
+    with open(installer_path, "rb") as f:
+        if f.read(2) != b"MZ":
+            raise UpdatePayloadError("Installer file is not a valid Windows executable (MZ header missing).")
+
+
 def run_windows_installer(installer_path: str, silent: bool = True) -> None:
     """Run installer and exit current app.
 
@@ -223,6 +238,8 @@ def run_windows_installer(installer_path: str, silent: bool = True) -> None:
 
     if sys.platform != "win32":
         return
+
+    _validate_installer_path_for_launch(installer_path)
 
     args = [installer_path]
     if silent:
