@@ -193,7 +193,12 @@ class Parser:
     
     def parse(self) -> Dict:
         """파싱 시작"""
-        return self.parse_expression()
+        ast = self.parse_expression()
+        if self.current.type != TokenType.EOF:
+            raise ExpressionError(
+                f"Unexpected token '{self.current.value}' at position {self.current.position}"
+            )
+        return ast
     
     def parse_expression(self) -> Dict:
         """비교 연산 파싱"""

@@ -109,6 +109,16 @@ class TestExpressionEngineMissingFunctions:
         with pytest.raises(ExpressionError, match="Unknown comparison operator: ==="):
             engine._evaluate_ast(ast, df)
 
+    def test_trailing_tokens_raise_expression_error(self):
+        """Parser should fail fast when extra tokens remain after a valid expression."""
+        from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
+
+        engine = ExpressionEngine()
+        df = pl.DataFrame({"x": [1, 2, 3]})
+
+        with pytest.raises(ExpressionError, match="Unexpected token '2' at position 2"):
+            engine.evaluate("1 2", df)
+
 
 class TestSamplingEdgeCases:
     """Test edge cases in sampling functions"""
