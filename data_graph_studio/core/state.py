@@ -14,6 +14,7 @@ import time
 from PySide6.QtCore import QObject, Signal
 
 from .undo_manager import UndoStack, UndoCommand, UndoActionType
+from .filter_ast import FilterNode, node_to_dict, node_from_dict
 
 if TYPE_CHECKING:
     from .profile import Profile, GraphSetting
@@ -403,6 +404,8 @@ class AppState(QObject):
 
         # 필터 & 정렬
         self._filters: List[FilterCondition] = []
+        self._advanced_filter_ast: Optional[FilterNode] = None
+        self._filter_presets: Dict[str, Dict[str, Any]] = {}
         self._sorts: List[SortCondition] = []
 
         # 선택 상태
@@ -1312,6 +1315,32 @@ class AppState(QObject):
         self._selection.select(rows, add)
         self.selection_changed.emit()
 
+    @property
+    def advanced_filter_ast(self) -> Optional[FilterNode]:
+        return self._advanced_filter_ast
+
+    def set_advanced_filter_ast(self, ast_node: Optional[FilterNode]):
+        self._advanced_filter_ast = ast_node
+        self.filter_changed.emit()
+
+    @property
+    def filter_presets(self) -> Dict[str, Dict[str, Any]]:
+        return dict(self._filter_presets)
+
+    def save_filter_preset(self, name: str, ast_node: Optional[FilterNode]):
+        if not name:
+            raise ValueError("Preset name is required")
+        self._filter_presets[name] = node_to_dict(ast_node)
+
+    def load_filter_preset(self, name: str) -> Optional[FilterNode]:
+        data = self._filter_presets.get(name)
+        node = node_from_dict(data)
+        self.set_advanced_filter_ast(node)
+        return node
+
+    def remove_filter_preset(self, name: str):
+        self._filter_presets.pop(name, None)
+
     def deselect_rows(self, rows: List[int]):
         self._selection.deselect(rows)
         self.selection_changed.emit()
@@ -1728,6 +1757,8 @@ class AppState(QObject):
                 }
                 for f in self._filters
             ],
+            'advanced_filter_ast': node_to_dict(self._advanced_filter_ast),
+            'filter_presets': dict(self._filter_presets),
             'sorts': [
                 {
                     'column': s.column,
@@ -1810,6 +1841,8 @@ class AppState(QObject):
                         enabled=f_data.get('enabled', True)
                     )
                     self._filters.append(f)
+                self._advanced_filter_ast = node_from_dict(getattr(setting, 'advanced_filter_ast', None))
+                self._filter_presets = dict(getattr(setting, 'filter_presets', {}) or {})
 
             # 정렬 복원 (include_sorts가 True인 경우만)
             if setting.include_sorts:

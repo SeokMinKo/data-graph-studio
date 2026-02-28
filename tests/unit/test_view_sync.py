@@ -48,6 +48,16 @@ class FakePanel(QWidget):
         self.selection_calls.append(list(indices))
 
 
+class TaggedFakePanel(FakePanel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.selection_sources: list[str | None] = []
+
+    def set_selection(self, indices, source_id=None):
+        self.selection_calls.append(list(indices))
+        self.selection_sources.append(source_id)
+
+
 @pytest.fixture()
 def manager(qtbot):
     """Create a fresh ViewSyncManager for each test."""
@@ -202,6 +212,19 @@ class TestSelectionSync:
         assert len(p3.selection_calls) == 1
         assert p3.selection_calls[0] == [42]
         assert len(p2.selection_calls) == 0  # source excluded
+
+    def test_selection_propagates_source_tag_when_supported(self, manager, qtbot):
+        src = TaggedFakePanel()
+        dst = TaggedFakePanel()
+        qtbot.addWidget(src)
+        qtbot.addWidget(dst)
+        manager.register_panel("SRC", src)
+        manager.register_panel("DST", dst)
+
+        manager.on_source_selection_changed("SRC", [5, 9])
+
+        assert dst.selection_calls[-1] == [5, 9]
+        assert dst.selection_sources[-1] == "SRC"
 
 
 # ---------------------------------------------------------------------------

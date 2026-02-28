@@ -28,6 +28,7 @@ from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnter
 
 from ...core.state import AppState, AggregationType, GroupColumn, ValueColumn
 from ...core.data_engine import DataEngine
+from ...core.filter_ast import apply_filter_ast
 from .grouped_table_model import GroupedTableModel
 from ..dialogs.split_column_dialog import SplitColumnDialog
 from ..floatable import FloatButton, FloatWindow
@@ -875,9 +876,9 @@ class ChipListWidget(QListWidget):
 
 class XAxisZone(QFrame):
     """X-Axis Zone - X축 컬럼 선택"""
-    
+
     x_changed = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
@@ -888,15 +889,15 @@ class XAxisZone(QFrame):
         self.setMinimumWidth(140)
         self.setMaximumWidth(180)
         self.setAcceptDrops(True)
-        
+
         self._setup_ui()
         self._connect_signals()
         self._apply_style()
-    
+
     def _apply_style(self):
         # Styles handled by global theme stylesheet
         pass
-    
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -954,11 +955,11 @@ class XAxisZone(QFrame):
         layout.addWidget(clear_btn)
 
         layout.addStretch()
-    
+
     def _connect_signals(self):
         # Listen for x_column changes from state
         self.state.chart_settings_changed.connect(self._sync_from_state)
-    
+
     def _on_chip_dropped(self, column_name: str, payload: Dict[str, Any]):
         self._set_x_column(column_name)
         _remove_from_source(self.state, payload, "x")
@@ -967,12 +968,12 @@ class XAxisZone(QFrame):
         """Set X column"""
         self.state.set_x_column(column_name)
         self._update_display(column_name)
-    
+
     def _clear_x_column(self):
         """Clear X column (use index)"""
         self.state.set_x_column(None)
         self._update_display(None)
-    
+
     def _update_display(self, column_name: Optional[str]):
         """Update the display"""
         self.list_widget.clear_chips()
@@ -990,21 +991,21 @@ class XAxisZone(QFrame):
             self.x_column_frame.setProperty("state", "empty")
         self.x_column_frame.style().unpolish(self.x_column_frame)
         self.x_column_frame.style().polish(self.x_column_frame)
-    
+
     def _sync_from_state(self):
         """Sync from state"""
         self._update_display(self.state.x_column)
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
             self.x_column_frame.setProperty("state", "dragover")
             self.x_column_frame.style().unpolish(self.x_column_frame)
             self.x_column_frame.style().polish(self.x_column_frame)
-    
+
     def dragLeaveEvent(self, event):
         self._update_display(self.state.x_column)
-    
+
     def dropEvent(self, event: QDropEvent):
         payload = _parse_drag_payload(event.mimeData())
         if payload.get("name"):
@@ -1042,9 +1043,9 @@ class XAxisZone(QFrame):
 
 class GroupZone(QFrame):
     """Group Zone - Minimal drag & drop zone"""
-    
+
     group_changed = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
@@ -1055,15 +1056,15 @@ class GroupZone(QFrame):
         self.setMinimumWidth(130)
         self.setMaximumWidth(170)
         self.setAcceptDrops(True)
-        
+
         self._setup_ui()
         self._connect_signals()
         self._apply_style()
-    
+
     def _apply_style(self):
         # Styles handled by global theme stylesheet
         pass
-    
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -1091,7 +1092,7 @@ class GroupZone(QFrame):
         help_label.setProperty("zone", "group")
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
-        
+
         # List widget
         self.list_widget = ChipListWidget(zone_id="group", accept_drop=True, allow_reorder=True)
         self.list_widget.setMaximumHeight(130)
@@ -1106,28 +1107,28 @@ class GroupZone(QFrame):
         remove_btn.setToolTip("Clear all group-by columns")
         remove_btn.clicked.connect(self.state.clear_group_zone)
         layout.addWidget(remove_btn)
-    
+
     def _connect_signals(self):
         self.state.group_zone_changed.connect(self._sync_from_state)
-    
+
     def _on_column_dropped(self, column_name: str, payload: Dict[str, Any]):
         self.state.add_group_column(column_name)
         _remove_from_source(self.state, payload, "group")
-    
+
     def _on_order_changed(self, new_order: List[str]):
         self.state.reorder_group_columns(new_order)
-    
+
     def _sync_from_state(self):
         self.list_widget.clear_chips()
         for idx, group_col in enumerate(self.state.group_columns):
             chip = ChipWidget(group_col.name, accent="#CBD5F5", text_color="#1E293B", zone_id="group", index=idx)
             chip.remove_clicked.connect(lambda checked=False, name=group_col.name: self.state.remove_group_column(name))
             self.list_widget.add_chip(group_col.name, chip)
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
-    
+
     def dropEvent(self, event: QDropEvent):
         payload = _parse_drag_payload(event.mimeData())
         if payload.get("name"):
@@ -1160,9 +1161,9 @@ class GroupZone(QFrame):
 
 class ValueZone(QFrame):
     """Value Zone - Y-axis values"""
-    
+
     value_changed = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
@@ -1172,15 +1173,15 @@ class ValueZone(QFrame):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(160)
         self.setAcceptDrops(True)
-        
+
         self._setup_ui()
         self._connect_signals()
         self._apply_style()
-    
+
     def _apply_style(self):
         # Styles handled by global theme stylesheet
         pass
-    
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -1208,16 +1209,16 @@ class ValueZone(QFrame):
         help_label.setProperty("zone", "value")
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
-        
+
         # Chip list
         self.list_widget = ChipListWidget(zone_id="value", accept_drop=True)
         self.list_widget.setObjectName("chipList")
         self.list_widget.item_dropped.connect(self._on_column_dropped)
         layout.addWidget(self.list_widget, 1)
-    
+
     def _connect_signals(self):
         self.state.value_zone_changed.connect(self._sync_from_state)
-    
+
     def _add_value_chip(self, value_col: ValueColumn, index: int):
         """Add value chip"""
         chip = ValueChipWidget(
@@ -1228,7 +1229,7 @@ class ValueZone(QFrame):
         )
         chip.remove_clicked.connect(lambda checked=False, i=index: self._remove_value(i))
         self.list_widget.add_chip(value_col.name, chip)
-    
+
     def _on_agg_changed(self, index: int, agg: AggregationType):
         self.state.update_value_column(index, aggregation=agg)
 
@@ -1242,16 +1243,16 @@ class ValueZone(QFrame):
     def _on_column_dropped(self, column_name: str, payload: Dict[str, Any]):
         self.state.add_value_column(column_name)
         _remove_from_source(self.state, payload, "value")
-    
+
     def _sync_from_state(self):
         self.list_widget.clear_chips()
         for i, value_col in enumerate(self.state.value_columns):
             self._add_value_chip(value_col, i)
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
             event.acceptProposedAction()
-    
+
     def dropEvent(self, event: QDropEvent):
         payload = _parse_drag_payload(event.mimeData())
         if payload.get("name"):
@@ -1400,7 +1401,7 @@ class HoverZone(QFrame):
 
 class DataTableView(QTableView):
     """데이터 테이블 뷰 - Minimal Design"""
-    
+
     column_dragged = Signal(str)
     column_action = Signal(str)
     rows_selected = Signal(list)
@@ -1415,23 +1416,23 @@ class DataTableView(QTableView):
     split_column_requested = Signal(str)  # column name
     rename_column_requested = Signal(str)  # old column name
     multi_sort_requested = Signal(int, object)  # column, Qt.SortOrder
-    
+
     def __init__(self):
         super().__init__()
-        
+
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
         self.setDragEnabled(True)
-        
+
         # Styles handled by global theme stylesheet
         self.setObjectName("dataTableView")
-        
+
         # Context menu for cells
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_cell_menu)
-        
+
         self.horizontalHeader().setStretchLastSection(True)
         self.horizontalHeader().setSectionsMovable(True)
         self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
@@ -1440,10 +1441,10 @@ class DataTableView(QTableView):
         self.horizontalHeader().sectionDoubleClicked.connect(self._on_header_double_clicked)
         self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
         self.horizontalHeader().installEventFilter(self)
-        
+
         # Multi-sort state
         self._pending_multi_sort: List[Tuple[int, Qt.SortOrder]] = []
-    
+
     def setModel(self, model):
         """Reconnect selectionModel on model swap, avoiding duplicate connections."""
         # Disconnect previous selectionModel signal before replacing
@@ -1483,7 +1484,7 @@ class DataTableView(QTableView):
                 line.append(str(self.model().data(idx, Qt.DisplayRole) or ""))
             lines.append("\t".join(line))
         QApplication.clipboard().setText("\n".join(lines))
-    
+
     def _on_header_pressed(self, logical_index: int):
         # Store column name for context menu / reorder
         pass
@@ -1518,25 +1519,25 @@ class DataTableView(QTableView):
     def eventFilter(self, obj, event):
         # Ctrl+drag to zones removed (zones moved to Data tab in Chart Options)
         return super().eventFilter(obj, event)
-    
+
     def _on_selection_changed(self, selected, deselected):
         indexes = self.selectionModel().selectedRows()
         rows = [idx.row() for idx in indexes]
         self.rows_selected.emit(rows)
-    
+
     def _show_header_menu(self, pos):
         logical_index = self.horizontalHeader().logicalIndexAt(pos)
         model = self.model()
         if not model:
             return
-        
+
         column_name = model.get_column_name(logical_index)
         if not column_name:
             return
-        
+
         menu = QMenu(self)
 
-        # Set as — 최상위에 펼쳐서 배치
+        # Set as - 최상위에 펼쳐서 배치
         set_x = QAction("📐 Set as X-Axis", self)
         set_x.triggered.connect(lambda: self.column_dragged.emit(f"X:{column_name}"))
         menu.addAction(set_x)
@@ -1597,39 +1598,39 @@ class DataTableView(QTableView):
         menu.addAction(unfreeze_act)
 
         menu.exec(self.horizontalHeader().mapToGlobal(pos))
-    
+
     def _show_cell_menu(self, pos):
         """셀 우클릭 메뉴"""
         index = self.indexAt(pos)
         if not index.isValid():
             return
-        
+
         model = self.model()
         if not model:
             return
-        
+
         column_name = model.get_column_name(index.column())
         cell_value = model.data(index, Qt.DisplayRole)
-        
+
         if not column_name:
             return
-        
+
         menu = QMenu(self)
-        
+
         # Filter options
         if cell_value:
             display_val = str(cell_value)[:20] + "..." if len(str(cell_value)) > 20 else str(cell_value)
-            
+
             filter_eq = QAction(f"🔍 Filter: {column_name} = \"{display_val}\"", self)
             filter_eq.triggered.connect(lambda: self.exclude_value.emit(column_name, ("eq", cell_value)))
             menu.addAction(filter_eq)
-            
+
             filter_ne = QAction(f"🚫 Exclude: {column_name} ≠ \"{display_val}\"", self)
             filter_ne.triggered.connect(lambda: self.exclude_value.emit(column_name, ("ne", cell_value)))
             menu.addAction(filter_ne)
-            
+
             menu.addSeparator()
-        
+
         # Copy
         copy_action = QAction("📋 Copy", self)
         copy_action.triggered.connect(lambda: QApplication.clipboard().setText(str(cell_value) if cell_value else ""))
@@ -1638,7 +1639,7 @@ class DataTableView(QTableView):
         split_col = QAction("✂️ Split Column (Regex Groups)...", self)
         split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
         menu.addAction(split_col)
-        
+
         menu.exec(self.viewport().mapToGlobal(pos))
 
 
@@ -1646,46 +1647,46 @@ class DataTableView(QTableView):
 
 class FilterBar(QFrame):
     """활성 필터 표시 바"""
-    
+
     filter_removed = Signal(int)  # filter index
     clear_all = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
         self.setObjectName("FilterBar")
         self._setup_ui()
         self._connect_signals()
-    
+
     def _setup_ui(self):
         self.main_layout = QHBoxLayout(self)
         self.main_layout.setContentsMargins(8, 4, 8, 4)
         self.main_layout.setSpacing(6)
-        
+
         # Filter icon
         icon = QLabel("🔍")
         icon.setObjectName("cardIcon")
         self.main_layout.addWidget(icon)
-        
+
         # Filters container
         self.filters_layout = QHBoxLayout()
         self.filters_layout.setSpacing(4)
         self.main_layout.addLayout(self.filters_layout)
-        
+
         self.main_layout.addStretch()
-        
+
         # Clear all button
         clear_btn = QPushButton("Clear All")
         clear_btn.setObjectName("warningButton")
         clear_btn.setToolTip("Remove all active filters")
         clear_btn.clicked.connect(self.clear_all.emit)
         self.main_layout.addWidget(clear_btn)
-        
+
         self.setVisible(False)  # Hidden by default
-    
+
     def _connect_signals(self):
         self.state.filter_changed.connect(self._update_filters)
-    
+
     def _update_filters(self):
         """Update filter display"""
         # Clear existing
@@ -1693,44 +1694,44 @@ class FilterBar(QFrame):
             item = self.filters_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        
+
         filters = self.state.filters
-        
+
         if not filters:
             self.setVisible(False)
             return
-        
+
         self.setVisible(True)
-        
+
         for i, f in enumerate(filters):
             chip = self._create_filter_chip(f, i)
             self.filters_layout.addWidget(chip)
-    
+
     def _create_filter_chip(self, filter_cond, index: int) -> QWidget:
         """Create a filter chip widget"""
         chip = QFrame()
         chip.setObjectName("chipWidget")
-        
+
         layout = QHBoxLayout(chip)
         layout.setContentsMargins(8, 2, 4, 2)
         layout.setSpacing(4)
-        
+
         # Operator display
         op_map = {
             'eq': '=', 'ne': '≠', 'gt': '>', 'lt': '<',
             'ge': '≥', 'le': '≤', 'contains': '∋'
         }
         op = op_map.get(filter_cond.operator, filter_cond.operator)
-        
+
         # Display value (truncate if too long)
         val_str = str(filter_cond.value)
         if len(val_str) > 15:
             val_str = val_str[:15] + "..."
-        
+
         label = QLabel(f"{filter_cond.column} {op} \"{val_str}\"")
         label.setObjectName("chipLabel")
         layout.addWidget(label)
-        
+
         # Remove button
         remove_btn = QPushButton("×")
         remove_btn.setFixedSize(24, 24)
@@ -1738,7 +1739,7 @@ class FilterBar(QFrame):
         remove_btn.setAccessibleName(f"Remove filter for {filter_cond.column}")
         remove_btn.clicked.connect(lambda: self.filter_removed.emit(index))
         layout.addWidget(remove_btn)
-        
+
         return chip
 
 
@@ -1746,46 +1747,46 @@ class FilterBar(QFrame):
 
 class HiddenColumnsBar(QFrame):
     """숨겨진 컬럼 표시 바"""
-    
+
     show_column = Signal(str)  # column name
     show_all = Signal()
-    
+
     def __init__(self, state: AppState):
         super().__init__()
         self.state = state
         self.setObjectName("HiddenColumnsBar")
         self._setup_ui()
-    
+
     def _setup_ui(self):
         self.main_layout = QHBoxLayout(self)
         self.main_layout.setContentsMargins(8, 4, 8, 4)
         self.main_layout.setSpacing(6)
-        
+
         # Icon
         icon = QLabel("👁")
         icon.setObjectName("cardIcon")
         self.main_layout.addWidget(icon)
-        
+
         label = QLabel("Hidden columns:")
         label.setObjectName("profileLabel")
         self.main_layout.addWidget(label)
-        
+
         # Columns container
         self.columns_layout = QHBoxLayout()
         self.columns_layout.setSpacing(4)
         self.main_layout.addLayout(self.columns_layout)
-        
+
         self.main_layout.addStretch()
-        
+
         # Show all button
         show_all_btn = QPushButton("Show All")
         show_all_btn.setObjectName("smallButton")
         show_all_btn.setToolTip("Show all hidden columns")
         show_all_btn.clicked.connect(self.show_all.emit)
         self.main_layout.addWidget(show_all_btn)
-        
+
         self.setVisible(False)
-    
+
     def update_hidden_columns(self, hidden_columns: List[str]):
         """Update hidden columns display"""
         # Clear existing
@@ -1793,35 +1794,35 @@ class HiddenColumnsBar(QFrame):
             item = self.columns_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        
+
         if not hidden_columns:
             self.setVisible(False)
             return
-        
+
         self.setVisible(True)
-        
+
         for col in hidden_columns[:5]:  # Show max 5
             chip = self._create_column_chip(col)
             self.columns_layout.addWidget(chip)
-        
+
         if len(hidden_columns) > 5:
             more = QLabel(f"+{len(hidden_columns) - 5} more")
             more.setObjectName("hintLabel")
             self.columns_layout.addWidget(more)
-    
+
     def _create_column_chip(self, column: str) -> QWidget:
         chip = QFrame()
         chip.setObjectName("chipWidget")
-        
+
         layout = QHBoxLayout(chip)
         layout.setContentsMargins(6, 2, 4, 2)
         layout.setSpacing(2)
-        
+
         label = QLabel(column[:12] + "..." if len(column) > 12 else column)
         label.setObjectName("chipLabel")
         label.setToolTip(column)
         layout.addWidget(label)
-        
+
         show_btn = QPushButton("👁")
         show_btn.setFixedSize(24, 24)
         show_btn.setObjectName("chipRemoveBtn")
@@ -1829,7 +1830,7 @@ class HiddenColumnsBar(QFrame):
         show_btn.setAccessibleName(f"Show hidden column {column}")
         show_btn.clicked.connect(lambda: self.show_column.emit(column))
         layout.addWidget(show_btn)
-        
+
         return chip
 
 
@@ -1861,9 +1862,12 @@ class TablePanel(QWidget):
         self._cached_filter_hash: Optional[int] = None
         self._cached_filter_df: Optional[pl.DataFrame] = None
 
+        # Linked selection sync guard (prevents table<->state feedback loops)
+        self._selection_sync_source: Optional[str] = None
+
         self._setup_ui()
         self._connect_signals()
-    
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1874,35 +1878,35 @@ class TablePanel(QWidget):
         table_layout = QVBoxLayout(table_container)
         table_layout.setContentsMargins(4, 4, 4, 4)
         table_layout.setSpacing(4)
-        
+
         # Filter bar (above search)
         self.filter_bar = FilterBar(self.state)
         self.filter_bar.filter_removed.connect(self._on_filter_removed)
         self.filter_bar.clear_all.connect(self._on_clear_filters)
         table_layout.addWidget(self.filter_bar)
-        
+
         # Hidden columns bar
         self.hidden_bar = HiddenColumnsBar(self.state)
         self.hidden_bar.show_column.connect(self._on_show_column)
         self.hidden_bar.show_all.connect(self._on_show_all_columns)
         table_layout.addWidget(self.hidden_bar)
-        
+
         # Search bar with debouncing, clear button, and result count
         search_layout = QHBoxLayout()
         search_layout.setContentsMargins(0, 0, 0, 6)
         search_layout.setSpacing(8)
-        
+
         # Search input container (for clear button overlay)
         search_container = QFrame()
         search_container_layout = QHBoxLayout(search_container)
         search_container_layout.setContentsMargins(0, 0, 0, 0)
         search_container_layout.setSpacing(0)
-        
+
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 Search data...")
         self.search_input.setObjectName("searchInput")
         search_container_layout.addWidget(self.search_input)
-        
+
         # Clear button (inside search input)
         self.search_clear_btn = QPushButton("×")
         self.search_clear_btn.setFixedSize(20, 20)
@@ -1911,37 +1915,37 @@ class TablePanel(QWidget):
         self.search_clear_btn.clicked.connect(self._clear_search)
         self.search_clear_btn.hide()  # Hidden when empty
         search_container_layout.addWidget(self.search_clear_btn)
-        
+
         search_layout.addWidget(search_container, 1)
-        
+
         # Search result count label
         self.search_result_label = QLabel("")
         self.search_result_label.setObjectName("searchResultLabel")
         self.search_result_label.setMinimumWidth(80)
         search_layout.addWidget(self.search_result_label)
-        
+
         table_layout.addLayout(search_layout)
-        
+
         # Search debounce timer (300ms)
         self._search_debounce_timer = QTimer(self)
         self._search_debounce_timer.setSingleShot(True)
         self._search_debounce_timer.setInterval(300)
         self._search_debounce_timer.timeout.connect(self._execute_search)
         self._pending_search_text = ""
-        
+
         # Connect search input to debounced search
         self.search_input.textChanged.connect(self._on_search_text_changed)
-        
+
         # Toolbar
         toolbar = QHBoxLayout()
         toolbar.setSpacing(6)
-        
+
         self.expand_btn = QPushButton("▼ Expand")
         self.expand_btn.setObjectName("smallButton")
         self.expand_btn.setToolTip("Expand all groups")
         self.expand_btn.clicked.connect(self._expand_all)
         toolbar.addWidget(self.expand_btn)
-        
+
         self.collapse_btn = QPushButton("▶ Collapse")
         self.collapse_btn.setObjectName("smallButton")
         self.collapse_btn.setToolTip("Collapse all groups")
@@ -1964,7 +1968,7 @@ class TablePanel(QWidget):
         )
         self.table_view_mode_combo.currentIndexChanged.connect(self._on_table_view_mode_changed)
         toolbar.addWidget(self.table_view_mode_combo)
-        
+
         # Limit to Marking toggle button
         self.limit_marking_btn = QPushButton("🔗 Limit to Marking")
         self.limit_marking_btn.setCheckable(True)
@@ -2085,7 +2089,7 @@ class TablePanel(QWidget):
 
         self.window_widget.setVisible(False)
         toolbar.addWidget(self.window_widget)
-        
+
         # F2: Edit mode toggle
         self.edit_toggle_btn = QPushButton("✏️ Edit")
         self.edit_toggle_btn.setCheckable(True)
@@ -2096,13 +2100,13 @@ class TablePanel(QWidget):
         toolbar.addWidget(self.edit_toggle_btn)
 
         toolbar.addStretch()
-        
+
         self.group_info_label = QLabel("")
         self.group_info_label.setObjectName("groupInfoLabel")
         toolbar.addWidget(self.group_info_label)
-        
+
         table_layout.addLayout(toolbar)
-        
+
         # F7: Frozen columns container
         self._frozen_columns: List[str] = []
         self._frozen_view: Optional[QTableView] = None
@@ -2113,11 +2117,11 @@ class TablePanel(QWidget):
         self.grouped_model = None
         self.table_view.setModel(self.table_model)
         self.table_view.clicked.connect(self._on_table_clicked)
-        
+
         table_layout.addWidget(self.table_view)
 
         layout.addWidget(table_container)
-    
+
     def _connect_signals(self):
         self.table_view.rows_selected.connect(self._on_rows_selected)
         self.table_view.exclude_value.connect(self._on_exclude_value)
@@ -2165,7 +2169,7 @@ class TablePanel(QWidget):
             self.search_input.clear()
         else:
             self.search_input.setPlaceholderText("🔍 Search in table... (Ctrl+F)")
-    
+
     def _update_table_model(self, df: Optional[pl.DataFrame] = None):
         if df is None:
             df = self.engine.df if self.engine.is_loaded else None
@@ -2206,18 +2210,18 @@ class TablePanel(QWidget):
         if show_grouped:
             if self.grouped_model is None:
                 self.grouped_model = GroupedTableModel()
-            
+
             group_cols = [g.name for g in self.state.group_columns]
             value_cols = [v.name for v in self.state.value_columns]
             agg_map = {v.name: v.aggregation.value for v in self.state.value_columns}
-            
+
             self.grouped_model.set_data(
                 df,
                 group_columns=group_cols,
                 value_columns=value_cols,
                 aggregations=agg_map
             )
-            
+
             self.table_view.setModel(self.grouped_model)
 
             group_names = " → ".join(group_cols)
@@ -2261,41 +2265,41 @@ class TablePanel(QWidget):
         header = self.table_view.horizontalHeader()
         for i in range(min(10, self.table_view.model().columnCount())):
             header.resizeSection(i, 120)
-    
+
     def clear(self):
         self.table_model.set_dataframe(None)
         if self.grouped_model:
             self.grouped_model.set_data(None)
         self.group_info_label.setText("")
-    
+
     def _on_search_text_changed(self, text: str):
         """Handle search text change with debouncing"""
         self._pending_search_text = text
-        
+
         # Show/hide clear button
         if text:
             self.search_clear_btn.show()
         else:
             self.search_clear_btn.hide()
             self.search_result_label.setText("")
-        
+
         # Start debounce timer
         self._search_debounce_timer.start()
-    
+
     def _execute_search(self):
         """Execute search after debounce delay"""
         text = self._pending_search_text
-        
+
         if not self.engine.is_loaded:
             return
-        
+
         if not text:
             self._update_table_model(self.engine.df)
             self.search_result_label.setText("")
             return
-        
+
         result = self.engine.search(text)
-        
+
         # Update result count
         if result is not None:
             count = len(result)
@@ -2307,9 +2311,9 @@ class TablePanel(QWidget):
                 self.search_result_label.setProperty("state", "found")
             self.search_result_label.style().unpolish(self.search_result_label)
             self.search_result_label.style().polish(self.search_result_label)
-        
+
         self._update_table_model(result)
-    
+
     def _clear_search(self):
         """Clear search input and restore full data"""
         self.search_input.clear()
@@ -2318,12 +2322,15 @@ class TablePanel(QWidget):
         self._search_debounce_timer.stop()
         if self.engine.is_loaded:
             self._update_table_model(self.engine.df)
-    
+
     def _on_search(self, text: str):
         """Legacy search handler (kept for compatibility)"""
         self._on_search_text_changed(text)
-    
+
     def _on_rows_selected(self, rows: List[int]):
+        if self._selection_sync_source == "state":
+            return
+
         if self.grouped_model and self.state.group_columns:
             actual_rows = []
             for row in rows:
@@ -2338,61 +2345,67 @@ class TablePanel(QWidget):
             self.state.select_rows(actual_rows)
         else:
             self.state.select_rows(rows)
-    
+
     def _on_state_selection_changed(self):
         """Sync table selection with state selection"""
         selected_rows = self.state.selection.selected_rows
-        
+
         if not selected_rows:
             # Clear selection
             self.table_view.clearSelection()
             return
-        
+
         model = self.table_view.model()
         if model is None:
             return
-        
+
         row_count = model.rowCount()
         col_count = model.columnCount()
-        
+
         if row_count == 0 or col_count == 0:
             return
-        
-        # Block signals to prevent feedback loop
+
+        # Block selection propagation while applying state-driven selection.
+        selection_model = self.table_view.selectionModel()
+        self._selection_sync_source = "state"
         self.table_view.blockSignals(True)
-        
+        if selection_model:
+            selection_model.blockSignals(True)
+
         try:
             # Clear and rebuild selection
             self.table_view.clearSelection()
-            
+
             # Use QItemSelection for batch selection (more efficient)
             selection = QItemSelection()
-            
+
             for row in selected_rows:
                 if 0 <= row < row_count:
                     # Create selection range for entire row
                     top_left = model.index(row, 0)
                     bottom_right = model.index(row, col_count - 1)
                     selection.select(top_left, bottom_right)
-            
+
             # Apply selection
-            selection_model = self.table_view.selectionModel()
             if selection_model:
                 selection_model.select(selection, QItemSelectionModel.Select)
-            
+
             # Scroll to first selected row
             first_row = min(selected_rows)
             if 0 <= first_row < row_count:
                 self.table_view.scrollTo(model.index(first_row, 0))
-                
+
         finally:
+            if selection_model:
+                selection_model.blockSignals(False)
             self.table_view.blockSignals(False)
-    
+            self._selection_sync_source = None
+
     def _on_group_zone_changed(self):
         self._sync_group_combos_from_state()
         if self.engine.is_loaded:
             self._update_table_model(self.engine.df)
-    
+
     def _on_value_zone_changed(self):
         if self.engine.is_loaded and self.state.group_columns:
             self._update_table_model(self.engine.df)
@@ -2461,33 +2474,33 @@ class TablePanel(QWidget):
         # 모든 value_columns의 aggregation 업데이트 (index로 전달)
         for i in range(len(self.state.value_columns)):
             self.state.update_value_column(i, aggregation=agg)
-    
+
     def _on_table_clicked(self, index):
         if index.column() == 0 and self.grouped_model and self.state.group_columns:
             is_header = self.grouped_model.data(index, Qt.UserRole + 1)
             if is_header:
                 self.grouped_model.toggle_expand(index.row())
-    
+
     def _expand_all(self):
         if self.grouped_model and self.state.group_columns:
             self.grouped_model.expand_all()
-    
+
     def _collapse_all(self):
         if self.grouped_model and self.state.group_columns:
             self.grouped_model.collapse_all()
-    
+
     def get_group_data(self) -> List:
         if self.grouped_model and self.state.group_columns:
             return self.grouped_model.get_group_data()
         return []
-    
+
     # ==================== Filter & Column Handlers ====================
-    
+
     def _on_exclude_value(self, column: str, filter_info: tuple):
         """Handle exclude value from cell context menu"""
         operator, value = filter_info
         self.state.add_filter(column, operator, value)
-    
+
     def _on_hide_column(self, column: str):
         """Handle hide column from header context menu"""
         self.state.toggle_column_visibility(column)
@@ -2531,7 +2544,7 @@ class TablePanel(QWidget):
             self.graph_panel.refresh() if hasattr(self, 'graph_panel') else None
         except Exception as e:
             QMessageBox.warning(self, "Exclude Column", f"Failed to exclude column: {e}")
-    
+
     def _build_split_dataframe(
         self,
         df: pl.DataFrame,
@@ -2724,26 +2737,26 @@ class TablePanel(QWidget):
             column = action[2:]
             self.state.add_hover_column(column)
             feedback = f"Added '{column}' to Hover"
-        
+
         # Show statusbar feedback
         if feedback:
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(feedback, 3000)
-    
+
     def _on_filter_removed(self, index: int):
         """Handle filter removal"""
         self.state.remove_filter(index)
-    
+
     def _on_clear_filters(self):
         """Handle clear all filters"""
         self.state.clear_filters()
-    
+
     def _on_filter_changed(self):
         """Handle filter state change"""
         if self.engine.is_loaded:
             self._apply_filters_and_update()
-    
+
     def _apply_filters_and_update(self):
         """Apply filters to data and update table (with filter cache #14)"""
         df = self.engine.df
@@ -2760,8 +2773,19 @@ class TablePanel(QWidget):
             self._update_table_model(self._cached_filter_df)
             return
 
-        # Apply all enabled filters sequentially
+        # Apply advanced AST filter first (if configured)
         filtered_df = df
+        if self.state.advanced_filter_ast is not None:
+            try:
+                filtered_df = apply_filter_ast(filtered_df, self.state.advanced_filter_ast)
+            except Exception as e:
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        f"Advanced filter error: {e}", 5000
+                    )
+
+        # Apply legacy enabled filters sequentially (backward compatibility)
         for f in self.state.filters:
             if not f.enabled:
                 continue
@@ -2797,13 +2821,13 @@ class TablePanel(QWidget):
         self._cached_filter_hash = filter_hash
         self._cached_filter_df = filtered_df
         self._update_table_model(filtered_df)
-    
+
     def _on_show_column(self, column: str):
         """Show a hidden column"""
         self.state.unhide_column(column)
         self._update_hidden_bar()
         self._update_table_model()
-    
+
     def _on_show_all_columns(self):
         """Show all hidden columns"""
         hidden = list(self.state.hidden_columns)
@@ -2811,7 +2835,7 @@ class TablePanel(QWidget):
             self.state.unhide_column(col)
         self._update_hidden_bar()
         self._update_table_model()
-    
+
     def _update_hidden_bar(self):
         """Update hidden columns bar"""
         hidden = list(self.state.hidden_columns)
@@ -2851,53 +2875,53 @@ class TablePanel(QWidget):
             self._apply_filters_and_update()
 
     # ==================== Limit to Marking ====================
-    
+
     def _on_limit_marking_toggled(self, checked: bool):
         """Handle limit to marking button toggle"""
         self.state.set_limit_to_marking(checked)
-    
+
     def _on_limit_to_marking_changed(self, enabled: bool):
         """Handle limit to marking state change"""
         self.limit_marking_btn.setChecked(enabled)
         self._apply_limit_to_marking()
-    
+
     def _on_selection_for_limit_marking(self):
         """Update table when selection changes and limit to marking is enabled"""
         if self.state.limit_to_marking:
             self._apply_limit_to_marking()
         if self._focus_enabled:
             self._update_focus_from_selection()
-    
+
     def _apply_limit_to_marking(self):
         """Apply limit to marking filter to table"""
         if not self.engine.is_loaded:
             return
-        
+
         df = self.engine.df
         if df is None:
             return
-        
+
         if self.state.limit_to_marking and self.state.selection.has_selection:
             # Filter to only selected rows
             selected_rows = list(self.state.selection.selected_rows)
-            
+
             # Ensure indices are within bounds
             max_idx = len(df)
             valid_indices = [i for i in selected_rows if 0 <= i < max_idx]
-            
+
             if valid_indices:
                 # Bug 2: O(n) with polars is_in instead of O(n×m) list comprehension
                 valid_series = pl.Series("valid", valid_indices)
                 idx_series = pl.arange(0, len(df), eager=True).alias("idx")
                 mask = idx_series.is_in(valid_series)
                 filtered_df = df.filter(mask)
-                
+
                 # UX 9: Use setProperty instead of inline style
                 self.group_info_label.setText(f"Showing {len(valid_indices)} marked rows")
                 self.group_info_label.setProperty("state", "marking")
                 self.group_info_label.style().unpolish(self.group_info_label)
                 self.group_info_label.style().polish(self.group_info_label)
-                
+
                 self._update_table_model(filtered_df)
             else:
                 # No valid selection, show empty or all
@@ -2905,7 +2929,7 @@ class TablePanel(QWidget):
         else:
             # Show all data
             self._apply_filters_and_update()
-    
+
     # ==================== Focusing ====================
 
     def _on_focus_toggled(self, checked: bool):
@@ -3020,7 +3044,7 @@ class TablePanel(QWidget):
 
     def _set_window_label(self, start: int, size: int, total: int):
         end = min(start + size, total) if total else start + size
-        self.window_label.setText(f"{start + 1:,}–{end:,} / {total:,}")
+        self.window_label.setText(f"{start + 1:,}-{end:,} / {total:,}")
 
     def _apply_window(self, start: int):
         if not self.engine.is_windowed:
@@ -3130,11 +3154,11 @@ class TablePanel(QWidget):
             self._update_table_model()
 
     # ==================== Drag & Drop ====================
-    
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
-    
+
     def dropEvent(self, event: QDropEvent):
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():

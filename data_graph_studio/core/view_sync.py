@@ -214,14 +214,24 @@ class ViewSyncManager(QObject):
             self._dispatch_selection(source_id, indices)
 
     def _dispatch_selection(self, source_id: str, indices: list) -> None:
-        """Push selection to all panels except the source."""
+        """Push selection to all panels except the source.
+
+        If panel.set_selection supports source tagging, pass source_id to prevent
+        panel-local feedback loops.
+        """
         self._is_syncing = True
         try:
             for pid, panel in list(self._panels.items()):
                 if pid == source_id:
                     continue
                 try:
-                    panel.set_selection(indices)
+                    panel.set_selection(indices, source_id=source_id)
+                except TypeError:
+                    # Backward compatibility for legacy panel API
+                    try:
+                        panel.set_selection(indices)
+                    except Exception:
+                        pass
                 except Exception:
                     pass
             self.selection_synced.emit(source_id, list(indices))
