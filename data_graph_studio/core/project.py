@@ -2,12 +2,16 @@
 Project Save/Load - .dgs file format
 """
 
+import logging
 import os
 import json
+import tempfile
 import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -231,16 +235,29 @@ class Project:
         return cls.from_dict(data)
     
     def save(self, path: str):
-        """파일로 저장"""
+        """파일로 저장 (atomic write)"""
         # .dgs 확장자 보장
         if not path.endswith('.dgs'):
             path = path + '.dgs'
-        
+
         self.modified_at = time.time()
-        self._path = path
-        
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(self.to_json())
+        content = self.to_json()
+
+        # Atomic write: 임시 파일에 쓰고 성공 시 교체
+        dir_path = os.path.dirname(path) or '.'
+        fd, tmp_path = tempfile.mkstemp(suffix='.dgs.tmp', dir=dir_path)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(content)
+            os.replace(tmp_path, path)
+            self._path = path  # 쓰기 성공 후에만 _path 설정
+        except Exception:
+            # 임시 파일 정리
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
     
     @classmethod
     def load(cls, path: str) -> 'Project':

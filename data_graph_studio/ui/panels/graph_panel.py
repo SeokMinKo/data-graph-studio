@@ -45,7 +45,6 @@ from .main_graph import MainGraph
 from .minimap_widget import MinimapWidget
 
 logger = logging.getLogger(__name__)
-_lg = logger
 
 # ==================== Graph Panel ====================
 
@@ -84,11 +83,16 @@ class GraphPanel(QWidget):
 
         # P1-2: Categorical mapping cache {col_name: (labels_tuple, value_to_idx_dict)}
         self._categorical_cache: Dict[str, tuple] = {}
+        self._categorical_cache_df_id: Optional[int] = None  # id(df) for cache invalidation
 
         # Minimap state
         self._minimap_enabled = False
         self._minimap_syncing = False  # guard against infinite loop
         self._minimap_lock_y = False
+
+        # Reentrant refresh guard
+        self._refreshing = False
+        self._pending_refresh = False
 
         # Debounced refresh timer
         self._refresh_timer = QTimer(self)
@@ -353,6 +357,9 @@ class GraphPanel(QWidget):
         """Update sliding windows when graph range changes"""
         if not self._sliding_window_enabled:
             return
+        # Guard: skip when minimap is driving the range change to prevent feedback loop
+        if self._minimap_syncing:
+            return
 
         x_range, y_range = ranges
         if self._x_window_enabled:
@@ -405,6 +412,7 @@ class GraphPanel(QWidget):
             state = getattr(controller, "state", None)
             return state in ("live", "paused")
         except Exception:
+            logger.debug("Could not check streaming state")
             return False
 
     def toggle_minimap(self, enabled: Optional[bool] = None):
@@ -494,22 +502,20 @@ class GraphPanel(QWidget):
 
     def refresh(self):
         """Refresh graph"""
-        import logging as _logging
-        _lg = _logging.getLogger(__name__)
-                
         # Show empty state if no data loaded
         if not self.engine.is_loaded:
-            _lg.debug("[DEBUG-CRASH] graph_panel.refresh() - showing empty state")
+            logger.debug("graph_panel.refresh() - showing empty state")
             self._center_stack.setCurrentIndex(0)  # Empty state
             self._minimap_overlay.setVisible(False)
             return
-        
+
         # Data is loaded - show graph view
         self._center_stack.setCurrentIndex(1)  # Graph view
 
         # Guard against reentrant calls (can cause access violation in pyqtgraph)
-        if getattr(self, '_refreshing', False):
-            _lg.debug("Skipping reentrant refresh")
+        if self._refreshing:
+            logger.debug("Skipping reentrant refresh, queuing pending")
+            self._pending_refresh = True
             return
         self._refreshing = True
         # P1-7: Suppress visual updates during refresh to avoid blank flash
@@ -517,10 +523,14 @@ class GraphPanel(QWidget):
         try:
             self._do_refresh()
         except Exception as e:
-            _lg.error(f"graph_panel.refresh() error: {e}")
+            logger.error("graph_panel.refresh() error: %s", e)
         finally:
             self.main_graph.setUpdatesEnabled(True)
             self._refreshing = False
+            # If a refresh was requested during execution, schedule it
+            if self._pending_refresh:
+                self._pending_refresh = False
+                self._schedule_refresh()
 
     def _do_refresh(self):
         """Internal refresh implementation."""
@@ -548,8 +558,8 @@ class GraphPanel(QWidget):
                 if axis is not None:
                     axis.setTextPen(pg.mkPen(tick_color))
                     axis.setPen(pg.mkPen(grid_color))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Axis tick color update failed: %s", e)
 
         # Check if Grid View is enabled
         grid_enabled = options.get('enabled', False)  # from get_grid_view_settings()
@@ -583,8 +593,8 @@ class GraphPanel(QWidget):
                     # Cast filter values to match column dtype for robust comparison
                     try:
                         working_df = working_df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Filter cast failed for column %s: %s", f_col, e)
             if len(working_df) == 0:
                 self.main_graph.clear_plot()
                 return
@@ -594,8 +604,12 @@ class GraphPanel(QWidget):
         x_categorical_labels = None
         x_is_categorical = False
 
-        # P1-2: Invalidate categorical cache if X column changed
-        if x_col and x_col not in self._categorical_cache:
+        # P1-2: Invalidate categorical cache if X column or dataset changed
+        current_df_id = id(working_df) if working_df is not None else None
+        if current_df_id != self._categorical_cache_df_id:
+            self._categorical_cache.clear()
+            self._categorical_cache_df_id = current_df_id
+        elif x_col and x_col not in self._categorical_cache:
             self._categorical_cache.clear()  # New X col → clear stale entries
 
         if not x_col:
@@ -642,8 +656,8 @@ class GraphPanel(QWidget):
                         x_data = np.array([value_to_idx.get(v, 0) for v in x_data], dtype=np.float64)
                         x_is_categorical = True
                         self._x_axis.set_categorical(x_categorical_labels)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("X-data coercion failed: %s", e)
 
         # Build group masks early (needed for combo chart too)
         groups = None
@@ -732,8 +746,8 @@ class GraphPanel(QWidget):
                         mvals = working_df[mark_by_col].to_numpy()[g_mask]
                         if len(mvals) > 0:
                             m_key = str(mvals[0])
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Color/marker by column lookup failed: %s", e)
                 if c_key not in color_map:
                     color_map[c_key] = palette[len(color_map) % len(palette)]
                 if m_key not in marker_map:
@@ -834,7 +848,8 @@ class GraphPanel(QWidget):
                                         step = max(1, len(x_group) // max(1, len(x_group_sampled)))
                                         matched = np.arange(0, len(x_group), step)[:len(x_group_sampled)]
                                     group_sampled_orig = group_orig_indices[matched]
-                                except Exception:
+                                except Exception as e:
+                                    logger.debug("Group sampling index match failed: %s", e)
                                     group_sampled_orig = group_orig_indices[:len(x_group_sampled)]
                             else:
                                 x_group_sampled, y_group_sampled = x_group, y_group
@@ -924,7 +939,8 @@ class GraphPanel(QWidget):
                 else:
                     step = max(1, len(x_data) // max(1, len(x_sampled)))
                     self._sampled_original_indices = np.arange(0, len(x_data), step)[:len(x_sampled)]
-            except Exception:
+            except Exception as e:
+                logger.debug("Sampled index mapping failed: %s", e)
                 self._sampled_original_indices = None
         else:
             self._sampled_original_indices = None
@@ -1018,7 +1034,8 @@ class GraphPanel(QWidget):
                 # Discard if all zeros
                 if all(v == 0.0 for v in group_data.values()):
                     group_data = None
-            except Exception:
+            except Exception as e:
+                logger.debug("Group data aggregation failed: %s", e)
                 group_data = None
 
         self.stat_panel.update_histograms(x_sampled, y_sampled, group_data)
@@ -1033,8 +1050,8 @@ class GraphPanel(QWidget):
                     stats['X-Diff'] = float(np.max(clean_x) - np.min(clean_x))
                 if len(clean_y) > 0:
                     stats['Y-Diff'] = float(np.max(clean_y) - np.min(clean_y))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("X/Y diff computation failed: %s", e)
 
             # Percentiles for summary
             percentiles = {}
@@ -1044,7 +1061,8 @@ class GraphPanel(QWidget):
                     pct_list = [0, 1, 2, 3, 4, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.7, 99.9, 99.99, 100]
                     pct_vals = np.percentile(clean_y, pct_list)
                     percentiles = {f"P{p}": float(v) for p, v in zip(pct_list, pct_vals)}
-            except Exception:
+            except Exception as e:
+                logger.debug("Percentile computation failed: %s", e)
                 percentiles = {}
 
             # Groupby counts & sums
@@ -1056,7 +1074,8 @@ class GraphPanel(QWidget):
                         group_y = y_sampled[mask]
                         group_counts[group_name] = int(np.sum(~np.isnan(group_y)))
                         group_sums[group_name] = float(np.nansum(group_y))
-                except Exception:
+                except Exception as e:
+                    logger.debug("Group counts/sums computation failed: %s", e)
                     group_counts = {}
                     group_sums = {}
 
@@ -1123,11 +1142,11 @@ class GraphPanel(QWidget):
             return result_series.to_numpy()
 
         except ExpressionError as e:
-            _lg.warning(f"Formula error: {e}")
+            logger.warning("Formula error: %s", e)
             self._show_formula_error(str(e))
             return y_data
         except Exception as e:
-            _lg.warning(f"Error applying formula '{formula}': {e}")
+            logger.warning("Error applying formula '%s': %s", formula, e)
             self._show_formula_error(str(e))
             return y_data
 
@@ -1291,8 +1310,8 @@ class GraphPanel(QWidget):
                             vals_m = working_df[mark_by_col].to_numpy()[mask]
                             if len(vals_m) > 0:
                                 mark_key = str(vals_m[0])
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Combo color/marker lookup failed: %s", e)
 
                     if color_key not in color_map:
                         color_map[color_key] = group_colors[len(color_map) % len(group_colors)]
@@ -1412,8 +1431,8 @@ class GraphPanel(QWidget):
                                 pct_list = [0, 1, 5, 10, 25, 50, 75, 90, 95, 99, 100]
                                 pct_vals = np.percentile(clean, pct_list)
                                 pcts_by_col[vc.name] = {f"P{p}": float(v) for p, v in zip(pct_list, pct_vals)}
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Multi-Y percentile computation failed for %s: %s", vc.name, e)
                     self.stat_panel.update_multi_y_stats(stats_by_col, pcts_by_col)
                 else:
                     stats = self.engine.get_statistics(valid_cols[0].name)
@@ -1435,8 +1454,8 @@ class GraphPanel(QWidget):
                 if f_col in df.columns and f_vals:
                     try:
                         df = df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Violin/density filter cast failed for %s: %s", f_col, e)
             if len(df) == 0:
                 return
 
@@ -1609,8 +1628,9 @@ class GraphPanel(QWidget):
         if cat_col and cat_col in df.columns:
             try:
                 density = chart.calculate_density(df, cat_col, y_col, include_box=True)
-            except Exception:
+            except Exception as e:
                 # Fallback to box plot if KDE fails
+                logger.debug("KDE density failed, falling back to box plot: %s", e)
                 self._render_box_plot(df, cat_col, y_col, options, colors)
                 return
         else:
@@ -1634,7 +1654,8 @@ class GraphPanel(QWidget):
                     'q1': float(np.percentile(y_data, 25)),
                     'q3': float(np.percentile(y_data, 75)),
                 }}
-            except Exception:
+            except Exception as e:
+                logger.debug("Single violin KDE failed, falling back to box plot: %s", e)
                 self._render_box_plot(df, cat_col, y_col, options, colors)
                 return
 
@@ -1921,14 +1942,16 @@ class GraphPanel(QWidget):
                 self.main_graph.set_hover_data([], {})
 
             # Update sampling status
+            original_total = sum(
+                len(ds.df)
+                for did in dataset_ids
+                for ds in [self.engine.get_dataset(did)]
+                if ds and ds.df is not None
+            )
             self.main_graph.update_sampling_status(
                 displayed_points=total_points,
-                total_points=sum(len(self.engine.get_dataset(did).df)
-                               for did in dataset_ids
-                               if self.engine.get_dataset(did) and self.engine.get_dataset(did).df is not None),
-                is_sampled=total_points < sum(len(self.engine.get_dataset(did).df)
-                                            for did in dataset_ids
-                                            if self.engine.get_dataset(did) and self.engine.get_dataset(did).df is not None),
+                total_points=original_total,
+                is_sampled=total_points < original_total,
                 algorithm="Multi-Dataset"
             )
 
@@ -1959,8 +1982,8 @@ class GraphPanel(QWidget):
                 self.options_panel.chart_subtitle_edit.blockSignals(True)
                 self.options_panel.chart_subtitle_edit.setText(subtitle_text)
                 self.options_panel.chart_subtitle_edit.blockSignals(False)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Chart settings sync failed: %s", e)
         self.refresh()
 
     def _on_selection_changed(self):
@@ -2070,7 +2093,7 @@ class GraphPanel(QWidget):
             self.stat_panel.update_histograms(selected_x, selected_y)
             
         except Exception as e:
-            print(f"Error updating stats for selection: {e}")
+            logger.warning("Error updating stats for selection: %s", e)
     
     def _build_group_masks(self, df_override=None) -> Dict[str, np.ndarray]:
         if not self.state.group_columns or not self.engine.is_loaded:
@@ -2133,7 +2156,8 @@ class GraphPanel(QWidget):
 
             self.main_graph.setXRange(x_min - x_pad, x_max + x_pad, padding=0)
             self.main_graph.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
-        except Exception:
+        except Exception as e:
+            logger.debug("Autofit data failed: %s", e)
             self.main_graph.autoRange()
     
     def export_image(self, path: str):
@@ -2352,8 +2376,8 @@ class GraphPanel(QWidget):
                 if f_col in working_df.columns and f_vals:
                     try:
                         working_df = working_df.filter(pl.col(f_col).cast(pl.Utf8).is_in(f_vals))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Grid view filter cast failed for %s: %s", f_col, e)
 
         if working_df is None or len(working_df) == 0:
             self._clear_grid_cells()
@@ -2451,6 +2475,7 @@ class GraphPanel(QWidget):
             try:
                 facet_df = working_df.filter(pl.col(split_by).cast(pl.Utf8) == str(split_val))
             except Exception:
+                logger.debug("Facet filter cast fallback for %s=%s", split_by, split_val)
                 facet_df = working_df.filter(pl.col(split_by) == split_val)
 
             if len(facet_df) == 0:
@@ -2590,5 +2615,4 @@ class GraphPanel(QWidget):
                     cell.getViewBox().setYLink(main_vb)
 
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to sync grid axes: {e}")
+            logger.warning("Failed to sync grid axes: %s", e)

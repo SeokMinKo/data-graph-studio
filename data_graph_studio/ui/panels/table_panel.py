@@ -2,11 +2,14 @@
 Table Panel - 테이블 뷰 + X Zone + Group Zone + Value Zone
 """
 
+import logging
 from typing import Optional, List, Dict, Any, Set, Tuple
 from collections import OrderedDict
 import json
 import re
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
@@ -245,7 +248,8 @@ class PolarsTableModel(QAbstractTableModel):
                 del self._column_cache[col_idx]
             self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug("setData failed at row=%d col=%d: %s", row, col, e)
             return False
 
     def set_editable(self, editable: bool):
@@ -356,7 +360,8 @@ class PolarsTableModel(QAbstractTableModel):
                 series = series.head(self._row_count)
             self._column_cache[col] = series
             self._column_cache.move_to_end(col)
-        except Exception:
+        except Exception as e:
+            logger.debug("Column cache miss for col %d: %s", col, e)
             self._column_cache[col] = pl.Series([], dtype=pl.Utf8)
 
         # LRU eviction
@@ -435,8 +440,8 @@ class PolarsTableModel(QAbstractTableModel):
                         max_val = float(series.max())
                         self._cond_fmt_ranges[col_name] = (min_val, max_val)
                         fmt.set_range(min_val, max_val)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Conditional format range failed for %s: %s", col_name, e)
 
     def _precompute_column_stats(self):
         """Pre-compute header tooltip stats at set_dataframe time (#12)."""
@@ -454,7 +459,8 @@ class PolarsTableModel(QAbstractTableModel):
                 if series.dtype.is_numeric():
                     tooltip += f"<br>Min: {series.min()}<br>Max: {series.max()}<br>Mean: {series.mean():.2f}"
                 self._column_stats[col_name] = tooltip
-            except Exception:
+            except Exception as e:
+                logger.debug("Column stats failed for %s: %s", col_name, e)
                 self._column_stats[col_name] = col_name
 
     # ==================== 정렬 기능 ====================
@@ -506,7 +512,7 @@ class PolarsTableModel(QAbstractTableModel):
 
         except Exception as e:
             # 정렬 실패 시 원본 유지
-            print(f"Sort error: {e}")
+            logger.warning("Sort error: %s", e)
             self._df = self._original_df
             self._sort_column = None
             self._sort_order = None
@@ -546,7 +552,7 @@ class PolarsTableModel(QAbstractTableModel):
             self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
             self._row_count = self._loaded_rows
         except Exception as e:
-            print(f"Multi-sort error: {e}")
+            logger.warning("Multi-sort error: %s", e)
             self._df = self._original_df
             self._sort_columns = []
         self.endResetModel()
@@ -606,8 +612,8 @@ def _parse_drag_payload(mime_data: QMimeData) -> Dict[str, Any]:
             data = json.loads(raw)
             if isinstance(data, dict):
                 payload.update(data)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to parse drag payload: %s", e)
     if not payload.get("name") and mime_data.hasText():
         payload["name"] = mime_data.text()
     return payload
@@ -1439,7 +1445,14 @@ class DataTableView(QTableView):
         self._pending_multi_sort: List[Tuple[int, Qt.SortOrder]] = []
     
     def setModel(self, model):
-        """Bug 4: Reconnect selectionModel on every model swap."""
+        """Reconnect selectionModel on model swap, avoiding duplicate connections."""
+        # Disconnect previous selectionModel signal before replacing
+        old_sel = self.selectionModel()
+        if old_sel:
+            try:
+                old_sel.selectionChanged.disconnect(self._on_selection_changed)
+            except (RuntimeError, TypeError):
+                pass
         super().setModel(model)
         sel_model = self.selectionModel()
         if sel_model:
@@ -2180,7 +2193,8 @@ class TablePanel(QWidget):
         view_mode = None
         try:
             view_mode = self.table_view_mode_combo.currentData()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to get table view mode: %s", e)
             view_mode = None
 
         # "Source Raw" means: ignore table-level filters/marking/search and show engine.df as-is.
@@ -2216,8 +2230,8 @@ class TablePanel(QWidget):
             try:
                 self.expand_btn.setEnabled(True)
                 self.collapse_btn.setEnabled(True)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to enable expand/collapse buttons: %s", e)
         else:
             # Row-level table view
             self.table_model.set_dataframe(df)
@@ -2227,8 +2241,8 @@ class TablePanel(QWidget):
             try:
                 self.expand_btn.setEnabled(False)
                 self.collapse_btn.setEnabled(False)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to disable expand/collapse buttons: %s", e)
 
             # 데이터가 잘렸는지 표시
             actual_rows = self.table_model.get_actual_row_count()
@@ -2601,10 +2615,6 @@ class TablePanel(QWidget):
                 main_window.statusBar().showMessage(
                     f"Split '{column_name}' into {', '.join(target_names)}", 3000
                 )
-            elif main_window and hasattr(main_window, 'statusbar'):
-                main_window.statusbar.showMessage(
-                    f"Split '{column_name}' into {', '.join(target_names)}", 3000
-                )
         except Exception as e:
             QMessageBox.warning(self, "Split Column", f"Failed to split column: {e}")
 
@@ -2684,16 +2694,12 @@ class TablePanel(QWidget):
                         self.graph_panel.set_columns(new_df.columns)
                     if hasattr(self.graph_panel, "refresh"):
                         self.graph_panel.refresh()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to refresh graph panel after rename: %s", e)
 
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    f"Renamed column '{old_name}' to '{new_name}'", 3000
-                )
-            elif main_window and hasattr(main_window, 'statusbar'):
-                main_window.statusbar.showMessage(
                     f"Renamed column '{old_name}' to '{new_name}'", 3000
                 )
         except Exception as e:
@@ -2722,8 +2728,8 @@ class TablePanel(QWidget):
         # Show statusbar feedback
         if feedback:
             main_window = self.window()
-            if main_window and hasattr(main_window, 'statusbar'):
-                main_window.statusbar.showMessage(feedback, 3000)
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(feedback, 3000)
     
     def _on_filter_removed(self, index: int):
         """Handle filter removal"""
@@ -2821,7 +2827,8 @@ class TablePanel(QWidget):
         mode = None
         try:
             mode = self.table_view_mode_combo.currentData()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to get table view mode: %s", e)
             mode = None
 
         # Grouped mode only makes sense when Group By is configured.

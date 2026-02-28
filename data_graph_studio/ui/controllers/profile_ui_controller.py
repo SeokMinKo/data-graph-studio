@@ -719,7 +719,7 @@ class ProfileUIController:
                         'range': y_max_all - y_min_all,
                         'columns': y_col_names,
                     }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Summary range calculation failed: %s", e)
 
         w.state.update_summary(stats)

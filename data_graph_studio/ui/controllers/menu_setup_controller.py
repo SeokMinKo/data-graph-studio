@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 
 from ...core.state import ChartType
 from ...core.export_controller import ExportFormat
@@ -32,82 +32,81 @@ class MenuSetupController:
         # ============================================================
         file_menu = menubar.addMenu("&File")
 
-        # Open Data (with wizard)
-        open_data_action = QAction("Open &Data...", self.w)
+        # Open submenu
+        open_menu = file_menu.addMenu("&Open")
+
+        open_data_action = QAction("&Data...", self.w)
         open_data_action.setShortcut(QKeySequence.Open)
         open_data_action.setStatusTip("Open data file with New Project Wizard (Ctrl+O)")
         open_data_action.triggered.connect(self.w._on_open_file)
-        file_menu.addAction(open_data_action)
+        open_menu.addAction(open_data_action)
 
-        # Open Data Without Wizard
-        open_no_wizard_action = QAction("Open Without &Wizard...", self.w)
+        open_no_wizard_action = QAction("Data Without &Wizard...", self.w)
         open_no_wizard_action.setShortcut("Ctrl+Shift+O")
         open_no_wizard_action.setStatusTip("Open data file without wizard - quick mode (Ctrl+Shift+O)")
         open_no_wizard_action.triggered.connect(self.w._on_open_file_without_wizard)
-        file_menu.addAction(open_no_wizard_action)
+        open_menu.addAction(open_no_wizard_action)
 
-        # Open Profile
-        open_profile_action = QAction("Open &Profile...", self.w)
+        open_menu.addSeparator()
+
+        open_profile_action = QAction("&Profile...", self.w)
         open_profile_action.setShortcut("Ctrl+Alt+O")
         open_profile_action.setStatusTip("Load a saved profile file (Ctrl+Alt+O)")
         open_profile_action.triggered.connect(self.w._on_open_profile)
-        file_menu.addAction(open_profile_action)
+        open_menu.addAction(open_profile_action)
 
-        # Open Project
-        open_project_action = QAction("Open Pro&ject...", self.w)
+        open_project_action = QAction("Pro&ject...", self.w)
         open_project_action.setShortcut("Ctrl+Alt+P")
         open_project_action.setStatusTip("Load a DGS project file (Ctrl+Alt+P)")
         open_project_action.triggered.connect(self.w._on_open_project)
-        file_menu.addAction(open_project_action)
+        open_menu.addAction(open_project_action)
 
-        file_menu.addSeparator()
+        # Save submenu
+        save_menu = file_menu.addMenu("&Save")
 
-        # Save Data
-        save_data_action = QAction("Save Data", self.w)
+        save_data_action = QAction("&Data", self.w)
         save_data_action.setShortcut(QKeySequence.Save)
         save_data_action.setStatusTip("Save current data (Ctrl+S)")
         save_data_action.triggered.connect(self.w._on_save_data)
-        file_menu.addAction(save_data_action)
+        save_menu.addAction(save_data_action)
 
-        # Save Data As
-        save_data_as_action = QAction("Save Data As...", self.w)
+        save_data_as_action = QAction("Data &As...", self.w)
         save_data_as_action.setShortcut("Ctrl+Shift+S")
         save_data_as_action.setStatusTip("Save current data to a new file")
         save_data_as_action.triggered.connect(self.w._on_save_data_as)
-        file_menu.addAction(save_data_as_action)
+        save_menu.addAction(save_data_as_action)
 
-        # Save Profile
-        save_profile_action = QAction("Save Profile", self.w)
+        save_menu.addSeparator()
+
+        save_profile_action = QAction("&Profile", self.w)
         save_profile_action.setStatusTip("Save active profile to last path")
         save_profile_action.triggered.connect(self.w._on_save_profile_file)
-        file_menu.addAction(save_profile_action)
+        save_menu.addAction(save_profile_action)
 
-        # Save Profile As
-        save_profile_as_action = QAction("Save Profile As...", self.w)
+        save_profile_as_action = QAction("Profile As...", self.w)
         save_profile_as_action.setStatusTip("Save active profile to a new file")
         save_profile_as_action.triggered.connect(self.w._on_save_profile_file_as)
-        file_menu.addAction(save_profile_as_action)
+        save_menu.addAction(save_profile_as_action)
 
-        # Save Project
-        save_project_action = QAction("Save Project", self.w)
+        save_menu.addSeparator()
+
+        save_project_action = QAction("Pro&ject", self.w)
         save_project_action.setShortcut("Ctrl+Alt+S")
         save_project_action.setStatusTip("Save project with profiles (Ctrl+Alt+S)")
         save_project_action.triggered.connect(self.w._on_save_project_file)
-        file_menu.addAction(save_project_action)
+        save_menu.addAction(save_project_action)
 
-        # Save Project As
-        save_project_as_action = QAction("Save Project As...", self.w)
+        save_project_as_action = QAction("Project As...", self.w)
         save_project_as_action.setStatusTip("Save project with profiles to a new file")
         save_project_as_action.triggered.connect(self.w._on_save_project_file_as)
-        file_menu.addAction(save_project_as_action)
+        save_menu.addAction(save_project_as_action)
 
-        file_menu.addSeparator()
+        save_menu.addSeparator()
 
-        # Save Profile Bundle As
-        save_bundle_as_action = QAction("Save Profile Bundle As...", self.w)
+        save_bundle_as_action = QAction("Profile &Bundle As...", self.w)
         save_bundle_as_action.setStatusTip("Save all profiles as a bundle file")
         save_bundle_as_action.triggered.connect(self.w._on_save_profile_bundle_as)
-        file_menu.addAction(save_bundle_as_action)
+        save_menu.addAction(save_bundle_as_action)
 
         file_menu.addSeparator()
 
@@ -227,12 +226,14 @@ class MenuSetupController:
         self.w._export_quick_action.triggered.connect(self.w._on_export_dialog)
         export_menu.addAction(self.w._export_quick_action)
 
-        # Keep legacy report action for backward compat
-        export_report_action = QAction("Export &Report (Legacy)...", self.w)
+        export_menu.addSeparator()
+
+        # Legacy report action (moved into Export submenu)
+        export_report_action = QAction("Report (&Legacy)...", self.w)
         export_report_action.setShortcut("Ctrl+R")
-        export_report_action.setStatusTip("Export data and charts as a report")
+        export_report_action.setStatusTip("Export data and charts as a report (legacy)")
         export_report_action.triggered.connect(self.w._on_export_report)
-        file_menu.addAction(export_report_action)
+        export_menu.addAction(export_report_action)
 
         # Import
         import_action = QAction("&Import...", self.w)
@@ -434,7 +435,7 @@ class MenuSetupController:
         view_menu.addSeparator()
 
         # Multi-Grid View
-        multi_grid_action = QAction("&Multi-Grid View", self.w)
+        multi_grid_action = QAction("&Multi-Grid View (Coming Soon)", self.w)
         multi_grid_action.setShortcut("Ctrl+M")
         multi_grid_action.setStatusTip("Display multiple graphs in a grid layout")
         multi_grid_action.triggered.connect(self.w._on_multi_grid_view)
@@ -478,12 +479,15 @@ class MenuSetupController:
         # Theme submenu
         theme_menu = view_menu.addMenu("&Theme")
         self.w._theme_actions = {}
+        self.w._theme_action_group = QActionGroup(self.w)
+        self.w._theme_action_group.setExclusive(True)
 
         light_theme_action = QAction("Light", self.w)
         light_theme_action.setToolTip("Switch to light theme")
         light_theme_action.setCheckable(True)
         light_theme_action.setChecked(False)
         light_theme_action.triggered.connect(lambda: self.w._on_theme_changed("light"))
+        self.w._theme_action_group.addAction(light_theme_action)
         theme_menu.addAction(light_theme_action)
         self.w._theme_actions["light"] = light_theme_action
 
@@ -491,6 +495,7 @@ class MenuSetupController:
         dark_theme_action.setToolTip("Switch to dark theme")
         dark_theme_action.setCheckable(True)
         dark_theme_action.triggered.connect(lambda: self.w._on_theme_changed("dark"))
+        self.w._theme_action_group.addAction(dark_theme_action)
         theme_menu.addAction(dark_theme_action)
         self.w._theme_actions["dark"] = dark_theme_action
 
@@ -499,6 +504,7 @@ class MenuSetupController:
         midnight_theme_action.setCheckable(True)
         midnight_theme_action.setChecked(True)
         midnight_theme_action.triggered.connect(lambda: self.w._on_theme_changed("midnight"))
+        self.w._theme_action_group.addAction(midnight_theme_action)
         theme_menu.addAction(midnight_theme_action)
         self.w._theme_actions["midnight"] = midnight_theme_action
 
@@ -643,6 +649,9 @@ class MenuSetupController:
 
         # Chart Type submenu within Options (with shortcut hints)
         chart_type_menu = options_menu.addMenu("Chart &Type")
+        self.w._chart_type_actions = {}
+        self.w._chart_type_action_group = QActionGroup(self.w)
+        self.w._chart_type_action_group.setExclusive(True)
         _chart_shortcuts = {
             ChartType.LINE: "1", ChartType.BAR: "2", ChartType.SCATTER: "3",
             ChartType.AREA: "5",
@@ -653,14 +662,19 @@ class MenuSetupController:
             if shortcut_hint:
                 label = f"{label} ({shortcut_hint})"
             action = QAction(label, self.w)
+            action.setCheckable(True)
+            if chart_type == ChartType.LINE:
+                action.setChecked(True)
             action.triggered.connect(lambda checked, ct=chart_type: self.w.state.set_chart_type(ct))
+            self.w._chart_type_action_group.addAction(action)
             chart_type_menu.addAction(action)
+            self.w._chart_type_actions[chart_type] = action
 
         options_menu.addSeparator()
 
         # Axis settings
-        axis_settings_action = QAction("&Axis Settings...", self.w)
-        axis_settings_action.setStatusTip("Configure axis range, labels, and scale")
+        axis_settings_action = QAction("&Axis Settings... (Coming Soon)", self.w)
+        axis_settings_action.setStatusTip("Configure axis range, labels, and scale (coming soon)")
         axis_settings_action.triggered.connect(self.w._on_axis_settings)
         options_menu.addAction(axis_settings_action)
 
@@ -742,6 +756,23 @@ class MenuSetupController:
         # Graph menu items
         if hasattr(self.w, '_trend_line_action'):
             self.w._trend_line_action.setEnabled(has_data)
+
+        # View menu items that require data
+        if hasattr(self.w, '_dashboard_mode_action'):
+            self.w._dashboard_mode_action.setEnabled(has_data)
+        if hasattr(self.w, '_add_annotation_action'):
+            self.w._add_annotation_action.setEnabled(has_data)
+        if hasattr(self.w, '_start_streaming_action'):
+            self.w._start_streaming_action.setEnabled(has_data)
+
+        # Sync chart type checkmarks with current state (menu + toolbar)
+        current_ct = self.w.state.chart_type
+        if hasattr(self.w, '_chart_type_actions'):
+            for ct, action in self.w._chart_type_actions.items():
+                action.setChecked(ct == current_ct)
+        if hasattr(self.w, '_chart_toolbar_actions'):
+            for ct, action in self.w._chart_toolbar_actions.items():
+                action.setChecked(ct == current_ct)
 
     def _update_export_menu_state(self):
         """Enable/disable export menu items based on data/graph state"""

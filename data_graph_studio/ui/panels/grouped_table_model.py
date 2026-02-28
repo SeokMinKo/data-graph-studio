@@ -2,9 +2,12 @@
 Grouped Table Model - Hierarchical data display with expand/collapse
 """
 
+import logging
 from typing import Optional, List, Dict, Any, Set, Tuple
 from dataclasses import dataclass, field
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import Qt, QAbstractItemModel, QModelIndex, Signal
 from PySide6.QtGui import QFont, QColor, QBrush
@@ -242,8 +245,9 @@ class GroupedTableModel(QAbstractItemModel):
         # Polars groupby 실행 (C 레벨에서 최적화)
         try:
             grouped = self._df.group_by(self._group_columns).agg(agg_exprs).sort(self._group_columns)
-        except:
+        except Exception as e:
             # 실패 시 기본 방식
+            logger.debug("Polars groupby failed, falling back to recursive build: %s", e)
             self._build_group_recursive(
                 self._root,
                 self._group_columns,
@@ -255,6 +259,7 @@ class GroupedTableModel(QAbstractItemModel):
         # 그룹 개수 제한 (성능)
         MAX_GROUPS = 1000
         if len(grouped) > MAX_GROUPS:
+            logger.warning("Truncated %d groups to %d", len(grouped), MAX_GROUPS)
             grouped = grouped.head(MAX_GROUPS)
         
         # 트리 구조 빌드 (집계 결과에서)
@@ -399,7 +404,8 @@ class GroupedTableModel(QAbstractItemModel):
                     node.aggregates[col] = subset[col].max()
                 else:
                     node.aggregates[col] = subset[col].sum()
-            except:
+            except Exception as e:
+                logger.debug("Aggregate calculation failed for column %s: %s", col, e)
                 node.aggregates[col] = None
     
     def _get_all_rows(self, node: GroupNode) -> List[int]:
@@ -625,7 +631,7 @@ class GroupedTableModel(QAbstractItemModel):
 
                 node.rows = row_indices
         except Exception as e:
-            print(f"Error loading node rows: {e}")
+            logger.warning("Error loading node rows: %s", e)
             node.rows = []
     
     def expand_all(self):

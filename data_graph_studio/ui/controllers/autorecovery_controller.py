@@ -45,8 +45,8 @@ class AutorecoveryController:
                     # so IPC server is already running and accessible
                     from PySide6.QtCore import QTimer as _QTimer
                     _QTimer.singleShot(500, self.w._prompt_recovery)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Autorecovery setup check failed: %s", e)
 
         # Autosave timer
         self.w._autosave_timer = QTimer(self.w)
@@ -116,8 +116,8 @@ class AutorecoveryController:
                     os.remove(self.w._autosave_path)
                 except OSError:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Recovery prompt failed: %s", e)
 
 
     def _autosave_session(self):
@@ -140,8 +140,8 @@ class AutorecoveryController:
                 for gs in self.w.profile_store.get_by_dataset(did):
                     try:
                         profiles.append(gs.to_dict())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to serialize profile for autosave: %s", e)
 
             payload = {
                 "version": 2,
@@ -155,8 +155,8 @@ class AutorecoveryController:
 
             with open(self.w._autosave_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Autosave failed: %s", e)
 
 
     def _restore_autosave(self):
@@ -164,7 +164,8 @@ class AutorecoveryController:
         try:
             with open(self.w._autosave_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to read autosave file: %s", e)
             return
 
         datasets = data.get("datasets", [])
@@ -216,6 +217,9 @@ class AutorecoveryController:
                     column_count=self.w.engine.column_count,
                     memory_bytes=memory_bytes
                 )
+        else:
+            logger.warning("Skipping dataset '%s': file not found at %s",
+                           ds.get('name', 'unknown'), path)
 
         QTimer.singleShot(0, self.w._restore_next)
 
@@ -245,8 +249,8 @@ class AutorecoveryController:
                 gs = GraphSetting.from_dict(p_data)
                 if gs.dataset_id in loaded_ids:
                     self.w.profile_store.add(gs)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to restore profile from autosave: %s", e)
 
         # Restore graph settings
         graph_state = data.get("graph_state", {})
@@ -329,7 +333,7 @@ class AutorecoveryController:
                     secondary_y_max=cs.get('secondary_y_max', self.w.state.chart_settings.secondary_y_max),
                     secondary_y_label=cs.get('secondary_y_label', self.w.state.chart_settings.secondary_y_label),
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to apply graph state from autosave: %s", e)
 
 

@@ -164,7 +164,7 @@ class ViewActionsController:
             action.setChecked(tid == theme_id)
         
         # 테마 적용
-        if not hasattr(self, '_theme_manager'):
+        if not hasattr(self.w, '_theme_manager'):
             self.w._theme_manager = ThemeManager()
         
         self.w._theme_manager.set_theme(theme_id)
@@ -174,7 +174,7 @@ class ViewActionsController:
         
         # Apply theme to graph panel components
         is_light = self.w._theme_manager.current_theme.is_light()
-        if hasattr(self, 'graph_panel'):
+        if hasattr(self.w, 'graph_panel'):
             # Main graph
             if hasattr(self.w.graph_panel, 'main_graph'):
                 self.w.graph_panel.main_graph.apply_theme(is_light)
@@ -243,17 +243,17 @@ class ViewActionsController:
 
 
     def _on_drawing_style(self):
-        if hasattr(self, 'graph_panel') and self.w.graph_panel is not None:
+        if hasattr(self.w, 'graph_panel') and self.w.graph_panel is not None:
             self.w.graph_panel.show_drawing_style_dialog()
 
 
     def _on_delete_drawing(self):
-        if hasattr(self, 'graph_panel') and self.w.graph_panel is not None:
+        if hasattr(self.w, 'graph_panel') and self.w.graph_panel is not None:
             self.w.graph_panel.delete_selected_drawing()
 
 
     def _on_clear_drawings(self):
-        if hasattr(self, 'graph_panel') and self.w.graph_panel is not None:
+        if hasattr(self.w, 'graph_panel') and self.w.graph_panel is not None:
             self.w.graph_panel.clear_drawings()
 
 
@@ -266,7 +266,7 @@ class ViewActionsController:
             self.w._draw_color = color
             self.w._update_draw_color_btn()
             # Apply to graph panel's current drawing style
-            if hasattr(self, 'graph_panel') and self.w.graph_panel is not None:
+            if hasattr(self.w, 'graph_panel') and self.w.graph_panel is not None:
                 self.w.graph_panel.set_drawing_color(color.name())
 
 
@@ -353,8 +353,12 @@ class ViewActionsController:
             else:
                 self.w.statusbar.showMessage(f"Multi-grid view: {layout}", 3000)
             
-            # TODO: 실제 멀티 그리드 뷰 구현
-            # self.w._floating_graph_manager.create_grid_view(rows, cols)
+            # TODO: 실제 멀티 그리드 뷰 구현 — 현재 상태 메시지만 표시
+            QMessageBox.information(
+                self.w, "Multi-Grid View",
+                f"Multi-Grid View ({layout}) is not yet implemented.\n"
+                "This feature will be available in a future update."
+            )
 
     # ============================================================
     # New Menu Action Methods (Data Menu)
@@ -678,7 +682,7 @@ class ViewActionsController:
     def _on_cycle_theme(self):
         """Cycle through themes: light → dark → midnight → light (Ctrl+T)"""
         cycle = ["light", "dark", "midnight"]
-        current = getattr(self, '_current_theme', 'midnight')
+        current = getattr(self.w, '_current_theme', 'midnight')
         try:
             idx = cycle.index(current)
         except ValueError:

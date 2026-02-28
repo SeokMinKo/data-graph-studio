@@ -5,8 +5,8 @@ MainGraph - 메인 그래프 위젯 with hover tooltip support
 import math
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import csv
+import logging
 
 import numpy as np
 import pyqtgraph as pg
@@ -22,7 +22,8 @@ from ..drawing import (
     DrawingStyleDialog, RectStyleDialog, TextInputDialog,
     snap_to_angle
 )
-import pyqtgraph as pg
+
+logger = logging.getLogger(__name__)
 
 
 # ==================== Annotation Item ====================
@@ -173,7 +174,7 @@ class MainGraph(pg.PlotWidget):
                 self.legend.GraphicsItemFlag.ItemIsMovable, True
             )
         except Exception:
-            pass
+            logger.debug("Legend drag not supported in this pyqtgraph version")
 
         self._plot_items = []
         self._scatter_items = []
@@ -269,7 +270,7 @@ class MainGraph(pg.PlotWidget):
         try:
             self.plotItem.vb.setMenuEnabled(False)
         except Exception:
-            pass
+            logger.debug("Could not disable default pyqtgraph context menu")
 
         self._grid_visible = True
 
@@ -286,13 +287,13 @@ class MainGraph(pg.PlotWidget):
                 self.useOpenGL(True)
                 self._opengl_enabled = True
             except Exception as e:
-                print(f"Failed to enable OpenGL: {e}")
+                logger.warning("Failed to enable OpenGL: %s", e)
         elif not enable and self._opengl_enabled:
             try:
                 self.useOpenGL(False)
                 self._opengl_enabled = False
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to disable OpenGL: %s", e)
 
     def update_sampling_status(
         self,
@@ -887,6 +888,7 @@ class MainGraph(pg.PlotWidget):
         try:
             self.getViewBox().autoRange(padding=0.05)
         except Exception:
+            logger.debug("autoRange with padding failed, falling back")
             self.autoRange()
 
     def _update_legend_settings(self, settings: Dict):
@@ -912,6 +914,7 @@ class MainGraph(pg.PlotWidget):
         try:
             self.getViewBox().autoRange(padding=0.05)
         except Exception:
+            logger.debug("autoRange with padding failed, falling back")
             self.autoRange()
         self.setLogMode(x=False, y=False)
 
@@ -964,7 +967,8 @@ class MainGraph(pg.PlotWidget):
             y_pad = (y_max - y_min) * 0.08 or 1.0
             self.setXRange(x_min - x_pad, x_max + x_pad, padding=0)
             self.setYRange(y_min - y_pad, y_max + y_pad, padding=0)
-        except Exception:
+        except Exception as e:
+            logger.debug("Fit to selection failed: %s", e)
             self.reset_view()
 
     def _find_graph_panel(self):
@@ -981,8 +985,8 @@ class MainGraph(pg.PlotWidget):
         """Reset legend to default top-right position."""
         try:
             self.legend.anchor((1, 0), (1, 0), offset=(-10, 10))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Reset legend position failed: %s", e)
 
     def _toggle_grid(self):
         self._grid_visible = not getattr(self, '_grid_visible', True)
@@ -998,8 +1002,8 @@ class MainGraph(pg.PlotWidget):
         try:
             pix = self.grab()
             QApplication.clipboard().setPixmap(pix)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Copy plot image failed: %s", e)
 
     def _export_plot_image(self):
         """Save current plot as an image file."""
@@ -1015,8 +1019,8 @@ class MainGraph(pg.PlotWidget):
                 return
             pix = self.grab()
             pix.save(path)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Export plot image failed: %s", e)
 
     def _export_plot_data_csv(self):
         """Export currently plotted data to CSV (best-effort)."""
@@ -1056,8 +1060,8 @@ class MainGraph(pg.PlotWidget):
                 w.writerow(["x", "y"])
                 for i in range(n):
                     w.writerow([self._data_x[i], self._data_y[i]])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Export plot data CSV failed: %s", e)
 
     def contextMenuEvent(self, event):
         """Custom right-click menu (replace pyqtgraph default)."""
@@ -1151,8 +1155,8 @@ class MainGraph(pg.PlotWidget):
                 dlg.set_style(self._current_drawing_style)
                 if dlg.exec() == QDialog.Accepted:
                     self.set_drawing_style(dlg.get_style())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Drawing style dialog failed: %s", e)
         style_act.triggered.connect(_open_style)
         draw_menu.addAction(style_act)
 
@@ -1642,7 +1646,8 @@ class MainGraph(pg.PlotWidget):
                     self._show_tooltip(idx, x_val, y_val, series_name=series_name, hover_data=hover_data)
                 else:
                     self._hide_tooltip()
-            except Exception:
+            except Exception as e:
+                logger.debug("Multi-series hover error: %s", e)
                 self._hide_tooltip()
             return
 
@@ -1672,7 +1677,8 @@ class MainGraph(pg.PlotWidget):
                 self._show_tooltip(nearest_idx, float(self._data_x[nearest_idx]), float(self._data_y[nearest_idx]))
             else:
                 self._hide_tooltip()
-        except Exception:
+        except Exception as e:
+            logger.debug("Single-series hover error: %s", e)
             self._hide_tooltip()
 
     def _show_tooltip(
@@ -1756,7 +1762,7 @@ class MainGraph(pg.PlotWidget):
             return
         if self._last_recorded_range is not None:
             self._view_range_stack.append(self._last_recorded_range)
-            if len(self._view_range_stack) > self._view_range_max:
+            if len(self._view_range_stack) >= self._view_range_max:
                 self._view_range_stack.pop(0)
             self._view_range_redo.clear()
         self._last_recorded_range = current_tuple
@@ -1862,7 +1868,7 @@ class MainGraph(pg.PlotWidget):
         try:
             pen.setCosmetic(True)
         except Exception:
-            pass
+            logger.debug("pen.setCosmetic not supported")
 
         if self.state.tool_mode in (ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW):
             # Line/Arrow preview (arrow head is drawn on final object)
@@ -2159,8 +2165,8 @@ class MainGraph(pg.PlotWidget):
             r2_text.setPos(float(x_smooth[-1]), float(y_smooth[-1]))
             self.addItem(r2_text)
             self._trendline_items.append(r2_text)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to add trendline: %s", e)
 
     def clear_trendlines(self):
         """Remove all trendlines."""

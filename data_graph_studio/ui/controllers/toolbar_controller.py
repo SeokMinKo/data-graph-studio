@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QToolBar, QLabel, QPushButton
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtGui import QAction, QActionGroup, QColor
 
 from ...core.state import ToolMode, ChartType
 from ..toolbars.compare_toolbar import CompareToolbar
@@ -82,6 +82,10 @@ class ToolbarController:
         self.w._tool_actions = {}
         nav_actions = []
 
+        # Shared action group for Nav + Draw tools (mutually exclusive)
+        self.w._tool_action_group = QActionGroup(self.w)
+        self.w._tool_action_group.setExclusive(True)
+
         tools = [
             (ToolMode.ZOOM, "🔍", "Zoom Mode", "Z"),
             (ToolMode.PAN, "✋", "Pan Mode", "H"),
@@ -94,6 +98,7 @@ class ToolbarController:
             action.setToolTip(self.w._format_tooltip(name, shortcut))
             action.setCheckable(True)
             action.triggered.connect(lambda checked, m=mode: self.w.state.set_tool_mode(m))
+            self.w._tool_action_group.addAction(action)
             toolbar.addAction(action)
             self.w._tool_actions[mode] = action
             nav_actions.append(action)
@@ -124,6 +129,7 @@ class ToolbarController:
             action.setToolTip(self.w._format_tooltip(name, shortcut))
             action.setCheckable(True)
             action.triggered.connect(lambda checked, m=mode: self.w.state.set_tool_mode(m))
+            self.w._tool_action_group.addAction(action)
             toolbar.addAction(action)
             self.w._tool_actions[mode] = action
             draw_actions.append(action)
@@ -154,6 +160,10 @@ class ToolbarController:
         chart_label = self._make_group_label("CHART")
         toolbar.addWidget(chart_label)
         chart_actions = []
+        self.w._chart_toolbar_actions = {}
+        chart_toolbar_group = QActionGroup(self.w)
+        chart_toolbar_group.setExclusive(True)
+        self.w._chart_toolbar_action_group = chart_toolbar_group
 
         chart_types = [
             (ChartType.LINE, "📈", "<b>Line Chart</b><br>Best for: Time series, trends<br>Shortcut: 1"),
@@ -165,9 +175,14 @@ class ToolbarController:
         for ct, icon, tooltip in chart_types:
             action = QAction(icon, self.w)
             action.setToolTip(tooltip)
+            action.setCheckable(True)
+            if ct == ChartType.LINE:
+                action.setChecked(True)
             action.triggered.connect(lambda checked, c=ct: self.w.state.set_chart_type(c))
+            chart_toolbar_group.addAction(action)
             toolbar.addAction(action)
             chart_actions.append(action)
+            self.w._chart_toolbar_actions[ct] = action
 
         mgr.register_group("main", "main.chart", "Chart Types",
                            actions=chart_actions, widgets=[],
@@ -319,18 +334,12 @@ class ToolbarController:
     def _show_streaming_controls(self):
         """Show streaming-related toolbar widgets."""
         for widget in self.w._streaming_widgets:
-            if isinstance(widget, QAction):
-                widget.setVisible(True)
-            else:
-                widget.setVisible(True)
+            widget.setVisible(True)
 
     def _hide_streaming_controls(self):
         """Hide streaming-related toolbar widgets."""
         for widget in self.w._streaming_widgets:
-            if isinstance(widget, QAction):
-                widget.setVisible(False)
-            else:
-                widget.setVisible(False)
+            widget.setVisible(False)
 
     def _setup_compare_toolbar(self):
         """Setup the Compare Toolbar (hidden by default, auto-shown during comparison)."""
