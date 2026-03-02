@@ -4,11 +4,29 @@ Filtering System - Spotfire 스타일 필터링 스킴
 필터링 스킴(Filtering Scheme)은 시각화별로 독립적인 필터를 적용할 수 있는 메커니즘입니다.
 """
 
-from typing import Dict, List, Optional, Any, Set, Tuple, Union
+from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
 from PySide6.QtCore import QObject, Signal
 import polars as pl
+import re
+
+_MAX_REGEX_PATTERN_LENGTH = 256
+_SUSPICIOUS_REGEX_PATTERNS = (
+    re.compile(r"\([^)]*[+*][^)]*\)[+*{]"),  # nested quantifiers like (a+)+
+)
+
+
+def _is_safe_regex_pattern(pattern: str) -> bool:
+    """Conservative regex safety guard against pathological patterns."""
+    if not pattern or len(pattern) > _MAX_REGEX_PATTERN_LENGTH:
+        return False
+
+    for rule in _SUSPICIOUS_REGEX_PATTERNS:
+        if rule.search(pattern):
+            return False
+
+    return True
 
 
 class FilterType(Enum):
@@ -143,11 +161,12 @@ class Filter:
                 return col.cast(pl.Utf8).str.to_lowercase().str.ends_with(str(self.value).lower())
 
         elif self.operator == FilterOperator.MATCHES_REGEX:
-            import re as _re
             pattern = str(self.value)
+            if not _is_safe_regex_pattern(pattern):
+                return None
             try:
-                _re.compile(pattern)
-            except _re.error:
+                re.compile(pattern)
+            except re.error:
                 return None
             return col.cast(pl.Utf8).str.contains(pattern)
 
@@ -158,10 +177,10 @@ class Filter:
             return col.is_not_null()
 
         elif self.operator == FilterOperator.IS_TRUE:
-            return col == True
+            return col.eq(True)
 
         elif self.operator == FilterOperator.IS_FALSE:
-            return col == False
+            return col.eq(False)
 
         return None
 
