@@ -24,10 +24,11 @@ logger = logging.getLogger(__name__)
 
 # Upload size limit: 500 MB
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+API_AUTH_HEADER = "x-dgs-api-token"
 
 try:
     from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
-    from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+    from fastapi.responses import StreamingResponse
     from pydantic import BaseModel
     import uvicorn
     FASTAPI_AVAILABLE = True
@@ -109,6 +110,16 @@ if FASTAPI_AVAILABLE:
             )
         return content
 
+    def _require_api_token(request: Request) -> None:
+        """선택적 API 토큰 인증 (DGS_API_TOKEN 설정 시 필수)."""
+        expected = os.environ.get("DGS_API_TOKEN", "").strip()
+        if not expected:
+            return
+
+        provided = request.headers.get(API_AUTH_HEADER, "").strip()
+        if provided != expected:
+            raise HTTPException(401, "Unauthorized: invalid or missing API token")
+
     # ==================== Endpoints ====================
 
     @app.get("/")
@@ -137,6 +148,7 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/api/v1/plot")
     async def create_plot(
+        request: Request,
         data: Optional[UploadFile] = File(None),
         config: Optional[str] = Form(None),
         x: Optional[str] = Form(None),
@@ -158,6 +170,8 @@ if FASTAPI_AVAILABLE:
         - format: 출력 포맷 (png, jpg, svg, pdf)
         """
         from .api import DataGraphStudio
+
+        _require_api_token(request)
 
         # 설정 파싱
         plot_config = {}
@@ -221,7 +235,7 @@ if FASTAPI_AVAILABLE:
         )
 
     @app.post("/api/v1/plot/json")
-    async def create_plot_json(config: PlotConfig, data: dict):
+    async def create_plot_json(request: Request, config: PlotConfig, data: dict):
         """
         JSON 데이터로 그래프 생성
 
@@ -232,6 +246,8 @@ if FASTAPI_AVAILABLE:
         }
         """
         from .api import DataGraphStudio
+
+        _require_api_token(request)
 
         dgs = DataGraphStudio()
         dgs.load_dict(data)
@@ -251,10 +267,12 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/api/v1/data/upload")
     async def upload_data(
+        request: Request,
         file: UploadFile = File(...),
         session_id: Optional[str] = Form(None)
     ):
         """데이터 파일 업로드"""
+        _require_api_token(request)
         content = await _read_upload_with_limit(file)
         filename = file.filename or "data.csv"
         ext = os.path.splitext(filename)[1].lower()
@@ -297,8 +315,9 @@ if FASTAPI_AVAILABLE:
         }
 
     @app.get("/api/v1/data/info/{session_id}")
-    def get_data_info(session_id: str) -> DataInfo:
+    def get_data_info(session_id: str, request: Request) -> DataInfo:
         """업로드된 데이터 정보"""
+        _require_api_token(request)
         if session_id not in _data_store:
             raise HTTPException(404, "Session not found")
 
@@ -315,6 +334,7 @@ if FASTAPI_AVAILABLE:
     @app.post("/api/v1/data/{session_id}/plot")
     async def plot_uploaded_data(
         session_id: str,
+        request: Request,
         x: Optional[str] = Form(None),
         y: Optional[str] = Form(None),
         chart: str = Form("line"),
@@ -322,6 +342,7 @@ if FASTAPI_AVAILABLE:
         format: str = Form("png"),
     ):
         """업로드된 데이터로 그래프 생성"""
+        _require_api_token(request)
         if session_id not in _data_store:
             raise HTTPException(404, "Session not found")
 
@@ -346,10 +367,12 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/api/v1/convert")
     async def convert_file(
+        request: Request,
         file: UploadFile = File(...),
         output_format: str = Form("csv"),
     ):
         """파일 포맷 변환"""
+        _require_api_token(request)
         content = await _read_upload_with_limit(file)
         filename = file.filename or "data.csv"
         in_ext = os.path.splitext(filename)[1].lower()
@@ -405,8 +428,9 @@ if FASTAPI_AVAILABLE:
         )
 
     @app.delete("/api/v1/data/{session_id}")
-    def delete_data(session_id: str):
+    def delete_data(session_id: str, request: Request):
         """업로드된 데이터 삭제"""
+        _require_api_token(request)
         if session_id in _data_store:
             del _data_store[session_id]
             _data_store_timestamps.pop(session_id, None)
