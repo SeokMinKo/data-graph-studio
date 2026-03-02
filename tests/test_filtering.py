@@ -4,7 +4,6 @@ Filtering System 테스트 - Spotfire 스타일 필터링 스킴
 
 import pytest
 import polars as pl
-from typing import List
 
 from data_graph_studio.core.filtering import (
     FilterType,
@@ -381,6 +380,35 @@ class TestFilteringManager:
         assert "Page" in names
         assert "A" in names
         assert "B" in names
+
+    def test_regex_filter_invalid_pattern_is_ignored(self, manager, sample_data):
+        """잘못된 정규식은 필터 적용에서 무시된다."""
+        manager.add_filter("Page", "name", FilterOperator.MATCHES_REGEX, "(")
+
+        result = manager.apply_filters("Page", sample_data)
+
+        # invalid regex should be skipped -> original rows preserved
+        assert len(result) == len(sample_data)
+
+    def test_regex_filter_suspicious_pattern_is_ignored(self, manager, sample_data):
+        """ReDoS 위험 패턴은 방어적으로 무시한다."""
+        manager.add_filter("Page", "name", FilterOperator.MATCHES_REGEX, "(a+)+$")
+
+        result = manager.apply_filters("Page", sample_data)
+
+        assert len(result) == len(sample_data)
+
+    def test_scheme_circular_inheritance_does_not_recurse_infinitely(self, manager, sample_data):
+        """스킴 상속 순환이 있어도 안전하게 종료되어야 한다."""
+        manager.create_scheme("A", inherit_from="B")
+        manager.create_scheme("B", inherit_from="A")
+
+        manager.add_filter("A", "sales", FilterOperator.GREATER_THAN, 100)
+
+        result = manager.apply_filters("A", sample_data)
+
+        assert len(result) > 0
+        assert all(v > 100 for v in result["sales"].to_list())
 
 
 class TestRangeFilter:
