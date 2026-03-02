@@ -5,27 +5,26 @@ Report Generation Dialog
 Provides UI for configuring and generating reports.
 """
 
-from typing import Optional, List, Dict, Any
 from pathlib import Path
 import logging
+import tempfile
+
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QTextEdit, QComboBox, QCheckBox,
     QPushButton, QGroupBox, QTabWidget, QWidget,
     QFileDialog, QProgressDialog, QMessageBox,
-    QSpinBox, QButtonGroup, QRadioButton, QFrame,
-    QScrollArea, QSizePolicy
+    QSpinBox, QButtonGroup, QRadioButton
 )
-from PySide6.QtCore import Qt, Signal, QThread, QSize
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt, Signal, QThread, QUrl
+from PySide6.QtGui import QDesktopServices
 
 from data_graph_studio.core.report import (
     ReportFormat,
     ReportTheme,
     PageSize,
     PageOrientation,
-    ReportMetadata,
     ReportOptions,
     ReportData,
 )
@@ -546,12 +545,39 @@ class ReportDialog(QDialog):
 
     def _preview_report(self):
         """레포트 미리보기"""
-        # TODO: 미리보기 기능 구현
-        QMessageBox.information(
-            self,
-            "Preview",
-            "Preview feature will be available in a future update."
-        )
+        try:
+            # 최신 UI 값 반영
+            self._update_report_data()
+            options = self._get_options()
+
+            from data_graph_studio.report import create_report_manager
+            manager = create_report_manager()
+
+            # 미리보기는 빠른 확인을 위해 HTML 우선
+            preview_format = options.format
+            if preview_format in {ReportFormat.PDF, ReportFormat.DOCX, ReportFormat.PPTX}:
+                preview_format = ReportFormat.HTML
+
+            preview_options = ReportOptions(**vars(options))
+            preview_options.format = preview_format
+
+            ext = self.FORMAT_EXTENSIONS.get(preview_format, ".html")
+            with tempfile.NamedTemporaryFile(prefix="dgs_report_preview_", suffix=ext, delete=False) as f:
+                preview_path = f.name
+
+            manager.generate_report(self.report_data, preview_options, preview_path)
+
+            opened = QDesktopServices.openUrl(QUrl.fromLocalFile(preview_path))
+            if not opened:
+                QMessageBox.warning(
+                    self,
+                    "Preview",
+                    f"Preview created but could not be opened automatically:\n{preview_path}"
+                )
+
+        except Exception as e:
+            logger.exception("Failed to preview report")
+            QMessageBox.critical(self, "Preview Error", str(e))
 
     def _generate_report(self):
         """레포트 생성"""
