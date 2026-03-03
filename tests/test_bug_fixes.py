@@ -291,5 +291,83 @@ class TestGraphPanelDataHandling:
         pass
 
 
+class TestExpressionEngineRegressionEdges:
+    """Additional regression tests for known fragile expression cases."""
+
+    def test_contains_handles_none_values_without_crash(self):
+        from data_graph_studio.core.expression_engine import ExpressionEngine
+
+        engine = ExpressionEngine()
+        df = pl.DataFrame({"text": ["hello", None, "world"]})
+
+        result = engine.evaluate("CONTAINS(text, 'o')", df)
+
+        assert result.to_list() == [True, None, True]
+
+    def test_substring_overflow_length_is_safe(self):
+        from data_graph_studio.core.expression_engine import ExpressionEngine
+
+        engine = ExpressionEngine()
+        df = pl.DataFrame({"text": ["abc", "x"]})
+
+        result = engine.evaluate("SUBSTRING(text, 2, 99)", df)
+
+        assert result.to_list() == ["bc", ""]
+
+
+class TestFtraceConverterRegressionEdges:
+    """Regression tests for converter dispatch and sched conversion behavior."""
+
+    def test_unknown_converter_raises_clear_error(self):
+        from data_graph_studio.parsers.ftrace_parser import FtraceParser
+
+        parser = FtraceParser()
+        raw_df = pl.DataFrame(
+            {
+                "timestamp": [1.0],
+                "cpu": [0],
+                "task": ["kworker"],
+                "pid": [1],
+                "flags": ["...."],
+                "event": ["block_rq_issue"],
+                "details": ["8,0 R 4096 () 100 + 8 [kworker]"],
+            }
+        )
+
+        with pytest.raises(ValueError, match="Unknown converter: 'unknown_converter'"):
+            parser.convert(raw_df, {"converter": "unknown_converter"})
+
+    def test_sched_converter_runtime_is_per_cpu(self):
+        from data_graph_studio.parsers.ftrace_parser import FtraceParser
+
+        parser = FtraceParser()
+        raw_df = pl.DataFrame(
+            {
+                "timestamp": [1.0, 1.5, 2.0],
+                "cpu": [0, 0, 1],
+                "task": ["a", "b", "c"],
+                "pid": [1, 2, 3],
+                "flags": ["....", "....", "...."],
+                "event": ["sched_switch", "sched_switch", "sched_switch"],
+                "details": [
+                    "prev_comm=foo prev_pid=10 prev_prio=120 prev_state=S ==> next_comm=bar next_pid=20",
+                    "prev_comm=bar prev_pid=20 prev_prio=120 prev_state=R ==> next_comm=baz next_pid=30",
+                    "prev_comm=q prev_pid=11 prev_prio=120 prev_state=S ==> next_comm=w next_pid=22",
+                ],
+            }
+        )
+
+        result = parser.convert(raw_df, {"converter": "sched"}).sort(["cpu", "timestamp"])
+
+        # CPU0 second switch: 0.5s => 500ms runtime
+        cpu0 = result.filter(pl.col("cpu") == 0)
+        assert cpu0["runtime_ms"][0] is None
+        assert cpu0["runtime_ms"][1] == pytest.approx(500.0)
+
+        # CPU1 first switch should not inherit CPU0 runtime
+        cpu1 = result.filter(pl.col("cpu") == 1)
+        assert cpu1["runtime_ms"][0] is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
