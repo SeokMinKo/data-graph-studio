@@ -429,3 +429,75 @@ class TestAutoSave:
             
             assert recovered is not None
             assert recovered.state.get('test') == 'data'
+
+
+class TestProjectRegressionCoverage:
+    """추가 회귀 테스트: 프로젝트 복원/호환성/경로 해석"""
+
+    def test_legacy_data_source_migrates_to_data_sources(self):
+        """레거시 data_source 단일 저장본은 로드시 data_sources로 마이그레이션된다."""
+        payload = {
+            "name": "legacy-project",
+            "data_source": {
+                "path": "data/legacy.csv",
+                "file_type": "csv",
+            },
+            "data_sources": [],
+        }
+
+        project = Project.from_dict(payload)
+
+        assert project.data_source is not None
+        assert len(project.data_sources) == 1
+        assert project.data_sources[0].path == "data/legacy.csv"
+
+    def test_profiles_round_trip_is_preserved(self):
+        """profiles 필드가 저장/로드 과정에서 손실되지 않는다."""
+        project = Project(name="profiles-test")
+        project.profiles = [
+            {
+                "id": "p1",
+                "name": "default",
+                "graph_type": "line",
+                "value_columns": ["latency"],
+            }
+        ]
+
+        restored = Project.from_dict(project.to_dict())
+
+        assert len(restored.profiles) == 1
+        assert restored.profiles[0]["id"] == "p1"
+        assert restored.profiles[0]["name"] == "default"
+
+    def test_validate_resolves_relative_path_against_project_location(self):
+        """상대 경로 데이터소스가 프로젝트 파일 위치 기준으로 유효성 검증된다."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir) / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            csv_path = data_dir / "sales.csv"
+            csv_path.write_text("a,b\n1,2\n", encoding="utf-8")
+
+            project = Project(name="relative-path")
+            project.data_sources = [
+                DataSourceRef(path="data/sales.csv", file_type="csv", name="sales")
+            ]
+            project._path = str(Path(tmpdir) / "sample.dgs")
+
+            errors = project.validate()
+
+            assert errors == []
+
+    def test_validate_includes_named_data_source_in_error_message(self):
+        """누락된 데이터소스 에러에 데이터소스 이름(name)이 포함된다."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Project(name="missing-source")
+            project.data_sources = [
+                DataSourceRef(path="missing.csv", file_type="csv", name="orders")
+            ]
+            project._path = str(Path(tmpdir) / "sample.dgs")
+
+            errors = project.validate()
+
+            assert len(errors) == 1
+            assert "orders" in errors[0]
+            assert "missing.csv" in errors[0]
