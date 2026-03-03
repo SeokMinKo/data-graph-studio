@@ -41,3 +41,17 @@ jobs:
           echo "Changed Python files:"
           echo "$CHANGED"
           ruff check $CHANGED
+
+      - name: Regenerate changelog-test index docs
+        run: |
+          set -euo pipefail
+          python scripts/generate_changelog_test_index.py
+
+      - name: Ensure generated docs are up-to-date
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- docs/changelog-test-index.md docs/changelog-manual-mapping-priority.md; then
+            echo "Generated changelog index docs are stale. Run: python scripts/generate_changelog_test_index.py"
+            git --no-pager diff -- docs/changelog-test-index.md docs/changelog-manual-mapping-priority.md
+            exit 1
+          fi

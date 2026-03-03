@@ -4,14 +4,14 @@
 
 | Version | Bugfix item | Related tests |
 |---|---|---|
-| ## [v0.23.11] — 2026-02-09 | - **프로젝트 열기(Open Project)가 데이터를 로드하지 않던 버그 수정** — Ctrl+Alt+P로 .dgs 프로젝트를 열 때 프로파일만 복원되고 데이터소스가 로드되지 않던 문제 해결. `file_loading_controller._load_project_file`로 통합하여 데이터 + 프로파일 모두 정상 로드 | `tests/test_project.py`<br>`tests/unit/test_main_graph_event_sequence.py` |
+| ## [v0.23.11] — 2026-02-09 | - **프로젝트 열기(Open Project)가 데이터를 로드하지 않던 버그 수정** — Ctrl+Alt+P로 .dgs 프로젝트를 열 때 프로파일만 복원되고 데이터소스가 로드되지 않던 문제 해결. `file_loading_controller._load_project_file`로 통합하여 데이터 + 프로파일 모두 정상 로드 | `tests/test_project.py`<br>`tests/unit/test_main_graph_event_sequence.py`<br>`tests/unit/test_ipc_profile.py` |
 | ## [v0.18.3] — 2026-02-05 | - **프로젝트 저장/로드 버그 수정** — 저장 시 데이터 소스 경로 포함, 로드 시 자동 복원 ([`b05e65f`](../../commit/b05e65f)) | `tests/test_project.py`<br>`tests/unit/test_main_graph_event_sequence.py` |
 | ## [v0.15.7] — 2026-02-04 | - Selection/Draw 마우스 드래그 버그 수정 — `mouseReleaseEvent` 중복 정의로 selection/draw 완료 처리가 무시되던 문제 해결 ([`9568bfa`](../../commit/9568bfa)) | `tests/unit/test_main_graph_event_sequence.py`<br>`tests/test_drawing.py`<br>`tests/unit/test_selection_sync.py` |
-| ## [v0.15.1] — 2026-02-04 | - 세션 복원 시 프로파일이 프로젝트 탐색창에 표시되지 않는 버그 수정 — autosave에 프로파일 데이터 저장/복원 추가 ([`autosave-profiles`](../../commit/HEAD)) | (manual mapping needed) |
-| ## [v0.13.1] — 2026-02-04 | - 프로파일 독립성 버그 수정 + 트리 expand 상태 보존 ([`5d424bb`](../../commit/5d424bb)) | (manual mapping needed) |
+| ## [v0.15.1] — 2026-02-04 | - 세션 복원 시 프로파일이 프로젝트 탐색창에 표시되지 않는 버그 수정 — autosave에 프로파일 데이터 저장/복원 추가 ([`autosave-profiles`](../../commit/HEAD)) | `tests/test_project.py`<br>`tests/unit/test_main_graph_event_sequence.py`<br>`tests/unit/test_ipc_profile.py` |
+| ## [v0.13.1] — 2026-02-04 | - 프로파일 독립성 버그 수정 + 트리 expand 상태 보존 ([`5d424bb`](../../commit/5d424bb)) | `tests/test_project.py`<br>`tests/unit/test_ipc_profile.py` |
 | ## [v0.12.9] — 2026-02-03 | - GroupBy multi-select checkboxes, search filters, dual aggregation, fix input heights ([`43d54e0`](../../commit/43d54e0)) | (manual mapping needed) |
-| ## [v0.11.7] — 2026-02-03 | - 프로젝트 탐색창 3가지 버그 수정 ([`76a2db9`](../../commit/76a2db9)) | (manual mapping needed) |
-| ## [v0.10.1] — 2026-02-03 | - 파일 로딩 후 프로젝트 탐색창에 데이터셋 표시되지 않던 버그 수정 ([`e00aeff`](../../commit/e00aeff)) | (manual mapping needed) |
+| ## [v0.11.7] — 2026-02-03 | - 프로젝트 탐색창 3가지 버그 수정 ([`76a2db9`](../../commit/76a2db9)) | `tests/test_project.py`<br>`tests/unit/test_main_graph_event_sequence.py` |
+| ## [v0.10.1] — 2026-02-03 | - 파일 로딩 후 프로젝트 탐색창에 데이터셋 표시되지 않던 버그 수정 ([`e00aeff`](../../commit/e00aeff)) | `tests/test_project.py`<br>`tests/unit/test_main_graph_event_sequence.py` |
 | ## [v0.9.8] — 2026-02-03 | - Fix Zone chip layout alignment and sizing ([`1db1628`](../../commit/1db1628)) | (manual mapping needed) |
 | ## [v0.9.4] — 2026-02-03 | - Comprehensive theme color fixes ([`1060fac`](../../commit/1060fac)) | (manual mapping needed) |
 | ## [v0.9.0] — 2026-02-03 | - Light theme + bug fixes ([`3567bd4`](../../commit/3567bd4)) | (manual mapping needed) |
