@@ -369,5 +369,85 @@ class TestFtraceConverterRegressionEdges:
         assert cpu1["runtime_ms"][0] is None
 
 
+class TestFileLoadingControllerRegression:
+    """Regression tests for multi-file load flow."""
+
+    def test_open_multiple_files_with_paths_enables_overlay_compare(self):
+        from unittest.mock import MagicMock, patch
+
+        from data_graph_studio.ui.controllers.file_loading_controller import FileLoadingController
+        from data_graph_studio.core.state import ComparisonMode
+
+        class _Dataset:
+            row_count = 10
+            column_count = 2
+            memory_bytes = 128
+
+        class _Engine:
+            def __init__(self):
+                self._datasets = {}
+
+            def load_dataset(self, file_path, name=None):
+                dataset_id = f"ds-{len(self._datasets)+1}"
+                self._datasets[dataset_id] = _Dataset()
+                return dataset_id
+
+            def get_dataset(self, dataset_id):
+                return self._datasets.get(dataset_id)
+
+            def activate_dataset(self, dataset_id):
+                self.active = dataset_id
+
+        class _State:
+            def __init__(self):
+                self.added = []
+                self.comparison_dataset_ids = None
+                self.mode = None
+
+            def add_dataset(self, **kwargs):
+                self.added.append(kwargs)
+
+            def set_comparison_datasets(self, ids):
+                self.comparison_dataset_ids = ids
+
+            def set_comparison_mode(self, mode):
+                self.mode = mode
+
+        class _Window:
+            def __init__(self):
+                self.engine = _Engine()
+                self.state = _State()
+                self.statusbar = MagicMock()
+                self._loaded = False
+                self._comp_started = None
+
+            def _on_data_loaded(self):
+                self._loaded = True
+
+            def _on_comparison_started(self, ids):
+                self._comp_started = ids
+
+        w = _Window()
+        ctrl = FileLoadingController(w)
+
+        progress = MagicMock()
+        progress.wasCanceled.return_value = False
+
+        with patch(
+            "data_graph_studio.ui.controllers.file_loading_controller.QProgressDialog",
+            return_value=progress,
+        ), patch(
+            "data_graph_studio.ui.controllers.file_loading_controller.QApplication.processEvents",
+            return_value=None,
+        ):
+            ctrl._on_open_multiple_files_with_paths(["a.csv", "b.csv"])
+
+        assert len(w.state.added) == 2
+        assert w._loaded is True
+        assert w.state.comparison_dataset_ids == ["ds-1", "ds-2"]
+        assert w.state.mode == ComparisonMode.OVERLAY
+        assert w._comp_started == ["ds-1", "ds-2"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
