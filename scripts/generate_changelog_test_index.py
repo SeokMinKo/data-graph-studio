@@ -41,6 +41,28 @@ RULES = [
         "tests/test_project.py",
         "tests/unit/test_ipc_profile.py",
     ]),
+    (re.compile(r"multi-file|multiple files|멀티 데이터셋", re.I), [
+        "tests/test_bug_fixes.py",
+        "tests/test_multi_dataset.py",
+    ]),
+]
+
+# Function-level hints for quick triage
+FUNCTION_RULES = [
+    (re.compile(r"Open Project|저장/로드|복원|프로젝트", re.I), [
+        "tests/test_project.py::TestProjectFileIO::test_load_project",
+        "tests/test_project.py::TestProjectRegressionCoverage::test_legacy_data_source_migrates_to_data_sources",
+    ]),
+    (re.compile(r"Selection|Draw|mouseReleaseEvent|드래그", re.I), [
+        "tests/unit/test_main_graph_event_sequence.py::TestMainGraphMouseEventSequence::test_rect_select_press_move_release_selects_expected_points",
+        "tests/unit/test_main_graph_event_sequence.py::TestMainGraphMouseEventSequence::test_mode_switch_during_rect_drag_cleans_stale_selection_state",
+    ]),
+    (re.compile(r"Perfetto|permission denied|fallback", re.I), [
+        "tests/unit/test_perfetto_oneshot_fallback.py::test_oneshot_fallback_command_used_when_config_mode_fails",
+    ]),
+    (re.compile(r"multi-file|multiple files|멀티 데이터셋", re.I), [
+        "tests/test_bug_fixes.py::TestFileLoadingControllerRegression::test_open_multiple_files_with_paths_enables_overlay_compare",
+    ]),
 ]
 
 PRIORITY_KEYWORDS = [
@@ -63,19 +85,30 @@ def extract_bugfix_lines(changelog_text: str) -> list[tuple[str, str]]:
     return rows
 
 
+def dedupe(items: list[str]) -> list[str]:
+    out: list[str] = []
+    seen = set()
+    for x in items:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
+
 def map_tests(bug_line: str) -> list[str]:
     mapped: list[str] = []
     for pattern, tests in RULES:
         if pattern.search(bug_line):
             mapped.extend(tests)
-    # dedupe while preserving order
-    out = []
-    seen = set()
-    for t in mapped:
-        if t not in seen:
-            seen.add(t)
-            out.append(t)
-    return out
+    return dedupe(mapped)
+
+
+def map_test_functions(bug_line: str) -> list[str]:
+    mapped: list[str] = []
+    for pattern, funcs in FUNCTION_RULES:
+        if pattern.search(bug_line):
+            mapped.extend(funcs)
+    return dedupe(mapped)
 
 
 def score_priority(bug_line: str) -> int:
@@ -98,22 +131,25 @@ def generate_index(rows: list[tuple[str, str]]) -> tuple[list[str], list[tuple[i
     lines = [
         "# CHANGELOG ↔ Test Index",
         "",
-        "자동 생성 파일. 버그 수정 이력과 관련 테스트 파일을 키워드 기반으로 매핑한다.",
+        "자동 생성 파일. 버그 수정 이력과 관련 테스트 파일/함수를 키워드 기반으로 매핑한다.",
         "",
-        "| Version | Bugfix item | Related tests |",
-        "|---|---|---|",
+        "| Version | Bugfix item | Related tests | Related test functions |",
+        "|---|---|---|---|",
     ]
 
     manual_items: list[tuple[int, str, str]] = []
 
     for version, bug in rows:
         tests = map_tests(bug)
+        funcs = map_test_functions(bug)
         if tests:
             test_cell = "<br>".join(f"`{t}`" for t in tests)
+            func_cell = "<br>".join(f"`{f}`" for f in funcs) if funcs else "(function mapping pending)"
         else:
             test_cell = "(manual mapping needed)"
+            func_cell = "(manual mapping needed)"
             manual_items.append((score_priority(bug), version, bug))
-        lines.append(f"| {version} | {bug} | {test_cell} |")
+        lines.append(f"| {version} | {bug} | {test_cell} | {func_cell} |")
 
     return lines, manual_items
 

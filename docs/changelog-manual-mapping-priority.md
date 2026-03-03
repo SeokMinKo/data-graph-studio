@@ -5,7 +5,6 @@
 | Priority | Score | Version | Bugfix item |
 |---|---:|---|---|
 | P2 | 3 | ## [v0.2.0] — 2026-02-02 | - Fix import paths in test files and type hints in report generators ([`c24201c`](../../commit/c24201c)) |
-| P2 | 3 | ## [v0.2.7] — 2026-02-02 | - Fix windowed index length and add multi-file dataset load ([`557bea2`](../../commit/557bea2)) |
 | P2 | 2 | ## [v0.8.0] — 2026-02-03 | - Fix: Improve drag-and-drop from table header and clean up context menu ([`d96d6d6`](../../commit/d96d6d6)) |
 | P3 | 1 | ## [v0.2.0] — 2026-02-02 | - Multiple UI improvements and bug fixes ([`f56ac35`](../../commit/f56ac35)) |
 | P3 | 1 | ## [v0.2.1] — 2026-02-02 | - Apply minimal modern grayscale theme and fix table text contrast ([`e77c36f`](../../commit/e77c36f)) |
