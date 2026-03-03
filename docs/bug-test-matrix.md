@@ -83,6 +83,16 @@
 3. UI 이벤트 시퀀스 회귀 (사용자 체감 버그)
 4. 대용량 데이터 성능/시간 제한 스모크
 
+## CHANGELOG ↔ 테스트 매핑(핵심)
+- v0.23.11 Open Project 데이터 미로드 버그
+  - 관련 테스트군: `tests/test_project.py` (저장/복원/경로/호환성)
+  - 강화 테스트: `test_legacy_data_source_migrates_to_data_sources`, `test_validate_resolves_relative_path_against_project_location`
+- v0.23.12 Perfetto permission denied fallback
+  - 관련 테스트군: `tests/unit/test_perfetto_oneshot_fallback.py`
+- Selection/Draw mouseReleaseEvent 처리 버그(기존 changelog 항목)
+  - 관련 테스트군: `tests/unit/test_main_graph_event_sequence.py`
+  - 강화 테스트: `test_rect_select_press_move_release_selects_expected_points`, `test_line_draw_press_release_calls_finish_once`
+
 ## 운영 규칙
 - 새 버그 수정 시 반드시 "재현 테스트 1개 + 인접 회귀 1개"를 함께 추가한다.
 - CHANGELOG의 bugfix 항목은 가능한 한 테스트 함수 이름으로 역추적 가능하게 유지한다.
