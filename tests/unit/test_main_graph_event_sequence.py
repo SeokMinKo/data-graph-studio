@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, Qt, QEvent
+from PySide6.QtGui import QMouseEvent
 
 from data_graph_studio.core.state import AppState, ToolMode
 from data_graph_studio.ui.panels.main_graph import MainGraph
@@ -24,6 +25,19 @@ class _FakeMouseEvent:
 
     def accept(self):
         self.accepted = True
+
+
+def _qt_release_event(x: float, y: float) -> QMouseEvent:
+    p = QPointF(x, y)
+    return QMouseEvent(
+        QEvent.Type.MouseButtonRelease,
+        p,
+        p,
+        p,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
 
 
 @pytest.fixture()
@@ -51,6 +65,22 @@ class TestMainGraphMouseEventSequence:
         graph.mouseReleaseEvent(_FakeMouseEvent(6.0, 6.0))
 
         assert state.selection.selected_rows == {0, 1}
+        assert graph._is_selecting is False
+        assert graph._selection_roi is None
+
+    def test_mode_switch_during_rect_drag_cleans_stale_selection_state(self, graph, state):
+        """중간에 툴 모드를 바꿔도 stale selection state가 남지 않아야 한다."""
+        state.set_tool_mode(ToolMode.RECT_SELECT)
+        graph._data_x = np.array([0.0, 5.0, 10.0])
+        graph._data_y = np.array([0.0, 5.0, 10.0])
+
+        graph.mousePressEvent(_FakeMouseEvent(0.0, 0.0))
+        graph.mouseMoveEvent(_FakeMouseEvent(6.0, 6.0))
+
+        # Drag 도중 모드 전환
+        state.set_tool_mode(ToolMode.PAN)
+        graph.mouseReleaseEvent(_qt_release_event(6.0, 6.0))
+
         assert graph._is_selecting is False
         assert graph._selection_roi is None
 

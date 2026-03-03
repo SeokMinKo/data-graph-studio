@@ -1450,13 +1450,22 @@ class MainGraph(pg.PlotWidget):
 
                 event.accept()
                 handled = True
-                
+
         elif self._is_selecting and self.state.tool_mode == ToolMode.LASSO_SELECT:
             if event.button() == Qt.LeftButton:
                 self._finish_lasso_selection()
                 event.accept()
                 handled = True
-        
+
+        # Tool mode changed while selecting: cancel stale selection state.
+        elif self._is_selecting:
+            if getattr(self, '_lasso_points', None):
+                self._cleanup_lasso()
+            else:
+                self._cleanup_selection()
+            event.accept()
+            handled = True
+
         # Drawing mode finish
         elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW,
                                                             ToolMode.ARROW_DRAW,
@@ -1467,6 +1476,12 @@ class MainGraph(pg.PlotWidget):
                 self._finish_drawing(pos.x(), pos.y())
                 event.accept()
                 handled = True
+
+        # Tool mode changed while drawing: cancel stale drawing state.
+        elif self._is_drawing:
+            self._cleanup_drawing()
+            event.accept()
+            handled = True
 
         # Drawing drag-move finish
         if self._dragging_drawing_id is not None and event.button() == Qt.LeftButton:
