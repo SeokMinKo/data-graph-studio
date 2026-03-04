@@ -213,6 +213,8 @@ class PerfettoTraceController(QObject):
     finished = Signal(str)
     error = Signal(str)
 
+    DEFAULT_DEVICE_TRACE_PATH = "/data/misc/perfetto-traces/blocktrace.pftrace"
+
     # ftrace_event 테이블 쿼리 — ts(나노초), cpu, event name, args
     FTRACE_QUERY = (
         "SELECT fe.ts, c.cpu, fe.name, t.name AS task, t.tid AS pid, "
@@ -230,7 +232,7 @@ class PerfettoTraceController(QObject):
         self._serial: str = ""
         self._process: subprocess.Popen | None = None
         self._tracing: bool = False
-        self._trace_device_path = "/data/misc/perfetto-traces/dgs_blocktrace.pftrace"
+        self._trace_device_path = self.DEFAULT_DEVICE_TRACE_PATH
         self._tp_shell: str = ""
         self._used_oneshot: bool = False
 
@@ -393,7 +395,7 @@ class PerfettoTraceController(QObject):
         self.progress.emit("Starting perfetto...")
         self._used_oneshot = True
         self._trace_device_path = config.get(
-            "device_trace_path", "/data/misc/perfetto-traces/blocktrace.pftrace"
+            "device_trace_path", self.DEFAULT_DEVICE_TRACE_PATH
         )
         perfetto_cmd = adb + [
             "shell", "perfetto",
@@ -474,19 +476,31 @@ class PerfettoTraceController(QObject):
             # 2. Wait for trace file to be flushed, then pull
             self.progress.emit("Waiting for trace file...")
             import time
+            trace_ready = False
             for attempt in range(5):
-                check = subprocess.run(
-                    adb + ["shell", "ls", "-l", self._trace_device_path],
+                # test -f로 존재 여부를 먼저 확인하고, 존재하면 stat으로 크기까지 로깅한다.
+                exists_check = subprocess.run(
+                    adb + ["shell", "test", "-f", self._trace_device_path],
                     capture_output=True, text=True, timeout=600,
                 )
-                if check.returncode == 0 and self._trace_device_path in check.stdout:
-                    logger.debug("[Perfetto] trace file exists (attempt %d): %s",
-                                 attempt, check.stdout.strip())
+                if exists_check.returncode == 0:
+                    stat_check = subprocess.run(
+                        adb + ["shell", "ls", "-l", self._trace_device_path],
+                        capture_output=True, text=True, timeout=600,
+                    )
+                    logger.debug("[Perfetto] trace file ready (attempt %d): %s",
+                                 attempt, stat_check.stdout.strip())
+                    trace_ready = True
                     break
+
                 logger.debug("[Perfetto] trace file not ready (attempt %d), waiting 2s...", attempt)
                 time.sleep(2)
-            else:
-                logger.warning("[Perfetto] trace file not found after 5 attempts")
+
+            if not trace_ready:
+                logger.error("[Perfetto] trace file not ready after 5 attempts: %s", self._trace_device_path)
+                raise RuntimeError(
+                    f"Trace file not ready on device: {self._trace_device_path}"
+                )
 
             self.progress.emit("Pulling trace file...")
             logger.debug("[Perfetto] pulling %s → %s", self._trace_device_path, trace_local)
