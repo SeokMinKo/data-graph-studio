@@ -477,7 +477,7 @@ class PerfettoTraceController(QObject):
             for attempt in range(5):
                 check = subprocess.run(
                     adb + ["shell", "ls", "-l", self._trace_device_path],
-                    capture_output=True, text=True, timeout=5,
+                    capture_output=True, text=True, timeout=600,
                 )
                 if check.returncode == 0 and self._trace_device_path in check.stdout:
                     logger.debug("[Perfetto] trace file exists (attempt %d): %s",
