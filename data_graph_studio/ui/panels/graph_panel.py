@@ -908,10 +908,8 @@ class GraphPanel(QWidget):
                                 x_group_sampled, y_group_sampled = x_group, y_group
                                 group_sampled_orig = group_orig_indices
                             
-                            # Create new group mask for sampled data
                             group_len = len(x_group_sampled)
-                            new_mask = np.zeros(0, dtype=bool)  # Will be resized later
-                            
+
                             x_sampled_list.append(x_group_sampled)
                             y_sampled_list.append(y_group_sampled)
                             original_indices_list.append(group_sampled_orig)
@@ -1272,7 +1270,6 @@ class GraphPanel(QWidget):
             return
 
         value_cols = self.state.value_columns
-        chart_type = options.get('chart_type', ChartType.LINE)
         bg_color = options.get('bg_color', QColor('#323D4A'))
         self.main_graph.setBackground(bg_color.name())
         line_width = options.get('line_width', 2)
@@ -2465,7 +2462,6 @@ class GraphPanel(QWidget):
             n_rows = n_facets
         else:  # WRAP
             n_cols = min(max_columns, n_facets)
-            n_rows = (n_facets + n_cols - 1) // n_cols
 
         # Clear existing grid cells
         self._clear_grid_cells()
@@ -2579,11 +2575,6 @@ class GraphPanel(QWidget):
                 for g_idx, row in enumerate(facet_grouped.iter_rows()):
                     vals = row[:-1]
                     indices = row[-1]
-                    if len(group_col_names) == 1:
-                        g_name = str(vals[0]) if vals[0] is not None else "(Empty)"
-                    else:
-                        g_name = " / ".join(str(v) if v is not None else "(Empty)" for v in vals)
-
                     g_color = _grid_group_colors[g_idx % len(_grid_group_colors)]
                     g_pen = pg.mkPen(color=g_color, width=line_width)
                     g_x = x_data[list(indices)]

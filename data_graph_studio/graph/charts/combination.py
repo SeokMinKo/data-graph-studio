@@ -70,9 +70,6 @@ class CombinationChart:
             })
 
         # Y축 범위 계산
-        all_bar_values = [v for s in bar_data for v in s["values"] if v is not None]
-        all_line_values = [v for s in line_data for v in s["values"] if v is not None]
-
         primary_values = []
         secondary_values = []
 
