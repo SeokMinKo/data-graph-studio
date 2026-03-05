@@ -273,12 +273,13 @@ class FtraceParser(BaseParser):
     @staticmethod
     def _cmd_category_from_rwbs(rwbs: str) -> str:
         rw = (rwbs or "").upper()
-        if "F" in rw:
-            return "Flush"
+        # Priority rule requested by user: Read -> Write -> Flush.
         if "R" in rw:
             return "Read"
         if "W" in rw:
             return "Write"
+        if "F" in rw:
+            return "Flush"
         return "ETC"
 
     @classmethod
@@ -427,12 +428,12 @@ class FtraceParser(BaseParser):
             (pl.col("sector").cast(pl.Float64) * 512 / (1024 * 1024)).alias("lba_mb"),
             (pl.col("size_bytes").cast(pl.Float64) / 1024).alias("size_kb"),
         ]).with_columns([
-            pl.when(pl.col("rwbs").str.to_uppercase().str.contains("F"))
-            .then(pl.lit("Flush"))
-            .when(pl.col("rwbs").str.to_uppercase().str.contains("R"))
+            pl.when(pl.col("rwbs").str.to_uppercase().str.contains("R"))
             .then(pl.lit("Read"))
             .when(pl.col("rwbs").str.to_uppercase().str.contains("W"))
             .then(pl.lit("Write"))
+            .when(pl.col("rwbs").str.to_uppercase().str.contains("F"))
+            .then(pl.lit("Flush"))
             .otherwise(pl.lit("ETC"))
             .alias("cmd_category"),
         ]).with_columns([

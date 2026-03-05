@@ -181,9 +181,9 @@ class TestBlocklayerCmdCategoryClass:
         assert df["cmd_category"][1] == "Write"
         assert df["cmd_class"][1] == "Big Write"
 
-        # sector 300: WF -> Flush (category precedence) / Flush
-        assert df["cmd_category"][2] == "Flush"
-        assert df["cmd_class"][2] == "Flush"
+        # sector 300: WF -> Write (Read/Write/Flush precedence) / Small Write
+        assert df["cmd_category"][2] == "Write"
+        assert df["cmd_class"][2] == "Small Write"
 
 
 class TestBlocklayerMalformed:
