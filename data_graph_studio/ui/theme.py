@@ -972,6 +972,21 @@ class ThemeManager:
                 border: {"1px solid #E5E7EB" if t.is_light() else "none"};
                 border-radius: 8px;
             }}
+
+            QDockWidget {{
+                color: {t.foreground};
+                background-color: {t.surface};
+                border: 1px solid {t.border};
+            }}
+
+            QDockWidget::title {{
+                text-align: left;
+                padding: 6px 8px;
+                background-color: {t.surface_hover};
+                color: {t.foreground};
+                border-bottom: 1px solid {t.border};
+                font-weight: 600;
+            }}
             
             #StatPanel {{
                 background-color: {t.surface};

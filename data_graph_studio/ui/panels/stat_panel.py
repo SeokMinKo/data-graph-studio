@@ -45,8 +45,8 @@ class StatPanel(QFrame):
         self.setAccessibleName("Statistics Panel")
         self.setAccessibleDescription("Shows distribution histograms and summary statistics for selected data")
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setMinimumWidth(200)
-        self.setMaximumWidth(500)
+        self.setMinimumWidth(240)
+        self.setMaximumWidth(560)
 
         self._x_data: Optional[np.ndarray] = None
         self._y_data: Optional[np.ndarray] = None
@@ -154,7 +154,7 @@ class StatPanel(QFrame):
         graph_grid.addWidget(pie_group, 1, 0)
 
         # Percentile
-        pct_group, self.percentile_widget = create_plot_group("Pctl")
+        pct_group, self.percentile_widget = create_plot_group("Percentile")
         graph_grid.addWidget(pct_group, 1, 1)
 
         layout.addLayout(graph_grid)

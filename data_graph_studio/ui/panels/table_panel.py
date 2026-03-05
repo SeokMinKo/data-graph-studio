@@ -1942,7 +1942,7 @@ class TablePanel(QWidget):
 
         # Toolbar
         toolbar = QHBoxLayout()
-        toolbar.setSpacing(6)
+        toolbar.setSpacing(8)
 
         self.expand_btn = QPushButton("▼ Expand")
         self.expand_btn.setObjectName("smallButton")

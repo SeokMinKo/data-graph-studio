@@ -124,8 +124,8 @@ class GraphOptionsPanel(QFrame):
         # X-Axis Format Group (no column selection - that's in X Zone)
         x_group = QGroupBox("X-Axis Format")
         x_layout = QGridLayout(x_group)
-        x_layout.setSpacing(6)
-        x_layout.setColumnMinimumWidth(0, 60)
+        x_layout.setSpacing(8)
+        x_layout.setColumnMinimumWidth(0, 78)
         x_layout.setColumnStretch(1, 1)
 
         x_layout.addWidget(QLabel("Title:"), 0, 0)
@@ -177,8 +177,8 @@ class GraphOptionsPanel(QFrame):
         # Y-Axis Group
         y_group = QGroupBox("Y-Axis")
         y_layout = QGridLayout(y_group)
-        y_layout.setSpacing(6)
-        y_layout.setColumnMinimumWidth(0, 60)
+        y_layout.setSpacing(8)
+        y_layout.setColumnMinimumWidth(0, 78)
         y_layout.setColumnStretch(1, 1)
 
         y_layout.addWidget(QLabel("Title:"), 0, 0)
@@ -452,8 +452,11 @@ class GraphOptionsPanel(QFrame):
 
         # Style encoding by column (separate from GroupBy)
         color_by_row = QHBoxLayout()
-        color_by_row.addWidget(QLabel("Color by:"))
+        color_by_label = QLabel("Color by:")
+        color_by_label.setMinimumWidth(72)
+        color_by_row.addWidget(color_by_label)
         self.color_by_combo = NoWheelComboBox()
+        self.color_by_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.color_by_combo.addItem("(None)", None)
         self.color_by_combo.setToolTip("Split rendered series color by selected column values")
         self.color_by_combo.currentIndexChanged.connect(self._on_option_changed)
@@ -461,8 +464,11 @@ class GraphOptionsPanel(QFrame):
         data_layout.addLayout(color_by_row)
 
         mark_by_row = QHBoxLayout()
-        mark_by_row.addWidget(QLabel("Mark by:"))
+        mark_by_label = QLabel("Marker by:")
+        mark_by_label.setMinimumWidth(72)
+        mark_by_row.addWidget(mark_by_label)
         self.mark_by_combo = NoWheelComboBox()
+        self.mark_by_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.mark_by_combo.addItem("(None)", None)
         self.mark_by_combo.setToolTip("Split rendered series marker shape by selected column values")
         self.mark_by_combo.currentIndexChanged.connect(self._on_option_changed)
