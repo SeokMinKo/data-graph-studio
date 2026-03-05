@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from PySide6.QtCore import Qt
 
 from data_graph_studio.core.data_engine import DataEngine
 from data_graph_studio.core.graph_setting_mapper import GraphSettingMapper
@@ -181,6 +182,24 @@ def test_set_columns_populates_color_and_marker_by_combos(qtbot) -> None:
 
 
 @pytest.mark.qt
+def test_graph_panel_set_grid_visible_updates_both_axes(qtbot) -> None:
+    state = AppState()
+    engine = DataEngine()
+    engine.update_dataframe(pl.DataFrame({"x": [1, 2], "y": [3, 4]}))
+
+    panel = GraphPanel(state, engine)
+    qtbot.addWidget(panel)
+
+    panel.set_grid_visible(False)
+    assert panel.options_panel.grid_x_check.isChecked() is False
+    assert panel.options_panel.grid_y_check.isChecked() is False
+
+    panel.set_grid_visible(True)
+    assert panel.options_panel.grid_x_check.isChecked() is True
+    assert panel.options_panel.grid_y_check.isChecked() is True
+
+
+@pytest.mark.qt
 def test_legend_settings_include_marker_symbol() -> None:
     state = AppState()
     panel = GraphOptionsPanel(state)
@@ -191,6 +210,29 @@ def test_legend_settings_include_marker_symbol() -> None:
 
     legend = panel.get_legend_settings()
     assert legend["series"][0]["marker_symbol"] == "d"
+
+
+@pytest.mark.qt
+def test_graph_panel_applies_legend_marker_symbol(qtbot) -> None:
+    state = AppState()
+    engine = DataEngine()
+    engine.update_dataframe(pl.DataFrame({"x": [0, 1, 2], "y": [1, 2, 3]}))
+
+    state.set_x_column("x")
+    state.add_value_column("y", aggregation=AggregationType.MEAN)
+    state.set_chart_type(ChartType.SCATTER)
+
+    panel = GraphPanel(state, engine)
+    qtbot.addWidget(panel)
+    panel.set_columns(engine.columns)
+
+    marker_combo = panel.options_panel._series_items[0]["marker_combo"]
+    marker_combo.setCurrentIndex(marker_combo.findData("d"))
+
+    panel.refresh()
+
+    assert len(panel.main_graph._scatter_items) >= 1
+    assert panel.main_graph._scatter_items[0].opts.get("symbol") == "d"
 
 
 @pytest.mark.qt
@@ -209,3 +251,16 @@ def test_main_graph_applies_legend_marker_symbol(qtbot) -> None:
 
     assert len(graph._scatter_items) == 1
     assert graph._scatter_items[0].opts.get("symbol") == "d"
+
+
+@pytest.mark.qt
+def test_graph_options_tabs_are_readable_not_elided() -> None:
+    panel = GraphOptionsPanel(AppState())
+    bar = panel.tabs.tabBar()
+
+    assert bar.elideMode() == Qt.ElideNone
+    assert panel.tabs.tabText(0) == "Data"
+    assert panel.tabs.tabText(1) == "Chart"
+    assert panel.tabs.tabText(2) == "Legend"
+    assert panel.tabs.tabText(3) == "Axes"
+    assert panel.tabs.tabText(4) == "Style"

@@ -960,6 +960,12 @@ class ThemeManager:
                 border-right: 1px solid {t.border};
                 border-radius: 8px;
             }}
+
+            #GraphOptionsPanel QTabBar::tab {{
+                padding: 6px 10px;
+                margin-right: 2px;
+                min-width: 52px;
+            }}
             
             #LegendPanel {{
                 background-color: {t.surface};

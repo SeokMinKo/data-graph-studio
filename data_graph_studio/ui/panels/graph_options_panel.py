@@ -48,8 +48,9 @@ class GraphOptionsPanel(QFrame):
         super().__init__()
         self.state = state
         self.setObjectName("GraphOptionsPanel")
-        self.setMinimumWidth(260)
-        self.setMaximumWidth(320)
+        # Wider bounds to prevent clipped labels/controls in dense tabs.
+        self.setMinimumWidth(320)
+        self.setMaximumWidth(420)
         
         self._setup_ui()
         self._apply_style()
@@ -81,12 +82,12 @@ class GraphOptionsPanel(QFrame):
         # Tabs
         self.tabs = QTabWidget()
         self.tabs.setUsesScrollButtons(True)
-        # 좁은 패널에서 우측 탭(Axes/Style)이 잘리지 않도록 스크롤 기반 탭바 강제
+        # Keep tab titles readable: no forced ellipsis; scroll when needed.
         tab_bar = self.tabs.tabBar()
         tab_bar.setExpanding(False)
         tab_bar.setUsesScrollButtons(True)
-        tab_bar.setElideMode(Qt.ElideRight)
-        self.tabs.setElideMode(Qt.ElideRight)
+        tab_bar.setElideMode(Qt.ElideNone)
+        self.tabs.setElideMode(Qt.ElideNone)
         # Tab bar styling handled by ThemeManager.generate_stylesheet()
         main_layout.addWidget(self.tabs)
 
@@ -97,7 +98,7 @@ class GraphOptionsPanel(QFrame):
         # Tab 1: Chart (includes chart type)
         self.tabs.addTab(self._create_chart_tab(), "Chart")
 
-        # Tab 2: Legend (moved here as tab)
+        # Tab 2: Legend
         self.tabs.addTab(self._create_legend_tab(), "Legend")
 
         # Tab 3: Axes
@@ -105,6 +106,13 @@ class GraphOptionsPanel(QFrame):
 
         # Tab 4: Style
         self.tabs.addTab(self._create_style_tab(), "Style")
+
+        # Human-readable hints for compact mode.
+        self.tabs.setTabToolTip(0, "Data roles: X/Y/Group/Hover/Filter")
+        self.tabs.setTabToolTip(1, "Chart type, titles, data options, sampling")
+        self.tabs.setTabToolTip(2, "Legend visibility, position, series styles")
+        self.tabs.setTabToolTip(3, "Axis format, scale, range, grid")
+        self.tabs.setTabToolTip(4, "Line/marker/fill/background styling")
     
     def _create_axes_tab(self) -> QWidget:
         """축 설정 탭"""
