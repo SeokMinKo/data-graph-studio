@@ -23,6 +23,20 @@ if TYPE_CHECKING:
     from ...core.data_engine import DataEngine
 
 
+class NoWheelComboBox(QComboBox):
+    """ComboBox that ignores accidental mouse-wheel value changes.
+
+    Wheel scrolling is only accepted while popup is explicitly open.
+    """
+
+    def wheelEvent(self, event):  # noqa: N802
+        view = self.view()
+        if view is not None and view.isVisible():
+            super().wheelEvent(event)
+            return
+        event.ignore()
+
+
 # ==================== Options Panel ====================
 
 class GraphOptionsPanel(QFrame):
@@ -113,7 +127,7 @@ class GraphOptionsPanel(QFrame):
         x_layout.addWidget(self.x_title_edit, 0, 1)
 
         x_layout.addWidget(QLabel("Format:"), 1, 0)
-        self.x_format_combo = QComboBox()
+        self.x_format_combo = NoWheelComboBox()
         self.x_format_combo.setEditable(True)
         if self.x_format_combo.lineEdit():
             self.x_format_combo.lineEdit().setPlaceholderText("e.g. 0.00\" MB\"")
@@ -166,7 +180,7 @@ class GraphOptionsPanel(QFrame):
         y_layout.addWidget(self.y_title_edit, 0, 1)
 
         y_layout.addWidget(QLabel("Format:"), 1, 0)
-        self.y_format_combo = QComboBox()
+        self.y_format_combo = NoWheelComboBox()
         self.y_format_combo.setEditable(True)
         if self.y_format_combo.lineEdit():
             self.y_format_combo.lineEdit().setPlaceholderText("e.g. 0.00\" MB\"")
@@ -297,7 +311,7 @@ class GraphOptionsPanel(QFrame):
         type_group = QGroupBox("Chart Type")
         type_layout = QVBoxLayout(type_group)
         
-        self.chart_type_combo = QComboBox()
+        self.chart_type_combo = NoWheelComboBox()
         self.chart_type_combo.setToolTip("Select chart visualization type")
         chart_types = [
             ("📈 Line", ChartType.LINE),
@@ -360,14 +374,14 @@ class GraphOptionsPanel(QFrame):
 
         # Split by column
         grid_options_layout.addWidget(QLabel("Split by:"), 0, 0)
-        self.grid_split_combo = QComboBox()
+        self.grid_split_combo = NoWheelComboBox()
         self.grid_split_combo.setToolTip("Column to split data by (uses Filter panel selections)")
         self.grid_split_combo.currentTextChanged.connect(self._on_grid_split_changed)
         grid_options_layout.addWidget(self.grid_split_combo, 0, 1)
 
         # Direction
         grid_options_layout.addWidget(QLabel("Direction:"), 1, 0)
-        self.grid_direction_combo = QComboBox()
+        self.grid_direction_combo = NoWheelComboBox()
         self.grid_direction_combo.addItems(["Wrap", "Row", "Column"])
         self.grid_direction_combo.setToolTip("Layout direction: Row=horizontal, Column=vertical, Wrap=auto")
         self.grid_direction_combo.currentIndexChanged.connect(self._on_grid_direction_changed)
@@ -431,7 +445,7 @@ class GraphOptionsPanel(QFrame):
         # Style encoding by column (separate from GroupBy)
         color_by_row = QHBoxLayout()
         color_by_row.addWidget(QLabel("Color by:"))
-        self.color_by_combo = QComboBox()
+        self.color_by_combo = NoWheelComboBox()
         self.color_by_combo.addItem("(None)", None)
         self.color_by_combo.currentIndexChanged.connect(self._on_option_changed)
         color_by_row.addWidget(self.color_by_combo)
@@ -439,7 +453,7 @@ class GraphOptionsPanel(QFrame):
 
         mark_by_row = QHBoxLayout()
         mark_by_row.addWidget(QLabel("Mark by:"))
-        self.mark_by_combo = QComboBox()
+        self.mark_by_combo = NoWheelComboBox()
         self.mark_by_combo.addItem("(None)", None)
         self.mark_by_combo.currentIndexChanged.connect(self._on_option_changed)
         mark_by_row.addWidget(self.mark_by_combo)
@@ -489,7 +503,7 @@ class GraphOptionsPanel(QFrame):
         # Algorithm selection
         algo_layout = QHBoxLayout()
         algo_layout.addWidget(QLabel("Algorithm:"))
-        self.sampling_algo_combo = QComboBox()
+        self.sampling_algo_combo = NoWheelComboBox()
         self.sampling_algo_combo.addItems([
             "Auto (LTTB/Min-Max)",
             "LTTB (Time Series)",
@@ -525,7 +539,7 @@ class GraphOptionsPanel(QFrame):
         line_layout.addWidget(self.line_width_spin, 0, 1)
         
         line_layout.addWidget(QLabel("Style:"), 1, 0)
-        self.line_style_combo = QComboBox()
+        self.line_style_combo = NoWheelComboBox()
         self.line_style_combo.addItems(["Solid", "Dashed", "Dotted", "Dash-Dot"])
         self.line_style_combo.currentIndexChanged.connect(self._on_option_changed)
         line_layout.addWidget(self.line_style_combo, 1, 1)
@@ -545,7 +559,7 @@ class GraphOptionsPanel(QFrame):
         marker_layout.addWidget(self.marker_size_spin, 0, 1)
         
         marker_layout.addWidget(QLabel("Shape:"), 1, 0)
-        self.marker_shape_combo = QComboBox()
+        self.marker_shape_combo = NoWheelComboBox()
         self.marker_shape_combo.addItems(["Circle", "Square", "Triangle", "Diamond", "Cross", "Plus"])
         self.marker_shape_combo.currentIndexChanged.connect(self._on_option_changed)
         marker_layout.addWidget(self.marker_shape_combo, 1, 1)
@@ -608,7 +622,7 @@ class GraphOptionsPanel(QFrame):
 
         pos_layout = QHBoxLayout()
         pos_layout.addWidget(QLabel("Position:"))
-        self.legend_pos_combo = QComboBox()
+        self.legend_pos_combo = NoWheelComboBox()
         self.legend_pos_combo.addItems([
             "Top Right", "Top Left", "Bottom Right", "Bottom Left",
             "Top Center", "Bottom Center", "Right", "Left"
@@ -884,7 +898,7 @@ class GraphOptionsPanel(QFrame):
             label.setToolTip(vc.name)
             row_layout.addWidget(label, 1)
 
-            combo = QComboBox()
+            combo = NoWheelComboBox()
             combo.setMinimumHeight(24)
             for display, val in combo_chart_types:
                 combo.addItem(display, val)

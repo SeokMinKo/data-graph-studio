@@ -766,7 +766,11 @@ class MenuSetupController:
             self.w._start_streaming_action.setEnabled(has_data)
 
         # Sync chart type checkmarks with current state (menu + toolbar)
-        current_ct = self.w.state.chart_type
+        # NOTE: AppState no longer exposes `chart_type` directly; use chart_settings.
+        current_ct = getattr(getattr(self.w.state, 'chart_settings', None), 'chart_type', None)
+        if current_ct is None:
+            return
+
         if hasattr(self.w, '_chart_type_actions'):
             for ct, action in self.w._chart_type_actions.items():
                 action.setChecked(ct == current_ct)

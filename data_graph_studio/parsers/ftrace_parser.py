@@ -261,12 +261,35 @@ class FtraceParser(BaseParser):
         "c2c_ms": pl.Float64,
         "size_kb": pl.Float64,
         "cmd": pl.Utf8,
+        "cmd_category": pl.Utf8,
+        "cmd_class": pl.Utf8,
         "queue_depth": pl.Int32,
         "sector": pl.Int64,
         "nr_sectors": pl.Int32,
         "device": pl.Utf8,
         "is_sequential": pl.Utf8,
     }
+
+    @staticmethod
+    def _cmd_category_from_rwbs(rwbs: str) -> str:
+        rw = (rwbs or "").upper()
+        if "F" in rw:
+            return "Flush"
+        if "R" in rw:
+            return "Read"
+        if "W" in rw:
+            return "Write"
+        return "ETC"
+
+    @classmethod
+    def _cmd_class_from_category(cls, category: str, size_kb: float) -> str:
+        if category == "Read":
+            return "Big Read" if size_kb >= 32.0 else "Small Read"
+        if category == "Write":
+            return "Big Write" if size_kb >= 32.0 else "Small Write"
+        if category == "Flush":
+            return "Flush"
+        return "ETC"
 
     def _convert_blocklayer(
         self, raw_df: pl.DataFrame, options: Dict[str, Any]
@@ -384,6 +407,28 @@ class FtraceParser(BaseParser):
             .alias("q2d_ms"),
             (pl.col("sector").cast(pl.Float64) * 512 / (1024 * 1024)).alias("lba_mb"),
             (pl.col("size_bytes").cast(pl.Float64) / 1024).alias("size_kb"),
+        ]).with_columns([
+            pl.when(pl.col("rwbs").str.to_uppercase().str.contains("F"))
+            .then(pl.lit("Flush"))
+            .when(pl.col("rwbs").str.to_uppercase().str.contains("R"))
+            .then(pl.lit("Read"))
+            .when(pl.col("rwbs").str.to_uppercase().str.contains("W"))
+            .then(pl.lit("Write"))
+            .otherwise(pl.lit("ETC"))
+            .alias("cmd_category"),
+        ]).with_columns([
+            pl.when((pl.col("cmd_category") == "Read") & (pl.col("size_kb") < 32.0))
+            .then(pl.lit("Small Read"))
+            .when((pl.col("cmd_category") == "Read") & (pl.col("size_kb") >= 32.0))
+            .then(pl.lit("Big Read"))
+            .when((pl.col("cmd_category") == "Write") & (pl.col("size_kb") < 32.0))
+            .then(pl.lit("Small Write"))
+            .when((pl.col("cmd_category") == "Write") & (pl.col("size_kb") >= 32.0))
+            .then(pl.lit("Big Write"))
+            .when(pl.col("cmd_category") == "Flush")
+            .then(pl.lit("Flush"))
+            .otherwise(pl.lit("ETC"))
+            .alias("cmd_class"),
         ])
 
         # Sort by issue timestamp for D2D/C2C/queue_depth/sequentiality
@@ -448,6 +493,8 @@ class FtraceParser(BaseParser):
             "c2c_ms",
             "size_kb",
             pl.col("rwbs").alias("cmd"),
+            "cmd_category",
+            "cmd_class",
             "queue_depth",
             "sector",
             "nr_sectors",
@@ -564,6 +611,11 @@ class FtraceParser(BaseParser):
             if insert_ts is not None:
                 q2d_ms = (issue_ts - insert_ts) * 1000.0
 
+            size_kb = entry["size_bytes"] / 1024.0
+            cmd = entry["rwbs"]
+            cmd_category = self._cmd_category_from_rwbs(cmd)
+            cmd_class = self._cmd_class_from_category(cmd_category, size_kb)
+
             result_rows.append({
                 "send_time": issue_ts,
                 "complete_time": complete_ts,
@@ -573,8 +625,10 @@ class FtraceParser(BaseParser):
                 "q2d_ms": q2d_ms,
                 "d2d_ms": d2d_ms,
                 "c2c_ms": c2c_ms,
-                "size_kb": entry["size_bytes"] / 1024.0,
-                "cmd": entry["rwbs"],
+                "size_kb": size_kb,
+                "cmd": cmd,
+                "cmd_category": cmd_category,
+                "cmd_class": cmd_class,
                 "queue_depth": entry["queue_depth"],
                 "sector": sector,
                 "nr_sectors": nr_sects,

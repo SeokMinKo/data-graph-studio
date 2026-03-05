@@ -414,7 +414,8 @@ class ThemeManager:
         return f"""
             /* ============ Global Reset ============ */
             * {{
-                font-family: 'Helvetica Neue', 'Arial';
+                /* Cross-platform + CJK-safe default stack */
+                font-family: 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans CJK KR', 'Noto Sans', 'Helvetica Neue', 'Arial', sans-serif;
                 font-size: 13px;
             }}
             

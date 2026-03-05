@@ -349,7 +349,7 @@ class MainWindow(QMainWindow):
         project_layout.setSpacing(0)
 
         self._project_search = QLineEdit()
-        self._project_search.setPlaceholderText("🔍 Filter profiles...")
+        self._project_search.setPlaceholderText("Filter profiles...")
         self._project_search.setClearButtonEnabled(True)
         self._project_search.textChanged.connect(self.project_tree.set_filter_text)
         project_layout.addWidget(self._project_search)
@@ -706,11 +706,11 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.statusbar)
 
         # Status labels with icons
-        self._status_data_label = QLabel("📋 No data loaded")
+        self._status_data_label = QLabel("No data loaded")
         self._status_data_label.setObjectName("hintLabel")
 
         self._status_selection_label = QLabel("")
-        self._status_memory_label = QLabel("💾 --")
+        self._status_memory_label = QLabel("Memory: --")
         self._status_memory_label.setObjectName("statusMemoryLabel")
         self._status_memory_label.setToolTip("Memory Usage (Process / System)")
 
@@ -951,12 +951,12 @@ class MainWindow(QMainWindow):
         # TablePanel도 내부적으로 float 처리
 
         # Create placeholders
-        for key, title in [("summary", "📊 Overview"), ("graph", "📈 Graph"), ("table", "📋 Table")]:
+        for key, title in [("summary", "Overview"), ("graph", "Graph"), ("table", "Table")]:
             placeholder = QFrame()
             placeholder.setObjectName("floatPlaceholder")
             layout = QVBoxLayout(placeholder)
             layout.setAlignment(Qt.AlignCenter)
-            label = QLabel(f"📤 {title}\n\nFloating as separate window\n\nClick 'Dock' to return")
+            label = QLabel(f"{title}\n\nFloating as separate window\n\nClick 'Dock' to return")
             label.setObjectName("floatPlaceholderLabel")
             label.setAlignment(Qt.AlignCenter)
             layout.addWidget(label)
@@ -975,10 +975,10 @@ class MainWindow(QMainWindow):
         
         # Update status bar
         if has_data:
-            self._status_data_label.setText(f"📋 {self.state.total_rows:,} rows")
+            self._status_data_label.setText(f"{self.state.total_rows:,} rows")
             self._status_data_label.setObjectName("successLabel")
         else:
-            self._status_data_label.setText("📋 Drag & drop a file to start")
+            self._status_data_label.setText("Drag & drop a file to start")
             self._status_data_label.setObjectName("hintLabel")
         self._status_data_label.style().unpolish(self._status_data_label)
         self._status_data_label.style().polish(self._status_data_label)

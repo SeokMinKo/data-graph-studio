@@ -67,7 +67,7 @@ def test_minimap_region_emits_xy_ranges_on_drag(qtbot) -> None:
 
 
 @pytest.mark.qt
-def test_graph_panel_minimap_overlay_fit_and_region_sync(qtbot) -> None:
+def test_graph_panel_minimap_tool_window_fit_and_region_sync(qtbot) -> None:
     state = AppState()
     engine = DataEngine()
 
@@ -90,7 +90,7 @@ def test_graph_panel_minimap_overlay_fit_and_region_sync(qtbot) -> None:
     panel.toggle_minimap(True)
     panel.refresh()
 
-    assert panel._minimap_overlay.isVisible()
+    assert panel._minimap_window.isVisible()
     assert panel.minimap.get_data_bounds() is not None
     assert panel.minimap._last_render_mode == "image_density"
 

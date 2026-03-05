@@ -1524,7 +1524,6 @@ class MainGraph(pg.PlotWidget):
 
         if selected_indices:
             self.points_selected.emit(selected_indices)
-            self.state.select_rows(selected_indices)
 
         self._cleanup_selection()
     
@@ -1549,7 +1548,6 @@ class MainGraph(pg.PlotWidget):
 
         if selected_indices:
             self.points_selected.emit(selected_indices)
-            self.state.select_rows(selected_indices)
 
         self._cleanup_lasso()
     
