@@ -89,6 +89,12 @@ BLOCK_TRACE_CMD_CLASS = """\
      kworker/0:1-100 [000] .... 1000.002500: block_rq_complete: 8,0 WF () 300 + 8 [0]
 """
 
+BLOCK_TRACE_MALFORMED = """\
+# tracer: nop
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 ??? malformed-payload
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 ??? malformed-payload
+"""
+
 
 @pytest.fixture
 def parser() -> FtraceParser:
@@ -178,6 +184,16 @@ class TestBlocklayerCmdCategoryClass:
         # sector 300: WF -> Flush (category precedence) / Flush
         assert df["cmd_category"][2] == "Flush"
         assert df["cmd_class"][2] == "Flush"
+
+
+class TestBlocklayerMalformed:
+    def test_malformed_block_rows_are_dropped(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_MALFORMED)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+
+        assert len(df) == 0
 
 
 class TestBlocklayerMulti:

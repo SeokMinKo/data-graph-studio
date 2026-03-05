@@ -458,7 +458,11 @@ class PolarsTableModel(QAbstractTableModel):
                 pct = (null_count / total * 100) if total > 0 else 0
                 tooltip = f"<b>{col_name}</b><br>Type: {dtype}<br>Nulls: {null_count} ({pct:.1f}%)"
                 if series.dtype.is_numeric():
-                    tooltip += f"<br>Min: {series.min()}<br>Max: {series.max()}<br>Mean: {series.mean():.2f}"
+                    min_val = series.min()
+                    max_val = series.max()
+                    mean_val = series.mean()
+                    mean_text = f"{float(mean_val):.2f}" if mean_val is not None else "-"
+                    tooltip += f"<br>Min: {min_val}<br>Max: {max_val}<br>Mean: {mean_text}"
                 self._column_stats[col_name] = tooltip
             except Exception as e:
                 logger.debug("Column stats failed for %s: %s", col_name, e)

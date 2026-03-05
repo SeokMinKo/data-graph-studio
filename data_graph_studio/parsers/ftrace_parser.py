@@ -346,17 +346,32 @@ class FtraceParser(BaseParser):
             pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
         ]
         issues = issues.with_columns(issue_parse_cols)
+        # Drop malformed issue rows early (prevents null-filled pseudo rows)
+        issues = issues.filter(
+            pl.col("device").is_not_null()
+            & pl.col("rwbs").is_not_null()
+            & pl.col("size_bytes").is_not_null()
+            & pl.col("sector").is_not_null()
+            & pl.col("nr_sectors").is_not_null()
+        )
         issues = issues.with_columns(
             (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
              pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
         ).with_row_index("issue_idx")
+
+        if len(issues) == 0:
+            return pl.DataFrame(schema=self._RESULT_SCHEMA)
 
         # complete format: <dev> <rwbs> () <sector> + <nr_sectors> [<errno>]
         completes = completes.with_columns([
             pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
             pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
             pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
-        ]).with_columns(
+        ]).filter(
+            pl.col("device").is_not_null()
+            & pl.col("sector").is_not_null()
+            & pl.col("nr_sectors").is_not_null()
+        ).with_columns(
             (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
              pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
         )
@@ -378,7 +393,11 @@ class FtraceParser(BaseParser):
 
         # ── 4. Match insert→issue (Q2D) ──
         if len(inserts) > 0:
-            inserts = inserts.with_columns(issue_parse_cols).with_columns(
+            inserts = inserts.with_columns(issue_parse_cols).filter(
+                pl.col("device").is_not_null()
+                & pl.col("sector").is_not_null()
+                & pl.col("nr_sectors").is_not_null()
+            ).with_columns(
                 (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
                  pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
             )

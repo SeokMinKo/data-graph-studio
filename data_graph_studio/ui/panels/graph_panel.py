@@ -635,7 +635,7 @@ class GraphPanel(QWidget):
 
         # Get sampling settings from options
         show_all_data = options.get('show_all_data', False)
-        max_points = options.get('max_points', 10000)
+        max_points = max(1, int(options.get('max_points', 10000) or 10000))
         sampling_algorithm = options.get('sampling_algorithm', 'auto')
 
         # Apply filter (Item 15) — work on a filtered view of the DataFrame
@@ -767,6 +767,11 @@ class GraphPanel(QWidget):
                 options['y_title'] = options.get('y_title') or f"{y_col_name} [{y_formula}]"
         else:
             options['y_title'] = options.get('y_title') or y_col_name
+
+        # Guard: nothing plottable (prevents downstream divide-by-zero in charts/stats)
+        if x_data is None or y_data is None or len(x_data) == 0 or len(y_data) == 0:
+            self.main_graph.clear_plot()
+            return
 
         # Groups (already built above for combo chart, but might be None if no group columns)
         # Re-build here if we didn't return early from combo chart path
