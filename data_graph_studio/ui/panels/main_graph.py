@@ -513,9 +513,11 @@ class MainGraph(pg.PlotWidget):
         # Get series colors from legend settings
         series_colors = {}
         series_visible = {}
+        series_markers = {}
         for s in legend_settings.get('series', []):
             series_colors[s['name']] = s.get('color', default_colors[0])
             series_visible[s['name']] = s.get('visible', True)
+            series_markers[s['name']] = s.get('marker_symbol', marker_symbol)
         
         # Item 14: Vary marker shapes per series for accessibility
         _marker_shapes = ['o', 's', 't', 'd', '+', 'x', 'star', 'p', 'h']
@@ -531,7 +533,10 @@ class MainGraph(pg.PlotWidget):
                     group_name,
                     series_colors.get(group_name, default_colors[i % len(default_colors)])
                 )
-                series_marker = group_marker_map.get(group_name, _marker_shapes[i % len(_marker_shapes)])
+                series_marker = group_marker_map.get(
+                    group_name,
+                    series_markers.get(group_name, _marker_shapes[i % len(_marker_shapes)]),
+                )
                 self._plot_series(
                     x_data[mask], y_data[mask],
                     chart_type, color, group_name,
@@ -543,16 +548,18 @@ class MainGraph(pg.PlotWidget):
                 )
         else:
             color = default_colors[0]
+            marker = marker_symbol
             if legend_settings.get('series'):
                 first_series = legend_settings['series'][0]
                 color = first_series.get('color', color)
+                marker = first_series.get('marker_symbol', marker)
                 if not first_series.get('visible', True):
                     return  # Hidden
             
             self._plot_series(
                 x_data, y_data,
                 chart_type, color, None,
-                line_width, marker_size, line_style, marker_symbol,
+                line_width, marker_size, line_style, marker,
                 show_points,
                 show_labels=options.get('show_labels', False),
                 smooth=options.get('smooth', False),

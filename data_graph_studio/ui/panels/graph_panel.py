@@ -308,15 +308,20 @@ class GraphPanel(QWidget):
         self.refresh()
 
     def _update_grid_split_columns(self, filter_dict=None):
-        """Update Grid View split column options based on filter panel selections"""
-        # Get columns that have filter selections (from DataTab)
-        filter_columns = list(self._active_filter.keys()) if self._active_filter else []
+        """Update Grid View split + style-encoding combo candidates."""
+        if self.engine.df is not None and self.engine.columns:
+            categorical = [c for c in self.engine.columns if self.engine.is_column_categorical(c)]
+            grid_columns = categorical if categorical else list(self.engine.columns)
+            style_columns = list(self.engine.columns)
+        else:
+            filter_columns = list(self._active_filter.keys()) if self._active_filter else []
+            group_col_names = [gc.name for gc in self.state.group_columns]
+            fallback = list(dict.fromkeys(filter_columns + group_col_names))
+            grid_columns = fallback
+            style_columns = fallback
 
-        # Also include group columns if any
-        group_col_names = [gc.name for gc in self.state.group_columns]
-        all_columns = list(set(filter_columns + group_col_names))
-
-        self.options_panel.update_grid_split_columns(all_columns)
+        self.options_panel.update_grid_split_columns(grid_columns)
+        self.options_panel.update_style_encoding_columns(style_columns)
 
     def _on_value_zone_changed(self):
         """Handle value zone changes — auto-switch chart type for combo."""
@@ -723,6 +728,11 @@ class GraphPanel(QWidget):
         groups = None
         if self.state.group_columns:
             groups = self._build_group_masks(working_df)
+        else:
+            color_by_col = options.get('color_by_column')
+            mark_by_col = options.get('mark_by_column')
+            if color_by_col or mark_by_col:
+                groups = self._build_style_groups(working_df, color_by_col, mark_by_col)
 
         # Item 14: combo chart when 2+ Y columns are selected
         if len(self.state.value_columns) >= 2:
@@ -1341,6 +1351,11 @@ class GraphPanel(QWidget):
         mark_by_col = options.get('mark_by_column')
         color_map = {}
         symbol_map = {}
+        legend_series_map = {
+            s.get('name'): s
+            for s in (legend_settings.get('series', []) or [])
+            if isinstance(s, dict) and s.get('name')
+        }
 
         for idx, vc in enumerate(value_cols):
             y_col_name = vc.name
@@ -1434,12 +1449,15 @@ class GraphPanel(QWidget):
                 if formula:
                     label = f"{y_col_name} [{formula}]"
 
+                legend_item = legend_series_map.get(y_col_name, {})
+                legend_marker_symbol = legend_item.get('marker_symbol') if isinstance(legend_item, dict) else None
+
                 if idx == 0:
                     self.main_graph.setLabel('left', label, color=color, **{'font-size': '14px'})
                     self.main_graph.getAxis('left').setPen(pg.mkPen(color))
                     self._render_combo_series(x_data, y_data_full, col_chart_type, color, pen, label,
                                               line_width, marker_size, marker_border,
-                                              self.main_graph, options)
+                                              self.main_graph, options, marker_symbol=legend_marker_symbol)
                     self.main_graph._data_x = x_data
                     self.main_graph._data_y = y_data_full
                 elif idx == 1:
@@ -1456,7 +1474,8 @@ class GraphPanel(QWidget):
 
                     self._render_combo_series_vb(x_data, y_data_full, col_chart_type, color, pen, label,
                                                  line_width, marker_size, marker_border,
-                                                 secondary_vb, self.main_graph, options)
+                                                 secondary_vb, self.main_graph, options,
+                                                 marker_symbol=legend_marker_symbol)
 
                     def _sync_vb():
                         secondary_vb.setGeometry(self.main_graph.getViewBox().sceneBoundingRect())
@@ -1469,7 +1488,8 @@ class GraphPanel(QWidget):
                     # units. Requires UI for axis assignment and spaced axis rendering.
                     self._render_combo_series(x_data, y_data_full, col_chart_type, color, pen, label,
                                               line_width, marker_size, marker_border,
-                                              self.main_graph, options)
+                                              self.main_graph, options,
+                                              marker_symbol=legend_marker_symbol)
 
         # Update series names for legend
         series_names = [vc.name for vc in value_cols if vc.name in working_df.columns]
@@ -2195,6 +2215,39 @@ class GraphPanel(QWidget):
             groups[group_name] = mask
 
         return groups
+
+    def _build_style_groups(self, df: pl.DataFrame, color_by_col: Optional[str], mark_by_col: Optional[str]) -> Optional[Dict[str, np.ndarray]]:
+        """Build pseudo-groups from color/marker encoding columns when GroupBy is empty."""
+        if df is None or len(df) == 0:
+            return None
+
+        cols = []
+        if color_by_col and color_by_col in df.columns:
+            cols.append(color_by_col)
+        if mark_by_col and mark_by_col in df.columns and mark_by_col != color_by_col:
+            cols.append(mark_by_col)
+        if not cols:
+            return None
+
+        n_rows = len(df)
+        indexed = df.with_row_index("__row_idx__")
+        grouped = indexed.group_by(cols).agg(pl.col("__row_idx__").alias("__indices__"))
+        try:
+            grouped = grouped.sort(cols)
+        except Exception as e:
+            logger.debug("style group sort skipped: %s", e)
+
+        groups: Dict[str, np.ndarray] = {}
+        for row in grouped.iter_rows():
+            vals = row[:-1]
+            indices = row[-1]
+            parts = [str(v) if v is not None else "(Empty)" for v in vals]
+            group_name = " / ".join(parts)
+            mask = np.zeros(n_rows, dtype=bool)
+            mask[indices] = True
+            groups[group_name] = mask
+
+        return groups if groups else None
     
     def reset_view(self):
         self.main_graph.reset_view()
@@ -2241,7 +2294,10 @@ class GraphPanel(QWidget):
         self.stat_panel.update_stats(None)
     
     def set_columns(self, columns: List[str]):
-        """컬럼 목록 설정 (범례 초기화용)"""
+        """컬럼 목록 설정 (데이터/범례/스타일 인코딩 동기화)."""
+        # Keep Data tab + Color by / Mark by combos in sync with latest dataset columns.
+        self.options_panel.set_columns(columns, self.engine)
+
         # Initialize legend with first numeric column
         numeric_cols = [
             col for col in columns
@@ -2249,6 +2305,17 @@ class GraphPanel(QWidget):
         ]
         if numeric_cols:
             self.options_panel.set_series([numeric_cols[0]])
+
+        # Refresh Grid View split candidates.
+        self._update_grid_split_columns()
+
+    def set_grid_visible(self, visible: Optional[bool] = None):
+        """Toggle grid visibility and refresh immediately."""
+        current = bool(self.options_panel.grid_x_check.isChecked() or self.options_panel.grid_y_check.isChecked())
+        target = (not current) if visible is None else bool(visible)
+        self.options_panel.grid_x_check.setChecked(target)
+        self.options_panel.grid_y_check.setChecked(target)
+        self.main_graph.showGrid(x=target, y=target, alpha=self.options_panel.grid_opacity_slider.value() / 100.0)
 
     def get_chart_options(self) -> Dict[str, Any]:
         """Get current chart options from the options panel"""

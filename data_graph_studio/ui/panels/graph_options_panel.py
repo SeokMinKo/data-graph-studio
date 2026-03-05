@@ -447,6 +447,7 @@ class GraphOptionsPanel(QFrame):
         color_by_row.addWidget(QLabel("Color by:"))
         self.color_by_combo = NoWheelComboBox()
         self.color_by_combo.addItem("(None)", None)
+        self.color_by_combo.setToolTip("Split rendered series color by selected column values")
         self.color_by_combo.currentIndexChanged.connect(self._on_option_changed)
         color_by_row.addWidget(self.color_by_combo)
         data_layout.addLayout(color_by_row)
@@ -455,6 +456,7 @@ class GraphOptionsPanel(QFrame):
         mark_by_row.addWidget(QLabel("Mark by:"))
         self.mark_by_combo = NoWheelComboBox()
         self.mark_by_combo.addItem("(None)", None)
+        self.mark_by_combo.setToolTip("Split rendered series marker shape by selected column values")
         self.mark_by_combo.currentIndexChanged.connect(self._on_option_changed)
         mark_by_row.addWidget(self.mark_by_combo)
         data_layout.addLayout(mark_by_row)
@@ -677,6 +679,17 @@ class GraphOptionsPanel(QFrame):
             "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
             "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
         ]
+        self._marker_options = [
+            ("Circle", 'o'),
+            ("Square", 's'),
+            ("Triangle", 't'),
+            ("Diamond", 'd'),
+            ("Plus", '+'),
+            ("Cross", 'x'),
+            ("Star", 'star'),
+            ("Pentagon", 'p'),
+            ("Hexagon", 'h'),
+        ]
 
         return widget
 
@@ -690,6 +703,16 @@ class GraphOptionsPanel(QFrame):
 
     def set_series(self, series_names: List[str]):
         """시리즈 목록 설정"""
+        # Preserve current per-series settings by name.
+        prev = {
+            item['name']: {
+                'visible': item['visible_check'].isChecked(),
+                'color': item['color_btn'].color(),
+                'marker': item['marker_combo'].currentData() if 'marker_combo' in item else 'o',
+            }
+            for item in self._series_items
+        }
+
         # Clear existing
         for item in self._series_items:
             item['widget'].deleteLater()
@@ -697,10 +720,17 @@ class GraphOptionsPanel(QFrame):
 
         # Add new series
         for i, name in enumerate(series_names):
-            color = QColor(self._legend_colors[i % len(self._legend_colors)])
-            self._add_series_item(name, color, i)
+            if name in prev:
+                color = prev[name]['color']
+                visible = prev[name]['visible']
+                marker = prev[name]['marker']
+            else:
+                color = QColor(self._legend_colors[i % len(self._legend_colors)])
+                visible = True
+                marker = self._marker_options[i % len(self._marker_options)][1]
+            self._add_series_item(name, color, i, visible=visible, marker_symbol=marker)
 
-    def _add_series_item(self, name: str, color: QColor, index: int):
+    def _add_series_item(self, name: str, color: QColor, index: int, visible: bool = True, marker_symbol: str = 'o'):
         """시리즈 아이템 추가"""
         item_widget = QWidget()
         item_layout = QHBoxLayout(item_widget)
@@ -709,7 +739,7 @@ class GraphOptionsPanel(QFrame):
 
         # Visibility checkbox
         visible_check = QCheckBox()
-        visible_check.setChecked(True)
+        visible_check.setChecked(visible)
         visible_check.stateChanged.connect(self._on_option_changed)
         item_layout.addWidget(visible_check)
 
@@ -717,6 +747,16 @@ class GraphOptionsPanel(QFrame):
         color_btn = ColorButton(color)
         color_btn.color_changed.connect(self._on_option_changed)
         item_layout.addWidget(color_btn)
+
+        # Marker combo
+        marker_combo = NoWheelComboBox()
+        marker_combo.setToolTip("Series marker symbol")
+        for label, symbol in self._marker_options:
+            marker_combo.addItem(label, symbol)
+        marker_idx = marker_combo.findData(marker_symbol)
+        marker_combo.setCurrentIndex(marker_idx if marker_idx >= 0 else 0)
+        marker_combo.currentIndexChanged.connect(self._on_option_changed)
+        item_layout.addWidget(marker_combo)
 
         # Name label
         name_label = QLabel(name)
@@ -731,6 +771,7 @@ class GraphOptionsPanel(QFrame):
             'widget': item_widget,
             'visible_check': visible_check,
             'color_btn': color_btn,
+            'marker_combo': marker_combo,
             'index': index
         })
 
@@ -753,6 +794,7 @@ class GraphOptionsPanel(QFrame):
                 'name': item['name'],
                 'visible': item['visible_check'].isChecked(),
                 'color': item['color_btn'].color().name(),
+                'marker_symbol': item['marker_combo'].currentData() if 'marker_combo' in item else 'o',
             })
 
         return {
@@ -1035,10 +1077,15 @@ class GraphOptionsPanel(QFrame):
         """Forward column info to the Data tab after a dataset load."""
         self._all_columns = list(columns)
         self._data_tab.set_columns(columns, engine)
+        self.update_style_encoding_columns(self._all_columns)
 
-        # Update style encoding combos
+    def update_style_encoding_columns(self, columns: List[str]) -> None:
+        """Refresh color/marker encoding combo candidates."""
+        self._all_columns = list(columns)
+
         current_color = self.color_by_combo.currentData() if hasattr(self, 'color_by_combo') else None
         current_mark = self.mark_by_combo.currentData() if hasattr(self, 'mark_by_combo') else None
+
         if hasattr(self, 'color_by_combo'):
             self.color_by_combo.blockSignals(True)
             self.color_by_combo.clear()
@@ -1048,6 +1095,7 @@ class GraphOptionsPanel(QFrame):
             idx = self.color_by_combo.findData(current_color)
             self.color_by_combo.setCurrentIndex(idx if idx >= 0 else 0)
             self.color_by_combo.blockSignals(False)
+
         if hasattr(self, 'mark_by_combo'):
             self.mark_by_combo.blockSignals(True)
             self.mark_by_combo.clear()

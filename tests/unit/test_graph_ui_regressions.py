@@ -10,6 +10,7 @@ from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.core.state import AppState, AggregationType, ChartType
 from data_graph_studio.ui.panels.graph_options_panel import GraphOptionsPanel
 from data_graph_studio.ui.panels.graph_panel import GraphPanel
+from data_graph_studio.ui.panels.main_graph import MainGraph
 
 
 class _DummyWheelEvent:
@@ -160,3 +161,51 @@ def test_profile_title_subtitle_do_not_leak_between_profiles() -> None:
     GraphSettingMapper.to_app_state(setting_b, state)
     assert state.chart_settings.title is None
     assert state.chart_settings.subtitle is None
+
+
+@pytest.mark.qt
+def test_set_columns_populates_color_and_marker_by_combos(qtbot) -> None:
+    state = AppState()
+    engine = DataEngine()
+    engine.update_dataframe(pl.DataFrame({"x": [1, 2], "kind": ["A", "B"]}))
+
+    panel = GraphPanel(state, engine)
+    qtbot.addWidget(panel)
+    panel.set_columns(engine.columns)
+
+    color_items = [panel.options_panel.color_by_combo.itemText(i) for i in range(panel.options_panel.color_by_combo.count())]
+    mark_items = [panel.options_panel.mark_by_combo.itemText(i) for i in range(panel.options_panel.mark_by_combo.count())]
+
+    assert "x" in color_items and "kind" in color_items
+    assert "x" in mark_items and "kind" in mark_items
+
+
+@pytest.mark.qt
+def test_legend_settings_include_marker_symbol() -> None:
+    state = AppState()
+    panel = GraphOptionsPanel(state)
+    panel.set_series(["Series A"])
+
+    marker_combo = panel._series_items[0]["marker_combo"]
+    marker_combo.setCurrentIndex(marker_combo.findData("d"))
+
+    legend = panel.get_legend_settings()
+    assert legend["series"][0]["marker_symbol"] == "d"
+
+
+@pytest.mark.qt
+def test_main_graph_applies_legend_marker_symbol(qtbot) -> None:
+    graph = MainGraph(AppState())
+    qtbot.addWidget(graph)
+
+    x = np.array([0.0, 1.0, 2.0], dtype=np.float64)
+    y = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+    legend_settings = {
+        "show": True,
+        "position": (1, 1),
+        "series": [{"name": "Series A", "visible": True, "color": "#1f77b4", "marker_symbol": "d"}],
+    }
+    graph.plot_data(x, y, groups=None, chart_type=ChartType.SCATTER, options={"show_points": True}, legend_settings=legend_settings)
+
+    assert len(graph._scatter_items) == 1
+    assert graph._scatter_items[0].opts.get("symbol") == "d"
