@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QListWidget, QListWidgetItem, QGridLayout,
     QMessageBox
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer, QPoint, QEvent
 from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter, QBrush
 
 from ..floatable import FloatableSection, FloatButton, FloatWindow
@@ -45,6 +45,61 @@ from .main_graph import MainGraph
 from .minimap_widget import MinimapWidget
 
 logger = logging.getLogger(__name__)
+
+
+class DraggableOverlayFrame(QFrame):
+    """Lightweight draggable floating frame constrained to parent widget bounds."""
+
+    moved = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._drag_handle: Optional[QWidget] = None
+        self._dragging = False
+        self._drag_offset = QPoint()
+
+    def set_drag_handle(self, handle: QWidget):
+        if self._drag_handle is not None:
+            self._drag_handle.removeEventFilter(self)
+        self._drag_handle = handle
+        if self._drag_handle is not None:
+            self._drag_handle.installEventFilter(self)
+            self._drag_handle.setCursor(Qt.OpenHandCursor)
+
+    def eventFilter(self, obj, event):
+        if obj is self._drag_handle:
+            if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                self._dragging = True
+                self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                self._drag_handle.setCursor(Qt.ClosedHandCursor)
+                return True
+
+            if event.type() == QEvent.MouseMove and self._dragging:
+                self._move_from_global(event.globalPosition().toPoint() - self._drag_offset)
+                return True
+
+            if event.type() == QEvent.MouseButtonRelease and self._dragging:
+                self._dragging = False
+                self._drag_handle.setCursor(Qt.OpenHandCursor)
+                return True
+
+        return super().eventFilter(obj, event)
+
+    def _move_from_global(self, global_top_left: QPoint):
+        parent = self.parentWidget()
+        if parent is None:
+            self.move(global_top_left)
+            self.moved.emit()
+            return
+
+        top_left = parent.mapFromGlobal(global_top_left)
+        max_x = max(0, parent.width() - self.width())
+        max_y = max(0, parent.height() - self.height())
+        x = min(max(top_left.x(), 0), max_x)
+        y = min(max(top_left.y(), 0), max_y)
+        self.move(x, y)
+        self.moved.emit()
+
 
 # ==================== Graph Panel ====================
 
@@ -89,6 +144,7 @@ class GraphPanel(QWidget):
         self._minimap_enabled = False
         self._minimap_syncing = False  # guard against infinite loop
         self._minimap_lock_y = False
+        self._minimap_user_positioned = False
 
         # Reentrant refresh guard
         self._refreshing = False
@@ -170,7 +226,7 @@ class GraphPanel(QWidget):
         center_layout.addWidget(self.x_sliding_window)
 
         # Floating minimap overlay (StarCraft-style)
-        self._minimap_overlay = QFrame(self._graph_container)
+        self._minimap_overlay = DraggableOverlayFrame(self._graph_container)
         self._minimap_overlay.setObjectName("minimapOverlay")
         self._minimap_overlay.setVisible(False)
         self._minimap_overlay.setFrameShape(QFrame.StyledPanel)
@@ -178,6 +234,14 @@ class GraphPanel(QWidget):
         overlay_layout = QVBoxLayout(self._minimap_overlay)
         overlay_layout.setContentsMargins(8, 8, 8, 8)
         overlay_layout.setSpacing(6)
+
+        self._minimap_drag_handle = QLabel("Minimap")
+        self._minimap_drag_handle.setObjectName("minimapDragHandle")
+        self._minimap_drag_handle.setAlignment(Qt.AlignCenter)
+        self._minimap_drag_handle.setToolTip("Drag to move minimap window")
+        overlay_layout.addWidget(self._minimap_drag_handle)
+        self._minimap_overlay.set_drag_handle(self._minimap_drag_handle)
+        self._minimap_overlay.moved.connect(self._on_minimap_overlay_moved)
 
         self.minimap = MinimapWidget(self._minimap_overlay)
         self.minimap.setVisible(True)
@@ -390,7 +454,13 @@ class GraphPanel(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._position_minimap_overlay()
+        if self._minimap_user_positioned:
+            self._clamp_minimap_overlay_to_container()
+        else:
+            self._position_minimap_overlay()
+
+    def _on_minimap_overlay_moved(self):
+        self._minimap_user_positioned = True
 
     def _position_minimap_overlay(self):
         if not hasattr(self, "_minimap_overlay"):
@@ -402,6 +472,22 @@ class GraphPanel(QWidget):
         container_h = self._graph_container.height()
         x = max(margin, container_w - w - margin)
         y = max(margin, container_h - h - margin)
+        self._minimap_overlay.move(x, y)
+
+    def _clamp_minimap_overlay_to_container(self):
+        if not hasattr(self, "_minimap_overlay"):
+            return
+
+        container_w = self._graph_container.width()
+        container_h = self._graph_container.height()
+        w = self._minimap_overlay.width()
+        h = self._minimap_overlay.height()
+        max_x = max(0, container_w - w)
+        max_y = max(0, container_h - h)
+
+        pos = self._minimap_overlay.pos()
+        x = min(max(pos.x(), 0), max_x)
+        y = min(max(pos.y(), 0), max_y)
         self._minimap_overlay.move(x, y)
 
     def _is_streaming_active(self) -> bool:
@@ -422,7 +508,10 @@ class GraphPanel(QWidget):
         self._minimap_enabled = bool(enabled)
         self._minimap_overlay.setVisible(self._minimap_enabled)
         if self._minimap_enabled:
-            self._position_minimap_overlay()
+            if self._minimap_user_positioned:
+                self._clamp_minimap_overlay_to_container()
+            else:
+                self._position_minimap_overlay()
             self._schedule_refresh()
 
     def _on_minimap_lock_y_toggled(self, checked: bool):
