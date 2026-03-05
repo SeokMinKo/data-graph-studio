@@ -43,7 +43,6 @@ from .panels.graph_panel import GraphPanel
 from .panels.table_panel import TablePanel
 from .panels.profile_bar import ProfileBar
 from .panels.dataset_manager_panel import DatasetManagerPanel
-from .panels.history_panel import HistoryPanel
 from .panels.side_by_side_layout import SideBySideLayout
 from .panels.comparison_stats_panel import ComparisonStatsPanel
 from .panels.converter_options_panel import ConverterOptionsPanel
@@ -153,8 +152,6 @@ class MainWindow(QMainWindow):
         self.state.set_undo_stack(self._undo_stack)
         self.profile_controller._main_undo_stack = self._undo_stack
 
-        self._history_panel: Optional[HistoryPanel] = None
-        self._history_dock: Optional[QDockWidget] = None
 
         # Feature 1: Dashboard Mode
         self._dashboard_controller = DashboardController(self.state, self._undo_stack)
@@ -416,41 +413,9 @@ class MainWindow(QMainWindow):
         # Initialize floating graph manager
         self._floating_graph_manager = FloatingGraphManager(self.state, self.engine)
 
-        # History (Undo/Redo) dock
-        self._setup_history_dock()
-
         # Converter Options dock
         self._setup_converter_options_dock()
     
-    def _setup_history_dock(self):
-        if self._history_dock is not None:
-            return
-
-        self._history_panel = HistoryPanel(self._undo_stack, parent=self)
-        self._history_panel.request_undo.connect(self._on_undo)
-        self._history_panel.request_redo.connect(self._on_redo)
-
-        dock = QDockWidget("History", self)
-        dock.setObjectName("HistoryDock")
-        dock.setWidget(self._history_panel)
-        dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
-        self._history_dock = dock
-
-        # Add toggle action to View menu
-        try:
-            for action in self.menuBar().actions():
-                if action.text().replace("&", "") == "View":
-                    view_menu = action.menu()
-                    if view_menu:
-                        view_menu.addSeparator()
-                        toggle_action = dock.toggleViewAction()
-                        toggle_action.setText("History Panel")
-                        view_menu.addAction(toggle_action)
-                    break
-        except Exception:
-            pass
-
     def _setup_converter_options_dock(self):
         """Set up the Converter Options dock widget."""
         self._converter_options_panel = ConverterOptionsPanel(self)
@@ -482,13 +447,10 @@ class MainWindow(QMainWindow):
             pass
 
     def _on_undo_stack_changed(self):
-        # Update history UI
-        if self._history_panel is not None:
-            self._history_panel.refresh()
         # #8: Sync Edit menu enabled state
-        if hasattr(self, '_edit_undo_action'):
+        if getattr(self, '_edit_undo_action', None) is not None:
             self._edit_undo_action.setEnabled(self._undo_stack.can_undo())
-        if hasattr(self, '_edit_redo_action'):
+        if getattr(self, '_edit_redo_action', None) is not None:
             self._edit_redo_action.setEnabled(self._undo_stack.can_redo())
 
     def _on_undo(self):
@@ -683,10 +645,6 @@ class MainWindow(QMainWindow):
         # Summary panel
         if hasattr(self, 'summary_panel'):
             self.summary_panel.setAccessibleName("Summary Panel")
-
-        # History dock
-        if self._history_dock:
-            self._history_dock.setAccessibleName("History Panel Dock")
 
         # Set tab order: sidebar → table → graph → profile bar
         if hasattr(self, '_project_search') and hasattr(self, 'table_panel'):
@@ -2234,8 +2192,6 @@ class MainWindow(QMainWindow):
         sc.connect("file.open", self._on_open_file)
         sc.connect("file.save", self._on_save_project_file)
         sc.connect("file.export", self._on_export_dialog)
-        sc.connect("edit.undo", self._on_undo)
-        sc.connect("edit.redo", self._on_redo)
         sc.connect("edit.annotation_mode", self._on_toggle_annotation_panel)
         sc.connect("view.dashboard_toggle", self._on_toggle_dashboard_mode)
         sc.connect("view.theme_toggle", self._on_cycle_theme)

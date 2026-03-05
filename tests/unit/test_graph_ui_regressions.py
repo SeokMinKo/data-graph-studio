@@ -5,6 +5,8 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.data_engine import DataEngine
+from data_graph_studio.core.graph_setting_mapper import GraphSettingMapper
+from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.core.state import AppState, AggregationType, ChartType
 from data_graph_studio.ui.panels.graph_options_panel import GraphOptionsPanel
 from data_graph_studio.ui.panels.graph_panel import GraphPanel
@@ -92,6 +94,12 @@ def test_graph_selection_maps_sampled_indices_back_to_original_rows(qtbot) -> No
     selected = sorted(list(state.selection.selected_rows))
     assert selected == [5, 9]
 
+    # Visual feedback should be immediate in graph rendered index space.
+    panel.main_graph._data_x = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+    panel.main_graph._data_y = np.array([10.0, 20.0, 30.0], dtype=np.float64)
+    panel.main_graph.highlight_selection([1])
+    assert panel.main_graph._selection_scatter is not None
+
 
 @pytest.mark.qt
 def test_graph_panel_refresh_handles_empty_dataframe_without_error(qtbot) -> None:
@@ -124,3 +132,31 @@ def test_graph_panel_refresh_handles_empty_dataframe_without_error(qtbot) -> Non
 
     # Must not raise.
     panel.refresh()
+
+
+def test_profile_title_subtitle_do_not_leak_between_profiles() -> None:
+    state = AppState()
+
+    setting_a = GraphSetting(
+        id="a",
+        name="A",
+        dataset_id="ds",
+        chart_type="line",
+        chart_settings={"title": "Profile A", "subtitle": "Sub A"},
+    )
+    setting_b = GraphSetting(
+        id="b",
+        name="B",
+        dataset_id="ds",
+        chart_type="line",
+        chart_settings={},
+    )
+
+    GraphSettingMapper.to_app_state(setting_a, state)
+    assert state.chart_settings.title == "Profile A"
+    assert state.chart_settings.subtitle == "Sub A"
+
+    # Applying profile B with no title/subtitle must clear prior values.
+    GraphSettingMapper.to_app_state(setting_b, state)
+    assert state.chart_settings.title is None
+    assert state.chart_settings.subtitle is None

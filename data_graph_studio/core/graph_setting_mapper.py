@@ -178,8 +178,25 @@ class GraphSettingMapper:
 
         # --- chart_settings ---
         try:
+            cs = state._chart_settings
+            # Reset key fields first so one profile's title/subtitle does not leak
+            # into another profile that leaves them unset.
+            defaults = {
+                'show_legend': True,
+                'show_grid': True,
+                'show_markers': False,
+                'line_width': 2,
+                'marker_size': 6,
+                'opacity': 1.0,
+                'color_palette': 'default',
+                'title': None,
+                'subtitle': None,
+            }
+            for key, value in defaults.items():
+                if hasattr(cs, key):
+                    setattr(cs, key, value)
+
             if setting.chart_settings:
-                cs = state._chart_settings
                 for key, value in setting.chart_settings.items():
                     if hasattr(cs, key):
                         try:

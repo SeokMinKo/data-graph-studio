@@ -154,8 +154,8 @@ class MainGraph(pg.PlotWidget):
         self.state = state
         self._is_light = False  # Default: dark (midnight) theme
 
-        # Ensure Y-axis label is not clipped (0 = auto-calculate)
-        self._y_axis.setWidth(0)
+        # Ensure Y-axis tick labels remain visible.
+        self._y_axis.setStyle(showValues=True, autoExpandTextSpace=True, tickTextWidth=70)
         self.getPlotItem().getViewBox().setDefaultPadding(0.05)
 
         self.setBackground('#1E293B')

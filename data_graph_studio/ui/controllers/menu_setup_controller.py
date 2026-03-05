@@ -273,24 +273,9 @@ class MenuSetupController:
         # ============================================================
         edit_menu = menubar.addMenu("&Edit")
 
-        undo_action = QAction("&Undo", self.w)
-        undo_action.setShortcut(QKeySequence.Undo)
-        undo_action.setStatusTip("Undo last action (Ctrl+Z)")
-        undo_action.triggered.connect(self.w._on_undo)
-        edit_menu.addAction(undo_action)
-        self.w._edit_undo_action = undo_action
-
-        redo_action = QAction("&Redo", self.w)
-        redo_action.setShortcut(QKeySequence("Ctrl+Y"))
-        redo_action.setStatusTip("Redo last undone action (Ctrl+Y)")
-        redo_action.triggered.connect(self.w._on_redo)
-        edit_menu.addAction(redo_action)
-        self.w._edit_redo_action = redo_action
-
-        # #9: macOS Cmd+Shift+Z for Redo
-        from PySide6.QtGui import QShortcut
-        redo_shortcut2 = QShortcut(QKeySequence("Ctrl+Shift+Z"), self.w)
-        redo_shortcut2.activated.connect(self.w._on_redo)
+        # History/undo-redo UI removed by product decision.
+        self.w._edit_undo_action = None
+        self.w._edit_redo_action = None
 
         edit_menu.addSeparator()
 

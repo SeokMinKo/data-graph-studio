@@ -372,6 +372,9 @@ class GraphPanel(QWidget):
         if not indices:
             return
 
+        # Always reflect immediate visual feedback in current rendered space.
+        self.main_graph.highlight_selection(indices)
+
         if self._sampled_original_indices is not None:
             mapped = []
             for idx in indices:
