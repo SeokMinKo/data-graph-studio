@@ -640,7 +640,11 @@ class GraphPanel(QWidget):
 
         # Apply filter (Item 15) — work on a filtered view of the DataFrame
         working_df = self.engine.df
-        if self._active_filter and working_df is not None:
+        if working_df is None or len(working_df) == 0:
+            self.main_graph.clear_plot()
+            return
+
+        if self._active_filter:
             for f_col, f_vals in self._active_filter.items():
                 if f_col in working_df.columns and f_vals:
                     # Cast filter values to match column dtype for robust comparison

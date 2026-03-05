@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 
 from data_graph_studio.core.data_engine import DataEngine
-from data_graph_studio.core.state import AppState, AggregationType
+from data_graph_studio.core.state import AppState, AggregationType, ChartType
 from data_graph_studio.ui.panels.graph_options_panel import GraphOptionsPanel
 from data_graph_studio.ui.panels.graph_panel import GraphPanel
 
@@ -91,3 +91,36 @@ def test_graph_selection_maps_sampled_indices_back_to_original_rows(qtbot) -> No
 
     selected = sorted(list(state.selection.selected_rows))
     assert selected == [5, 9]
+
+
+@pytest.mark.qt
+def test_graph_panel_refresh_handles_empty_dataframe_without_error(qtbot) -> None:
+    state = AppState()
+    engine = DataEngine()
+
+    # Empty frame that still has typical blocklayer columns.
+    engine.update_dataframe(
+        pl.DataFrame(
+            {
+                "send_time": [],
+                "d2c_ms": [],
+                "cmd": [],
+                "size_kb": [],
+            },
+            schema={
+                "send_time": pl.Float64,
+                "d2c_ms": pl.Float64,
+                "cmd": pl.Utf8,
+                "size_kb": pl.Float64,
+            },
+        )
+    )
+
+    # Simulate chart settings that could previously hit division-by-zero paths.
+    state.set_chart_type(ChartType.BAR)
+
+    panel = GraphPanel(state, engine)
+    qtbot.addWidget(panel)
+
+    # Must not raise.
+    panel.refresh()
