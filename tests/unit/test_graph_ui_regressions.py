@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import numpy as np
+import polars as pl
+import pytest
+
+from data_graph_studio.core.data_engine import DataEngine
+from data_graph_studio.core.state import AppState, AggregationType
+from data_graph_studio.ui.panels.graph_options_panel import GraphOptionsPanel
+from data_graph_studio.ui.panels.graph_panel import GraphPanel
+
+
+class _DummyWheelEvent:
+    def __init__(self) -> None:
+        self.ignored = False
+
+    def ignore(self) -> None:
+        self.ignored = True
+
+
+@pytest.mark.qt
+def test_chart_options_combo_ignores_accidental_wheel_when_popup_closed(qtbot) -> None:
+    state = AppState()
+    panel = GraphOptionsPanel(state)
+    qtbot.addWidget(panel)
+
+    combo = panel.chart_type_combo
+    initial_index = combo.currentIndex()
+
+    event = _DummyWheelEvent()
+    combo.wheelEvent(event)
+
+    assert event.ignored is True
+    assert combo.currentIndex() == initial_index
+
+
+@pytest.mark.qt
+def test_group_masks_order_is_stable_for_color_mapping(qtbot) -> None:
+    state = AppState()
+    engine = DataEngine()
+
+    df = pl.DataFrame(
+        {
+            "x": np.arange(12, dtype=np.float64),
+            "y": np.arange(12, dtype=np.float64),
+            "grp": ["B", "C", "A", "B", "C", "A", "B", "C", "A", "B", "C", "A"],
+        }
+    )
+    engine.update_dataframe(df)
+
+    state.set_x_column("x")
+    state.add_value_column("y", aggregation=AggregationType.MEAN)
+    state.add_group_column("grp")
+
+    panel = GraphPanel(state, engine)
+    qtbot.addWidget(panel)
+
+    keys_runs = []
+    for _ in range(5):
+        groups = panel._build_group_masks(df)
+        keys_runs.append(tuple(groups.keys()))
+
+    # Deterministic order is required so palette assignment does not flicker.
+    assert len(set(keys_runs)) == 1
+    assert keys_runs[0] == ("A", "B", "C")
