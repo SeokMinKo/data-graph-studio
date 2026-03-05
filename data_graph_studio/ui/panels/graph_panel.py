@@ -363,9 +363,25 @@ class GraphPanel(QWidget):
         self.refresh()
 
     def _on_graph_points_selected(self, indices: list):
-        """Handle selection from graph (rect select, lasso select)"""
-        if indices:
-            self.state.select_rows(indices)
+        """Handle selection from graph (rect select, lasso select).
+
+        Graph emits indices in the *currently rendered* array space.
+        When sampling is active, convert sampled indices back to original row
+        indices before storing selection state.
+        """
+        if not indices:
+            return
+
+        if self._sampled_original_indices is not None:
+            mapped = []
+            for idx in indices:
+                if 0 <= idx < len(self._sampled_original_indices):
+                    mapped.append(int(self._sampled_original_indices[idx]))
+            if mapped:
+                self.state.select_rows(mapped)
+            return
+
+        self.state.select_rows(indices)
 
     def _on_x_window_changed(self, min_val: float, max_val: float):
         """Handle X-axis sliding window range change"""

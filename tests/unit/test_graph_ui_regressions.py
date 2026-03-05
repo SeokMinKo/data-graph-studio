@@ -63,3 +63,31 @@ def test_group_masks_order_is_stable_for_color_mapping(qtbot) -> None:
     # Deterministic order is required so palette assignment does not flicker.
     assert len(set(keys_runs)) == 1
     assert keys_runs[0] == ("A", "B", "C")
+
+
+@pytest.mark.qt
+def test_graph_selection_maps_sampled_indices_back_to_original_rows(qtbot) -> None:
+    state = AppState()
+    engine = DataEngine()
+
+    df = pl.DataFrame(
+        {
+            "x": np.arange(10, dtype=np.float64),
+            "y": np.arange(10, dtype=np.float64),
+        }
+    )
+    engine.update_dataframe(df)
+
+    state.set_x_column("x")
+    state.add_value_column("y", aggregation=AggregationType.MEAN)
+
+    panel = GraphPanel(state, engine)
+    qtbot.addWidget(panel)
+
+    # Simulate sampling: rendered indices [0,1,2] correspond to original rows [2,5,9]
+    panel._sampled_original_indices = np.array([2, 5, 9], dtype=np.int64)
+
+    panel._on_graph_points_selected([1, 2])
+
+    selected = sorted(list(state.selection.selected_rows))
+    assert selected == [5, 9]
