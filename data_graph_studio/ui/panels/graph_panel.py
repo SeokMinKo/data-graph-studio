@@ -15,8 +15,8 @@ from PySide6.QtWidgets import (
     QTabWidget, QListWidget, QListWidgetItem, QGridLayout,
     QMessageBox
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer, QPoint, QEvent
-from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter, QBrush
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer
+from PySide6.QtGui import QMouseEvent, QColor, QIcon, QPixmap, QPainter, QBrush, QMoveEvent, QCloseEvent
 
 from ..floatable import FloatableSection, FloatButton, FloatWindow
 from .sliding_window import SlidingWindowWidget
@@ -47,58 +47,25 @@ from .minimap_widget import MinimapWidget
 logger = logging.getLogger(__name__)
 
 
-class DraggableOverlayFrame(QFrame):
-    """Lightweight draggable floating frame constrained to parent widget bounds."""
+class MinimapToolWindow(QDialog):
+    """Floating tool window that hosts minimap controls."""
 
     moved = Signal()
+    closed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._drag_handle: Optional[QWidget] = None
-        self._dragging = False
-        self._drag_offset = QPoint()
+        self.setWindowTitle("Minimap")
+        self.setWindowFlags(Qt.Tool)
+        self.setModal(False)
 
-    def set_drag_handle(self, handle: QWidget):
-        if self._drag_handle is not None:
-            self._drag_handle.removeEventFilter(self)
-        self._drag_handle = handle
-        if self._drag_handle is not None:
-            self._drag_handle.installEventFilter(self)
-            self._drag_handle.setCursor(Qt.OpenHandCursor)
-
-    def eventFilter(self, obj, event):
-        if obj is self._drag_handle:
-            if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-                self._dragging = True
-                self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-                self._drag_handle.setCursor(Qt.ClosedHandCursor)
-                return True
-
-            if event.type() == QEvent.MouseMove and self._dragging:
-                self._move_from_global(event.globalPosition().toPoint() - self._drag_offset)
-                return True
-
-            if event.type() == QEvent.MouseButtonRelease and self._dragging:
-                self._dragging = False
-                self._drag_handle.setCursor(Qt.OpenHandCursor)
-                return True
-
-        return super().eventFilter(obj, event)
-
-    def _move_from_global(self, global_top_left: QPoint):
-        parent = self.parentWidget()
-        if parent is None:
-            self.move(global_top_left)
-            self.moved.emit()
-            return
-
-        top_left = parent.mapFromGlobal(global_top_left)
-        max_x = max(0, parent.width() - self.width())
-        max_y = max(0, parent.height() - self.height())
-        x = min(max(top_left.x(), 0), max_x)
-        y = min(max(top_left.y(), 0), max_y)
-        self.move(x, y)
+    def moveEvent(self, event: QMoveEvent):  # noqa: N802
+        super().moveEvent(event)
         self.moved.emit()
+
+    def closeEvent(self, event: QCloseEvent):  # noqa: N802
+        self.closed.emit()
+        super().closeEvent(event)
 
 
 # ==================== Graph Panel ====================
@@ -225,27 +192,20 @@ class GraphPanel(QWidget):
         self.x_sliding_window.setVisible(False)  # Hidden by default
         center_layout.addWidget(self.x_sliding_window)
 
-        # Floating minimap overlay (StarCraft-style)
-        self._minimap_overlay = DraggableOverlayFrame(self._graph_container)
-        self._minimap_overlay.setObjectName("minimapOverlay")
-        self._minimap_overlay.setVisible(False)
-        self._minimap_overlay.setFrameShape(QFrame.StyledPanel)
+        # Floating minimap window (separate tool window)
+        self._minimap_window = MinimapToolWindow(self.window())
+        self._minimap_window.setObjectName("minimapWindow")
+        self._minimap_window.setVisible(False)
+        self._minimap_window.moved.connect(self._on_minimap_window_moved)
+        self._minimap_window.closed.connect(self._on_minimap_window_closed)
 
-        overlay_layout = QVBoxLayout(self._minimap_overlay)
-        overlay_layout.setContentsMargins(8, 8, 8, 8)
-        overlay_layout.setSpacing(6)
+        window_layout = QVBoxLayout(self._minimap_window)
+        window_layout.setContentsMargins(8, 8, 8, 8)
+        window_layout.setSpacing(6)
 
-        self._minimap_drag_handle = QLabel("Minimap")
-        self._minimap_drag_handle.setObjectName("minimapDragHandle")
-        self._minimap_drag_handle.setAlignment(Qt.AlignCenter)
-        self._minimap_drag_handle.setToolTip("Drag to move minimap window")
-        overlay_layout.addWidget(self._minimap_drag_handle)
-        self._minimap_overlay.set_drag_handle(self._minimap_drag_handle)
-        self._minimap_overlay.moved.connect(self._on_minimap_overlay_moved)
-
-        self.minimap = MinimapWidget(self._minimap_overlay)
+        self.minimap = MinimapWidget(self._minimap_window)
         self.minimap.setVisible(True)
-        overlay_layout.addWidget(self.minimap)
+        window_layout.addWidget(self.minimap)
 
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(0, 0, 0, 0)
@@ -272,8 +232,8 @@ class GraphPanel(QWidget):
         self._minimap_lock_y_btn.toggled.connect(self._on_minimap_lock_y_toggled)
         btn_row.addWidget(self._minimap_lock_y_btn)
 
-        overlay_layout.addLayout(btn_row)
-        self._minimap_overlay.resize(320, 170)
+        window_layout.addLayout(btn_row)
+        self._minimap_window.resize(360, 220)
 
         self.splitter.addWidget(center_widget)
 
@@ -290,7 +250,7 @@ class GraphPanel(QWidget):
         layout.addWidget(self.splitter)
 
         # Initial placement for floating minimap overlay
-        self._position_minimap_overlay()
+        self._position_minimap_window()
 
         # Initialize DrawingManager with a visible default color
         self._drawing_manager = DrawingManager(self.main_graph)
@@ -454,41 +414,27 @@ class GraphPanel(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._minimap_user_positioned:
-            self._clamp_minimap_overlay_to_container()
-        else:
-            self._position_minimap_overlay()
+        # Keep first-open default position near graph area.
+        if not self._minimap_user_positioned:
+            self._position_minimap_window()
 
-    def _on_minimap_overlay_moved(self):
+    def _on_minimap_window_moved(self):
         self._minimap_user_positioned = True
 
-    def _position_minimap_overlay(self):
-        if not hasattr(self, "_minimap_overlay"):
-            return
-        margin = 12
-        w = self._minimap_overlay.width()
-        h = self._minimap_overlay.height()
-        container_w = self._graph_container.width()
-        container_h = self._graph_container.height()
-        x = max(margin, container_w - w - margin)
-        y = max(margin, container_h - h - margin)
-        self._minimap_overlay.move(x, y)
+    def _on_minimap_window_closed(self):
+        self._minimap_enabled = False
 
-    def _clamp_minimap_overlay_to_container(self):
-        if not hasattr(self, "_minimap_overlay"):
+    def _position_minimap_window(self):
+        if not hasattr(self, "_minimap_window"):
             return
 
-        container_w = self._graph_container.width()
-        container_h = self._graph_container.height()
-        w = self._minimap_overlay.width()
-        h = self._minimap_overlay.height()
-        max_x = max(0, container_w - w)
-        max_y = max(0, container_h - h)
-
-        pos = self._minimap_overlay.pos()
-        x = min(max(pos.x(), 0), max_x)
-        y = min(max(pos.y(), 0), max_y)
-        self._minimap_overlay.move(x, y)
+        # Place as a real floating tool window near GraphPanel top-right.
+        margin_x = 16
+        margin_y = 48
+        global_top_right = self.mapToGlobal(self.rect().topRight())
+        x = global_top_right.x() - self._minimap_window.width() - margin_x
+        y = global_top_right.y() + margin_y
+        self._minimap_window.move(x, y)
 
     def _is_streaming_active(self) -> bool:
         """Best-effort check for live/paused streaming state."""
@@ -502,17 +448,19 @@ class GraphPanel(QWidget):
             return False
 
     def toggle_minimap(self, enabled: Optional[bool] = None):
-        """Toggle floating minimap visibility."""
+        """Toggle minimap as a separate floating tool window."""
         if enabled is None:
             enabled = not self._minimap_enabled
         self._minimap_enabled = bool(enabled)
-        self._minimap_overlay.setVisible(self._minimap_enabled)
+
         if self._minimap_enabled:
-            if self._minimap_user_positioned:
-                self._clamp_minimap_overlay_to_container()
-            else:
-                self._position_minimap_overlay()
+            if not self._minimap_user_positioned:
+                self._position_minimap_window()
+            self._minimap_window.show()
+            self._minimap_window.raise_()
             self._schedule_refresh()
+        else:
+            self._minimap_window.hide()
 
     def _on_minimap_lock_y_toggled(self, checked: bool):
         self._minimap_lock_y = bool(checked)
@@ -595,7 +543,7 @@ class GraphPanel(QWidget):
         if not self.engine.is_loaded:
             logger.debug("graph_panel.refresh() - showing empty state")
             self._center_stack.setCurrentIndex(0)  # Empty state
-            self._minimap_overlay.setVisible(False)
+            self._minimap_window.setVisible(False)
             return
 
         # Data is loaded - show graph view
@@ -1072,9 +1020,9 @@ class GraphPanel(QWidget):
             # Sync current view range to minimap
             vr = self.main_graph.viewRange()
             self.minimap.set_region(vr[0][0], vr[0][1], vr[1][0], vr[1][1])
-            self._minimap_overlay.setVisible(True)
+            self._minimap_window.setVisible(True)
         else:
-            self._minimap_overlay.setVisible(False)
+            self._minimap_window.setVisible(False)
 
         # Update sampling status label
         displayed_points = len(x_sampled)
