@@ -72,7 +72,7 @@ def main():
 
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import Qt
-        from PySide6.QtGui import QFont
+        from PySide6.QtGui import QFont, QFontDatabase
         
         from data_graph_studio.ui.main_window import MainWindow
         
@@ -86,11 +86,27 @@ def main():
         app.setApplicationVersion("0.1.0")
         app.setOrganizationName("Godol")
         
+        # Use platform-safe default UI font with Korean fallback.
+        preferred_fonts = [
+            "Segoe UI",          # Windows
+            "Malgun Gothic",     # Windows Korean
+            "Apple SD Gothic Neo",  # macOS Korean
+            "Noto Sans CJK KR",  # Linux/packaged CJK
+            "Noto Sans",
+            "Helvetica Neue",
+            "Arial",
+        ]
+        available = set(QFontDatabase.families())
+        chosen = next((f for f in preferred_fonts if f in available), None)
+
         font = QFont()
-        font.setFamily("Helvetica Neue")
+        if chosen:
+            font.setFamily(chosen)
         font.setPointSize(10)
         app.setFont(font)
         app.setStyle("Fusion")
+
+        logger.info("UI font selected: %s", chosen or "Qt default")
         
         window = MainWindow(debug=args.debug)
         window.show()

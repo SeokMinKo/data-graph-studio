@@ -219,14 +219,14 @@ class EmptyStateWidget(QWidget):
         btn_layout.setAlignment(Qt.AlignCenter)
 
         # 파일 열기 버튼 (Primary)
-        open_btn = QPushButton("📂  파일 열기")
+        open_btn = QPushButton("파일 열기")
         open_btn.setObjectName("emptyStatePrimaryBtn")
         open_btn.setCursor(Qt.PointingHandCursor)
         open_btn.clicked.connect(self.open_file_requested.emit)
         btn_layout.addWidget(open_btn)
 
         # 샘플 데이터 버튼 (Secondary)
-        sample_btn = QPushButton("✨  샘플 데이터")
+        sample_btn = QPushButton("샘플 데이터")
         sample_btn.setObjectName("emptyStateSecondaryBtn")
         sample_btn.setCursor(Qt.PointingHandCursor)
         sample_btn.clicked.connect(self.load_sample_requested.emit)
@@ -248,7 +248,7 @@ class EmptyStateWidget(QWidget):
         drop_layout = QVBoxLayout(drop_hint)
         drop_layout.setContentsMargins(24, 18, 24, 18)
 
-        drop_icon = QLabel("⬇️")
+        drop_icon = QLabel("↓")
         drop_icon.setAlignment(Qt.AlignCenter)
         drop_icon.setObjectName("dropHintIcon")
         drop_icon_font = QFont()
