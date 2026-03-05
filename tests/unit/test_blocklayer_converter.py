@@ -79,6 +79,16 @@ BLOCK_TRACE_C2C = """\
      kworker/0:1-100 [000] .... 1000.003000: block_rq_complete: 8,0 R () 300 + 8 [0]
 """
 
+BLOCK_TRACE_CMD_CLASS = """\
+# tracer: nop
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000500: block_rq_issue: 8,0 W 65536 () 200 + 128 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000900: block_rq_issue: 8,0 WF 4096 () 300 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 100 + 8 [0]
+     kworker/0:1-100 [000] .... 1000.002000: block_rq_complete: 8,0 W () 200 + 128 [0]
+     kworker/0:1-100 [000] .... 1000.002500: block_rq_complete: 8,0 WF () 300 + 8 [0]
+"""
+
 
 @pytest.fixture
 def parser() -> FtraceParser:
@@ -139,6 +149,35 @@ class TestBlocklayerBasic:
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
         assert df["cmd"][0] == "R"
+
+
+class TestBlocklayerCmdCategoryClass:
+    def test_cmd_category_and_cmd_class_columns_exist(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_CMD_CLASS)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings)
+
+        assert "cmd_category" in df.columns
+        assert "cmd_class" in df.columns
+
+    def test_cmd_category_and_class_mapping(self, parser: FtraceParser):
+        path = _write_trace(BLOCK_TRACE_CMD_CLASS)
+        settings = parser.default_settings()
+        settings["converter"] = "blocklayer"
+        df = parser.parse(path, settings).sort("sector")
+
+        # sector 100: R + 4KB -> Read / Small Read
+        assert df["cmd_category"][0] == "Read"
+        assert df["cmd_class"][0] == "Small Read"
+
+        # sector 200: W + 64KB -> Write / Big Write
+        assert df["cmd_category"][1] == "Write"
+        assert df["cmd_class"][1] == "Big Write"
+
+        # sector 300: WF -> Flush (category precedence) / Flush
+        assert df["cmd_category"][2] == "Flush"
+        assert df["cmd_class"][2] == "Flush"
 
 
 class TestBlocklayerMulti:
