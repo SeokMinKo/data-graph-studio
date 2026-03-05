@@ -962,9 +962,9 @@ class ThemeManager:
             }}
 
             #GraphOptionsPanel QTabBar::tab {{
-                padding: 6px 10px;
-                margin-right: 2px;
-                min-width: 52px;
+                padding: 6px 8px;
+                margin-right: 0px;
+                min-width: 0px;
             }}
             
             #LegendPanel {{

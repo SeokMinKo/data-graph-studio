@@ -1959,8 +1959,8 @@ class TablePanel(QWidget):
         # Table view mode
         toolbar.addWidget(QLabel("Table:"))
         self.table_view_mode_combo = QComboBox()
-        self.table_view_mode_combo.setMinimumWidth(120)
-        self.table_view_mode_combo.setMaximumWidth(180)
+        self.table_view_mode_combo.setMinimumWidth(140)
+        self.table_view_mode_combo.setMaximumWidth(220)
         self.table_view_mode_combo.addItem("Grouped", "grouped")
         self.table_view_mode_combo.addItem("Rows (pre-group)", "pre_group")
         self.table_view_mode_combo.addItem("Source Raw", "source_raw")
@@ -2020,15 +2020,15 @@ class TablePanel(QWidget):
         toolbar.addWidget(QLabel("Group:"))
 
         self.group_combo1 = QComboBox()
-        self.group_combo1.setMinimumWidth(100)
-        self.group_combo1.setMaximumWidth(160)
+        self.group_combo1.setMinimumWidth(110)
+        self.group_combo1.setMaximumWidth(200)
         self.group_combo1.setToolTip("Group By column 1")
         self.group_combo1.currentTextChanged.connect(self._on_group_combo_changed)
         toolbar.addWidget(self.group_combo1)
 
         self.group_combo2 = QComboBox()
-        self.group_combo2.setMinimumWidth(100)
-        self.group_combo2.setMaximumWidth(160)
+        self.group_combo2.setMinimumWidth(110)
+        self.group_combo2.setMaximumWidth(200)
         self.group_combo2.setToolTip("Group By column 2")
         self.group_combo2.currentTextChanged.connect(self._on_group_combo_changed)
         toolbar.addWidget(self.group_combo2)
@@ -2037,8 +2037,8 @@ class TablePanel(QWidget):
         toolbar.addWidget(QLabel("Agg:"))
 
         self.agg_combo = QComboBox()
-        self.agg_combo.setMinimumWidth(80)
-        self.agg_combo.setMaximumWidth(120)
+        self.agg_combo.setMinimumWidth(90)
+        self.agg_combo.setMaximumWidth(140)
         self.agg_combo.setToolTip("Aggregation function")
         from ...core.state import AggregationType
         for agg in AggregationType:

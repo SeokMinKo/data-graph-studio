@@ -241,8 +241,8 @@ class GraphPanel(QWidget):
         self.stat_panel = StatPanel(self.state)
         self.splitter.addWidget(self.stat_panel)
 
-        # Splitter sizes: Options(280) + Graph(stretch) + Stats(360) - Stats doubled
-        self.splitter.setSizes([280, 500, 360])
+        # Splitter sizes: Options + Graph(stretch) + Stats
+        self.splitter.setSizes([360, 600, 320])
         self.splitter.setStretchFactor(0, 0)  # Options: fixed
         self.splitter.setStretchFactor(1, 1)  # Graph: stretch
         self.splitter.setStretchFactor(2, 0)  # Stats: fixed (2x width)

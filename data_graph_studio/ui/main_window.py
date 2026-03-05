@@ -319,8 +319,9 @@ class MainWindow(QMainWindow):
 
         # 좌측 사이드바 - 탭 구조 (Projects + Datasets)
         self._sidebar_tabs = QTabWidget()
-        self._sidebar_tabs.setMinimumWidth(100)
-        self._sidebar_tabs.setMaximumWidth(350)
+        # Prevent Project/Filters UI clipping on narrow sidebars.
+        self._sidebar_tabs.setMinimumWidth(180)
+        self._sidebar_tabs.setMaximumWidth(420)
         # Style handled by global theme stylesheet
         
         # Project Explorer (새로운 트리 뷰) + 검색바
@@ -402,8 +403,8 @@ class MainWindow(QMainWindow):
         # 메인 스플리터를 root_splitter에 추가
         self.root_splitter.addWidget(self.main_splitter)
 
-        # root_splitter 비율 설정 (사이드바: 메인 = 150 : 나머지)
-        self.root_splitter.setSizes([200, 1000])
+        # root_splitter 비율 설정 (sidebar a bit wider to avoid clipping)
+        self.root_splitter.setSizes([260, 1040])
 
         # 초기 비율 설정
         self._reset_layout()

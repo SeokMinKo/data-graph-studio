@@ -84,7 +84,7 @@ class GraphOptionsPanel(QFrame):
         self.tabs.setUsesScrollButtons(True)
         # Keep tab titles readable: no forced ellipsis; scroll when needed.
         tab_bar = self.tabs.tabBar()
-        tab_bar.setExpanding(False)
+        tab_bar.setExpanding(True)
         tab_bar.setUsesScrollButtons(True)
         tab_bar.setElideMode(Qt.ElideNone)
         self.tabs.setElideMode(Qt.ElideNone)

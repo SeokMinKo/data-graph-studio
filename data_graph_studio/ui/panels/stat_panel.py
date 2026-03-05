@@ -83,7 +83,7 @@ class StatPanel(QFrame):
 
         # P1-5: Column selector for multi-Y stats
         self._stats_col_combo = QComboBox()
-        self._stats_col_combo.setMaximumWidth(120)
+        self._stats_col_combo.setMaximumWidth(180)
         self._stats_col_combo.setToolTip("Select Y column for statistics")
         self._stats_col_combo.currentTextChanged.connect(self._on_stats_col_changed)
         self._stats_col_combo.hide()  # Hidden until multiple Y columns
