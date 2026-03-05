@@ -2197,6 +2197,12 @@ class GraphPanel(QWidget):
         grouped = indexed.group_by(group_cols).agg(
             pl.col("__row_idx__").alias("__indices__")
         )
+        # Keep group iteration deterministic so color assignment stays stable
+        # across repeated refreshes (fixes perceived real-time color flicker).
+        try:
+            grouped = grouped.sort(group_cols)
+        except Exception as e:
+            logger.debug("group sort skipped: %s", e)
 
         for row in grouped.iter_rows():
             vals = row[:-1]
@@ -2602,6 +2608,10 @@ class GraphPanel(QWidget):
                 facet_grouped = facet_indexed.group_by(group_col_names).agg(
                     pl.col("__row_idx__").alias("__indices__")
                 )
+                try:
+                    facet_grouped = facet_grouped.sort(group_col_names)
+                except Exception as e:
+                    logger.debug("grid group sort skipped: %s", e)
                 for g_idx, row in enumerate(facet_grouped.iter_rows()):
                     vals = row[:-1]
                     indices = row[-1]
