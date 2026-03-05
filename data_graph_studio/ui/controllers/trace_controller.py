@@ -68,6 +68,21 @@ class TraceController:
         return result
 
     @classmethod
+    def _coerce_perfetto_task_for_blocklayer(
+        cls, event_name: str, task: Any, details: Any
+    ) -> str:
+        """Prefer `comm=` from Perfetto detail for block events task name."""
+        event = cls._normalize_event_name(event_name)
+        if event not in {"block_rq_insert", "block_rq_issue", "block_rq_complete"}:
+            return str(task or "")
+
+        kv = cls._parse_perfetto_kv_details(details)
+        comm = kv.get("comm")
+        if isinstance(comm, str) and comm.strip():
+            return comm.strip()
+        return str(task or "")
+
+    @classmethod
     def _coerce_perfetto_details_for_blocklayer(
         cls, event_name: str, details: Any
     ) -> str:
@@ -163,6 +178,14 @@ class TraceController:
             pl.col("__event_raw")
             .map_elements(cls._normalize_event_name, return_dtype=pl.Utf8)
             .alias("event"),
+            pl.struct(["__event_raw", "task", "details"])
+            .map_elements(
+                lambda row: cls._coerce_perfetto_task_for_blocklayer(
+                    row["__event_raw"], row["task"], row["details"]
+                ),
+                return_dtype=pl.Utf8,
+            )
+            .alias("task_norm"),
             pl.struct(["__event_raw", "details"])
             .map_elements(
                 lambda row: cls._coerce_perfetto_details_for_blocklayer(
@@ -176,7 +199,7 @@ class TraceController:
         return work.select([
             pl.col("timestamp").cast(pl.Float64).fill_null(0.0).alias("timestamp"),
             pl.col("cpu").cast(pl.Int32, strict=False).fill_null(0).alias("cpu"),
-            pl.col("task").cast(pl.Utf8).fill_null("").alias("task"),
+            pl.col("task_norm").cast(pl.Utf8).fill_null("").alias("task"),
             pl.col("pid").cast(pl.Int32, strict=False).fill_null(-1).alias("pid"),
             pl.lit("....").alias("flags"),
             pl.col("event").cast(pl.Utf8).fill_null("").alias("event"),

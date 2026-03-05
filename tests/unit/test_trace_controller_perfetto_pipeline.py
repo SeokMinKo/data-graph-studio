@@ -77,3 +77,24 @@ class TestPerfettoToBlocklayerPipeline:
         preset = select_preset(converted_df, converter="blocklayer")
         assert preset is not None
         assert preset.name == "LBA Map"
+
+
+class TestPerfettoTaskNormalization:
+    def test_block_event_prefers_comm_as_task(self) -> None:
+        perfetto_df = pl.DataFrame(
+            {
+                "ts": [3_000_000_000],
+                "cpu": [2],
+                "name": ["block/block_rq_issue"],
+                "task": ["perfetto-track-name"],
+                "pid": [333],
+                "details": [
+                    "dev=2048 sector=49005344 nr_sector=8 bytes=4096 rwbs=WS comm=binder:5582_5 cmd="
+                ],
+            }
+        )
+
+        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+
+        assert raw_df["task"][0] == "binder:5582_5"
+        assert raw_df["details"][0] == "2048 WS 4096 () 49005344 + 8"
