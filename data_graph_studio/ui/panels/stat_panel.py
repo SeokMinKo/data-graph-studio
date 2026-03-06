@@ -265,7 +265,7 @@ class StatPanel(QFrame):
                         fillLevel=0,
                         brush=(100, 100, 200, 100),
                     )
-            except:
+            except Exception:
                 pass
 
     def _update_y_histogram(self):
@@ -288,7 +288,7 @@ class StatPanel(QFrame):
                         pen=pg.mkPen((100, 200, 100, 255), width=1),
                     )
                     self.y_hist_widget.addItem(bar_item)
-            except:
+            except Exception:
                 pass
 
     def _render_pie(self, labels: list, values: list, colors: list):
@@ -368,7 +368,7 @@ class StatPanel(QFrame):
                         self.pie_widget.set_pie_data(
                             labels, values, "Y Value Distribution by Quartile", colors
                         )
-                except:
+                except Exception:
                     pass
             return
 
@@ -398,7 +398,7 @@ class StatPanel(QFrame):
             self.pie_widget.set_pie_data(
                 labels, values, "Y Groupby Aggregation", colors
             )
-        except:
+        except Exception:
             pass
 
     def _update_percentile_chart(self):
@@ -453,7 +453,7 @@ class StatPanel(QFrame):
             self.percentile_widget.set_percentile_data(
                 clean_y, "Y Values Percentile Distribution", (148, 103, 189)
             )
-        except:
+        except Exception:
             pass
 
     def update_histograms(

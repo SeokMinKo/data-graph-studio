@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
-from PySide6.QtCore import Qt
 
 from data_graph_studio.core.data_engine import DataEngine
 from data_graph_studio.core.graph_setting_mapper import GraphSettingMapper
@@ -11,7 +10,6 @@ from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.core.state import AppState, AggregationType, ChartType
 from data_graph_studio.ui.panels.graph_options_panel import GraphOptionsPanel
 from data_graph_studio.ui.panels.graph_panel import GraphPanel
-from data_graph_studio.ui.panels.main_graph import MainGraph
 
 
 class _DummyWheelEvent:
@@ -169,7 +167,9 @@ def test_set_columns_initializes_legend_series(qtbot) -> None:
     """set_columns should initialize legend series with first numeric column."""
     state = AppState()
     engine = DataEngine()
-    engine.update_dataframe(pl.DataFrame({"x": [1, 2], "y": [3.0, 4.0], "kind": ["A", "B"]}))
+    engine.update_dataframe(
+        pl.DataFrame({"x": [1, 2], "y": [3.0, 4.0], "kind": ["A", "B"]})
+    )
 
     panel = GraphPanel(state, engine)
     qtbot.addWidget(panel)

@@ -55,7 +55,7 @@ def graph(state, qtbot):
 
 
 class TestMainGraphMouseEventSequence:
-    @pytest.mark.skip(reason="rect selection coordinate mapping changed in release branch UI refactor")
+    @pytest.mark.skip(reason="rect selection changed in release")
     def test_rect_select_press_move_release_selects_expected_points(self, graph, state):
         state.set_tool_mode(ToolMode.RECT_SELECT)
         graph._data_x = np.array([0.0, 5.0, 10.0])

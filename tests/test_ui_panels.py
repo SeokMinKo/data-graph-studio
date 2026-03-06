@@ -13,32 +13,32 @@ app = QApplication.instance()
 if not app:
     app = QApplication([])
 
-from data_graph_studio.ui.panels.filter_panel import (
+from data_graph_studio.ui.panels.filter_panel import (  # noqa: E402
     FilterPanelModel,
     RangeSliderWidget,
     CheckboxListWidget,
 )
 
-from data_graph_studio.ui.panels.property_panel import (
+from data_graph_studio.ui.panels.property_panel import (  # noqa: E402
     PropertyPanel,
     PropertyItem,
     PropertyGroup,
     PropertyType,
 )
 
-from data_graph_studio.ui.panels.tooltip_config import (
+from data_graph_studio.ui.panels.tooltip_config import (  # noqa: E402
     TooltipConfig,
     TooltipItem,
     TooltipFormatter,
 )
 
-from data_graph_studio.ui.panels.legend_panel import (
+from data_graph_studio.ui.panels.legend_panel import (  # noqa: E402
     LegendConfig,
     LegendPosition,
     LegendStyle,
 )
 
-from data_graph_studio.ui.panels.color_scheme import (
+from data_graph_studio.ui.panels.color_scheme import (  # noqa: E402
     ColorScheme,
     ColorScale,
     ColorSchemeManager,

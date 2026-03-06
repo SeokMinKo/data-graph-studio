@@ -9,8 +9,6 @@ import json
 import re
 import polars as pl
 
-logger = logging.getLogger(__name__)
-
 from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
@@ -60,6 +58,8 @@ from ...core.data_engine import DataEngine
 from ...core.filter_ast import apply_filter_ast
 from .grouped_table_model import GroupedTableModel
 from ..dialogs.split_column_dialog import SplitColumnDialog
+
+logger = logging.getLogger(__name__)
 
 
 class ConditionalFormat:
@@ -517,13 +517,24 @@ class PolarsTableModel(QAbstractTableModel):
                 dtype = str(series.dtype)
                 null_count = series.null_count()
                 pct = (null_count / total * 100) if total > 0 else 0
-                tooltip = f"<b>{col_name}</b><br>Type: {dtype}<br>Nulls: {null_count} ({pct:.1f}%)"
+                tooltip = (
+                    f"<b>{col_name}</b><br>Type: {dtype}"
+                    f"<br>Nulls: {null_count} ({pct:.1f}%)"
+                )
                 if series.dtype.is_numeric():
                     min_val = series.min()
                     max_val = series.max()
                     mean_val = series.mean()
-                    mean_text = f"{float(mean_val):.2f}" if mean_val is not None else "-"
-                    tooltip += f"<br>Min: {min_val}<br>Max: {max_val}<br>Mean: {mean_text}"
+                    mean_text = (
+                        f"{float(mean_val):.2f}"
+                        if mean_val is not None
+                        else "-"
+                    )
+                    tooltip += (
+                        f"<br>Min: {min_val}"
+                        f"<br>Max: {max_val}"
+                        f"<br>Mean: {mean_text}"
+                    )
                 self._column_stats[col_name] = tooltip
             except Exception as e:
                 logger.debug("Column stats failed for %s: %s", col_name, e)
@@ -2071,7 +2082,7 @@ class HiddenColumnsBar(QFrame):
 
 class TablePanel(QWidget):
     """
-    Table Panel - Data table with full width (zones removed to Data tab in Chart Options).
+    Table Panel - Data table with full width.
 
     구조:
     ┌─────────────────────────────────────────────────────────┐
@@ -2441,7 +2452,8 @@ class TablePanel(QWidget):
             logger.debug("Failed to get table view mode: %s", e)
             view_mode = None
 
-        # "Source Raw" means: ignore table-level filters/marking/search and show engine.df as-is.
+        # "Source Raw" means: ignore table-level
+        # filters/marking/search and show engine.df as-is.
         if view_mode == "source_raw":
             df = self.engine.df if self.engine.is_loaded else df
 
@@ -2761,7 +2773,8 @@ class TablePanel(QWidget):
         reply = QMessageBox.question(
             self,
             "Exclude Column",
-            f"Remove column '{column}' from the active dataset?\n\nThis cannot be undone (reload to restore).",
+            f"Remove column '{column}' from the active dataset?\n\n"
+            f"This cannot be undone (reload to restore).",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )

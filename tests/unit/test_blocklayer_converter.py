@@ -12,36 +12,36 @@ from data_graph_studio.parsers.ftrace_parser import FtraceParser
 
 # ── Test data ─────────────────────────────────────────────────
 
-# block_rq_issue details: <major>,<minor> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
+# block_rq_issue details: <major>,<minor> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]  # noqa: E501
 # block_rq_complete details: <major>,<minor> <rwbs> () <sector> + <nr_sectors> [<errno>]
 
 BLOCK_TRACE_SIMPLE = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
 """
 
 BLOCK_TRACE_MULTI = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
-     kworker/0:1-100 [001] .... 1000.000500: block_rq_issue: 8,0 W 8192 () 2000 + 16 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [001] .... 1000.000500: block_rq_issue: 8,0 W 8192 () 2000 + 16 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
      kworker/0:1-100 [001] .... 1000.003000: block_rq_complete: 8,0 W () 2000 + 16 [0]
 """
 
 BLOCK_TRACE_UNMATCHED = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
-     kworker/0:1-100 [001] .... 1000.000500: block_rq_issue: 8,0 W 8192 () 2000 + 16 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [001] .... 1000.000500: block_rq_issue: 8,0 W 8192 () 2000 + 16 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
 """
 # 2000+16 W has no matching complete → should be dropped
 
 BLOCK_TRACE_QUEUE_DEPTH = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 200 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000200: block_rq_issue: 8,0 R 4096 () 300 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 200 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000200: block_rq_issue: 8,0 R 4096 () 300 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 100 + 8 [0]
      kworker/0:1-100 [000] .... 1000.001100: block_rq_complete: 8,0 R () 200 + 8 [0]
      kworker/0:1-100 [000] .... 1000.001200: block_rq_complete: 8,0 R () 300 + 8 [0]
@@ -49,29 +49,29 @@ BLOCK_TRACE_QUEUE_DEPTH = """\
 
 BLOCK_TRACE_MIXED_EVENTS = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000500: sched_switch: prev_comm=kworker prev_pid=100
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000500: sched_switch: prev_comm=kworker prev_pid=100  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
 """
 
 # Full lifecycle: insert → issue → complete
-# block_rq_insert details format same as issue: <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]
+# block_rq_insert details format same as issue: <dev> <rwbs> <bytes> () <sector> + <nr_sectors> [<comm>]  # noqa: E501
 BLOCK_TRACE_WITH_INSERT = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_insert: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000300: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_insert: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000300: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
-     kworker/0:1-100 [000] .... 1000.002000: block_rq_insert: 8,0 W 8192 () 2000 + 16 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.002500: block_rq_issue: 8,0 W 8192 () 2000 + 16 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.002000: block_rq_insert: 8,0 W 8192 () 2000 + 16 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.002500: block_rq_issue: 8,0 W 8192 () 2000 + 16 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.004000: block_rq_complete: 8,0 W () 2000 + 16 [0]
 """
 
 # C2C: multiple completes in sequence
 BLOCK_TRACE_C2C = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 200 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000200: block_rq_issue: 8,0 R 4096 () 300 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 200 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000200: block_rq_issue: 8,0 R 4096 () 300 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 100 + 8 [0]
      kworker/0:1-100 [000] .... 1000.001500: block_rq_complete: 8,0 R () 200 + 8 [0]
      kworker/0:1-100 [000] .... 1000.003000: block_rq_complete: 8,0 R () 300 + 8 [0]
@@ -79,9 +79,9 @@ BLOCK_TRACE_C2C = """\
 
 BLOCK_TRACE_CMD_CLASS = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000500: block_rq_issue: 8,0 W 65536 () 200 + 128 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000900: block_rq_issue: 8,0 WF 4096 () 300 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 100 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000500: block_rq_issue: 8,0 W 65536 () 200 + 128 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000900: block_rq_issue: 8,0 WF 4096 () 300 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 100 + 8 [0]
      kworker/0:1-100 [000] .... 1000.002000: block_rq_complete: 8,0 W () 200 + 128 [0]
      kworker/0:1-100 [000] .... 1000.002500: block_rq_complete: 8,0 WF () 300 + 8 [0]
@@ -90,7 +90,7 @@ BLOCK_TRACE_CMD_CLASS = """\
 BLOCK_TRACE_MALFORMED = """\
 # tracer: nop
      kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 ??? malformed-payload
-     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 ??? malformed-payload
+     kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 ??? malformed-payload  # noqa: E501
 """
 
 
@@ -388,7 +388,7 @@ class TestBlocklayerQ2D:
 
 
 class TestBlocklayerSequentiality:
-    """LBA sequentiality: sequential if current_sector == prev_sector + prev_nr_sectors."""
+    """LBA sequentiality: sequential if current_sector == prev_sector + prev_nr_sectors."""  # noqa: E501
 
     def test_has_is_sequential_column(self, parser: FtraceParser):
         path = _write_trace(BLOCK_TRACE_SIMPLE)
@@ -410,8 +410,8 @@ class TestBlocklayerSequentiality:
         # sector=1000 nr_sectors=8, then sector=1008 nr_sectors=8
         trace = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 1008 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 1008 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
      kworker/0:1-100 [000] .... 1000.001100: block_rq_complete: 8,0 R () 1008 + 8 [0]
 """
@@ -427,8 +427,8 @@ class TestBlocklayerSequentiality:
         # sector=1000 nr_sectors=8 (ends at 1008), then sector=5000
         trace = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 5000 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,0 R 4096 () 5000 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
      kworker/0:1-100 [000] .... 1000.001100: block_rq_complete: 8,0 R () 5000 + 8 [0]
 """
@@ -443,8 +443,8 @@ class TestBlocklayerSequentiality:
         """Sequentiality tracked per device — different devices don't chain."""
         trace = """\
 # tracer: nop
-     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]
-     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,16 R 4096 () 1008 + 8 [kworker/0:1]
+     kworker/0:1-100 [000] .... 1000.000000: block_rq_issue: 8,0 R 4096 () 1000 + 8 [kworker/0:1]  # noqa: E501
+     kworker/0:1-100 [000] .... 1000.000100: block_rq_issue: 8,16 R 4096 () 1008 + 8 [kworker/0:1]  # noqa: E501
      kworker/0:1-100 [000] .... 1000.001000: block_rq_complete: 8,0 R () 1000 + 8 [0]
      kworker/0:1-100 [000] .... 1000.001100: block_rq_complete: 8,16 R () 1008 + 8 [0]
 """
@@ -483,7 +483,7 @@ class TestBlocklayerEmpty:
 # Graph Preset system
 # ══════════════════════════════════════════════════════════════
 
-from data_graph_studio.parsers.graph_preset import GraphPreset, BUILTIN_PRESETS
+from data_graph_studio.parsers.graph_preset import GraphPreset, BUILTIN_PRESETS  # noqa: E402
 
 
 class TestGraphPreset:
@@ -580,7 +580,7 @@ class TestBuiltinPresets:
 # Auto-apply preset (integration-level unit test)
 # ══════════════════════════════════════════════════════════════
 
-from data_graph_studio.parsers.graph_preset import select_preset
+from data_graph_studio.parsers.graph_preset import select_preset  # noqa: E402
 
 
 class TestSelectPreset:

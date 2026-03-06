@@ -93,12 +93,15 @@ class TestPerfettoTaskNormalization:
                 "task": ["perfetto-track-name"],
                 "pid": [333],
                 "details": [
-                    "dev=2048 sector=49005344 nr_sector=8 bytes=4096 rwbs=WS comm=binder:5582_5 cmd="
+                    "dev=2048 sector=49005344 nr_sector=8"
+                    " bytes=4096 rwbs=WS comm=binder:5582_5 cmd="
                 ],
             }
         )
 
-        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(
+            perfetto_df
+        )
 
         # task column keeps original perfetto track name (comm extraction removed)
         assert raw_df["task"][0] == "perfetto-track-name"

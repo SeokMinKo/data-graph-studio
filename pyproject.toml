@@ -18,3 +18,8 @@ exclude = [".worktrees", "build", "dist"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
+ignore = ["E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/unit/test_blocklayer_converter.py" = ["E501"]
+"tests/test_ui_panels.py" = ["E402"]
