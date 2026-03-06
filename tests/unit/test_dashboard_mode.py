@@ -15,17 +15,14 @@ UT-1.8: 빈 데이터셋에서 대시보드 활성화 차단
 
 from __future__ import annotations
 
-import copy
 import json
 import sys
 import os
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 # Ensure project root is on sys.path
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..")
-)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
@@ -39,7 +36,7 @@ from data_graph_studio.core.dashboard_layout import (
     MIN_CELL_HEIGHT,
 )
 from data_graph_studio.core.dashboard_controller import DashboardController
-from data_graph_studio.core.undo_manager import UndoStack, UndoActionType
+from data_graph_studio.core.undo_manager import UndoStack
 from data_graph_studio.graph.sampling import DataSampler
 
 import numpy as np
@@ -105,7 +102,12 @@ class TestDashboardLayoutSerialization:
             DashboardCell(row=0, col=1, row_span=2, col_span=1, profile_id="b"),
         ]
         layout = DashboardLayout(
-            name="My Dashboard", rows=3, cols=3, cells=cells, sync_x=True, sync_y=False,
+            name="My Dashboard",
+            rows=3,
+            cols=3,
+            cells=cells,
+            sync_x=True,
+            sync_y=False,
         )
         d = layout.to_dict()
         restored = DashboardLayout.from_dict(d)
@@ -120,9 +122,14 @@ class TestDashboardLayoutSerialization:
         assert restored.cells[1].row_span == 2
 
     def test_json_serialization(self):
-        layout = DashboardLayout(name="J", rows=2, cols=2, cells=[
-            DashboardCell(row=0, col=0, profile_id="x"),
-        ])
+        layout = DashboardLayout(
+            name="J",
+            rows=2,
+            cols=2,
+            cells=[
+                DashboardCell(row=0, col=0, profile_id="x"),
+            ],
+        )
         json_str = json.dumps(layout.to_dict())
         data = json.loads(json_str)
         restored = DashboardLayout.from_dict(data)
@@ -136,7 +143,9 @@ class TestDashboardLayoutSerialization:
             for r in range(3)
             for c in range(3)
         ]
-        layout = DashboardLayout(name="Full 3×3", rows=3, cols=3, cells=cells, sync_x=True)
+        layout = DashboardLayout(
+            name="Full 3×3", rows=3, cols=3, cells=cells, sync_x=True
+        )
         json_str = json.dumps(layout.to_dict())
         assert len(json_str.encode("utf-8")) < 10240
 
@@ -162,7 +171,7 @@ class TestCellSpanValidation:
     def test_overlap_detected(self):
         cells = [
             DashboardCell(row=0, col=0, col_span=2),  # occupies (0,0) and (0,1)
-            DashboardCell(row=0, col=1),               # overlaps with first cell at (0,1)
+            DashboardCell(row=0, col=1),  # overlaps with first cell at (0,1)
         ]
         layout = DashboardLayout(name="t", rows=2, cols=2, cells=cells)
         assert layout.validate() is False
@@ -177,7 +186,7 @@ class TestCellSpanValidation:
     def test_row_span_overlap(self):
         cells = [
             DashboardCell(row=0, col=0, row_span=2),  # occupies (0,0) and (1,0)
-            DashboardCell(row=1, col=0),               # overlaps at (1,0)
+            DashboardCell(row=1, col=0),  # overlaps at (1,0)
         ]
         layout = DashboardLayout(name="t", rows=2, cols=2, cells=cells)
         assert layout.validate() is False
@@ -353,7 +362,12 @@ class TestAxisSync:
 
     def test_sync_flags_serialized(self):
         layout = DashboardLayout(
-            name="s", rows=2, cols=2, cells=[], sync_x=True, sync_y=True,
+            name="s",
+            rows=2,
+            cols=2,
+            cells=[],
+            sync_x=True,
+            sync_y=True,
         )
         d = layout.to_dict()
         restored = DashboardLayout.from_dict(d)

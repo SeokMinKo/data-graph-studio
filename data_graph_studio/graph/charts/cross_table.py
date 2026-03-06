@@ -3,13 +3,14 @@ Cross Table (Pivot Table) - 크로스 테이블/피벗 테이블
 """
 
 from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import polars as pl
 
 
 @dataclass
 class CrossTableData:
     """크로스 테이블 데이터"""
+
     row_headers: List[Any]
     col_headers: List[Any]
     values: Dict[Tuple, Any]
@@ -49,7 +50,7 @@ class CrossTableCalculator:
         show_row_totals: bool = False,
         show_col_totals: bool = False,
         sort_rows: bool = True,
-        sort_cols: bool = True
+        sort_cols: bool = True,
     ) -> Dict[str, Any]:
         """
         크로스 테이블 계산
@@ -69,17 +70,15 @@ class CrossTableCalculator:
             크로스 테이블 데이터
         """
         # 집계 함수 가져오기
-        agg_expr = self.AGG_FUNCTIONS.get(agg_func, self.AGG_FUNCTIONS["sum"])(value_column)
+        agg_expr = self.AGG_FUNCTIONS.get(agg_func, self.AGG_FUNCTIONS["sum"])(
+            value_column
+        )
 
         # 그룹화 컬럼
         group_cols = row_columns + col_columns
 
         # 피벗 실행
-        pivoted = (
-            data
-            .group_by(group_cols)
-            .agg(agg_expr.alias("_value_"))
-        )
+        pivoted = data.group_by(group_cols).agg(agg_expr.alias("_value_"))
 
         # 행/열 헤더 추출
         if row_columns:
@@ -107,8 +106,16 @@ class CrossTableCalculator:
         # 값 매트릭스 구성
         values = {}
         for row in pivoted.iter_rows(named=True):
-            row_key = tuple(row[c] for c in row_columns) if len(row_columns) > 1 else (row[row_columns[0]] if row_columns else None)
-            col_key = tuple(row[c] for c in col_columns) if len(col_columns) > 1 else (row[col_columns[0]] if col_columns else None)
+            row_key = (
+                tuple(row[c] for c in row_columns)
+                if len(row_columns) > 1
+                else (row[row_columns[0]] if row_columns else None)
+            )
+            col_key = (
+                tuple(row[c] for c in col_columns)
+                if len(col_columns) > 1
+                else (row[col_columns[0]] if col_columns else None)
+            )
 
             # 단일 값인 경우 튜플에서 추출
             if len(row_columns) == 1:
@@ -131,19 +138,13 @@ class CrossTableCalculator:
         if show_row_totals and row_columns:
             row_totals = {}
             for rh in row_headers:
-                total = sum(
-                    values.get((rh, ch), 0) or 0
-                    for ch in col_headers
-                )
+                total = sum(values.get((rh, ch), 0) or 0 for ch in col_headers)
                 row_totals[rh] = total
 
         if show_col_totals and col_columns:
             col_totals = {}
             for ch in col_headers:
-                total = sum(
-                    values.get((rh, ch), 0) or 0
-                    for rh in row_headers
-                )
+                total = sum(values.get((rh, ch), 0) or 0 for rh in row_headers)
                 col_totals[ch] = total
 
         if show_row_totals and show_col_totals:
@@ -159,15 +160,10 @@ class CrossTableCalculator:
             "row_columns": row_columns,
             "col_columns": col_columns,
             "value_column": value_column,
-            "agg_func": agg_func
+            "agg_func": agg_func,
         }
 
-    def get_cell_value(
-        self,
-        result: Dict[str, Any],
-        row_key: Any,
-        col_key: Any
-    ) -> Any:
+    def get_cell_value(self, result: Dict[str, Any], row_key: Any, col_key: Any) -> Any:
         """특정 셀의 값 반환"""
         return result["values"].get((row_key, col_key))
 
@@ -191,7 +187,9 @@ class CrossTableCalculator:
                 data_dict[result["row_columns"][0]] = row_headers
             else:
                 for i, col in enumerate(result["row_columns"]):
-                    data_dict[col] = [rh[i] if isinstance(rh, tuple) else rh for rh in row_headers]
+                    data_dict[col] = [
+                        rh[i] if isinstance(rh, tuple) else rh for rh in row_headers
+                    ]
 
         # 값 컬럼
         for ch in col_headers:
@@ -207,11 +205,7 @@ class CrossTableCalculator:
 
         return pl.DataFrame(data_dict)
 
-    def format_value(
-        self,
-        value: Any,
-        format_string: Optional[str] = None
-    ) -> str:
+    def format_value(self, value: Any, format_string: Optional[str] = None) -> str:
         """값 포맷팅"""
         if value is None:
             return ""
@@ -244,7 +238,7 @@ class CrossTableWidget:
         row_columns: List[str],
         col_columns: List[str],
         value_column: str,
-        **kwargs
+        **kwargs,
     ) -> None:
         """데이터 설정"""
         self._result = self.calculator.calculate(

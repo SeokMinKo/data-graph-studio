@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
-from types import MappingProxyType
+from unittest.mock import MagicMock
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt
 
 # Ensure QApplication exists
 _app = QApplication.instance()
@@ -110,6 +107,7 @@ class TestPlotDataRendering:
     def test_render_series_scatter(self, qtbot):
         """_render_series with scatter uses ScatterPlotItem."""
         import numpy as np
+
         widget = _make_widget(qtbot=qtbot)
         widget.plot_widget = MagicMock()
 
@@ -117,7 +115,11 @@ class TestPlotDataRendering:
         widget._render_series(
             np.array([1.0, 2.0, 3.0]),
             np.array([10.0, 20.0, 30.0]),
-            "#ff0000", "scatter", pg, np, name="test",
+            "#ff0000",
+            "scatter",
+            pg,
+            np,
+            name="test",
         )
         pg.ScatterPlotItem.assert_called_once()
         widget.plot_widget.addItem.assert_called_once()
@@ -125,6 +127,7 @@ class TestPlotDataRendering:
     def test_render_series_bar(self, qtbot):
         """_render_series with bar uses BarGraphItem."""
         import numpy as np
+
         widget = _make_widget(qtbot=qtbot)
         widget.plot_widget = MagicMock()
 
@@ -132,7 +135,11 @@ class TestPlotDataRendering:
         widget._render_series(
             np.array([1.0, 2.0, 3.0]),
             np.array([10.0, 20.0, 30.0]),
-            "#00ff00", "bar", pg, np, name="test",
+            "#00ff00",
+            "bar",
+            pg,
+            np,
+            name="test",
         )
         pg.BarGraphItem.assert_called_once()
         widget.plot_widget.addItem.assert_called_once()
@@ -140,6 +147,7 @@ class TestPlotDataRendering:
     def test_render_series_line(self, qtbot):
         """_render_series with line uses plot()."""
         import numpy as np
+
         widget = _make_widget(qtbot=qtbot)
         widget.plot_widget = MagicMock()
 
@@ -147,7 +155,10 @@ class TestPlotDataRendering:
         widget._render_series(
             np.array([1.0, 2.0]),
             np.array([10.0, 20.0]),
-            "#0000ff", "line", pg, np,
+            "#0000ff",
+            "line",
+            pg,
+            np,
         )
         widget.plot_widget.plot.assert_called_once()
 

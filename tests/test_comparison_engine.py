@@ -1,7 +1,6 @@
 """Tests for ComparisonEngine module."""
 
 import pytest
-import polars as pl
 
 from data_graph_studio.core.file_loader import FileLoader
 from data_graph_studio.core.dataset_manager import DatasetManager

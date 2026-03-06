@@ -25,7 +25,9 @@ class ParsingSettings:
     excluded_columns: List[str] = None  # 제외할 컬럼 목록
     # ETL specific settings
     etl_converted_path: Optional[str] = None  # Path to converted CSV from ETL
-    etl_selected_processes: List[str] = field(default_factory=list)  # Selected processes
+    etl_selected_processes: List[str] = field(
+        default_factory=list
+    )  # Selected processes
 
     def __post_init__(self):
         if self.excluded_columns is None:

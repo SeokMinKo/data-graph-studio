@@ -1,7 +1,7 @@
 """AutorecoveryController - extracted from MainWindow."""
+
 from __future__ import annotations
 
-import gc
 import json
 import logging
 import os
@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
+
 class AutorecoveryController:
     """Controller extracted from MainWindow."""
 
-    def __init__(self, main_window: 'MainWindow'):
+    def __init__(self, main_window: "MainWindow"):
         self.w = main_window
 
     def _setup_autorecovery(self):
@@ -37,6 +38,7 @@ class AutorecoveryController:
         if os.path.exists(self.w._autosave_path):
             try:
                 import time as _time
+
                 age = _time.time() - os.path.getmtime(self.w._autosave_path)
                 if age > 86400:  # >24h → discard silently
                     os.remove(self.w._autosave_path)
@@ -44,6 +46,7 @@ class AutorecoveryController:
                     # Use QTimer.singleShot to show dialog AFTER event loop starts
                     # so IPC server is already running and accessible
                     from PySide6.QtCore import QTimer as _QTimer
+
                     _QTimer.singleShot(500, self.w._prompt_recovery)
             except Exception as e:
                 logger.debug("Autorecovery setup check failed: %s", e)
@@ -53,7 +56,6 @@ class AutorecoveryController:
         self.w._autosave_timer.setInterval(60 * 1000)  # 1 minute
         self.w._autosave_timer.timeout.connect(self.w._autosave_session)
         self.w._autosave_timer.start()
-
 
     def _prompt_recovery(self):
         """Show recovery dialog (deferred via QTimer so IPC is already up).
@@ -66,6 +68,7 @@ class AutorecoveryController:
             return
 
         from PySide6.QtCore import QSettings
+
         settings = QSettings("Godol", "DataGraphStudio")
         if settings.value("recovery/skip_prompt", False, type=bool):
             # User opted out — silently discard
@@ -77,10 +80,13 @@ class AutorecoveryController:
 
         try:
             from PySide6.QtWidgets import QCheckBox
+
             msg = QMessageBox(self.w)
             msg.setIcon(QMessageBox.Question)
             msg.setWindowTitle("Recovery")
-            msg.setText("A previous session was not closed properly.\nRecover the last autosave?")
+            msg.setText(
+                "A previous session was not closed properly.\nRecover the last autosave?"
+            )
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
 
             cb = QCheckBox("Don't show again")
@@ -99,6 +105,7 @@ class AutorecoveryController:
                     bak_path = self.w._autosave_path + ".bak"
                     try:
                         import shutil
+
                         shutil.copy2(self.w._autosave_path, bak_path)
                     except OSError:
                         pass
@@ -106,7 +113,7 @@ class AutorecoveryController:
                         os.remove(self.w._autosave_path)
                     except OSError:
                         pass
-                    if hasattr(self.w, 'statusBar'):
+                    if hasattr(self.w, "statusBar"):
                         self.w.statusBar().showMessage(
                             f"Recovery failed: {exc}. Backup saved to autosave.json.bak",
                             8000,
@@ -119,7 +126,6 @@ class AutorecoveryController:
         except Exception as e:
             logger.warning("Recovery prompt failed: %s", e)
 
-
     def _autosave_session(self):
         """Autosave datasets + graph settings + drawings"""
         try:
@@ -128,11 +134,9 @@ class AutorecoveryController:
 
             datasets = []
             for did, meta in self.w.state._dataset_metadata.items():
-                datasets.append({
-                    "id": did,
-                    "name": meta.name,
-                    "file_path": meta.file_path
-                })
+                datasets.append(
+                    {"id": did, "name": meta.name, "file_path": meta.file_path}
+                )
 
             # Serialize all profiles from ProfileStore
             profiles = []
@@ -149,15 +153,16 @@ class AutorecoveryController:
                 "active_dataset_id": self.w.state.active_dataset_id,
                 "graph_state": self.w.state.get_current_graph_state(),
                 "profiles": profiles,
-                "drawings": self.w.graph_panel.get_drawings_data() if hasattr(self.w, 'graph_panel') else {},
-                "ts": time.time()
+                "drawings": self.w.graph_panel.get_drawings_data()
+                if hasattr(self.w, "graph_panel")
+                else {},
+                "ts": time.time(),
             }
 
             with open(self.w._autosave_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.warning("Autosave failed: %s", e)
-
 
     def _restore_autosave(self):
         """Restore from autosave file"""
@@ -177,13 +182,14 @@ class AutorecoveryController:
         self.w._restore_queue = list(enumerate(datasets))
         self.w._restore_loaded_dataset_ids = set()
 
-        self.w._restore_progress = QProgressDialog("Restoring session...", "Cancel", 0, len(datasets), self.w)
+        self.w._restore_progress = QProgressDialog(
+            "Restoring session...", "Cancel", 0, len(datasets), self.w
+        )
         self.w._restore_progress.setWindowModality(Qt.WindowModal)
         self.w._restore_progress.setMinimumDuration(0)
         self.w._restore_progress.show()
 
         self.w._restore_next()
-
 
     def _restore_next(self):
         """Restore one dataset per event-loop tick to keep UI responsive."""
@@ -198,7 +204,9 @@ class AutorecoveryController:
         i, ds = self.w._restore_queue.pop(0)
         if self.w._restore_progress:
             self.w._restore_progress.setValue(i)
-            self.w._restore_progress.setLabelText(f"Loading: {Path(ds.get('file_path','')).name}")
+            self.w._restore_progress.setLabelText(
+                f"Loading: {Path(ds.get('file_path', '')).name}"
+            )
 
         path = ds.get("file_path")
         if path and os.path.exists(path):
@@ -208,21 +216,27 @@ class AutorecoveryController:
             if new_id:
                 self.w._restore_loaded_dataset_ids.add(new_id)
                 dataset = self.w.engine.get_dataset(new_id)
-                memory_bytes = dataset.df.estimated_size() if dataset and dataset.df is not None else 0
+                memory_bytes = (
+                    dataset.df.estimated_size()
+                    if dataset and dataset.df is not None
+                    else 0
+                )
                 self.w.state.add_dataset(
                     dataset_id=new_id,
                     name=dataset.name if dataset else name,
                     file_path=path,
                     row_count=self.w.engine.row_count,
                     column_count=self.w.engine.column_count,
-                    memory_bytes=memory_bytes
+                    memory_bytes=memory_bytes,
                 )
         else:
-            logger.warning("Skipping dataset '%s': file not found at %s",
-                           ds.get('name', 'unknown'), path)
+            logger.warning(
+                "Skipping dataset '%s': file not found at %s",
+                ds.get("name", "unknown"),
+                path,
+            )
 
         QTimer.singleShot(0, self.w._restore_next)
-
 
     def _restore_finalize(self):
         """Finalize autosave restore after queued dataset loading."""
@@ -259,7 +273,7 @@ class AutorecoveryController:
 
         # Restore drawings
         drawings = data.get("drawings", {})
-        if drawings and hasattr(self.w, 'graph_panel'):
+        if drawings and hasattr(self.w, "graph_panel"):
             self.w.graph_panel.load_drawings_data(drawings)
 
         # Refresh profile tree + graph
@@ -272,68 +286,87 @@ class AutorecoveryController:
         self.w._restore_datasets = []
         self.w._restore_loaded_dataset_ids = set()
 
-
     def _apply_graph_state(self, gs: Dict[str, Any]):
         """Apply graph state dict to current session"""
         try:
             # Chart type
-            if gs.get('chart_type'):
-                self.w.state.set_chart_type(ChartType(gs['chart_type']))
+            if gs.get("chart_type"):
+                self.w.state.set_chart_type(ChartType(gs["chart_type"]))
 
             # X column
-            self.w.state.set_x_column(gs.get('x_column'))
+            self.w.state.set_x_column(gs.get("x_column"))
 
             # Group columns
             self.w.state.clear_group_zone()
-            for g in gs.get('group_columns', []):
-                name = g.get('name')
+            for g in gs.get("group_columns", []):
+                name = g.get("name")
                 if name:
                     self.w.state.add_group_column(name)
                     # Set selected values
                     for gc in self.w.state.group_columns:
                         if gc.name == name:
-                            gc.selected_values = set(g.get('selected_values', []))
+                            gc.selected_values = set(g.get("selected_values", []))
 
             # Value columns
             self.w.state.clear_value_zone()
-            for v in gs.get('value_columns', []):
-                name = v.get('name')
+            for v in gs.get("value_columns", []):
+                name = v.get("name")
                 if not name:
                     continue
-                agg = AggregationType(v.get('aggregation', 'sum'))
+                agg = AggregationType(v.get("aggregation", "sum"))
                 self.w.state.add_value_column(name, aggregation=agg)
                 idx = len(self.w.state.value_columns) - 1
                 self.w.state.update_value_column(
                     idx,
-                    color=v.get('color'),
-                    use_secondary_axis=v.get('use_secondary_axis'),
-                    formula=v.get('formula')
+                    color=v.get("color"),
+                    use_secondary_axis=v.get("use_secondary_axis"),
+                    formula=v.get("formula"),
                 )
 
             # Hover columns
             self.w.state.clear_hover_columns()
-            for h in gs.get('hover_columns', []):
+            for h in gs.get("hover_columns", []):
                 self.w.state.add_hover_column(h)
 
             # Chart settings
-            cs = gs.get('chart_settings', {})
+            cs = gs.get("chart_settings", {})
             if cs:
                 self.w.state.update_chart_settings(
-                    line_width=cs.get('line_width', self.w.state.chart_settings.line_width),
-                    marker_size=cs.get('marker_size', self.w.state.chart_settings.marker_size),
-                    fill_opacity=cs.get('fill_opacity', self.w.state.chart_settings.fill_opacity),
-                    show_data_labels=cs.get('show_data_labels', self.w.state.chart_settings.show_data_labels),
-                    x_log_scale=cs.get('x_log_scale', self.w.state.chart_settings.x_log_scale),
-                    y_log_scale=cs.get('y_log_scale', self.w.state.chart_settings.y_log_scale),
-                    y_min=cs.get('y_min', self.w.state.chart_settings.y_min),
-                    y_max=cs.get('y_max', self.w.state.chart_settings.y_max),
-                    y_label=cs.get('y_label', self.w.state.chart_settings.y_label),
-                    secondary_y_log_scale=cs.get('secondary_y_log_scale', self.w.state.chart_settings.secondary_y_log_scale),
-                    secondary_y_min=cs.get('secondary_y_min', self.w.state.chart_settings.secondary_y_min),
-                    secondary_y_max=cs.get('secondary_y_max', self.w.state.chart_settings.secondary_y_max),
-                    secondary_y_label=cs.get('secondary_y_label', self.w.state.chart_settings.secondary_y_label),
+                    line_width=cs.get(
+                        "line_width", self.w.state.chart_settings.line_width
+                    ),
+                    marker_size=cs.get(
+                        "marker_size", self.w.state.chart_settings.marker_size
+                    ),
+                    fill_opacity=cs.get(
+                        "fill_opacity", self.w.state.chart_settings.fill_opacity
+                    ),
+                    show_data_labels=cs.get(
+                        "show_data_labels", self.w.state.chart_settings.show_data_labels
+                    ),
+                    x_log_scale=cs.get(
+                        "x_log_scale", self.w.state.chart_settings.x_log_scale
+                    ),
+                    y_log_scale=cs.get(
+                        "y_log_scale", self.w.state.chart_settings.y_log_scale
+                    ),
+                    y_min=cs.get("y_min", self.w.state.chart_settings.y_min),
+                    y_max=cs.get("y_max", self.w.state.chart_settings.y_max),
+                    y_label=cs.get("y_label", self.w.state.chart_settings.y_label),
+                    secondary_y_log_scale=cs.get(
+                        "secondary_y_log_scale",
+                        self.w.state.chart_settings.secondary_y_log_scale,
+                    ),
+                    secondary_y_min=cs.get(
+                        "secondary_y_min", self.w.state.chart_settings.secondary_y_min
+                    ),
+                    secondary_y_max=cs.get(
+                        "secondary_y_max", self.w.state.chart_settings.secondary_y_max
+                    ),
+                    secondary_y_label=cs.get(
+                        "secondary_y_label",
+                        self.w.state.chart_settings.secondary_y_label,
+                    ),
                 )
         except Exception as e:
             logger.warning("Failed to apply graph state from autosave: %s", e)
-
-

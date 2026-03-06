@@ -106,7 +106,10 @@ class DashboardController:
             return False
         before = self._layout.deep_copy()
         cell = DashboardCell(
-            row=row, col=col, row_span=row_span, col_span=col_span,
+            row=row,
+            col=col,
+            row_span=row_span,
+            col_span=col_span,
             profile_id=profile_id,
         )
         ok = self._layout.add_cell(cell)
@@ -155,7 +158,10 @@ class DashboardController:
         _old_rs, _old_cs = cell.row_span, cell.col_span
         self._layout.cells.remove(cell)
         new_cell = DashboardCell(
-            row=row, col=col, row_span=row_span, col_span=col_span,
+            row=row,
+            col=col,
+            row_span=row_span,
+            col_span=col_span,
             profile_id=cell.profile_id,
         )
         # Bounds check
@@ -226,7 +232,8 @@ class DashboardController:
         before = self._layout.deep_copy()
         self._layout.sync_x = enabled
         self._push_layout_undo(
-            f"{'Enable' if enabled else 'Disable'} X-axis sync", before,
+            f"{'Enable' if enabled else 'Disable'} X-axis sync",
+            before,
         )
 
     def set_sync_y(self, enabled: bool) -> None:
@@ -236,7 +243,8 @@ class DashboardController:
         before = self._layout.deep_copy()
         self._layout.sync_y = enabled
         self._push_layout_undo(
-            f"{'Enable' if enabled else 'Disable'} Y-axis sync", before,
+            f"{'Enable' if enabled else 'Disable'} Y-axis sync",
+            before,
         )
 
     # -- save / load --------------------------------------------------------

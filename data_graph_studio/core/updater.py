@@ -13,6 +13,7 @@ from typing import Optional
 class UpdatePayloadError(RuntimeError):
     """Raised when downloaded update artifacts are invalid or unsafe to launch."""
 
+
 from packaging.version import Version, InvalidVersion
 
 
@@ -63,7 +64,9 @@ def _parse_version(v: str) -> Optional[Version]:
         return None
 
 
-def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -> Optional[UpdateInfo]:
+def check_github_latest(
+    expected_asset_prefix: str = "DataGraphStudio-Setup-",
+) -> Optional[UpdateInfo]:
     """Check GitHub latest release and find Windows installer + checksum asset.
 
     Returns UpdateInfo if compatible assets exist, else None.
@@ -91,7 +94,11 @@ def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -
 
     for a in assets:
         name = a.get("name", "")
-        if installer is None and name.startswith(expected_asset_prefix) and name.endswith(".exe"):
+        if (
+            installer is None
+            and name.startswith(expected_asset_prefix)
+            and name.endswith(".exe")
+        ):
             installer = a
             continue
 
@@ -102,7 +109,9 @@ def check_github_latest(expected_asset_prefix: str = "DataGraphStudio-Setup-") -
     expected_sha = installer.get("name", "") + ".sha256"
     for a in assets:
         name = a.get("name", "")
-        if name == expected_sha or (name.startswith(expected_asset_prefix) and name.endswith(".sha256")):
+        if name == expected_sha or (
+            name.startswith(expected_asset_prefix) and name.endswith(".sha256")
+        ):
             checksum = a
             # prefer exact match
             if name == expected_sha:
@@ -197,7 +206,9 @@ def validate_downloaded_update_assets(installer_path: str, sha_path: str) -> Non
         raise UpdatePayloadError("Checksum file is empty or malformed.")
 
     if len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
-        raise UpdatePayloadError("Checksum file format is invalid (sha256 digest not found).")
+        raise UpdatePayloadError(
+            "Checksum file format is invalid (sha256 digest not found)."
+        )
 
     expected_name = os.path.basename(installer_path)
     if checksum_target and os.path.basename(checksum_target) != expected_name:
@@ -209,8 +220,7 @@ def validate_downloaded_update_assets(installer_path: str, sha_path: str) -> Non
     actual = sha256sum(installer_path)
     if expected != actual:
         raise UpdatePayloadError(
-            "Checksum verification failed. "
-            f"Expected: {expected} / Actual: {actual}"
+            f"Checksum verification failed. Expected: {expected} / Actual: {actual}"
         )
 
 
@@ -219,14 +229,18 @@ def _validate_installer_path_for_launch(installer_path: str) -> None:
         raise UpdatePayloadError("Installer path is empty.")
 
     if not installer_path.lower().endswith(".exe"):
-        raise UpdatePayloadError(f"Installer path must be an .exe file: {installer_path}")
+        raise UpdatePayloadError(
+            f"Installer path must be an .exe file: {installer_path}"
+        )
 
     if not os.path.isfile(installer_path):
         raise UpdatePayloadError(f"Installer file not found: {installer_path}")
 
     with open(installer_path, "rb") as f:
         if f.read(2) != b"MZ":
-            raise UpdatePayloadError("Installer file is not a valid Windows executable (MZ header missing).")
+            raise UpdatePayloadError(
+                "Installer file is not a valid Windows executable (MZ header missing)."
+            )
 
 
 def run_windows_installer(installer_path: str, silent: bool = True) -> None:

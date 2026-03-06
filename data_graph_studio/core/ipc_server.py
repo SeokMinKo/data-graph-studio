@@ -8,11 +8,11 @@ so that clients can discover it automatically.
 Authentication: each request must include a ``token`` field matching
 the server's randomly generated token.
 """
+
 import json
 import logging
 import os
 import secrets
-import signal
 import tempfile
 from pathlib import Path
 from typing import Callable, Optional
@@ -51,9 +51,7 @@ def write_port_file(port: int, token: str = "") -> None:
     _PORT_FILE.parent.mkdir(parents=True, exist_ok=True)
     content = f"{os.getpid()}:{port}:{token}"
     # Atomic write: write to temp file then rename
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=str(_PORT_FILE.parent), prefix=".ipc_port_"
-    )
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=str(_PORT_FILE.parent), prefix=".ipc_port_")
     fd_closed = False
     try:
         os.write(tmp_fd, content.encode("utf-8"))
@@ -128,7 +126,9 @@ def send_files_to_existing_instance(file_paths: list[str]) -> bool:
         for path in file_paths:
             resp = client.send_command("load_file", path=path)
             if resp.get("status") != "ok":
-                logger.warning("[IPC] Failed to send file to existing instance: %s", path)
+                logger.warning(
+                    "[IPC] Failed to send file to existing instance: %s", path
+                )
         client.disconnect()
         return True
     except Exception as e:
@@ -236,7 +236,9 @@ class IPCServer(QObject):
 
         # Buffer size limit check
         if len(buf) > _MAX_BUFFER_SIZE:
-            logger.warning("[IPC] Client buffer exceeded %d bytes, disconnecting", _MAX_BUFFER_SIZE)
+            logger.warning(
+                "[IPC] Client buffer exceeded %d bytes, disconnecting", _MAX_BUFFER_SIZE
+            )
             self._buffers.pop(client_id, None)
             client.disconnectFromServer()
             return
@@ -245,7 +247,7 @@ class IPCServer(QObject):
         while b"\n" in buf:
             idx = buf.index(b"\n")
             line = buf[:idx].decode("utf-8", errors="replace").strip()
-            del buf[:idx + 1]
+            del buf[: idx + 1]
             if line:
                 self._process_command(client, line)
 
@@ -263,10 +265,13 @@ class IPCServer(QObject):
             # Token authentication
             request_token = data.get("token", "")
             if self._token and request_token != self._token:
-                self._send_response(client, {
-                    "status": "error",
-                    "error": "Authentication failed: invalid token",
-                })
+                self._send_response(
+                    client,
+                    {
+                        "status": "error",
+                        "error": "Authentication failed: invalid token",
+                    },
+                )
                 return
 
             command = data.get("command", "")
@@ -284,7 +289,9 @@ class IPCServer(QObject):
             self._send_response(client, response)
 
         except json.JSONDecodeError as e:
-            self._send_response(client, {"status": "error", "error": f"Invalid JSON: {e}"})
+            self._send_response(
+                client, {"status": "error", "error": f"Invalid JSON: {e}"}
+            )
 
     def _send_response(self, client: QLocalSocket, response: dict):
         line = json.dumps(response, ensure_ascii=False, default=str) + "\n"
@@ -329,7 +336,6 @@ class IPCClient:
 
     def connect(self) -> bool:
         """Connect to the IPC server via Unix Domain Socket."""
-        import socket as _socket
 
         socket_name = "dgs-ipc"
         try:
@@ -337,7 +343,9 @@ class IPCClient:
             self._socket.connectToServer(socket_name)
             if self._socket.waitForConnected(3000):
                 return True
-            logger.debug("[IPC Client] Connection failed: %s", self._socket.errorString())
+            logger.debug(
+                "[IPC Client] Connection failed: %s", self._socket.errorString()
+            )
             self._socket = None
             return False
         except Exception as e:

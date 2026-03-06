@@ -22,7 +22,7 @@ class BubbleChart:
         labels: Optional[List[str]] = None,
         min_bubble_size: float = 10,
         max_bubble_size: float = 100,
-        default_size: float = 50
+        default_size: float = 50,
     ) -> Dict[str, Any]:
         """
         버블 차트 데이터 계산
@@ -55,7 +55,9 @@ class BubbleChart:
                 if max_val > min_val:
                     # 정규화 후 스케일링
                     normalized = (size_arr - min_val) / (max_val - min_val)
-                    scaled_sizes = min_bubble_size + normalized * (max_bubble_size - min_bubble_size)
+                    scaled_sizes = min_bubble_size + normalized * (
+                        max_bubble_size - min_bubble_size
+                    )
                 else:
                     scaled_sizes = np.full(n, (min_bubble_size + max_bubble_size) / 2)
 
@@ -70,7 +72,7 @@ class BubbleChart:
 
         # 레이블
         if labels is None:
-            labels = [f"Point {i+1}" for i in range(n)]
+            labels = [f"Point {i + 1}" for i in range(n)]
 
         return {
             "x": list(x),
@@ -80,7 +82,7 @@ class BubbleChart:
             "colors": color,
             "labels": labels,
             "min_bubble_size": min_bubble_size,
-            "max_bubble_size": max_bubble_size
+            "max_bubble_size": max_bubble_size,
         }
 
     def get_bubble_data(
@@ -91,7 +93,7 @@ class BubbleChart:
         width: float = 100,
         height: float = 100,
         margin: float = 0.1,
-        **kwargs
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """
         실제 그리기용 버블 데이터
@@ -120,21 +122,27 @@ class BubbleChart:
             screen_x = np.full_like(x_arr, width / 2)
 
         if y_max > y_min:
-            screen_y = height - height * m - ((y_arr - y_min) / (y_max - y_min)) * usable_height
+            screen_y = (
+                height
+                - height * m
+                - ((y_arr - y_min) / (y_max - y_min)) * usable_height
+            )
         else:
             screen_y = np.full_like(y_arr, height / 2)
 
         bubbles = []
         for i in range(len(x_arr)):
-            bubbles.append({
-                "x": float(screen_x[i]),
-                "y": float(screen_y[i]),
-                "size": result["scaled_sizes"][i],
-                "original_x": result["x"][i],
-                "original_y": result["y"][i],
-                "original_size": result["original_sizes"][i],
-                "label": result["labels"][i],
-                "color": result["colors"][i] if result["colors"] else None
-            })
+            bubbles.append(
+                {
+                    "x": float(screen_x[i]),
+                    "y": float(screen_y[i]),
+                    "size": result["scaled_sizes"][i],
+                    "original_x": result["x"][i],
+                    "original_y": result["y"][i],
+                    "original_size": result["original_sizes"][i],
+                    "label": result["labels"][i],
+                    "color": result["colors"][i] if result["colors"] else None,
+                }
+            )
 
         return bubbles

@@ -1,4 +1,5 @@
 """ToolbarController - extracted from MainWindow."""
+
 from __future__ import annotations
 
 import logging
@@ -17,10 +18,11 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
+
 class ToolbarController:
     """Controller extracted from MainWindow."""
 
-    def __init__(self, main_window: 'MainWindow'):
+    def __init__(self, main_window: "MainWindow"):
         self.w = main_window
 
     @staticmethod
@@ -48,33 +50,48 @@ class ToolbarController:
         file_actions = []
 
         open_project_btn = QAction("📂 Open Project", self.w)
-        open_project_btn.setToolTip(self.w._format_tooltip("Open Project (.dgs)", "Ctrl+O"))
+        open_project_btn.setToolTip(
+            self.w._format_tooltip("Open Project (.dgs)", "Ctrl+O")
+        )
         open_project_btn.triggered.connect(self.w._on_open_file)
         toolbar.addAction(open_project_btn)
         file_actions.append(open_project_btn)
 
         open_profile_btn = QAction("📂 Open Profile", self.w)
         open_profile_btn.setToolTip(self.w._format_tooltip("Load Graph Profile", ""))
-        open_profile_btn.triggered.connect(lambda: self.w.dataset_manager._on_load_profile())
+        open_profile_btn.triggered.connect(
+            lambda: self.w.dataset_manager._on_load_profile()
+        )
         toolbar.addAction(open_profile_btn)
         file_actions.append(open_profile_btn)
 
         save_project_btn = QAction("💾 Save Project", self.w)
-        save_project_btn.setToolTip(self.w._format_tooltip("Save Project", "Ctrl+Alt+S"))
+        save_project_btn.setToolTip(
+            self.w._format_tooltip("Save Project", "Ctrl+Alt+S")
+        )
         save_project_btn.triggered.connect(self.w._on_save_project_file)
         toolbar.addAction(save_project_btn)
         file_actions.append(save_project_btn)
 
         save_profile_btn = QAction("💾 Save Profile", self.w)
         save_profile_btn.setToolTip(self.w._format_tooltip("Save Graph Profile", ""))
-        save_profile_btn.triggered.connect(lambda: self.w.dataset_manager._on_save_profile())
+        save_profile_btn.triggered.connect(
+            lambda: self.w.dataset_manager._on_save_profile()
+        )
         toolbar.addAction(save_profile_btn)
         file_actions.append(save_profile_btn)
 
         file_sep = toolbar.addSeparator()
-        mgr.register_group("main", "main.file", "File",
-                           actions=file_actions, widgets=[],
-                           separator=file_sep, label_widget=file_label, order=0)
+        mgr.register_group(
+            "main",
+            "main.file",
+            "File",
+            actions=file_actions,
+            widgets=[],
+            separator=file_sep,
+            label_widget=file_label,
+            order=0,
+        )
 
         # === Navigation/Selection Tools ===
         nav_label = self._make_group_label("NAV")
@@ -97,7 +114,9 @@ class ToolbarController:
             action = QAction(f"{icon}", self.w)
             action.setToolTip(self.w._format_tooltip(name, shortcut))
             action.setCheckable(True)
-            action.triggered.connect(lambda checked, m=mode: self.w.state.set_tool_mode(m))
+            action.triggered.connect(
+                lambda checked, m=mode: self.w.state.set_tool_mode(m)
+            )
             self.w._tool_action_group.addAction(action)
             toolbar.addAction(action)
             self.w._tool_actions[mode] = action
@@ -106,9 +125,16 @@ class ToolbarController:
         self.w._tool_actions[ToolMode.PAN].setChecked(True)
 
         nav_sep = toolbar.addSeparator()
-        mgr.register_group("main", "main.nav", "Navigation",
-                           actions=nav_actions, widgets=[],
-                           separator=nav_sep, label_widget=nav_label, order=1)
+        mgr.register_group(
+            "main",
+            "main.nav",
+            "Navigation",
+            actions=nav_actions,
+            widgets=[],
+            separator=nav_sep,
+            label_widget=nav_label,
+            order=1,
+        )
 
         # === Drawing Tools ===
         draw_label = self._make_group_label("DRAW")
@@ -128,7 +154,9 @@ class ToolbarController:
             action = QAction(f"{icon}", self.w)
             action.setToolTip(self.w._format_tooltip(name, shortcut))
             action.setCheckable(True)
-            action.triggered.connect(lambda checked, m=mode: self.w.state.set_tool_mode(m))
+            action.triggered.connect(
+                lambda checked, m=mode: self.w.state.set_tool_mode(m)
+            )
             self.w._tool_action_group.addAction(action)
             toolbar.addAction(action)
             self.w._tool_actions[mode] = action
@@ -146,15 +174,24 @@ class ToolbarController:
         draw_widgets.append(self.w._draw_color_btn)
 
         clear_drawing_btn = QAction("🗑️", self.w)
-        clear_drawing_btn.setToolTip(self.w._format_tooltip("Clear All Drawings", "Del"))
+        clear_drawing_btn.setToolTip(
+            self.w._format_tooltip("Clear All Drawings", "Del")
+        )
         clear_drawing_btn.triggered.connect(self.w._on_clear_drawings)
         toolbar.addAction(clear_drawing_btn)
         draw_actions.append(clear_drawing_btn)
 
         draw_sep = toolbar.addSeparator()
-        mgr.register_group("main", "main.draw", "Drawing",
-                           actions=draw_actions, widgets=draw_widgets,
-                           separator=draw_sep, label_widget=draw_label, order=2)
+        mgr.register_group(
+            "main",
+            "main.draw",
+            "Drawing",
+            actions=draw_actions,
+            widgets=draw_widgets,
+            separator=draw_sep,
+            label_widget=draw_label,
+            order=2,
+        )
 
         # === Chart Type Selector ===
         chart_label = self._make_group_label("CHART")
@@ -166,10 +203,26 @@ class ToolbarController:
         self.w._chart_toolbar_action_group = chart_toolbar_group
 
         chart_types = [
-            (ChartType.LINE, "📈", "<b>Line Chart</b><br>Best for: Time series, trends<br>Shortcut: 1"),
-            (ChartType.BAR, "📊", "<b>Bar Chart</b><br>Best for: Comparing categories<br>Shortcut: 2"),
-            (ChartType.SCATTER, "⚬", "<b>Scatter Plot</b><br>Best for: Correlations, distributions<br>Shortcut: 3"),
-            (ChartType.AREA, "▤", "<b>Area Chart</b><br>Best for: Cumulative values, stacked data<br>Shortcut: 5"),
+            (
+                ChartType.LINE,
+                "📈",
+                "<b>Line Chart</b><br>Best for: Time series, trends<br>Shortcut: 1",
+            ),
+            (
+                ChartType.BAR,
+                "📊",
+                "<b>Bar Chart</b><br>Best for: Comparing categories<br>Shortcut: 2",
+            ),
+            (
+                ChartType.SCATTER,
+                "⚬",
+                "<b>Scatter Plot</b><br>Best for: Correlations, distributions<br>Shortcut: 3",
+            ),
+            (
+                ChartType.AREA,
+                "▤",
+                "<b>Area Chart</b><br>Best for: Cumulative values, stacked data<br>Shortcut: 5",
+            ),
         ]
 
         for ct, icon, tooltip in chart_types:
@@ -178,20 +231,28 @@ class ToolbarController:
             action.setCheckable(True)
             if ct == ChartType.LINE:
                 action.setChecked(True)
-            action.triggered.connect(lambda checked, c=ct: self.w.state.set_chart_type(c))
+            action.triggered.connect(
+                lambda checked, c=ct: self.w.state.set_chart_type(c)
+            )
             chart_toolbar_group.addAction(action)
             toolbar.addAction(action)
             chart_actions.append(action)
             self.w._chart_toolbar_actions[ct] = action
 
-        mgr.register_group("main", "main.chart", "Chart Types",
-                           actions=chart_actions, widgets=[],
-                           separator=None, label_widget=chart_label, order=3)
+        mgr.register_group(
+            "main",
+            "main.chart",
+            "Chart Types",
+            actions=chart_actions,
+            widgets=[],
+            separator=None,
+            label_widget=chart_label,
+            order=3,
+        )
 
         # Store references for view actions
         self.w._reset_btn_action = None
         self.w._autofit_btn_action = None
-
 
     def _setup_streaming_toolbar(self):
         """Secondary toolbar setup (Line 2) - Streaming + Compare"""
@@ -242,6 +303,7 @@ class ToolbarController:
 
         # Speed control
         from PySide6.QtWidgets import QComboBox
+
         speed_label = QLabel(" Speed: ")
         speed_label.setObjectName("toolbarLabel")
         toolbar.addWidget(speed_label)
@@ -251,7 +313,9 @@ class ToolbarController:
         self.w._streaming_speed_combo = QComboBox()
         self.w._streaming_speed_combo.addItems(["0.5x", "1x", "2x", "5x", "10x"])
         self.w._streaming_speed_combo.setCurrentIndex(1)  # Default 1x
-        self.w._streaming_speed_combo.currentTextChanged.connect(self.w._on_streaming_speed_changed)
+        self.w._streaming_speed_combo.currentTextChanged.connect(
+            self.w._on_streaming_speed_changed
+        )
         self.w._streaming_speed_combo.setFixedWidth(60)
         toolbar.addWidget(self.w._streaming_speed_combo)
         self.w._streaming_widgets.append(self.w._streaming_speed_combo)
@@ -267,7 +331,9 @@ class ToolbarController:
         self.w._streaming_window_combo = QComboBox()
         self.w._streaming_window_combo.addItems(["100", "500", "1000", "5000", "All"])
         self.w._streaming_window_combo.setCurrentIndex(2)  # Default 1000
-        self.w._streaming_window_combo.currentTextChanged.connect(self.w._on_streaming_window_changed)
+        self.w._streaming_window_combo.currentTextChanged.connect(
+            self.w._on_streaming_window_changed
+        )
         self.w._streaming_window_combo.setFixedWidth(70)
         toolbar.addWidget(self.w._streaming_window_combo)
         self.w._streaming_widgets.append(self.w._streaming_window_combo)
@@ -277,9 +343,16 @@ class ToolbarController:
         self._hide_streaming_controls()
 
         streaming_sep = toolbar.addSeparator()
-        mgr.register_group("secondary", "secondary.streaming", "Streaming",
-                           actions=streaming_actions, widgets=streaming_widgets,
-                           separator=streaming_sep, label_widget=None, order=0)
+        mgr.register_group(
+            "secondary",
+            "secondary.streaming",
+            "Streaming",
+            actions=streaming_actions,
+            widgets=streaming_widgets,
+            separator=streaming_sep,
+            label_widget=None,
+            order=0,
+        )
 
         # === View Controls (always visible) ===
         view_label = QLabel(" View: ")
@@ -308,9 +381,16 @@ class ToolbarController:
         view_actions.append(autofit_btn)
 
         view_sep = toolbar.addSeparator()
-        mgr.register_group("secondary", "secondary.view", "View Controls",
-                           actions=view_actions, widgets=[],
-                           separator=view_sep, label_widget=view_label, order=1)
+        mgr.register_group(
+            "secondary",
+            "secondary.view",
+            "View Controls",
+            actions=view_actions,
+            widgets=[],
+            separator=view_sep,
+            label_widget=view_label,
+            order=1,
+        )
 
         # === Quick Actions ===
         quick_actions = []
@@ -327,9 +407,16 @@ class ToolbarController:
         toolbar.addAction(export_btn)
         quick_actions.append(export_btn)
 
-        mgr.register_group("secondary", "secondary.quick", "Quick Actions",
-                           actions=quick_actions, widgets=[],
-                           separator=None, label_widget=None, order=2)
+        mgr.register_group(
+            "secondary",
+            "secondary.quick",
+            "Quick Actions",
+            actions=quick_actions,
+            widgets=[],
+            separator=None,
+            label_widget=None,
+            order=2,
+        )
 
     def _show_streaming_controls(self):
         """Show streaming-related toolbar widgets."""

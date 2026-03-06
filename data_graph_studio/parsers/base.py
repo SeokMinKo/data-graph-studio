@@ -59,7 +59,9 @@ class BaseParser(ABC):
         return {}
 
     @abstractmethod
-    def parse(self, file_path: str, settings: Optional[Dict[str, Any]] = None) -> pl.DataFrame:
+    def parse(
+        self, file_path: str, settings: Optional[Dict[str, Any]] = None
+    ) -> pl.DataFrame:
         """Parse the given file and return a polars DataFrame.
 
         Args:
@@ -120,7 +122,9 @@ class ParserProfileStore:
         raw = self._data.get(parser_key, [])
         return [ParserProfile.from_dict(d) for d in raw]
 
-    def get_profile(self, parser_key: str, profile_name: str) -> Optional[ParserProfile]:
+    def get_profile(
+        self, parser_key: str, profile_name: str
+    ) -> Optional[ParserProfile]:
         """Get a specific profile by name."""
         for d in self._data.get(parser_key, []):
             if d["name"] == profile_name:

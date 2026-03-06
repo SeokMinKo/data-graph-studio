@@ -11,18 +11,16 @@ UT-4.5: 내보내기 취소 시 부분 파일 삭제
 from __future__ import annotations
 
 import os
-import tempfile
-import time
 from pathlib import Path
 from typing import Optional
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import patch
 
 import pytest
 
 # Ensure headless Qt before any PySide6 import
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QTimer, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QImage, QPainter, QColor
 
@@ -69,7 +67,7 @@ def sample_svg_bytes() -> bytes:
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'
         '<rect fill="red" width="100" height="100"/>'
-        '</svg>'
+        "</svg>"
     )
     return svg.encode("utf-8")
 
@@ -81,14 +79,14 @@ from data_graph_studio.core.export_controller import (
     ExportController,
     ExportFormat,
     ExportOptions,
-    ExportWorker,
 )
-from data_graph_studio.core.io_abstract import atomic_write, RealFileSystem
+from data_graph_studio.core.io_abstract import atomic_write
 
 
 # ===========================================================================
 # UT-4.1  PNG 내보내기 파일 생성
 # ===========================================================================
+
 
 class TestPNGExport:
     """UT-4.1: PNG export produces a valid file."""
@@ -149,13 +147,16 @@ class TestPNGExport:
         out_path = str(tmp_dir / "transparent.png")
         opts = ExportOptions(background="transparent")
         ctrl = ExportController()
-        ctrl.export_chart_sync(image=img, path=out_path, fmt=ExportFormat.PNG, options=opts)
+        ctrl.export_chart_sync(
+            image=img, path=out_path, fmt=ExportFormat.PNG, options=opts
+        )
         assert os.path.exists(out_path)
 
 
 # ===========================================================================
 # UT-4.2  SVG 내보내기 파일 생성
 # ===========================================================================
+
 
 class TestSVGExport:
     """UT-4.2: SVG export produces a valid file."""
@@ -176,6 +177,7 @@ class TestSVGExport:
     def test_export_svg_is_valid_xml(self, tmp_dir, sample_qimage):
         """SVG output should be well-formed XML."""
         import xml.etree.ElementTree as ET
+
         out_path = str(tmp_dir / "chart_valid.svg")
         ctrl = ExportController()
         ctrl.export_chart_sync(
@@ -191,6 +193,7 @@ class TestSVGExport:
 # ===========================================================================
 # UT-4.3  PDF 내보내기 파일 생성
 # ===========================================================================
+
 
 class TestPDFExport:
     """UT-4.3: PDF export produces a valid file."""
@@ -266,6 +269,7 @@ class TestPDFExport:
 # UT-4.4  원자적 저장 (temp → rename)
 # ===========================================================================
 
+
 class TestAtomicExport:
     """UT-4.4: Exports use atomic write (temp → rename)."""
 
@@ -295,7 +299,10 @@ class TestAtomicExport:
         out_path = str(tmp_dir / "fail_test.bin")
         # Simulate failure by writing to a read-only directory
         # Instead: patch os.rename to raise
-        with patch("data_graph_studio.core.io_abstract.os.rename", side_effect=OSError("rename failed")):
+        with patch(
+            "data_graph_studio.core.io_abstract.os.rename",
+            side_effect=OSError("rename failed"),
+        ):
             with pytest.raises(OSError):
                 atomic_write(out_path, b"data")
         assert not os.path.exists(out_path + ".tmp")
@@ -312,7 +319,9 @@ class TestAtomicExport:
             return original_rename(src, dst)
 
         ctrl = ExportController()
-        with patch("data_graph_studio.core.export_controller.os.rename", tracking_rename):
+        with patch(
+            "data_graph_studio.core.export_controller.os.rename", tracking_rename
+        ):
             ctrl.export_chart_sync(
                 image=sample_qimage,
                 path=out_path,
@@ -321,14 +330,14 @@ class TestAtomicExport:
 
         # At least one rename from .tmp to final
         assert any(
-            src.endswith(".tmp") and dst == out_path
-            for src, dst in rename_calls
+            src.endswith(".tmp") and dst == out_path for src, dst in rename_calls
         )
 
 
 # ===========================================================================
 # UT-4.5  내보내기 취소 시 부분 파일 삭제
 # ===========================================================================
+
 
 class TestExportCancel:
     """UT-4.5: Cancel during export cleans up partial files."""
@@ -389,6 +398,7 @@ class TestExportCancel:
 # Data Export Tests (FR-4.4)
 # ===========================================================================
 
+
 class TestDataExport:
     """FR-4.4: Data export to CSV/Parquet/Excel."""
 
@@ -433,6 +443,7 @@ class TestDataExport:
 # ExportOptions Tests
 # ===========================================================================
 
+
 class TestExportOptions:
     """Test ExportOptions dataclass defaults and configuration."""
 
@@ -468,6 +479,7 @@ class TestExportOptions:
 # ===========================================================================
 # Signal Tests (progress_changed, export_completed, export_failed)
 # ===========================================================================
+
 
 class TestExportSignals:
     """Test that ExportController emits proper signals."""
@@ -524,6 +536,7 @@ class TestExportSignals:
 # ===========================================================================
 # ExportFormat enum
 # ===========================================================================
+
 
 class TestExportFormat:
     """ExportFormat enum should have all required formats."""

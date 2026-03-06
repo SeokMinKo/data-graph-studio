@@ -15,11 +15,11 @@ class TestExpressionEngineMissingFunctions:
         from data_graph_studio.core.expression_engine import ExpressionEngine
 
         engine = ExpressionEngine()
-        df = pl.DataFrame({"x": [0.0, np.pi/2, np.pi]})
-        
+        df = pl.DataFrame({"x": [0.0, np.pi / 2, np.pi]})
+
         result = engine.evaluate("SIN(x)", df)
-        expected = np.sin([0.0, np.pi/2, np.pi])
-        
+        expected = np.sin([0.0, np.pi / 2, np.pi])
+
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
 
     def test_cos_function(self):
@@ -27,11 +27,11 @@ class TestExpressionEngineMissingFunctions:
         from data_graph_studio.core.expression_engine import ExpressionEngine
 
         engine = ExpressionEngine()
-        df = pl.DataFrame({"x": [0.0, np.pi/2, np.pi]})
-        
+        df = pl.DataFrame({"x": [0.0, np.pi / 2, np.pi]})
+
         result = engine.evaluate("COS(x)", df)
-        expected = np.cos([0.0, np.pi/2, np.pi])
-        
+        expected = np.cos([0.0, np.pi / 2, np.pi])
+
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
 
     def test_tan_function(self):
@@ -39,11 +39,11 @@ class TestExpressionEngineMissingFunctions:
         from data_graph_studio.core.expression_engine import ExpressionEngine
 
         engine = ExpressionEngine()
-        df = pl.DataFrame({"x": [0.0, np.pi/4]})
-        
+        df = pl.DataFrame({"x": [0.0, np.pi / 4]})
+
         result = engine.evaluate("TAN(x)", df)
-        expected = np.tan([0.0, np.pi/4])
-        
+        expected = np.tan([0.0, np.pi / 4])
+
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
 
     def test_min_function_single_column(self):
@@ -52,9 +52,9 @@ class TestExpressionEngineMissingFunctions:
 
         engine = ExpressionEngine()
         df = pl.DataFrame({"x": [1.0, 2.0, 3.0, 4.0]})
-        
+
         result = engine.evaluate("MIN(x)", df)
-        
+
         # MIN of single column returns the min value repeated
         assert all(v == 1.0 for v in result.to_list())
 
@@ -64,9 +64,9 @@ class TestExpressionEngineMissingFunctions:
 
         engine = ExpressionEngine()
         df = pl.DataFrame({"x": [1.0, 2.0, 3.0, 4.0]})
-        
+
         result = engine.evaluate("MAX(x)", df)
-        
+
         # MAX of single column returns the max value repeated
         assert all(v == 4.0 for v in result.to_list())
 
@@ -76,9 +76,9 @@ class TestExpressionEngineMissingFunctions:
 
         engine = ExpressionEngine()
         df = pl.DataFrame({"text": ["hello world", "foo bar", "hello there"]})
-        
+
         result = engine.evaluate("CONTAINS(text, 'hello')", df)
-        
+
         assert result.to_list() == [True, False, True]
 
     def test_substring_function(self):
@@ -95,7 +95,10 @@ class TestExpressionEngineMissingFunctions:
 
     def test_unknown_comparison_operator_raises_expression_error(self):
         """Unsupported comparison operators should raise a clear ExpressionError."""
-        from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
+        from data_graph_studio.core.expression_engine import (
+            ExpressionEngine,
+            ExpressionError,
+        )
 
         engine = ExpressionEngine()
         df = pl.DataFrame({"x": [1, 2, 3]})
@@ -111,7 +114,10 @@ class TestExpressionEngineMissingFunctions:
 
     def test_trailing_tokens_raise_expression_error(self):
         """Parser should fail fast when extra tokens remain after a valid expression."""
-        from data_graph_studio.core.expression_engine import ExpressionEngine, ExpressionError
+        from data_graph_studio.core.expression_engine import (
+            ExpressionEngine,
+            ExpressionError,
+        )
 
         engine = ExpressionEngine()
         df = pl.DataFrame({"x": [1, 2, 3]})
@@ -129,9 +135,9 @@ class TestSamplingEdgeCases:
 
         x = np.array([])
         y = np.array([])
-        
+
         sampled_x, sampled_y = DataSampler.lttb(x, y, 10)
-        
+
         assert len(sampled_x) == 0
         assert len(sampled_y) == 0
 
@@ -141,9 +147,9 @@ class TestSamplingEdgeCases:
 
         x = np.array([1, 2, 3, 4, 5])
         y = np.array([1, 2, 3, 4, 5])
-        
+
         sampled_x, sampled_y = DataSampler.lttb(x, y, 0)
-        
+
         assert len(sampled_x) == 0
         assert len(sampled_y) == 0
 
@@ -153,9 +159,9 @@ class TestSamplingEdgeCases:
 
         x = np.array([])
         y = np.array([])
-        
+
         sampled_x, sampled_y = DataSampler.min_max_per_bucket(x, y, 10)
-        
+
         assert len(sampled_x) == 0
         assert len(sampled_y) == 0
 
@@ -165,9 +171,9 @@ class TestSamplingEdgeCases:
 
         x = np.array([1, 2, 3, 4, 5])
         y = np.array([1, 2, 3, 4, 5])
-        
+
         sampled_x, sampled_y = DataSampler.min_max_per_bucket(x, y, 0)
-        
+
         assert len(sampled_x) == 0
         assert len(sampled_y) == 0
 
@@ -178,9 +184,11 @@ class TestSamplingEdgeCases:
         x = np.array([])
         y = np.array([])
         groups = np.array([])
-        
-        sampled_x, sampled_y, sampled_groups = DataSampler.stratified_sample(x, y, groups, 10)
-        
+
+        sampled_x, sampled_y, sampled_groups = DataSampler.stratified_sample(
+            x, y, groups, 10
+        )
+
         assert len(sampled_x) == 0
         assert len(sampled_y) == 0
         assert len(sampled_groups) == 0
@@ -191,10 +199,12 @@ class TestSamplingEdgeCases:
 
         x = np.array([1, 2, 3, 4, 5])
         y = np.array([1, 2, 3, 4, 5])
-        groups = np.array(['a', 'a', 'b', 'b', 'b'])
-        
-        sampled_x, sampled_y, sampled_groups = DataSampler.stratified_sample(x, y, groups, 0)
-        
+        groups = np.array(["a", "a", "b", "b", "b"])
+
+        sampled_x, sampled_y, sampled_groups = DataSampler.stratified_sample(
+            x, y, groups, 0
+        )
+
         assert len(sampled_x) == 0
 
 
@@ -203,24 +213,25 @@ class TestTrellisEdgeCases:
 
     def test_trellis_panels_per_page_zero(self):
         """Test trellis with panels_per_page=0 doesn't crash"""
-        from data_graph_studio.graph.trellis import TrellisCalculator, TrellisSettings, TrellisMode
+        from data_graph_studio.graph.trellis import (
+            TrellisCalculator,
+            TrellisSettings,
+            TrellisMode,
+        )
 
         calc = TrellisCalculator()
-        df = pl.DataFrame({
-            "category": ["A", "B", "C", "D"],
-            "value": [1, 2, 3, 4]
-        })
-        
+        df = pl.DataFrame({"category": ["A", "B", "C", "D"], "value": [1, 2, 3, 4]})
+
         settings = TrellisSettings(
             enabled=True,
             mode=TrellisMode.PANELS,
             panel_column="category",
-            panels_per_page=0  # Edge case
+            panels_per_page=0,  # Edge case
         )
-        
+
         # Should not crash
         layout = calc.calculate(df, settings, 100, 100, "value")
-        
+
         # Should have at least 1 panel
         assert layout.panels_per_page >= 1
 
@@ -233,22 +244,22 @@ class TestStateDeepCopy:
         from data_graph_studio.core.state import AppState, DatasetState, GroupColumn
 
         state = AppState()
-        
+
         # Create a dataset with some group columns
         dataset_state = DatasetState(dataset_id="test")
         dataset_state.group_columns = [
             GroupColumn(name="col1", order=0),
-            GroupColumn(name="col2", order=1)
+            GroupColumn(name="col2", order=1),
         ]
-        
+
         state._dataset_states["test"] = dataset_state
-        
+
         # Sync from dataset state
         state._sync_from_dataset_state("test")
-        
+
         # Modify the original dataset state
         dataset_state.group_columns[0].name = "modified"
-        
+
         # App state's group columns should NOT be affected (deep copy)
         assert state._group_columns[0].name == "col1"
 
@@ -259,19 +270,19 @@ class TestStateDeepCopy:
         state = AppState()
         state._active_dataset_id = "test"
         state._dataset_states["test"] = DatasetState(dataset_id="test")
-        
+
         # Set some group columns on app state
         state._group_columns = [
             GroupColumn(name="col1", order=0),
-            GroupColumn(name="col2", order=1)
+            GroupColumn(name="col2", order=1),
         ]
-        
+
         # Sync to dataset state
         state._sync_to_dataset_state("test")
-        
+
         # Modify the app state's group columns
         state._group_columns[0].name = "modified"
-        
+
         # Dataset state's group columns should NOT be affected (deep copy)
         assert state._dataset_states["test"].group_columns[0].name == "col1"
 
@@ -357,7 +368,9 @@ class TestFtraceConverterRegressionEdges:
             }
         )
 
-        result = parser.convert(raw_df, {"converter": "sched"}).sort(["cpu", "timestamp"])
+        result = parser.convert(raw_df, {"converter": "sched"}).sort(
+            ["cpu", "timestamp"]
+        )
 
         # CPU0 second switch: 0.5s => 500ms runtime
         cpu0 = result.filter(pl.col("cpu") == 0)
@@ -375,7 +388,9 @@ class TestFileLoadingControllerRegression:
     def test_open_multiple_files_with_paths_enables_overlay_compare(self):
         from unittest.mock import MagicMock, patch
 
-        from data_graph_studio.ui.controllers.file_loading_controller import FileLoadingController
+        from data_graph_studio.ui.controllers.file_loading_controller import (
+            FileLoadingController,
+        )
         from data_graph_studio.core.state import ComparisonMode
 
         class _Dataset:
@@ -388,7 +403,7 @@ class TestFileLoadingControllerRegression:
                 self._datasets = {}
 
             def load_dataset(self, file_path, name=None):
-                dataset_id = f"ds-{len(self._datasets)+1}"
+                dataset_id = f"ds-{len(self._datasets) + 1}"
                 self._datasets[dataset_id] = _Dataset()
                 return dataset_id
 
@@ -433,12 +448,15 @@ class TestFileLoadingControllerRegression:
         progress = MagicMock()
         progress.wasCanceled.return_value = False
 
-        with patch(
-            "data_graph_studio.ui.controllers.file_loading_controller.QProgressDialog",
-            return_value=progress,
-        ), patch(
-            "data_graph_studio.ui.controllers.file_loading_controller.QApplication.processEvents",
-            return_value=None,
+        with (
+            patch(
+                "data_graph_studio.ui.controllers.file_loading_controller.QProgressDialog",
+                return_value=progress,
+            ),
+            patch(
+                "data_graph_studio.ui.controllers.file_loading_controller.QApplication.processEvents",
+                return_value=None,
+            ),
         ):
             ctrl._on_open_multiple_files_with_paths(["a.csv", "b.csv"])
 

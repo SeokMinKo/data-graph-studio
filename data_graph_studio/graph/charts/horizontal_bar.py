@@ -4,12 +4,12 @@ Horizontal Bar Chart - 수평 막대 차트
 
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-import numpy as np
 
 
 @dataclass
 class HorizontalBarResult:
     """수평 막대 차트 계산 결과"""
+
     y_positions: List[float]
     widths: List[float]
     categories: List[str]
@@ -35,7 +35,7 @@ class HorizontalBarChart:
         values: List[float],
         sort_by_value: bool = False,
         descending: bool = True,
-        colors: Optional[List[str]] = None
+        colors: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         수평 막대 차트 데이터 계산
@@ -55,9 +55,7 @@ class HorizontalBarChart:
         # 정렬
         if sort_by_value:
             sorted_pairs = sorted(
-                zip(categories, values),
-                key=lambda x: x[1],
-                reverse=descending
+                zip(categories, values), key=lambda x: x[1], reverse=descending
             )
             sorted_categories = [p[0] for p in sorted_pairs]
             sorted_values = [p[1] for p in sorted_pairs]
@@ -75,7 +73,7 @@ class HorizontalBarChart:
             "sorted_categories": sorted_categories,
             "sorted_values": sorted_values,
             "bar_height": self.bar_height,
-            "colors": colors
+            "colors": colors,
         }
 
     def get_bar_rects(
@@ -85,7 +83,7 @@ class HorizontalBarChart:
         width: float,
         height: float,
         margin: float = 0.1,
-        **kwargs
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """
         실제 그리기용 사각형 좌표 계산
@@ -123,19 +121,23 @@ class HorizontalBarChart:
         bar_height = bar_total_height * self.bar_height
 
         rects = []
-        for i, (cat, val) in enumerate(zip(result["sorted_categories"], result["sorted_values"])):
+        for i, (cat, val) in enumerate(
+            zip(result["sorted_categories"], result["sorted_values"])
+        ):
             bar_width = (val / max_val) * usable_width if max_val > 0 else 0
 
             y = top_margin + i * bar_total_height + (bar_total_height - bar_height) / 2
 
-            rects.append({
-                "x": left_margin,
-                "y": y,
-                "width": bar_width,
-                "height": bar_height,
-                "category": cat,
-                "value": val,
-                "index": i
-            })
+            rects.append(
+                {
+                    "x": left_margin,
+                    "y": y,
+                    "width": bar_width,
+                    "height": bar_height,
+                    "category": cat,
+                    "value": val,
+                    "index": i,
+                }
+            )
 
         return rects

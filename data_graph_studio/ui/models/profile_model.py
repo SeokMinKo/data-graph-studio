@@ -75,10 +75,20 @@ class ProfileModel(QAbstractItemModel):
             node = idx.internalPointer()
             if isinstance(node, _ProfileNode) and not node.is_dataset:
                 ids.append(node.setting.id)
-        mime.setData("application/x-dgs-profile-id", QByteArray(b"\n".join(i.encode() for i in ids)))
+        mime.setData(
+            "application/x-dgs-profile-id",
+            QByteArray(b"\n".join(i.encode() for i in ids)),
+        )
         return mime
 
-    def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, column: int, parent: QModelIndex) -> bool:
+    def dropMimeData(
+        self,
+        data: QMimeData,
+        action: Qt.DropAction,
+        row: int,
+        column: int,
+        parent: QModelIndex,
+    ) -> bool:
         if action != Qt.MoveAction:
             return False
         raw = bytes(data.data("application/x-dgs-profile-id")).decode()
@@ -134,7 +144,7 @@ class ProfileModel(QAbstractItemModel):
         if role == Qt.DisplayRole:
             if node.is_dataset:
                 return self._get_dataset_name(node.dataset_id)
-            prefix = "⭐ " if getattr(node.setting, 'is_favorite', False) else ""
+            prefix = "⭐ " if getattr(node.setting, "is_favorite", False) else ""
             return prefix + node.setting.name
 
         if role == Qt.UserRole:
@@ -151,28 +161,38 @@ class ProfileModel(QAbstractItemModel):
                 if s.x_column:
                     lines.append(f"X: {s.x_column}")
                 if s.value_columns:
-                    y_names = [vc['name'] if isinstance(vc, dict) else str(vc) for vc in s.value_columns]
+                    y_names = [
+                        vc["name"] if isinstance(vc, dict) else str(vc)
+                        for vc in s.value_columns
+                    ]
                     lines.append(f"Y: {', '.join(y_names[:3])}")
                     if len(y_names) > 3:
-                        lines.append(f"  (+{len(y_names)-3} more)")
+                        lines.append(f"  (+{len(y_names) - 3} more)")
                 if s.group_columns:
-                    g_names = [gc['name'] if isinstance(gc, dict) else str(gc) for gc in s.group_columns]
+                    g_names = [
+                        gc["name"] if isinstance(gc, dict) else str(gc)
+                        for gc in s.group_columns
+                    ]
                     lines.append(f"Group: {', '.join(g_names)}")
                 if s.description:
                     lines.append(f"\n{s.description}")
-                return '\n'.join(lines)
+                return "\n".join(lines)
             else:
                 # 데이터셋 툴팁: 행/열 수, 소스 파일
-                metadata = self._state.dataset_metadata.get(node.dataset_id) if hasattr(self._state, 'dataset_metadata') else None
+                metadata = (
+                    self._state.dataset_metadata.get(node.dataset_id)
+                    if hasattr(self._state, "dataset_metadata")
+                    else None
+                )
                 if metadata:
                     lines = [metadata.name]
-                    if hasattr(metadata, 'source_path') and metadata.source_path:
+                    if hasattr(metadata, "source_path") and metadata.source_path:
                         lines.append(f"Source: {metadata.source_path}")
-                    if hasattr(metadata, 'row_count'):
+                    if hasattr(metadata, "row_count"):
                         lines.append(f"Rows: {metadata.row_count:,}")
                     profiles = self._get_profiles(node.dataset_id)
                     lines.append(f"Profiles: {len(profiles)}")
-                    return '\n'.join(lines)
+                    return "\n".join(lines)
 
         # Note: DecorationRole은 반환하지 않음 - 문자열 반환 시 Qt가 QIcon 변환 시도하여 에러
         # 아이콘은 delegate에서 UserRole+1로 처리
@@ -182,7 +202,9 @@ class ProfileModel(QAbstractItemModel):
 
         return None
 
-    def _find_node(self, dataset_id: str, setting: Optional[GraphSetting] = None) -> _ProfileNode:
+    def _find_node(
+        self, dataset_id: str, setting: Optional[GraphSetting] = None
+    ) -> _ProfileNode:
         """Find a cached node, or create and cache a new one."""
         for n in self._nodes:
             if n.dataset_id == dataset_id and n.setting is setting:
@@ -191,7 +213,9 @@ class ProfileModel(QAbstractItemModel):
         self._nodes.append(node)
         return node
 
-    def index(self, row: int, col: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
+    def index(
+        self, row: int, col: int, parent: QModelIndex = QModelIndex()
+    ) -> QModelIndex:
         if col != 0 or row < 0:
             return QModelIndex()
 
@@ -309,10 +333,15 @@ class ProfileModel(QAbstractItemModel):
         parent_idx = self.createIndex(ds_row, 0, parent_node)
 
         self.beginRemoveRows(parent_idx, row, row)
-        self._nodes = [n for n in self._nodes
-                       if not (n.dataset_id == dataset_id
-                               and n.setting is not None
-                               and n.setting.id == profile_id)]
+        self._nodes = [
+            n
+            for n in self._nodes
+            if not (
+                n.dataset_id == dataset_id
+                and n.setting is not None
+                and n.setting.id == profile_id
+            )
+        ]
         self.endRemoveRows()
 
     def update_profile_data(self, dataset_id: str, setting: GraphSetting) -> None:
@@ -326,9 +355,11 @@ class ProfileModel(QAbstractItemModel):
 
         # Find and replace the node in cache
         for i, node in enumerate(self._nodes):
-            if (node.dataset_id == dataset_id
-                    and node.setting is not None
-                    and node.setting.id == setting.id):
+            if (
+                node.dataset_id == dataset_id
+                and node.setting is not None
+                and node.setting.id == setting.id
+            ):
                 self._nodes[i] = _ProfileNode(dataset_id=dataset_id, setting=setting)
 
                 # Emit dataChanged for just the affected index
@@ -387,5 +418,5 @@ class ProfileModel(QAbstractItemModel):
             profiles = []
 
         # Sort favorites first, preserve original order within each group
-        profiles.sort(key=lambda p: not getattr(p, 'is_favorite', False))
+        profiles.sort(key=lambda p: not getattr(p, "is_favorite", False))
         return profiles

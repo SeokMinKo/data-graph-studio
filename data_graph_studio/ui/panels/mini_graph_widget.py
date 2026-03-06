@@ -14,7 +14,11 @@ from typing import Optional, TYPE_CHECKING
 import numpy as np
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QFrame, QSizePolicy,
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QFrame,
+    QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -158,7 +162,9 @@ class MiniGraphWidget(QFrame):
         """Disconnect signals, prepare for deletion (§10.1)."""
         if pg is not None and hasattr(self, "_plot"):
             try:
-                self._plot.getViewBox().sigRangeChanged.disconnect(self._on_range_changed)
+                self._plot.getViewBox().sigRangeChanged.disconnect(
+                    self._on_range_changed
+                )
             except (RuntimeError, TypeError):
                 pass
             self._plot.clear()

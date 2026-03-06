@@ -2,13 +2,14 @@
 Funnel Chart - 퍼널 차트
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dataclasses import dataclass
 
 
 @dataclass
 class FunnelData:
     """퍼널 데이터"""
+
     stages: List[str]
     values: List[float]
     widths: List[float]
@@ -23,15 +24,20 @@ class FunnelCalculator:
     """
 
     DEFAULT_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     def calculate(
-        self,
-        stages: List[str],
-        values: List[float],
-        normalize_widths: bool = True
+        self, stages: List[str], values: List[float], normalize_widths: bool = True
     ) -> Dict[str, Any]:
         """
         퍼널 데이터 계산
@@ -53,7 +59,7 @@ class FunnelCalculator:
                 "widths": [],
                 "conversion_rates": [],
                 "percentages": [],
-                "colors": []
+                "colors": [],
             }
 
         # 최대값
@@ -91,7 +97,7 @@ class FunnelCalculator:
             "conversion_rates": conversion_rates,
             "percentages": percentages,
             "colors": colors,
-            "total_conversion": percentages[-1] if percentages else 0
+            "total_conversion": percentages[-1] if percentages else 0,
         }
 
     def get_funnel_shapes(
@@ -103,7 +109,7 @@ class FunnelCalculator:
         margin: float = 0.1,
         gap: float = 2,
         symmetric: bool = True,
-        **kwargs
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """
         퍼널 모양 좌표 계산
@@ -138,14 +144,16 @@ class FunnelCalculator:
         shapes = []
         center_x = width / 2
 
-        for i, (stage, value, w, rate, pct, color) in enumerate(zip(
-            result["stages"],
-            result["values"],
-            result["widths"],
-            result["conversion_rates"],
-            result["percentages"],
-            result["colors"]
-        )):
+        for i, (stage, value, w, rate, pct, color) in enumerate(
+            zip(
+                result["stages"],
+                result["values"],
+                result["widths"],
+                result["conversion_rates"],
+                result["percentages"],
+                result["colors"],
+            )
+        ):
             # 현재 단계의 폭
             current_width = usable_width * w
 
@@ -161,43 +169,47 @@ class FunnelCalculator:
 
             if symmetric:
                 # 좌우 대칭 사다리꼴
-                shapes.append({
-                    "stage": stage,
-                    "value": value,
-                    "conversion_rate": rate,
-                    "percentage": pct,
-                    "color": color,
-                    "points": [
-                        (center_x - current_width / 2, y_top),      # 좌상
-                        (center_x + current_width / 2, y_top),      # 우상
-                        (center_x + next_width / 2, y_bottom),      # 우하
-                        (center_x - next_width / 2, y_bottom),      # 좌하
-                    ],
-                    "label_x": center_x,
-                    "label_y": (y_top + y_bottom) / 2,
-                    "y_top": y_top,
-                    "y_bottom": y_bottom
-                })
+                shapes.append(
+                    {
+                        "stage": stage,
+                        "value": value,
+                        "conversion_rate": rate,
+                        "percentage": pct,
+                        "color": color,
+                        "points": [
+                            (center_x - current_width / 2, y_top),  # 좌상
+                            (center_x + current_width / 2, y_top),  # 우상
+                            (center_x + next_width / 2, y_bottom),  # 우하
+                            (center_x - next_width / 2, y_bottom),  # 좌하
+                        ],
+                        "label_x": center_x,
+                        "label_y": (y_top + y_bottom) / 2,
+                        "y_top": y_top,
+                        "y_bottom": y_bottom,
+                    }
+                )
             else:
                 # 왼쪽 정렬 사다리꼴
                 left_x = width * m
-                shapes.append({
-                    "stage": stage,
-                    "value": value,
-                    "conversion_rate": rate,
-                    "percentage": pct,
-                    "color": color,
-                    "points": [
-                        (left_x, y_top),
-                        (left_x + current_width, y_top),
-                        (left_x + next_width, y_bottom),
-                        (left_x, y_bottom),
-                    ],
-                    "label_x": left_x + current_width / 2,
-                    "label_y": (y_top + y_bottom) / 2,
-                    "y_top": y_top,
-                    "y_bottom": y_bottom
-                })
+                shapes.append(
+                    {
+                        "stage": stage,
+                        "value": value,
+                        "conversion_rate": rate,
+                        "percentage": pct,
+                        "color": color,
+                        "points": [
+                            (left_x, y_top),
+                            (left_x + current_width, y_top),
+                            (left_x + next_width, y_bottom),
+                            (left_x, y_bottom),
+                        ],
+                        "label_x": left_x + current_width / 2,
+                        "label_y": (y_top + y_bottom) / 2,
+                        "y_top": y_top,
+                        "y_bottom": y_bottom,
+                    }
+                )
 
         return shapes
 
@@ -217,7 +229,7 @@ class FunnelCalculator:
                 "end_value": 0,
                 "total_conversion": 0,
                 "biggest_drop_stage": None,
-                "biggest_drop_rate": 0
+                "biggest_drop_rate": 0,
             }
 
         # 가장 큰 이탈 단계 찾기
@@ -235,6 +247,8 @@ class FunnelCalculator:
             "start_value": result["values"][0],
             "end_value": result["values"][-1],
             "total_conversion": result["total_conversion"],
-            "biggest_drop_stage": result["stages"][biggest_drop_idx] if biggest_drop_idx > 0 else None,
-            "biggest_drop_rate": biggest_drop
+            "biggest_drop_stage": result["stages"][biggest_drop_idx]
+            if biggest_drop_idx > 0
+            else None,
+            "biggest_drop_rate": biggest_drop,
         }

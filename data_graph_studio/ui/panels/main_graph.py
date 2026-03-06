@@ -17,16 +17,22 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QMenu, QDialog
 from .graph_widgets import FormattedAxisItem
 from ...core.state import AppState, ChartType, ToolMode
 from ..drawing import (
-    DrawingManager, DrawingStyle, LineStyle,
-    LineDrawing, ArrowDrawing, CircleDrawing, RectDrawing, TextDrawing,
-    DrawingStyleDialog, RectStyleDialog, TextInputDialog,
-    snap_to_angle
+    DrawingManager,
+    DrawingStyle,
+    LineDrawing,
+    ArrowDrawing,
+    CircleDrawing,
+    RectDrawing,
+    DrawingStyleDialog,
+    TextInputDialog,
+    snap_to_angle,
 )
 
 logger = logging.getLogger(__name__)
 
 
 # ==================== Annotation Item ====================
+
 
 class AnnotationItem:
     """Data-anchored annotation with leader line.
@@ -36,9 +42,16 @@ class AnnotationItem:
     are positioned in *data* coordinates so they follow zoom/pan.
     """
 
-    def __init__(self, text: str, data_x: float, data_y: float,
-                 offset_x: float = 0.0, offset_y: float = 0.0,
-                 color: str = '#FBBF24', uid: str = ''):
+    def __init__(
+        self,
+        text: str,
+        data_x: float,
+        data_y: float,
+        offset_x: float = 0.0,
+        offset_y: float = 0.0,
+        color: str = "#FBBF24",
+        uid: str = "",
+    ):
         self.data_x = data_x
         self.data_y = data_y
         self.uid = uid or str(id(self))
@@ -50,24 +63,24 @@ class AnnotationItem:
             text=text,
             anchor=(0, 1),
             color=color,
-            border=pg.mkPen('#888', width=1),
-            fill=pg.mkBrush('#1E293BCC'),
+            border=pg.mkPen("#888", width=1),
+            fill=pg.mkBrush("#1E293BCC"),
         )
-        self.text_item.setFont(pg.QtGui.QFont('Arial', 10))
+        self.text_item.setFont(pg.QtGui.QFont("Arial", 10))
         self.text_item.setZValue(200)
 
         # Leader line (data_point → label)
-        self.leader = pg.PlotCurveItem(
-            pen=pg.mkPen('#888', width=1, style=Qt.DashLine)
-        )
+        self.leader = pg.PlotCurveItem(pen=pg.mkPen("#888", width=1, style=Qt.DashLine))
         self.leader.setZValue(199)
 
         # Marker dot at the data point
         self.marker = pg.ScatterPlotItem(
-            [data_x], [data_y], size=8,
+            [data_x],
+            [data_y],
+            size=8,
             pen=pg.mkPen(color, width=2),
             brush=pg.mkBrush(color),
-            symbol='o',
+            symbol="o",
         )
         self.marker.setZValue(201)
 
@@ -99,25 +112,26 @@ class AnnotationItem:
 
     def to_dict(self) -> dict:
         return {
-            'text': self.get_text(),
-            'data_x': self.data_x,
-            'data_y': self.data_y,
-            'offset_x': self.offset_x,
-            'offset_y': self.offset_y,
+            "text": self.get_text(),
+            "data_x": self.data_x,
+            "data_y": self.data_y,
+            "offset_x": self.offset_x,
+            "offset_y": self.offset_y,
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> 'AnnotationItem':
+    def from_dict(cls, d: dict) -> "AnnotationItem":
         return cls(
-            text=d['text'],
-            data_x=d['data_x'],
-            data_y=d['data_y'],
-            offset_x=d.get('offset_x', 0.0),
-            offset_y=d.get('offset_y', 0.0),
+            text=d["text"],
+            data_x=d["data_x"],
+            data_y=d["data_y"],
+            offset_x=d.get("offset_x", 0.0),
+            offset_y=d.get("offset_y", 0.0),
         )
 
 
 # ==================== Main Graph ====================
+
 
 class MainGraph(pg.PlotWidget):
     """메인 그래프 위젯 with hover tooltip support"""
@@ -147,21 +161,21 @@ class MainGraph(pg.PlotWidget):
 
     def __init__(self, state: AppState):
         # Create custom axes
-        self._x_axis = FormattedAxisItem('bottom')
-        self._y_axis = FormattedAxisItem('left')
+        self._x_axis = FormattedAxisItem("bottom")
+        self._y_axis = FormattedAxisItem("left")
 
-        super().__init__(axisItems={'bottom': self._x_axis, 'left': self._y_axis})
+        super().__init__(axisItems={"bottom": self._x_axis, "left": self._y_axis})
         self.state = state
         self._is_light = False  # Default: dark (midnight) theme
 
-        # Ensure Y-axis tick labels remain visible.
-        self._y_axis.setStyle(showValues=True, autoExpandTextSpace=True, tickTextWidth=70)
+        # Ensure Y-axis label is not clipped (0 = auto-calculate)
+        self._y_axis.setWidth(0)
         self.getPlotItem().getViewBox().setDefaultPadding(0.05)
 
-        self.setBackground('#1E293B')
+        self.setBackground("#1E293B")
         self.showGrid(x=True, y=True, alpha=0.3)
-        self.setLabel('left', '')
-        self.setLabel('bottom', '')
+        self.setLabel("left", "")
+        self.setLabel("bottom", "")
 
         self.legend = self.addLegend()
         self._legend_visible = True
@@ -170,9 +184,7 @@ class MainGraph(pg.PlotWidget):
 
         # Make legend draggable
         try:
-            self.legend.setFlag(
-                self.legend.GraphicsItemFlag.ItemIsMovable, True
-            )
+            self.legend.setFlag(self.legend.GraphicsItemFlag.ItemIsMovable, True)
         except Exception:
             logger.debug("Legend drag not supported in this pyqtgraph version")
 
@@ -199,11 +211,11 @@ class MainGraph(pg.PlotWidget):
         self._selection_roi = None
         self._selection_start = None
         self._is_selecting = False
-        
+
         # Lasso selection
         self._lasso_points = []  # List of (x, y) points for lasso path
         self._lasso_path_item = None  # Visual path item
-        
+
         # Drawing mode
         self._is_drawing = False
         self._drawing_start = None
@@ -218,7 +230,7 @@ class MainGraph(pg.PlotWidget):
 
         # View range undo/redo stack
         self._view_range_stack: list = []  # undo stack
-        self._view_range_redo: list = []   # redo stack
+        self._view_range_redo: list = []  # redo stack
         self._view_range_max = 50
         self._view_range_recording = True  # prevent recursive push
         self._last_recorded_range = None
@@ -227,10 +239,10 @@ class MainGraph(pg.PlotWidget):
         self._sampling_label = pg.TextItem(
             text="",
             anchor=(0, 0),
-            color='#C2C8D1'  # Dark theme default
+            color="#C2C8D1",  # Dark theme default
         )
         self._sampling_label.setZValue(1000)
-        self._sampling_label.setFont(pg.QtGui.QFont('Arial', 9))
+        self._sampling_label.setFont(pg.QtGui.QFont("Arial", 9))
         self.addItem(self._sampling_label)
         self._sampling_label.hide()
 
@@ -245,7 +257,7 @@ class MainGraph(pg.PlotWidget):
 
         # Crosshair
         self._crosshair_enabled = True
-        _ch_color = '#9CA3AF' if self._is_light else '#D1D5DB'
+        _ch_color = "#9CA3AF" if self._is_light else "#D1D5DB"
         _ch_pen = pg.mkPen(color=_ch_color, width=1, style=Qt.DashLine)
         self._crosshair_v = pg.InfiniteLine(angle=90, movable=False, pen=_ch_pen)
         self._crosshair_h = pg.InfiniteLine(angle=0, movable=False, pen=_ch_pen)
@@ -300,7 +312,7 @@ class MainGraph(pg.PlotWidget):
         displayed_points: int,
         total_points: int,
         is_sampled: bool,
-        algorithm: str = ""
+        algorithm: str = "",
     ):
         """Update sampling status label"""
         if is_sampled and total_points > displayed_points:
@@ -335,10 +347,13 @@ class MainGraph(pg.PlotWidget):
             self.removeItem(self._selection_roi)
             self._selection_roi = None
         self._is_selecting = False
-        
+
         # Clear any drawing in progress
         self._is_drawing = False
-        if hasattr(self, '_drawing_preview_item') and self._drawing_preview_item is not None:
+        if (
+            hasattr(self, "_drawing_preview_item")
+            and self._drawing_preview_item is not None
+        ):
             self.removeItem(self._drawing_preview_item)
             self._drawing_preview_item = None
 
@@ -357,8 +372,13 @@ class MainGraph(pg.PlotWidget):
             vb.setMouseMode(pg.ViewBox.PanMode)  # Disable rect zoom
             vb.setMouseEnabled(x=False, y=False)  # Disable panning
             self.setCursor(Qt.CrossCursor)
-        elif mode in [ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW, ToolMode.CIRCLE_DRAW, 
-                      ToolMode.RECT_DRAW, ToolMode.TEXT_DRAW]:
+        elif mode in [
+            ToolMode.LINE_DRAW,
+            ToolMode.ARROW_DRAW,
+            ToolMode.CIRCLE_DRAW,
+            ToolMode.RECT_DRAW,
+            ToolMode.TEXT_DRAW,
+        ]:
             # Drawing mode: disable default interactions
             vb.setMouseMode(pg.ViewBox.PanMode)
             vb.setMouseEnabled(x=False, y=False)
@@ -370,7 +390,7 @@ class MainGraph(pg.PlotWidget):
             vb.setMouseMode(pg.ViewBox.PanMode)
             vb.setMouseEnabled(x=True, y=True)
             self.setCursor(Qt.ArrowCursor)
-    
+
     def plot_data(
         self,
         x_data: np.ndarray,
@@ -380,7 +400,7 @@ class MainGraph(pg.PlotWidget):
         options: Optional[Dict] = None,
         legend_settings: Optional[Dict] = None,
         x_categorical_labels: Optional[List[str]] = None,
-        y_categorical_labels: Optional[List[str]] = None
+        y_categorical_labels: Optional[List[str]] = None,
     ):
         self.clear_plot()
 
@@ -400,11 +420,11 @@ class MainGraph(pg.PlotWidget):
         self._multi_series_data = None
 
         options = options or {}
-        legend_settings = legend_settings or {'show': True, 'series': []}
+        legend_settings = legend_settings or {"show": True, "series": []}
 
         # Apply axis formats
-        x_format = options.get('x_format')
-        y_format = options.get('y_format')
+        x_format = options.get("x_format")
+        y_format = options.get("y_format")
         self._x_axis.set_format(x_format)
         self._y_axis.set_format(y_format)
 
@@ -420,57 +440,65 @@ class MainGraph(pg.PlotWidget):
             self._y_axis.clear_categorical()
 
         # Apply options — use theme-aware colors
-        axis_label_color = '#111827' if self._is_light else '#E2E8F0'
-        x_label = options.get('x_title', 'X')
-        y_label = options.get('y_title', 'Y')
-        self.setLabel('bottom', x_label, **{'font-size': '14px', 'color': axis_label_color})
-        self.setLabel('left', y_label, **{'font-size': '14px', 'color': axis_label_color})
-        
+        axis_label_color = "#111827" if self._is_light else "#E2E8F0"
+        x_label = options.get("x_title", "X")
+        y_label = options.get("y_title", "Y")
+        self.setLabel(
+            "bottom", x_label, **{"font-size": "14px", "color": axis_label_color}
+        )
+        self.setLabel(
+            "left", y_label, **{"font-size": "14px", "color": axis_label_color}
+        )
+
         # Grid
-        grid_x = options.get('grid_x', True)
-        grid_y = options.get('grid_y', True)
-        grid_alpha = options.get('grid_opacity', 0.3)
+        grid_x = options.get("grid_x", True)
+        grid_y = options.get("grid_y", True)
+        grid_alpha = options.get("grid_opacity", 0.3)
         self.showGrid(x=grid_x, y=grid_y, alpha=grid_alpha)
-        
+
         # Background
-        default_bg = QColor('#F8FAFC') if self._is_light else QColor('#1E293B')
-        bg_color = options.get('bg_color', default_bg)
+        default_bg = QColor("#F8FAFC") if self._is_light else QColor("#1E293B")
+        bg_color = options.get("bg_color", default_bg)
         self.setBackground(bg_color.name())
-        
+
         # Title + subtitle
-        title = options.get('title')
-        subtitle = options.get('subtitle')
+        title = options.get("title")
+        subtitle = options.get("subtitle")
         if title and subtitle:
-            self.setTitle(f"{title}<br><span style='font-size:10pt;color:#94A3B8'>{subtitle}</span>")
+            self.setTitle(
+                f"{title}<br><span style='font-size:10pt;color:#94A3B8'>{subtitle}</span>"
+            )
         elif title:
             self.setTitle(title)
         elif subtitle:
-            self.setTitle(f"<span style='font-size:10pt;color:#94A3B8'>{subtitle}</span>")
+            self.setTitle(
+                f"<span style='font-size:10pt;color:#94A3B8'>{subtitle}</span>"
+            )
         else:
             self.setTitle("")
-        
+
         # Y-axis range
-        y_min = options.get('y_min')
-        y_max = options.get('y_max')
+        y_min = options.get("y_min")
+        y_max = options.get("y_max")
         if y_min is not None and y_max is not None:
             self.setYRange(y_min, y_max)
-        
+
         # Log scale
-        x_log = bool(options.get('x_log'))
-        y_log = bool(options.get('y_log'))
+        x_log = bool(options.get("x_log"))
+        y_log = bool(options.get("y_log"))
         self.setLogMode(x=x_log, y=y_log)
 
         # Reverse axes
-        x_reverse = bool(options.get('x_reverse'))
-        y_reverse = bool(options.get('y_reverse'))
+        x_reverse = bool(options.get("x_reverse"))
+        y_reverse = bool(options.get("y_reverse"))
         self.getViewBox().invertX(x_reverse)
         self.getViewBox().invertY(y_reverse)
-        
+
         # Legend visibility and position
-        if legend_settings.get('show', True):
+        if legend_settings.get("show", True):
             self.legend.show()
             # Apply legend position
-            position = legend_settings.get('position', (1, 1))  # Default top right
+            position = legend_settings.get("position", (1, 1))  # Default top right
             # Position format: (vertical, horizontal) where:
             # vertical: 0=bottom, 1=top, 0.5=middle
             # horizontal: 0=left, 1=right, 0.5=center
@@ -498,74 +526,84 @@ class MainGraph(pg.PlotWidget):
                 self.legend.anchor((0, 0.5), (0, 0.5), offset=(10, 0))
         else:
             self.legend.hide()
-        
+
         # Get style options
-        line_width = options.get('line_width', 2)
-        marker_size = options.get('marker_size', 6)
-        line_style = options.get('line_style', Qt.SolidLine)
-        marker_symbol = options.get('marker_symbol', 'o')
-        show_points = options.get('show_points', True)
-        
+        line_width = options.get("line_width", 2)
+        marker_size = options.get("marker_size", 6)
+        line_style = options.get("line_style", Qt.SolidLine)
+        marker_symbol = options.get("marker_symbol", "o")
+        show_points = options.get("show_points", True)
+
         # Default colors from theme palette
         from ..theme import ColorPalette
+
         default_colors = list(ColorPalette.default().colors)
-        
+
         # Get series colors from legend settings
         series_colors = {}
         series_visible = {}
-        series_markers = {}
-        for s in legend_settings.get('series', []):
-            series_colors[s['name']] = s.get('color', default_colors[0])
-            series_visible[s['name']] = s.get('visible', True)
-            series_markers[s['name']] = s.get('marker_symbol', marker_symbol)
-        
+        for s in legend_settings.get("series", []):
+            series_colors[s["name"]] = s.get("color", default_colors[0])
+            series_visible[s["name"]] = s.get("visible", True)
+
         # Item 14: Vary marker shapes per series for accessibility
-        _marker_shapes = ['o', 's', 't', 'd', '+', 'x', 'star', 'p', 'h']
+        _marker_shapes = ["o", "s", "t", "d", "+", "x", "star", "p", "h"]
 
         if groups:
-            group_color_map = options.get('group_color_map', {})
-            group_marker_map = options.get('group_marker_map', {})
+            group_color_map = options.get("group_color_map", {})
+            group_marker_map = options.get("group_marker_map", {})
             for i, (group_name, mask) in enumerate(groups.items()):
                 if not series_visible.get(group_name, True):
                     continue  # Skip hidden series
 
                 color = group_color_map.get(
                     group_name,
-                    series_colors.get(group_name, default_colors[i % len(default_colors)])
+                    series_colors.get(
+                        group_name, default_colors[i % len(default_colors)]
+                    ),
                 )
                 series_marker = group_marker_map.get(
-                    group_name,
-                    series_markers.get(group_name, _marker_shapes[i % len(_marker_shapes)]),
+                    group_name, _marker_shapes[i % len(_marker_shapes)]
                 )
                 self._plot_series(
-                    x_data[mask], y_data[mask],
-                    chart_type, color, group_name,
-                    line_width, marker_size, line_style, series_marker,
+                    x_data[mask],
+                    y_data[mask],
+                    chart_type,
+                    color,
+                    group_name,
+                    line_width,
+                    marker_size,
+                    line_style,
+                    series_marker,
                     show_points,
-                    show_labels=options.get('show_labels', False),
-                    smooth=options.get('smooth', False),
-                    marker_border=options.get('marker_border', False),
+                    show_labels=options.get("show_labels", False),
+                    smooth=options.get("smooth", False),
+                    marker_border=options.get("marker_border", False),
                 )
         else:
             color = default_colors[0]
-            marker = marker_symbol
-            if legend_settings.get('series'):
-                first_series = legend_settings['series'][0]
-                color = first_series.get('color', color)
-                marker = first_series.get('marker_symbol', marker)
-                if not first_series.get('visible', True):
+            if legend_settings.get("series"):
+                first_series = legend_settings["series"][0]
+                color = first_series.get("color", color)
+                if not first_series.get("visible", True):
                     return  # Hidden
-            
+
             self._plot_series(
-                x_data, y_data,
-                chart_type, color, None,
-                line_width, marker_size, line_style, marker,
+                x_data,
+                y_data,
+                chart_type,
+                color,
+                None,
+                line_width,
+                marker_size,
+                line_style,
+                marker_symbol,
                 show_points,
-                show_labels=options.get('show_labels', False),
-                smooth=options.get('smooth', False),
-                marker_border=options.get('marker_border', False),
+                show_labels=options.get("show_labels", False),
+                smooth=options.get("smooth", False),
+                marker_border=options.get("marker_border", False),
             )
-    
+
     def _plot_series(
         self,
         x: np.ndarray,
@@ -590,24 +628,31 @@ class MainGraph(pg.PlotWidget):
         if chart_type == ChartType.LINE and smooth and len(y) > 3:
             window = min(9, max(3, len(y) // 50))
             kernel = np.ones(window) / window
-            y = np.convolve(y, kernel, mode='same')
+            y = np.convolve(y, kernel, mode="same")
 
         if chart_type == ChartType.LINE:
             item = self.plot(x, y, pen=pen, name=name)
             if show_points and marker_size > 0:
-                scatter = pg.ScatterPlotItem(x, y, size=marker_size, pen=marker_pen, brush=brush, symbol=marker_symbol)
+                scatter = pg.ScatterPlotItem(
+                    x,
+                    y,
+                    size=marker_size,
+                    pen=marker_pen,
+                    brush=brush,
+                    symbol=marker_symbol,
+                )
                 self.addItem(scatter)
                 self._scatter_items.append(scatter)
 
             # Data labels (limited)
             if show_labels:
-                if not hasattr(self, '_label_items'):
+                if not hasattr(self, "_label_items"):
                     self._label_items = []
                 max_labels = 200
                 for i, (xi, yi) in enumerate(zip(x, y)):
                     if i >= max_labels:
                         break
-                    _lbl_color = '#111827' if self._is_light else '#E2E8F0'
+                    _lbl_color = "#111827" if self._is_light else "#E2E8F0"
                     label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color=_lbl_color)
                     label.setPos(xi, yi)
                     self.addItem(label)
@@ -615,45 +660,53 @@ class MainGraph(pg.PlotWidget):
         elif chart_type == ChartType.SCATTER:
             if not show_points:
                 return
-            scatter = pg.ScatterPlotItem(x, y, size=marker_size, pen=marker_pen, brush=brush, symbol=marker_symbol, name=name)
+            scatter = pg.ScatterPlotItem(
+                x,
+                y,
+                size=marker_size,
+                pen=marker_pen,
+                brush=brush,
+                symbol=marker_symbol,
+                name=name,
+            )
             self.addItem(scatter)
             self._scatter_items.append(scatter)
             item = scatter
             if show_labels:
-                if not hasattr(self, '_label_items'):
+                if not hasattr(self, "_label_items"):
                     self._label_items = []
                 max_labels = 200
                 for i, (xi, yi) in enumerate(zip(x, y)):
                     if i >= max_labels:
                         break
-                    _lbl_color = '#111827' if self._is_light else '#E2E8F0'
+                    _lbl_color = "#111827" if self._is_light else "#E2E8F0"
                     label = pg.TextItem(f"{yi:.2f}", anchor=(0.5, 1), color=_lbl_color)
                     label.setPos(xi, yi)
                     self.addItem(label)
                     self._label_items.append(label)
-            
+
         elif chart_type == ChartType.BAR:
             width = (x.max() - x.min()) / len(x) * 0.8 if len(x) > 1 else 0.8
             item = pg.BarGraphItem(x=x, height=y, width=width, brush=brush, name=name)
             self.addItem(item)
-            
+
         elif chart_type == ChartType.AREA:
-            fill_brush = pg.mkBrush(color=color)
+            pg.mkBrush(color=color)
             fill_color = QColor(color)
             fill_color.setAlpha(50)
             item = self.plot(x, y, pen=pen, fillLevel=0, brush=fill_color, name=name)
-            
+
         else:
             item = self.plot(x, y, pen=pen, name=name)
-        
+
         self._plot_items.append(item)
-    
+
     def clear_plot(self):
         for item in self._plot_items:
             self.removeItem(item)
         for item in self._scatter_items:
             self.removeItem(item)
-        if hasattr(self, '_label_items'):
+        if hasattr(self, "_label_items"):
             for item in self._label_items:
                 self.removeItem(item)
             self._label_items.clear()
@@ -666,14 +719,14 @@ class MainGraph(pg.PlotWidget):
             self._secondary_vb_items.clear()
             self.scene().removeItem(self._secondary_vb)
             self._secondary_vb = None
-            self.hideAxis('right')
+            self.hideAxis("right")
         self._data_x = None
         self._data_y = None
         self.legend.clear()
         # Clear trendlines (data-dependent)
         self.clear_trendlines()
         # Clear selection highlight
-        if hasattr(self, '_selection_scatter') and self._selection_scatter is not None:
+        if hasattr(self, "_selection_scatter") and self._selection_scatter is not None:
             self.removeItem(self._selection_scatter)
             self._selection_scatter = None
         # Note: annotations are NOT cleared on refresh — they persist.
@@ -683,8 +736,14 @@ class MainGraph(pg.PlotWidget):
 
     # ==================== Annotations ====================
 
-    def add_annotation(self, text: str, data_x: float, data_y: float,
-                       offset_x: float = 0.0, offset_y: float = 0.0) -> AnnotationItem:
+    def add_annotation(
+        self,
+        text: str,
+        data_x: float,
+        data_y: float,
+        offset_x: float = 0.0,
+        offset_y: float = 0.0,
+    ) -> AnnotationItem:
         """Add a data-anchored annotation at (data_x, data_y)."""
         # Auto-compute offset from view range if not provided
         if offset_x == 0.0 and offset_y == 0.0:
@@ -722,7 +781,7 @@ class MainGraph(pg.PlotWidget):
 
     def _find_nearest_data_point(self, x: float, y: float):
         """Find the nearest data point to (x, y) in data coordinates.
-        
+
         Returns (nearest_x, nearest_y, index) or None.
         """
         if self._data_x is None or self._data_y is None or len(self._data_x) == 0:
@@ -740,9 +799,11 @@ class MainGraph(pg.PlotWidget):
     def _prompt_add_annotation(self, data_x: float, data_y: float):
         """Show dialog and add annotation at given data point."""
         from PySide6.QtWidgets import QInputDialog
+
         text, ok = QInputDialog.getText(
-            self, "Add Annotation",
-            f"Annotation text for point ({data_x:.4g}, {data_y:.4g}):"
+            self,
+            "Add Annotation",
+            f"Annotation text for point ({data_x:.4g}, {data_y:.4g}):",
         )
         if ok and text.strip():
             self.add_annotation(text.strip(), data_x, data_y)
@@ -750,30 +811,30 @@ class MainGraph(pg.PlotWidget):
     def highlight_selection(self, selected_indices: List[int]):
         """Highlight selected data points on the graph"""
         # Remove previous selection highlight
-        if hasattr(self, '_selection_scatter') and self._selection_scatter is not None:
+        if hasattr(self, "_selection_scatter") and self._selection_scatter is not None:
             self.removeItem(self._selection_scatter)
             self._selection_scatter = None
-        
+
         if not selected_indices or self._data_x is None or self._data_y is None:
             return
-        
+
         # Get selected points
         valid_indices = [i for i in selected_indices if 0 <= i < len(self._data_x)]
         if not valid_indices:
             return
-        
+
         selected_x = self._data_x[valid_indices]
         selected_y = self._data_y[valid_indices]
-        
+
         # Create highlight scatter with distinct style
         self._selection_scatter = pg.ScatterPlotItem(
             x=selected_x,
             y=selected_y,
             size=12,
-            pen=pg.mkPen('#EF4444', width=2),  # Red border
-            brush=pg.mkBrush('#EF444480'),  # Semi-transparent red fill
-            symbol='o',
-            pxMode=True
+            pen=pg.mkPen("#EF4444", width=2),  # Red border
+            brush=pg.mkBrush("#EF444480"),  # Semi-transparent red fill
+            symbol="o",
+            pxMode=True,
         )
         self._selection_scatter.setZValue(100)  # Render on top
         self.addItem(self._selection_scatter)
@@ -783,7 +844,7 @@ class MainGraph(pg.PlotWidget):
         series_data: List[Dict],
         chart_type: ChartType = ChartType.LINE,
         options: Dict = None,
-        legend_settings: Dict = None
+        legend_settings: Dict = None,
     ):
         """
         Plot multiple data series on the same chart.
@@ -806,30 +867,34 @@ class MainGraph(pg.PlotWidget):
         self.clear_plot()
 
         # Apply axis settings — use theme-aware colors
-        axis_label_color = '#111827' if self._is_light else '#E2E8F0'
-        x_title = options.get('x_title', '')
-        y_title = options.get('y_title', '')
+        axis_label_color = "#111827" if self._is_light else "#E2E8F0"
+        x_title = options.get("x_title", "")
+        y_title = options.get("y_title", "")
         if x_title:
-            self.setLabel('bottom', x_title, **{'font-size': '14px', 'color': axis_label_color})
+            self.setLabel(
+                "bottom", x_title, **{"font-size": "14px", "color": axis_label_color}
+            )
         if y_title:
-            self.setLabel('left', y_title, **{'font-size': '14px', 'color': axis_label_color})
+            self.setLabel(
+                "left", y_title, **{"font-size": "14px", "color": axis_label_color}
+            )
 
         # Set log scale if specified
-        x_log = options.get('x_log', False)
-        y_log = options.get('y_log', False)
+        x_log = options.get("x_log", False)
+        y_log = options.get("y_log", False)
         self.setLogMode(x=x_log, y=y_log)
 
         # Get style options
-        line_width = options.get('line_width', 2)
-        marker_size = options.get('marker_size', 6)
-        fill_opacity = options.get('fill_opacity', 0.3)
+        line_width = options.get("line_width", 2)
+        marker_size = options.get("marker_size", 6)
+        fill_opacity = options.get("fill_opacity", 0.3)
 
         # Plot each series
         for i, series in enumerate(series_data):
-            x = series['x']
-            y = series['y']
-            name = series.get('name', f'Series {i+1}')
-            color_hex = series.get('color', '#1f77b4')
+            x = series["x"]
+            y = series["y"]
+            name = series.get("name", f"Series {i + 1}")
+            color_hex = series.get("color", "#1f77b4")
 
             # Convert hex color to QColor
             color = QColor(color_hex)
@@ -843,14 +908,17 @@ class MainGraph(pg.PlotWidget):
                 self._plot_items.append(item)
 
             elif chart_type == ChartType.SCATTER:
-                m_border = options.get('marker_border', False)
-                s_pen = pg.mkPen(color=color_hex, width=1) if m_border else pg.mkPen(None)
+                m_border = options.get("marker_border", False)
+                s_pen = (
+                    pg.mkPen(color=color_hex, width=1) if m_border else pg.mkPen(None)
+                )
                 scatter = pg.ScatterPlotItem(
-                    x=x, y=y,
+                    x=x,
+                    y=y,
                     pen=s_pen,
                     brush=pg.mkBrush(r, g, b, 180),
                     size=marker_size,
-                    name=name
+                    name=name,
                 )
                 self.addItem(scatter)
                 self._scatter_items.append(scatter)
@@ -862,18 +930,26 @@ class MainGraph(pg.PlotWidget):
 
                 x_offset = x.astype(float) + offset
                 bar_item = pg.BarGraphItem(
-                    x=x_offset, height=y, width=bar_width * 0.9,
+                    x=x_offset,
+                    height=y,
+                    width=bar_width * 0.9,
                     brush=pg.mkBrush(r, g, b, 200),
                     pen=pg.mkPen(color_hex),
-                    name=name
+                    name=name,
                 )
                 self.addItem(bar_item)
                 self._plot_items.append(bar_item)
 
             elif chart_type == ChartType.AREA:
                 # Fill area under line
-                curve = self.plot(x, y, pen=pen, name=name, fillLevel=0,
-                                  brush=pg.mkBrush(r, g, b, int(255 * fill_opacity)))
+                curve = self.plot(
+                    x,
+                    y,
+                    pen=pen,
+                    name=name,
+                    fillLevel=0,
+                    brush=pg.mkBrush(r, g, b, int(255 * fill_opacity)),
+                )
                 self._plot_items.append(curve)
 
             else:
@@ -884,8 +960,8 @@ class MainGraph(pg.PlotWidget):
         # Store multi-series data for hover; keep first series as selection baseline
         self._multi_series_data = series_data or None
         if series_data:
-            self._data_x = series_data[0].get('x')
-            self._data_y = series_data[0].get('y')
+            self._data_x = series_data[0].get("x")
+            self._data_y = series_data[0].get("y")
 
         # Update legend settings
         if legend_settings:
@@ -900,17 +976,17 @@ class MainGraph(pg.PlotWidget):
 
     def _update_legend_settings(self, settings: Dict):
         """Update legend based on settings"""
-        show = settings.get('show', True)
-        position = settings.get('position', 'top-right')
+        show = settings.get("show", True)
+        position = settings.get("position", "top-right")
 
         if show:
             self.legend.show()
             # Map position string to anchor
             pos_map = {
-                'top-left': (0, 0),
-                'top-right': (1, 0),
-                'bottom-left': (0, 1),
-                'bottom-right': (1, 1),
+                "top-left": (0, 0),
+                "top-right": (1, 0),
+                "bottom-left": (0, 1),
+                "bottom-right": (1, 1),
             }
             anchor = pos_map.get(position, (1, 0))
             self.legend.anchor(anchor, anchor)
@@ -927,8 +1003,8 @@ class MainGraph(pg.PlotWidget):
 
     def setXRange(self, min: float, max: float, padding=None, update=True):  # noqa: A002
         """Set X range safely when log mode is enabled."""
-        axis = self.getAxis('bottom')
-        if getattr(axis, 'logMode', False):
+        axis = self.getAxis("bottom")
+        if getattr(axis, "logMode", False):
             normalized = self._normalize_range_for_log(min, max)
             if normalized is None:
                 return
@@ -937,8 +1013,8 @@ class MainGraph(pg.PlotWidget):
 
     def setYRange(self, min: float, max: float, padding=None, update=True):  # noqa: A002
         """Set Y range safely when log mode is enabled."""
-        axis = self.getAxis('left')
-        if getattr(axis, 'logMode', False):
+        axis = self.getAxis("left")
+        if getattr(axis, "logMode", False):
             normalized = self._normalize_range_for_log(min, max)
             if normalized is None:
                 return
@@ -963,8 +1039,8 @@ class MainGraph(pg.PlotWidget):
                 return
             xs = self._data_x[valid]
             ys = self._data_y[valid]
-            xs = xs[~np.isnan(xs.astype(float))] if hasattr(xs, 'astype') else xs
-            ys = ys[~np.isnan(ys.astype(float))] if hasattr(ys, 'astype') else ys
+            xs = xs[~np.isnan(xs.astype(float))] if hasattr(xs, "astype") else xs
+            ys = ys[~np.isnan(ys.astype(float))] if hasattr(ys, "astype") else ys
             if len(xs) == 0 or len(ys) == 0:
                 self.reset_view()
                 return
@@ -981,11 +1057,12 @@ class MainGraph(pg.PlotWidget):
     def _find_graph_panel(self):
         """Walk up parent chain to find GraphPanel instance."""
         from .graph_panel import GraphPanel
+
         widget = self.parent()
         while widget is not None:
             if isinstance(widget, GraphPanel):
                 return widget
-            widget = widget.parent() if hasattr(widget, 'parent') else None
+            widget = widget.parent() if hasattr(widget, "parent") else None
         return None
 
     def _reset_legend_position(self):
@@ -996,7 +1073,7 @@ class MainGraph(pg.PlotWidget):
             logger.debug("Reset legend position failed: %s", e)
 
     def _toggle_grid(self):
-        self._grid_visible = not getattr(self, '_grid_visible', True)
+        self._grid_visible = not getattr(self, "_grid_visible", True)
         self.showGrid(x=self._grid_visible, y=self._grid_visible, alpha=0.3)
 
     def _toggle_crosshair(self):
@@ -1020,7 +1097,7 @@ class MainGraph(pg.PlotWidget):
                 self,
                 "Export Plot Image",
                 default_name,
-                "PNG Image (*.png);;JPEG Image (*.jpg *.jpeg)"
+                "PNG Image (*.png);;JPEG Image (*.jpg *.jpeg)",
             )
             if not path:
                 return
@@ -1034,23 +1111,20 @@ class MainGraph(pg.PlotWidget):
         try:
             default_name = "dgs-plot-data.csv"
             path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Export Plot Data (CSV)",
-                default_name,
-                "CSV (*.csv)"
+                self, "Export Plot Data (CSV)", default_name, "CSV (*.csv)"
             )
             if not path:
                 return
 
             # Multi-series export
             if self._multi_series_data:
-                with open(path, 'w', newline='', encoding='utf-8') as f:
+                with open(path, "w", newline="", encoding="utf-8") as f:
                     w = csv.writer(f)
                     w.writerow(["series", "x", "y"])
                     for s in self._multi_series_data:
-                        name = s.get('name', '')
-                        xs = s.get('x')
-                        ys = s.get('y')
+                        name = s.get("name", "")
+                        xs = s.get("x")
+                        ys = s.get("y")
                         if xs is None or ys is None:
                             continue
                         n = min(len(xs), len(ys))
@@ -1062,7 +1136,7 @@ class MainGraph(pg.PlotWidget):
             if self._data_x is None or self._data_y is None:
                 return
             n = min(len(self._data_x), len(self._data_y))
-            with open(path, 'w', newline='', encoding='utf-8') as f:
+            with open(path, "w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
                 w.writerow(["x", "y"])
                 for i in range(n):
@@ -1094,7 +1168,9 @@ class MainGraph(pg.PlotWidget):
         graph_panel = self._find_graph_panel()
         if graph_panel:
             minimap_act.setChecked(graph_panel._minimap_enabled)
-            minimap_act.triggered.connect(lambda checked: graph_panel.toggle_minimap(checked))
+            minimap_act.triggered.connect(
+                lambda checked: graph_panel.toggle_minimap(checked)
+            )
         menu.addAction(minimap_act)
 
         crosshair_act = QAction("Toggle Crosshair", self)
@@ -1135,7 +1211,9 @@ class MainGraph(pg.PlotWidget):
             act = QAction(label, self)
             act.setCheckable(True)
             act.setChecked(self.state.tool_mode == mode)
-            act.triggered.connect(lambda checked=False, m=mode: self.state.set_tool_mode(m))
+            act.triggered.connect(
+                lambda checked=False, m=mode: self.state.set_tool_mode(m)
+            )
             tools_menu.addAction(act)
 
         # Draw
@@ -1150,12 +1228,15 @@ class MainGraph(pg.PlotWidget):
             act = QAction(label, self)
             act.setCheckable(True)
             act.setChecked(self.state.tool_mode == mode)
-            act.triggered.connect(lambda checked=False, m=mode: self.state.set_tool_mode(m))
+            act.triggered.connect(
+                lambda checked=False, m=mode: self.state.set_tool_mode(m)
+            )
             draw_menu.addAction(act)
 
         draw_menu.addSeparator()
 
         style_act = QAction("Drawing Style…", self)
+
         def _open_style():
             try:
                 dlg = DrawingStyleDialog("Drawing Style", self)
@@ -1164,6 +1245,7 @@ class MainGraph(pg.PlotWidget):
                     self.set_drawing_style(dlg.get_style())
             except Exception as e:
                 logger.warning("Drawing style dialog failed: %s", e)
+
         style_act.triggered.connect(_open_style)
         draw_menu.addAction(style_act)
 
@@ -1221,10 +1303,16 @@ class MainGraph(pg.PlotWidget):
 
         # Trendline
         trend_menu = menu.addMenu("Trendline")
-        for label_t, deg in [("Linear (1차)", 1), ("Quadratic (2차)", 2), ("Cubic (3차)", 3)]:
+        for label_t, deg in [
+            ("Linear (1차)", 1),
+            ("Quadratic (2차)", 2),
+            ("Cubic (3차)", 3),
+        ]:
             t_act = QAction(label_t, self)
             t_act.setEnabled(has_data)
-            t_act.triggered.connect(lambda checked=False, d=deg: self._add_trendline_degree(d))
+            t_act.triggered.connect(
+                lambda checked=False, d=deg: self._add_trendline_degree(d)
+            )
             trend_menu.addAction(t_act)
 
         exp_act = QAction("Exponential", self)
@@ -1244,11 +1332,13 @@ class MainGraph(pg.PlotWidget):
         ann_menu = menu.addMenu("Annotations")
         add_ann_act = QAction("Add Annotation at Nearest Point…", self)
         add_ann_act.setEnabled(has_data)
+
         def _add_ann_nearest():
             pos = self.plotItem.vb.mapSceneToView(event.pos())
             result = self._find_nearest_data_point(pos.x(), pos.y())
             if result:
                 self._prompt_add_annotation(result[0], result[1])
+
         add_ann_act.triggered.connect(_add_ann_nearest)
         ann_menu.addAction(add_ann_act)
 
@@ -1294,40 +1384,44 @@ class MainGraph(pg.PlotWidget):
 
                 event.accept()
                 return
-                
+
         elif self.state.tool_mode == ToolMode.LASSO_SELECT:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
                 self._selection_start = pos
                 self._is_selecting = True
-                
+
                 # Clear previous lasso
                 if self._lasso_path_item is not None:
                     self.removeItem(self._lasso_path_item)
                     self._lasso_path_item = None
-                
+
                 # Initialize lasso points
                 self._lasso_points = [(pos.x(), pos.y())]
-                
+
                 event.accept()
                 return
-        
+
         # Drawing modes
-        elif self.state.tool_mode in [ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW, ToolMode.CIRCLE_DRAW, 
-                                       ToolMode.RECT_DRAW]:
+        elif self.state.tool_mode in [
+            ToolMode.LINE_DRAW,
+            ToolMode.ARROW_DRAW,
+            ToolMode.CIRCLE_DRAW,
+            ToolMode.RECT_DRAW,
+        ]:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
                 self._drawing_start = (pos.x(), pos.y())
                 self._is_drawing = True
-                
+
                 # Clear any previous preview
                 if self._drawing_preview_item is not None:
                     self.removeItem(self._drawing_preview_item)
                     self._drawing_preview_item = None
-                
+
                 event.accept()
                 return
-        
+
         elif self.state.tool_mode == ToolMode.TEXT_DRAW:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
@@ -1337,10 +1431,15 @@ class MainGraph(pg.PlotWidget):
 
         # Check for drawing click+drag (when not in a drawing-creation mode)
         if (
-            self.state.tool_mode not in (
-                ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW, ToolMode.CIRCLE_DRAW,
-                ToolMode.RECT_DRAW, ToolMode.TEXT_DRAW,
-                ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT,
+            self.state.tool_mode
+            not in (
+                ToolMode.LINE_DRAW,
+                ToolMode.ARROW_DRAW,
+                ToolMode.CIRCLE_DRAW,
+                ToolMode.RECT_DRAW,
+                ToolMode.TEXT_DRAW,
+                ToolMode.RECT_SELECT,
+                ToolMode.LASSO_SELECT,
             )
             and event.button() == Qt.LeftButton
             and self._drawing_manager is not None
@@ -1372,7 +1471,7 @@ class MainGraph(pg.PlotWidget):
             pos = self.plotItem.vb.mapSceneToView(event.position())
 
             # Update selection rectangle visualization
-            if hasattr(self, '_rect_start_x'):
+            if hasattr(self, "_rect_start_x"):
                 x1 = min(self._rect_start_x, pos.x())
                 y1 = min(self._rect_start_y, pos.y())
                 width = abs(pos.x() - self._rect_start_x)
@@ -1390,44 +1489,46 @@ class MainGraph(pg.PlotWidget):
 
             event.accept()
             return
-            
+
         elif self._is_selecting and self.state.tool_mode == ToolMode.LASSO_SELECT:
             pos = self.plotItem.vb.mapSceneToView(event.position())
-            
+
             # Add point to lasso path
             self._lasso_points.append((pos.x(), pos.y()))
-            
+
             # Update lasso path visualization
             if self._lasso_path_item is not None:
                 self.removeItem(self._lasso_path_item)
-            
+
             if len(self._lasso_points) >= 2:
                 # Create path
-                from PySide6.QtGui import QPainterPath, QPolygonF
+                from PySide6.QtGui import QPainterPath
                 from PySide6.QtCore import QPointF
-                
+
                 path = QPainterPath()
                 path.moveTo(QPointF(self._lasso_points[0][0], self._lasso_points[0][1]))
                 for px, py in self._lasso_points[1:]:
                     path.lineTo(QPointF(px, py))
                 # Close path back to start
                 path.lineTo(QPointF(self._lasso_points[0][0], self._lasso_points[0][1]))
-                
+
                 # Create graphics item
                 path_item = pg.QtWidgets.QGraphicsPathItem(path)
                 path_item.setPen(pg.mkPen((236, 72, 153), width=2))  # Pink color
                 path_item.setBrush(pg.mkBrush(236, 72, 153, 30))
                 self.addItem(path_item)
                 self._lasso_path_item = path_item
-            
+
             event.accept()
             return
-        
+
         # Drawing mode preview
-        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW,
-                                                            ToolMode.ARROW_DRAW,
-                                                            ToolMode.CIRCLE_DRAW,
-                                                            ToolMode.RECT_DRAW]:
+        elif self._is_drawing and self.state.tool_mode in [
+            ToolMode.LINE_DRAW,
+            ToolMode.ARROW_DRAW,
+            ToolMode.CIRCLE_DRAW,
+            ToolMode.RECT_DRAW,
+        ]:
             pos = self.plotItem.vb.mapSceneToView(event.position())
             self._update_drawing_preview(pos.x(), pos.y())
             event.accept()
@@ -1439,7 +1540,7 @@ class MainGraph(pg.PlotWidget):
             dx = pos.x() - self._drag_last_pos[0]
             dy = pos.y() - self._drag_last_pos[1]
             drawing = self._drawing_manager.get_drawing(self._dragging_drawing_id)
-            if drawing and hasattr(drawing, 'move'):
+            if drawing and hasattr(drawing, "move"):
                 drawing.move(dx, dy)
                 self._drawing_manager.update_drawing(drawing)
                 self._drag_last_pos = (pos.x(), pos.y())
@@ -1456,7 +1557,7 @@ class MainGraph(pg.PlotWidget):
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
 
-                if hasattr(self, '_rect_start_x'):
+                if hasattr(self, "_rect_start_x"):
                     self._finish_rect_selection(pos)
 
                 event.accept()
@@ -1470,7 +1571,7 @@ class MainGraph(pg.PlotWidget):
 
         # Tool mode changed while selecting: cancel stale selection state.
         elif self._is_selecting:
-            if getattr(self, '_lasso_points', None):
+            if getattr(self, "_lasso_points", None):
                 self._cleanup_lasso()
             else:
                 self._cleanup_selection()
@@ -1478,10 +1579,12 @@ class MainGraph(pg.PlotWidget):
             handled = True
 
         # Drawing mode finish
-        elif self._is_drawing and self.state.tool_mode in [ToolMode.LINE_DRAW,
-                                                            ToolMode.ARROW_DRAW,
-                                                            ToolMode.CIRCLE_DRAW,
-                                                            ToolMode.RECT_DRAW]:
+        elif self._is_drawing and self.state.tool_mode in [
+            ToolMode.LINE_DRAW,
+            ToolMode.ARROW_DRAW,
+            ToolMode.CIRCLE_DRAW,
+            ToolMode.RECT_DRAW,
+        ]:
             if event.button() == Qt.LeftButton:
                 pos = self.plotItem.vb.mapSceneToView(event.position())
                 self._finish_drawing(pos.x(), pos.y())
@@ -1505,14 +1608,14 @@ class MainGraph(pg.PlotWidget):
 
         # Always record view range after release
         self.push_view_range()
-    
+
     def _finish_rect_selection(self, end_point):
         """Finish rectangle selection"""
         if self._data_x is None or self._data_y is None:
             self._cleanup_selection()
             return
 
-        if not hasattr(self, '_rect_start_x'):
+        if not hasattr(self, "_rect_start_x"):
             self._cleanup_selection()
             return
 
@@ -1531,12 +1634,9 @@ class MainGraph(pg.PlotWidget):
 
         if selected_indices:
             self.points_selected.emit(selected_indices)
-            # Keep standalone MainGraph behavior for tests/tools that do not
-            # wire GraphPanel signal mapping.
-            self.state.select_rows(selected_indices)
 
         self._cleanup_selection()
-    
+
     def _finish_lasso_selection(self):
         """Finish lasso selection - select points inside polygon"""
         if self._data_x is None or self._data_y is None:
@@ -1550,7 +1650,7 @@ class MainGraph(pg.PlotWidget):
         # Use point-in-polygon algorithm
         selected_indices = []
         polygon = self._lasso_points
-        
+
         for i in range(len(self._data_x)):
             x, y = self._data_x[i], self._data_y[i]
             if self._point_in_polygon(x, y, polygon):
@@ -1558,47 +1658,44 @@ class MainGraph(pg.PlotWidget):
 
         if selected_indices:
             self.points_selected.emit(selected_indices)
-            # Keep standalone MainGraph behavior for tests/tools that do not
-            # wire GraphPanel signal mapping.
-            self.state.select_rows(selected_indices)
 
         self._cleanup_lasso()
-    
+
     def _point_in_polygon(self, x: float, y: float, polygon: list) -> bool:
         """Ray casting algorithm to check if point is inside polygon"""
         n = len(polygon)
         inside = False
-        
+
         j = n - 1
         for i in range(n):
             xi, yi = polygon[i]
             xj, yj = polygon[j]
-            
+
             if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
                 inside = not inside
             j = i
-        
+
         return inside
-    
+
     def _cleanup_selection(self):
         """Clean up rect selection state"""
         if self._selection_roi is not None:
             self.removeItem(self._selection_roi)
             self._selection_roi = None
-        
+
         self._is_selecting = False
         self._selection_start = None
-        if hasattr(self, '_rect_start_x'):
+        if hasattr(self, "_rect_start_x"):
             del self._rect_start_x
-        if hasattr(self, '_rect_start_y'):
+        if hasattr(self, "_rect_start_y"):
             del self._rect_start_y
-    
+
     def _cleanup_lasso(self):
         """Clean up lasso selection state"""
         if self._lasso_path_item is not None:
             self.removeItem(self._lasso_path_item)
             self._lasso_path_item = None
-        
+
         self._lasso_points = []
         self._is_selecting = False
         self._selection_start = None
@@ -1614,8 +1711,12 @@ class MainGraph(pg.PlotWidget):
         mx, my = mouse_point.x(), mouse_point.y()
 
         # Update crosshair position
-        if self._crosshair_enabled and self.plotItem.vb.sceneBoundingRect().contains(pos):
-            has_data = (self._data_x is not None and len(self._data_x) > 0) or bool(self._multi_series_data)
+        if self._crosshair_enabled and self.plotItem.vb.sceneBoundingRect().contains(
+            pos
+        ):
+            has_data = (self._data_x is not None and len(self._data_x) > 0) or bool(
+                self._multi_series_data
+            )
             self._crosshair_v.setPos(mx)
             self._crosshair_h.setPos(my)
             self._crosshair_v.setVisible(has_data)
@@ -1637,8 +1738,8 @@ class MainGraph(pg.PlotWidget):
             best = None  # (dist, series_name, idx, x, y, hover_data)
             try:
                 for series in self._multi_series_data:
-                    x = series.get('x')
-                    y = series.get('y')
+                    x = series.get("x")
+                    y = series.get("y")
                     if x is None or y is None or len(x) == 0:
                         continue
 
@@ -1657,19 +1758,25 @@ class MainGraph(pg.PlotWidget):
                     if best is None or dist < best[0]:
                         best = (
                             dist,
-                            series.get('name', ''),
+                            series.get("name", ""),
                             idx,
                             float(x[idx]),
                             float(y[idx]),
-                            series.get('hover_data') or {},
+                            series.get("hover_data") or {},
                         )
 
                 # Adaptive hover threshold based on total points across series
-                _total_pts = sum(len(s.get('x', [])) for s in self._multi_series_data)
+                _total_pts = sum(len(s.get("x", [])) for s in self._multi_series_data)
                 _hover_thresh = 0.05 * max(1.0, min(3.0, 1000 / max(_total_pts, 1)))
                 if best and best[0] < _hover_thresh:
                     _, series_name, idx, x_val, y_val, hover_data = best
-                    self._show_tooltip(idx, x_val, y_val, series_name=series_name, hover_data=hover_data)
+                    self._show_tooltip(
+                        idx,
+                        x_val,
+                        y_val,
+                        series_name=series_name,
+                        hover_data=hover_data,
+                    )
                 else:
                     self._hide_tooltip()
             except Exception as e:
@@ -1700,7 +1807,11 @@ class MainGraph(pg.PlotWidget):
             _n_pts = len(self._data_x) if self._data_x is not None else 0
             _hover_thresh = 0.05 * max(1.0, min(3.0, 1000 / max(_n_pts, 1)))
             if min_dist < _hover_thresh and not np.isinf(min_dist):
-                self._show_tooltip(nearest_idx, float(self._data_x[nearest_idx]), float(self._data_y[nearest_idx]))
+                self._show_tooltip(
+                    nearest_idx,
+                    float(self._data_x[nearest_idx]),
+                    float(self._data_y[nearest_idx]),
+                )
             else:
                 self._hide_tooltip()
         except Exception as e:
@@ -1717,10 +1828,12 @@ class MainGraph(pg.PlotWidget):
     ):
         """Show tooltip at data point"""
         if self._tooltip_item is None:
-            fill_color = '#FFFFFF' if self._is_light else '#323D4A'
-            border_color = '#CCCCCC' if self._is_light else '#4A5568'
-            text_color = '#111827' if self._is_light else '#E2E8F0'
-            self._tooltip_item = pg.TextItem(anchor=(0, 1), fill=fill_color, border=border_color, color=text_color)
+            fill_color = "#FFFFFF" if self._is_light else "#323D4A"
+            border_color = "#CCCCCC" if self._is_light else "#4A5568"
+            text_color = "#111827" if self._is_light else "#E2E8F0"
+            self._tooltip_item = pg.TextItem(
+                anchor=(0, 1), fill=fill_color, border=border_color, color=text_color
+            )
             self._tooltip_item.setZValue(1000)
             self.addItem(self._tooltip_item)
 
@@ -1730,7 +1843,9 @@ class MainGraph(pg.PlotWidget):
         lines = []
         if series_name:
             lines.append(f"Series: {series_name}")
-        lines.extend([f"X: {self._format_value(x_val)}", f"Y: {self._format_value(y_val)}"])
+        lines.extend(
+            [f"X: {self._format_value(x_val)}", f"Y: {self._format_value(y_val)}"]
+        )
 
         for col in self._hover_columns:
             if col in hover_data and idx < len(hover_data[col]):
@@ -1889,7 +2004,7 @@ class MainGraph(pg.PlotWidget):
         pen = pg.mkPen(
             color=style.stroke_color,
             width=style.stroke_width,
-            style=style.line_style.to_qt()
+            style=style.line_style.to_qt(),
         )
         try:
             pen.setCosmetic(True)
@@ -1899,6 +2014,7 @@ class MainGraph(pg.PlotWidget):
         if self.state.tool_mode in (ToolMode.LINE_DRAW, ToolMode.ARROW_DRAW):
             # Line/Arrow preview (arrow head is drawn on final object)
             from PySide6.QtCore import QLineF
+
             line = pg.QtWidgets.QGraphicsLineItem(QLineF(x1, y1, x2, y2))
             line.setPen(pen)
             self.addItem(line)
@@ -1970,32 +2086,22 @@ class MainGraph(pg.PlotWidget):
         drawing = None
 
         if self.state.tool_mode == ToolMode.LINE_DRAW:
-            drawing = LineDrawing(
-                x1=x1, y1=y1, x2=x2, y2=y2,
-                style=style
-            )
+            drawing = LineDrawing(x1=x1, y1=y1, x2=x2, y2=y2, style=style)
         elif self.state.tool_mode == ToolMode.ARROW_DRAW:
-            drawing = ArrowDrawing(
-                x1=x1, y1=y1, x2=x2, y2=y2,
-                style=style
-            )
+            drawing = ArrowDrawing(x1=x1, y1=y1, x2=x2, y2=y2, style=style)
         elif self.state.tool_mode == ToolMode.CIRCLE_DRAW:
             cx = (x1 + x2) / 2
             cy = (y1 + y2) / 2
             rx = abs(x2 - x1) / 2
             ry = abs(y2 - y1) / 2
-            drawing = CircleDrawing(
-                cx=cx, cy=cy, rx=rx, ry=ry,
-                style=style
-            )
+            drawing = CircleDrawing(cx=cx, cy=cy, rx=rx, ry=ry, style=style)
         elif self.state.tool_mode == ToolMode.RECT_DRAW:
             rect_x = min(x1, x2)
             rect_y = min(y1, y2)
             width = abs(x2 - x1)
             height = abs(y2 - y1)
             drawing = RectDrawing(
-                x=rect_x, y=rect_y, width=width, height=height,
-                style=style
+                x=rect_x, y=rect_y, width=width, height=height, style=style
             )
 
         if drawing:
@@ -2024,14 +2130,19 @@ class MainGraph(pg.PlotWidget):
 
     # ==================== Reference Lines & Bands ====================
 
-    def add_reference_line(self, value: float, orientation='horizontal',
-                           color='#EF4444', style=Qt.DashLine, width=1,
-                           label: str = None):
+    def add_reference_line(
+        self,
+        value: float,
+        orientation="horizontal",
+        color="#EF4444",
+        style=Qt.DashLine,
+        width=1,
+        label: str = None,
+    ):
         """Add a reference line at a specific value."""
-        angle = 0 if orientation == 'horizontal' else 90
+        angle = 0 if orientation == "horizontal" else 90
         line = pg.InfiniteLine(
-            pos=value, angle=angle,
-            pen=pg.mkPen(color, width=width, style=style)
+            pos=value, angle=angle, pen=pg.mkPen(color, width=width, style=style)
         )
         line.setZValue(50)
         self.addItem(line)
@@ -2041,7 +2152,7 @@ class MainGraph(pg.PlotWidget):
             lbl_color = color
             label_item = pg.TextItem(label, anchor=(0, 1), color=lbl_color)
             label_item.setZValue(51)
-            if orientation == 'horizontal':
+            if orientation == "horizontal":
                 vr = self.viewRange()
                 label_item.setPos(vr[0][0], value)
             else:
@@ -2050,17 +2161,18 @@ class MainGraph(pg.PlotWidget):
             self.addItem(label_item)
             self._ref_labels.append(label_item)
 
-    def add_reference_band(self, y_min: float, y_max: float,
-                           color='#3B82F6', alpha=0.1, label: str = None):
+    def add_reference_band(
+        self, y_min: float, y_max: float, color="#3B82F6", alpha=0.1, label: str = None
+    ):
         """Add a horizontal band between two values."""
         band_color = QColor(color)
         band_color.setAlphaF(alpha)
         region = pg.LinearRegionItem(
             values=(y_min, y_max),
-            orientation='horizontal',
+            orientation="horizontal",
             brush=pg.mkBrush(band_color),
             pen=pg.mkPen(color, width=1, style=Qt.DotLine),
-            movable=False
+            movable=False,
         )
         region.setZValue(10)
         self.addItem(region)
@@ -2099,7 +2211,7 @@ class MainGraph(pg.PlotWidget):
         if len(y) == 0:
             return
         mean_val = float(np.mean(y))
-        self.add_reference_line(mean_val, label=f'Mean: {mean_val:.4g}')
+        self.add_reference_line(mean_val, label=f"Mean: {mean_val:.4g}")
 
     def _add_median_line(self):
         """Add median reference line from current Y data."""
@@ -2110,14 +2222,19 @@ class MainGraph(pg.PlotWidget):
         if len(y) == 0:
             return
         med_val = float(np.median(y))
-        self.add_reference_line(med_val, color='#8B5CF6', label=f'Median: {med_val:.4g}')
+        self.add_reference_line(
+            med_val, color="#8B5CF6", label=f"Median: {med_val:.4g}"
+        )
 
     def _add_custom_line(self):
         """Add a custom reference line via input dialog."""
         from PySide6.QtWidgets import QInputDialog
-        val, ok = QInputDialog.getDouble(self, "Custom Reference Line", "Value:", 0.0, -1e15, 1e15, 4)
+
+        val, ok = QInputDialog.getDouble(
+            self, "Custom Reference Line", "Value:", 0.0, -1e15, 1e15, 4
+        )
         if ok:
-            self.add_reference_line(val, color='#10B981', label=f'Ref: {val:.4g}')
+            self.add_reference_line(val, color="#10B981", label=f"Ref: {val:.4g}")
 
     def _add_sigma_band(self):
         """Add ±1σ band around mean."""
@@ -2130,18 +2247,28 @@ class MainGraph(pg.PlotWidget):
         mean_val = float(np.mean(y))
         std_val = float(np.std(y))
         self.add_reference_band(
-            mean_val - std_val, mean_val + std_val,
-            color='#6366F1', alpha=0.08,
-            label=f'±1σ ({mean_val - std_val:.4g} – {mean_val + std_val:.4g})'
+            mean_val - std_val,
+            mean_val + std_val,
+            color="#6366F1",
+            alpha=0.08,
+            label=f"±1σ ({mean_val - std_val:.4g} – {mean_val + std_val:.4g})",
         )
         # Also add mean line
-        self.add_reference_line(mean_val, color='#6366F1', style=Qt.DashDotLine,
-                                label=f'μ: {mean_val:.4g}')
+        self.add_reference_line(
+            mean_val, color="#6366F1", style=Qt.DashDotLine, label=f"μ: {mean_val:.4g}"
+        )
 
     # ==================== Trendline ====================
 
-    def add_trendline(self, x_data, y_data, degree=1, color='#F59E0B',
-                      label=None, is_exponential=False):
+    def add_trendline(
+        self,
+        x_data,
+        y_data,
+        degree=1,
+        color="#F59E0B",
+        label=None,
+        is_exponential=False,
+    ):
         """Add polynomial or exponential trendline."""
         # Clean NaN
         mask = ~(np.isnan(x_data.astype(float)) | np.isnan(y_data.astype(float)))
@@ -2165,7 +2292,7 @@ class MainGraph(pg.PlotWidget):
                 y_pred = np.exp(coeffs[1]) * np.exp(coeffs[0] * x_pos)
                 ss_res = np.sum((y_pos - y_pred) ** 2)
                 ss_tot = np.sum((y_pos - np.mean(y_pos)) ** 2)
-                deg_label = 'Exp'
+                deg_label = "Exp"
             else:
                 coeffs = np.polyfit(x_clean, y_clean, degree)
                 poly = np.poly1d(coeffs)
@@ -2175,18 +2302,20 @@ class MainGraph(pg.PlotWidget):
                 y_pred = poly(x_clean)
                 ss_res = np.sum((y_clean - y_pred) ** 2)
                 ss_tot = np.sum((y_clean - np.mean(y_clean)) ** 2)
-                deg_label = f'deg={degree}'
+                deg_label = f"deg={degree}"
 
             r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0.0
 
             pen = pg.mkPen(color, width=2, style=Qt.DashDotLine)
-            curve_name = label or f'Trend ({deg_label})'
+            curve_name = label or f"Trend ({deg_label})"
             item = self.plot(x_smooth, y_smooth, pen=pen, name=curve_name)
             self._trendline_items.append(item)
 
             # R² text
             text_color = color
-            r2_text = pg.TextItem(f'R² = {r_squared:.4f}', anchor=(1, 0), color=text_color)
+            r2_text = pg.TextItem(
+                f"R² = {r_squared:.4f}", anchor=(1, 0), color=text_color
+            )
             r2_text.setZValue(52)
             r2_text.setPos(float(x_smooth[-1]), float(y_smooth[-1]))
             self.addItem(r2_text)
@@ -2204,50 +2333,54 @@ class MainGraph(pg.PlotWidget):
         """Add trendline with given polynomial degree from current data."""
         if self._data_x is None or self._data_y is None:
             return
-        colors = {1: '#F59E0B', 2: '#EC4899', 3: '#14B8A6'}
-        self.add_trendline(self._data_x, self._data_y, degree=degree,
-                           color=colors.get(degree, '#F59E0B'))
+        colors = {1: "#F59E0B", 2: "#EC4899", 3: "#14B8A6"}
+        self.add_trendline(
+            self._data_x,
+            self._data_y,
+            degree=degree,
+            color=colors.get(degree, "#F59E0B"),
+        )
 
     def _add_exponential_trendline(self):
         """Add exponential trendline from current data."""
         if self._data_x is None or self._data_y is None:
             return
-        self.add_trendline(self._data_x, self._data_y, degree=1,
-                           color='#F97316', is_exponential=True)
+        self.add_trendline(
+            self._data_x, self._data_y, degree=1, color="#F97316", is_exponential=True
+        )
 
     def apply_theme(self, is_light: bool):
         """Apply theme colors to main graph"""
         self._is_light = is_light
-        bg_color = '#F8FAFC' if is_light else '#1E293B'
-        grid_color = '#E5E7EB' if is_light else '#374151'
-        text_color = '#111827' if is_light else '#F1F5F9'
-        
+        bg_color = "#F8FAFC" if is_light else "#1E293B"
+        grid_color = "#E5E7EB" if is_light else "#374151"
+        text_color = "#111827" if is_light else "#F1F5F9"
+
         self.setBackground(bg_color)
-        
+
         # Update axis colors
-        for axis_name in ['bottom', 'left']:
+        for axis_name in ["bottom", "left"]:
             axis = self.getAxis(axis_name)
             if axis:
                 axis.setPen(pg.mkPen(grid_color))
                 axis.setTextPen(pg.mkPen(text_color))
-        
+
         # Update sampling label color
-        if hasattr(self, '_sampling_label'):
-            label_color = '#6B7280' if is_light else '#C2C8D1'
+        if hasattr(self, "_sampling_label"):
+            label_color = "#6B7280" if is_light else "#C2C8D1"
             self._sampling_label.setColor(label_color)
-        
+
         # Update crosshair colors
-        if hasattr(self, '_crosshair_v'):
-            ch_color = '#9CA3AF' if is_light else '#D1D5DB'
+        if hasattr(self, "_crosshair_v"):
+            ch_color = "#9CA3AF" if is_light else "#D1D5DB"
             ch_pen = pg.mkPen(color=ch_color, width=1, style=Qt.DashLine)
             self._crosshair_v.setPen(ch_pen)
             self._crosshair_h.setPen(ch_pen)
 
         # Reset tooltip so it gets recreated with correct theme colors
-        if hasattr(self, '_tooltip_item') and self._tooltip_item is not None:
+        if hasattr(self, "_tooltip_item") and self._tooltip_item is not None:
             self.removeItem(self._tooltip_item)
             self._tooltip_item = None
 
 
 # ==================== Graph Panel ====================
-

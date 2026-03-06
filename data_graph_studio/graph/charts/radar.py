@@ -10,6 +10,7 @@ import math
 @dataclass
 class RadarData:
     """레이더 차트 데이터"""
+
     axes: List[str]
     series_coordinates: Dict[str, List[Tuple[float, float]]]
     axis_angles: List[float]
@@ -23,8 +24,16 @@ class RadarCalculator:
     """
 
     DEFAULT_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     def calculate(
@@ -33,7 +42,7 @@ class RadarCalculator:
         series: List[Dict[str, Any]],
         max_value: Optional[float] = None,
         min_value: float = 0,
-        start_angle: float = 90  # 12시 방향 시작
+        start_angle: float = 90,  # 12시 방향 시작
     ) -> Dict[str, Any]:
         """
         레이더 차트 좌표 계산
@@ -58,15 +67,12 @@ class RadarCalculator:
                 "series_colors": {},
                 "max_value": 0,
                 "min_value": 0,
-                "grid_values": []
+                "grid_values": [],
             }
 
         # 축 각도 계산 (등간격)
         angle_step = 360 / n_axes
-        axis_angles = [
-            (start_angle - i * angle_step) % 360
-            for i in range(n_axes)
-        ]
+        axis_angles = [(start_angle - i * angle_step) % 360 for i in range(n_axes)]
 
         # 최대값 결정
         if max_value is None:
@@ -124,7 +130,7 @@ class RadarCalculator:
             "series_colors": series_colors,
             "max_value": max_value,
             "min_value": min_value,
-            "grid_values": grid_values
+            "grid_values": grid_values,
         }
 
     def get_polygon_points(
@@ -134,7 +140,7 @@ class RadarCalculator:
         center_x: float,
         center_y: float,
         radius: float,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         실제 그리기용 폴리곤 포인트 계산
@@ -151,7 +157,7 @@ class RadarCalculator:
         """
         result = self.calculate(axes, series, **kwargs)
 
-        n_axes = len(result["axes"])
+        len(result["axes"])
 
         # 축 라인 끝점
         axis_endpoints = []
@@ -165,7 +171,11 @@ class RadarCalculator:
         grid_polygons = []
         for grid_val in result["grid_values"]:
             if result["max_value"] > result["min_value"]:
-                grid_radius = radius * (grid_val - result["min_value"]) / (result["max_value"] - result["min_value"])
+                grid_radius = (
+                    radius
+                    * (grid_val - result["min_value"])
+                    / (result["max_value"] - result["min_value"])
+                )
             else:
                 grid_radius = 0
 
@@ -176,10 +186,7 @@ class RadarCalculator:
                 y = center_y - grid_radius * math.sin(rad)
                 points.append((x, y))
 
-            grid_polygons.append({
-                "value": grid_val,
-                "points": points
-            })
+            grid_polygons.append({"value": grid_val, "points": points})
 
         # 시리즈 폴리곤
         series_polygons = {}
@@ -192,7 +199,7 @@ class RadarCalculator:
 
             series_polygons[name] = {
                 "points": points,
-                "color": result["series_colors"][name]
+                "color": result["series_colors"][name],
             }
 
         return {
@@ -204,7 +211,7 @@ class RadarCalculator:
             "grid_polygons": grid_polygons,
             "series_polygons": series_polygons,
             "max_value": result["max_value"],
-            "min_value": result["min_value"]
+            "min_value": result["min_value"],
         }
 
     def calculate_area(self, coords: List[Tuple[float, float]]) -> float:
@@ -230,10 +237,7 @@ class RadarCalculator:
         return abs(area) / 2
 
     def compare_series(
-        self,
-        axes: List[str],
-        series: List[Dict[str, Any]],
-        **kwargs
+        self, axes: List[str], series: List[Dict[str, Any]], **kwargs
     ) -> Dict[str, Any]:
         """
         시리즈 간 비교 분석
@@ -277,7 +281,7 @@ class RadarCalculator:
                 "avg_distance": avg_distance,
                 "max_axis": max_axis,
                 "min_axis": min_axis,
-                "color": result["series_colors"][name]
+                "color": result["series_colors"][name],
             }
 
         return comparison

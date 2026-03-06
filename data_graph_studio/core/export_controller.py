@@ -44,8 +44,10 @@ logger = logging.getLogger(__name__)
 # ExportFormat
 # ---------------------------------------------------------------------------
 
+
 class ExportFormat(Enum):
     """Supported export formats."""
+
     # Chart formats
     PNG = "png"
     SVG = "svg"
@@ -59,6 +61,7 @@ class ExportFormat(Enum):
 # ---------------------------------------------------------------------------
 # ExportOptions
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ExportOptions:
@@ -74,6 +77,7 @@ class ExportOptions:
         stats_data: Dict of stat-name → value for the summary table.
         page_size: "A4" | "Letter" (PDF only).
     """
+
     width: Optional[int] = None
     height: Optional[int] = None
     dpi: int = 96
@@ -88,6 +92,7 @@ class ExportOptions:
 # ExportWorker  (QThread)
 # ---------------------------------------------------------------------------
 
+
 class ExportWorker(QThread):
     """
     Background worker — PRD §10.5.
@@ -96,13 +101,13 @@ class ExportWorker(QThread):
     The controller connects to its signals and forwards them.
     """
 
-    progress = Signal(int)          # 0..100
-    completed = Signal(str)         # output path
-    failed = Signal(str)            # error message
+    progress = Signal(int)  # 0..100
+    completed = Signal(str)  # output path
+    failed = Signal(str)  # error message
 
     def __init__(
         self,
-        task: str,          # "chart" | "data"
+        task: str,  # "chart" | "data"
         image: Optional[QImage] = None,
         df: Optional["pl.DataFrame"] = None,
         path: str = "",
@@ -173,7 +178,8 @@ class ExportWorker(QThread):
         # Resize if requested
         if opts.width and opts.height:
             img = img.scaled(
-                opts.width, opts.height,
+                opts.width,
+                opts.height,
                 Qt.IgnoreAspectRatio,
                 Qt.SmoothTransformation,
             )
@@ -268,8 +274,8 @@ class ExportWorker(QThread):
 
         self.progress.emit(20)
 
-        from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QSizeF, QRectF
-        from PySide6.QtGui import QPageSize, QPageLayout, QPdfWriter, QFont
+        from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QRectF
+        from PySide6.QtGui import QPageSize, QPdfWriter, QFont
 
         qba = QByteArray()
         qbuf = QBuffer(qba)
@@ -385,7 +391,6 @@ class ExportWorker(QThread):
         atomic_write(self.path, data)
 
     def _export_parquet(self) -> None:
-        import tempfile
 
         # Polars write_parquet writes to path; use temp file + rename
         tmp_path = self.path + ".tmp"
@@ -452,6 +457,7 @@ class ExportWorker(QThread):
 # ---------------------------------------------------------------------------
 # ExportController  (QObject, lives on main thread)
 # ---------------------------------------------------------------------------
+
 
 class ExportController(QObject):
     """
@@ -603,14 +609,24 @@ class ExportController(QObject):
         if not path:
             return {"status": "error", "message": "Missing 'path' parameter"}
 
-        fmt_map = {"png": ExportFormat.PNG, "svg": ExportFormat.SVG, "pdf": ExportFormat.PDF}
+        fmt_map = {
+            "png": ExportFormat.PNG,
+            "svg": ExportFormat.SVG,
+            "pdf": ExportFormat.PDF,
+        }
         fmt = fmt_map.get(fmt_str)
         if fmt is None:
-            return {"status": "error", "message": f"Unsupported chart format: {fmt_str}"}
+            return {
+                "status": "error",
+                "message": f"Unsupported chart format: {fmt_str}",
+            }
 
         image_provider = getattr(self, "_image_provider", None)
         if image_provider is None:
-            return {"status": "error", "message": "No image provider configured (call set_image_provider)"}
+            return {
+                "status": "error",
+                "message": "No image provider configured (call set_image_provider)",
+            }
 
         image = image_provider()
         if image is None or image.isNull():
@@ -637,8 +653,11 @@ class ExportController(QObject):
         if not path:
             return {"status": "error", "message": "Missing 'path' parameter"}
 
-        fmt_map = {"csv": ExportFormat.CSV, "excel": ExportFormat.EXCEL,
-                   "parquet": ExportFormat.PARQUET}
+        fmt_map = {
+            "csv": ExportFormat.CSV,
+            "excel": ExportFormat.EXCEL,
+            "parquet": ExportFormat.PARQUET,
+        }
         fmt = fmt_map.get(fmt_str)
         if fmt is None:
             return {"status": "error", "message": f"Unsupported data format: {fmt_str}"}

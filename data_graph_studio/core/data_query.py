@@ -49,17 +49,17 @@ class DataQuery:
 
         col = pl.col(column)
         ops = {
-            'eq': col == value,
-            'ne': col != value,
-            'gt': col > value,
-            'lt': col < value,
-            'ge': col >= value,
-            'le': col <= value,
-            'contains': col.str.contains(str(value)),
-            'startswith': col.str.starts_with(str(value)),
-            'endswith': col.str.ends_with(str(value)),
-            'isnull': col.is_null(),
-            'notnull': col.is_not_null(),
+            "eq": col == value,
+            "ne": col != value,
+            "gt": col > value,
+            "lt": col < value,
+            "ge": col >= value,
+            "le": col <= value,
+            "contains": col.str.contains(str(value)),
+            "startswith": col.str.starts_with(str(value)),
+            "endswith": col.str.ends_with(str(value)),
+            "isnull": col.is_null(),
+            "notnull": col.is_not_null(),
         }
 
         if operator not in ops:
@@ -90,7 +90,9 @@ class DataQuery:
         if df is None:
             return None
         try:
-            return self._collect_streaming(df.lazy().sort(columns, descending=descending))
+            return self._collect_streaming(
+                df.lazy().sort(columns, descending=descending)
+            )
         except Exception as e:
             logger.debug("Streaming sort failed, falling back to eager: %s", e)
             return df.sort(columns, descending=descending)
@@ -118,25 +120,29 @@ class DataQuery:
             return None
 
         agg_map = {
-            'sum': lambda c: pl.col(c).sum(),
-            'mean': lambda c: pl.col(c).mean(),
-            'median': lambda c: pl.col(c).median(),
-            'min': lambda c: pl.col(c).min(),
-            'max': lambda c: pl.col(c).max(),
-            'count': lambda c: pl.col(c).count(),
-            'std': lambda c: pl.col(c).std(),
-            'var': lambda c: pl.col(c).var(),
-            'first': lambda c: pl.col(c).first(),
-            'last': lambda c: pl.col(c).last(),
+            "sum": lambda c: pl.col(c).sum(),
+            "mean": lambda c: pl.col(c).mean(),
+            "median": lambda c: pl.col(c).median(),
+            "min": lambda c: pl.col(c).min(),
+            "max": lambda c: pl.col(c).max(),
+            "count": lambda c: pl.col(c).count(),
+            "std": lambda c: pl.col(c).std(),
+            "var": lambda c: pl.col(c).var(),
+            "first": lambda c: pl.col(c).first(),
+            "last": lambda c: pl.col(c).last(),
         }
 
         agg_exprs = []
         for val_col, agg_func in zip(value_columns, agg_funcs):
             if agg_func in agg_map:
-                agg_exprs.append(agg_map[agg_func](val_col).alias(f"{val_col}_{agg_func}"))
+                agg_exprs.append(
+                    agg_map[agg_func](val_col).alias(f"{val_col}_{agg_func}")
+                )
 
         try:
-            return self._collect_streaming(df.lazy().group_by(group_columns).agg(agg_exprs))
+            return self._collect_streaming(
+                df.lazy().group_by(group_columns).agg(agg_exprs)
+            )
         except Exception as e:
             logger.debug("Streaming group_by failed, falling back to eager: %s", e)
             return df.group_by(group_columns).agg(agg_exprs)
@@ -197,9 +203,10 @@ class DataQuery:
 
         if value_columns is None:
             value_columns = [
-                col for col in df.columns
-                if df[col].dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                                     pl.Float32, pl.Float64]
+                col
+                for col in df.columns
+                if df[col].dtype
+                in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]
             ]
 
         return {
@@ -229,45 +236,52 @@ class DataQuery:
             if profile is None:
                 return None
             return {
-                'total_rows': profile.total_rows,
-                'total_columns': profile.total_columns,
-                'columns': profile.columns,
-                'memory_bytes': profile.memory_bytes,
-                'load_time_seconds': profile.load_time_seconds,
+                "total_rows": profile.total_rows,
+                "total_columns": profile.total_columns,
+                "columns": profile.columns,
+                "memory_bytes": profile.memory_bytes,
+                "load_time_seconds": profile.load_time_seconds,
             }
 
         try:
             schema = lazy_df.schema
             total_columns = len(schema)
-            numeric_cols = sum(1 for dtype in schema.values()
-                               if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                                            pl.Float32, pl.Float64])
-            temporal_cols = sum(1 for dtype in schema.values()
-                                if dtype in [pl.Date, pl.Datetime, pl.Time])
+            numeric_cols = sum(
+                1
+                for dtype in schema.values()
+                if dtype
+                in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]
+            )
+            sum(
+                1
+                for dtype in schema.values()
+                if dtype in [pl.Date, pl.Datetime, pl.Time]
+            )
 
             null_exprs = [pl.col(c).null_count().alias(c) for c in schema.keys()]
             stats_df = self._collect_streaming(
-                lazy_df.select([pl.len().alias('total_rows')] + null_exprs)
+                lazy_df.select([pl.len().alias("total_rows")] + null_exprs)
             )
             if stats_df is None or stats_df.height == 0:
                 return None
 
-            total_rows = int(stats_df[0, 'total_rows'])
+            total_rows = int(stats_df[0, "total_rows"])
             total_nulls = sum(
-                int(stats_df[0, c]) for c in schema.keys()
-                if c in stats_df.columns
+                int(stats_df[0, c]) for c in schema.keys() if c in stats_df.columns
             )
             total_cells = total_rows * total_columns if total_rows > 0 else 0
-            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0.0
+            missing_percent = (
+                (total_nulls / total_cells * 100) if total_cells > 0 else 0.0
+            )
 
             return {
-                'total_rows': total_rows,
-                'total_columns': total_columns,
-                'numeric_columns': numeric_cols,
-                'text_columns': total_columns - numeric_cols,
-                'missing_percent': missing_percent,
-                'memory_bytes': 0,
-                'load_time_seconds': 0,
+                "total_rows": total_rows,
+                "total_columns": total_columns,
+                "numeric_columns": numeric_cols,
+                "text_columns": total_columns - numeric_cols,
+                "missing_percent": missing_percent,
+                "memory_bytes": 0,
+                "load_time_seconds": 0,
             }
         except Exception:
             return None
@@ -301,7 +315,10 @@ class DataQuery:
 
         if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
             unique_count = series.n_unique()
-            return unique_count <= min(20, max_unique_count) and unique_count / len(series) < max_unique_ratio
+            return (
+                unique_count <= min(20, max_unique_count)
+                and unique_count / len(series) < max_unique_ratio
+            )
 
         if dtype in [pl.Date, pl.Datetime, pl.Time]:
             return False
@@ -309,7 +326,9 @@ class DataQuery:
         if dtype == pl.Utf8:
             row_count = len(series)
             unique_count = series.n_unique()
-            return unique_count <= max_unique_count or (row_count > 0 and unique_count / row_count < max_unique_ratio)
+            return unique_count <= max_unique_count or (
+                row_count > 0 and unique_count / row_count < max_unique_ratio
+            )
 
         if dtype == pl.Boolean:
             return True
@@ -446,7 +465,11 @@ class DataQuery:
         conditions = []
         for col in columns:
             try:
-                cond = pl.col(col).cast(pl.Utf8).str.contains(query_pattern, literal=literal)
+                cond = (
+                    pl.col(col)
+                    .cast(pl.Utf8)
+                    .str.contains(query_pattern, literal=literal)
+                )
                 conditions.append(cond)
             except Exception:
                 continue
@@ -504,48 +527,68 @@ class DataQuery:
                     return {}
                 dtype = lazy_df.schema.get(column)
                 exprs = [
-                    pl.len().alias('count'),
-                    pl.col(column).null_count().alias('null_count'),
-                    pl.col(column).n_unique().alias('unique_count'),
+                    pl.len().alias("count"),
+                    pl.col(column).null_count().alias("null_count"),
+                    pl.col(column).n_unique().alias("unique_count"),
                 ]
-                if dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
-                    exprs.extend([
-                        pl.col(column).sum().alias('sum'),
-                        pl.col(column).mean().alias('mean'),
-                        pl.col(column).median().alias('median'),
-                        pl.col(column).std().alias('std'),
-                        pl.col(column).min().alias('min'),
-                        pl.col(column).max().alias('max'),
-                        pl.col(column).quantile(0.25).alias('q1'),
-                        pl.col(column).quantile(0.75).alias('q3'),
-                    ])
+                if dtype in [
+                    pl.Int8,
+                    pl.Int16,
+                    pl.Int32,
+                    pl.Int64,
+                    pl.Float32,
+                    pl.Float64,
+                ]:
+                    exprs.extend(
+                        [
+                            pl.col(column).sum().alias("sum"),
+                            pl.col(column).mean().alias("mean"),
+                            pl.col(column).median().alias("median"),
+                            pl.col(column).std().alias("std"),
+                            pl.col(column).min().alias("min"),
+                            pl.col(column).max().alias("max"),
+                            pl.col(column).quantile(0.25).alias("q1"),
+                            pl.col(column).quantile(0.75).alias("q3"),
+                        ]
+                    )
                 stats_df = self._collect_streaming(lazy_df.select(exprs))
                 if stats_df is not None and stats_df.height > 0:
                     return stats_df.to_dicts()[0]
             except Exception as e:
-                logger.debug("Windowed statistics failed for column '%s': %s", column, e)
+                logger.debug(
+                    "Windowed statistics failed for column '%s': %s", column, e
+                )
 
         if df is None or column not in df.columns:
             return {}
 
         series = df[column]
         stats: Dict[str, Any] = {
-            'count': len(series),
-            'null_count': series.null_count(),
-            'unique_count': series.n_unique(),
+            "count": len(series),
+            "null_count": series.null_count(),
+            "unique_count": series.n_unique(),
         }
 
-        if series.dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]:
-            stats.update({
-                'sum': series.sum(),
-                'mean': series.mean(),
-                'median': series.median(),
-                'std': series.std(),
-                'min': series.min(),
-                'max': series.max(),
-                'q1': series.quantile(0.25),
-                'q3': series.quantile(0.75),
-            })
+        if series.dtype in [
+            pl.Int8,
+            pl.Int16,
+            pl.Int32,
+            pl.Int64,
+            pl.Float32,
+            pl.Float64,
+        ]:
+            stats.update(
+                {
+                    "sum": series.sum(),
+                    "mean": series.mean(),
+                    "median": series.median(),
+                    "std": series.std(),
+                    "min": series.min(),
+                    "max": series.max(),
+                    "q1": series.quantile(0.25),
+                    "q3": series.quantile(0.75),
+                }
+            )
 
         return stats
 

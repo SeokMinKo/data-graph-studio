@@ -8,7 +8,6 @@ UT-8.4: 복합 동작 (cascade 삭제) → 하나의 Undo로 전체 복원
 """
 
 import time
-import pytest
 
 from data_graph_studio.core.undo_manager import (
     UndoActionType,
@@ -64,7 +63,9 @@ class TestUndoStackBasic:
 
     def test_undo_returns_action(self):
         stack = UndoStack()
-        action = _make_cmd(description="add annotation", before_state="A", after_state="B")
+        action = _make_cmd(
+            description="add annotation", before_state="A", after_state="B"
+        )
         stack.push(action)
 
         result = stack.undo()
@@ -231,21 +232,27 @@ class TestUndoStackCompound:
 
         # Begin compound — cascade delete
         stack.begin_compound("Delete column with dependents")
-        stack.push(_make_cmd(
-            action_type=UndoActionType.COLUMN_DELETE,
-            description="delete col_a",
-            before_state={"name": "col_a"},
-        ))
-        stack.push(_make_cmd(
-            action_type=UndoActionType.COLUMN_DELETE,
-            description="delete col_b (dependent)",
-            before_state={"name": "col_b"},
-        ))
-        stack.push(_make_cmd(
-            action_type=UndoActionType.COLUMN_DELETE,
-            description="delete col_c (dependent)",
-            before_state={"name": "col_c"},
-        ))
+        stack.push(
+            _make_cmd(
+                action_type=UndoActionType.COLUMN_DELETE,
+                description="delete col_a",
+                before_state={"name": "col_a"},
+            )
+        )
+        stack.push(
+            _make_cmd(
+                action_type=UndoActionType.COLUMN_DELETE,
+                description="delete col_b (dependent)",
+                before_state={"name": "col_b"},
+            )
+        )
+        stack.push(
+            _make_cmd(
+                action_type=UndoActionType.COLUMN_DELETE,
+                description="delete col_c (dependent)",
+                before_state={"name": "col_c"},
+            )
+        )
         stack.end_compound()
 
         # Should be 2 undo items: 1 normal + 1 compound
@@ -322,9 +329,15 @@ class TestUndoStackCompound:
 class TestUndoActionType:
     def test_all_types_exist(self):
         expected = [
-            "ANNOTATION_ADD", "ANNOTATION_DELETE", "ANNOTATION_EDIT",
-            "COLUMN_ADD", "COLUMN_DELETE", "COLUMN_EDIT",
-            "DASHBOARD_LAYOUT_CHANGE", "DASHBOARD_CELL_ASSIGN", "DASHBOARD_CELL_REMOVE",
+            "ANNOTATION_ADD",
+            "ANNOTATION_DELETE",
+            "ANNOTATION_EDIT",
+            "COLUMN_ADD",
+            "COLUMN_DELETE",
+            "COLUMN_EDIT",
+            "DASHBOARD_LAYOUT_CHANGE",
+            "DASHBOARD_CELL_ASSIGN",
+            "DASHBOARD_CELL_REMOVE",
         ]
         for name in expected:
             assert hasattr(UndoActionType, name)

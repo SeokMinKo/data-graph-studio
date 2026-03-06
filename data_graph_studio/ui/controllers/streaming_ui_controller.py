@@ -1,4 +1,5 @@
 """StreamingUIController - extracted from MainWindow."""
+
 from __future__ import annotations
 
 import logging
@@ -23,7 +24,7 @@ MIN_POLL_INTERVAL_MS = 500
 class StreamingUIController:
     """Controller extracted from MainWindow."""
 
-    def __init__(self, main_window: 'MainWindow'):
+    def __init__(self, main_window: "MainWindow"):
         self.w = main_window
         self._base_poll_interval_ms: int | None = None
         self._streaming_start_time: float | None = None
@@ -38,14 +39,15 @@ class StreamingUIController:
         if self.w._streaming_controller.state == "live":
             return  # already playing
         if not self.w.state.is_data_loaded:
-            self.w.statusbar.showMessage("⚠ No data loaded — cannot start streaming", 4000)
+            self.w.statusbar.showMessage(
+                "⚠ No data loaded — cannot start streaming", 4000
+            )
             self.w._streaming_play_action.setChecked(False)
             return
         if self.w._streaming_controller.state == "paused":
             self.w._streaming_controller.resume()
         else:
             self.w._on_start_streaming_dialog()
-
 
     def _on_streaming_pause(self):
         """Pause/resume streaming playback (unified — replaces _on_pause_streaming)."""
@@ -54,24 +56,23 @@ class StreamingUIController:
         elif self.w._streaming_controller.state == "paused":
             self.w._streaming_controller.resume()
 
-
     def _on_streaming_stop(self):
         """Stop streaming — current data is kept (FR-B2.7). Unified stop method."""
         self.w._streaming_controller.stop()
-
 
     def _on_streaming_speed_changed(self, text: str):
         """Change streaming speed (base interval based, no cumulative error)."""
         try:
             if self._base_poll_interval_ms is None:
-                self._base_poll_interval_ms = self.w._streaming_controller.poll_interval_ms
-            speed = float(text.replace('x', ''))
+                self._base_poll_interval_ms = (
+                    self.w._streaming_controller.poll_interval_ms
+                )
+            speed = float(text.replace("x", ""))
             self.w._streaming_controller.set_poll_interval(
                 max(MIN_POLL_INTERVAL_MS, int(self._base_poll_interval_ms / speed))
             )
         except (ValueError, ZeroDivisionError):
             pass
-
 
     def _on_streaming_window_changed(self, text: str):
         """Change streaming window size for sliding window display."""
@@ -87,7 +88,6 @@ class StreamingUIController:
                     self._streaming_window_size = int(float(cleaned))
             except (ValueError, OverflowError):
                 self._streaming_window_size = None
-
 
     def _on_start_streaming_dialog(self):
         """Open the streaming configuration dialog and start streaming (FR-B2.1)."""
@@ -118,7 +118,8 @@ class StreamingUIController:
         ok = self.w._streaming_controller.start(file_path, mode=dlg.mode)
         if not ok:
             QMessageBox.warning(
-                self.w, "Streaming Error",
+                self.w,
+                "Streaming Error",
                 f"Could not start streaming for:\n{file_path}\n\n"
                 "The file may not exist or is not accessible.",
             )
@@ -200,7 +201,7 @@ class StreamingUIController:
                 return
 
             # Try incremental append
-            if hasattr(self.w.engine, 'append_rows') and new_row_count > 0:
+            if hasattr(self.w.engine, "append_rows") and new_row_count > 0:
                 try:
                     self.w.engine.append_rows(file_path, new_row_count)
                 except Exception:
@@ -219,8 +220,8 @@ class StreamingUIController:
                 self.w.graph_panel.refresh()
 
                 # Follow tail: auto-scroll table
-                if getattr(self.w._streaming_controller, 'follow_tail', False):
-                    if hasattr(self.w.table_panel, 'table_view'):
+                if getattr(self.w._streaming_controller, "follow_tail", False):
+                    if hasattr(self.w.table_panel, "table_view"):
                         self.w.table_panel.table_view.scrollToBottom()
 
                 self._update_streaming_status(new_row_count)
@@ -233,12 +234,17 @@ class StreamingUIController:
     def _on_streaming_file_deleted(self, file_path: str):
         """Handle file deletion during streaming — notify user."""
         self.w.statusbar.showMessage(
-            f"⚠ Streaming file deleted: {Path(file_path).name} — streaming stopped", 5000
+            f"⚠ Streaming file deleted: {Path(file_path).name} — streaming stopped",
+            5000,
         )
 
     def _update_streaming_status(self, new_row_count: int):
         """Update statusbar with streaming row counter and throughput."""
-        elapsed = time.time() - self._streaming_start_time if self._streaming_start_time else 0
+        elapsed = (
+            time.time() - self._streaming_start_time
+            if self._streaming_start_time
+            else 0
+        )
         rate = self._streaming_total_rows / elapsed if elapsed > 0 else 0
         total = f"{self._streaming_total_rows:,}"
         msg = f"Streaming: {total} rows ({rate:.0f} rows/s)"
@@ -282,5 +288,3 @@ class StreamingUIController:
             f"📊 {self._streaming_total_rows:,} rows  |  "
             f"⚡ {rate:.0f} rows/s"
         )
-
-

@@ -3,19 +3,17 @@
 """
 
 import pytest
-import numpy as np
 import polars as pl
-from typing import List, Dict, Any
 
 from data_graph_studio.graph.charts.horizontal_bar import HorizontalBarChart
 from data_graph_studio.graph.charts.stacked_bar import StackedBarChart
 from data_graph_studio.graph.charts.bubble import BubbleChart
 from data_graph_studio.graph.charts.donut import DonutChart
 from data_graph_studio.graph.charts.combination import CombinationChart
-from data_graph_studio.graph.charts.cross_table import CrossTableData, CrossTableCalculator
-from data_graph_studio.graph.charts.treemap import TreeMapData, TreeMapCalculator
-from data_graph_studio.graph.charts.funnel import FunnelData, FunnelCalculator
-from data_graph_studio.graph.charts.radar import RadarData, RadarCalculator
+from data_graph_studio.graph.charts.cross_table import CrossTableCalculator
+from data_graph_studio.graph.charts.treemap import TreeMapCalculator
+from data_graph_studio.graph.charts.funnel import FunnelCalculator
+from data_graph_studio.graph.charts.radar import RadarCalculator
 
 
 class TestHorizontalBarChart:
@@ -24,16 +22,21 @@ class TestHorizontalBarChart:
     @pytest.fixture
     def sample_data(self):
         return {
-            "categories": ["Product A", "Product B", "Product C", "Product D", "Product E"],
-            "values": [100, 250, 180, 300, 120]
+            "categories": [
+                "Product A",
+                "Product B",
+                "Product C",
+                "Product D",
+                "Product E",
+            ],
+            "values": [100, 250, 180, 300, 120],
         }
 
     def test_calculate_positions(self, sample_data):
         """막대 위치 계산"""
         chart = HorizontalBarChart()
         result = chart.calculate(
-            categories=sample_data["categories"],
-            values=sample_data["values"]
+            categories=sample_data["categories"], values=sample_data["values"]
         )
 
         assert len(result["y_positions"]) == 5
@@ -47,7 +50,7 @@ class TestHorizontalBarChart:
             categories=sample_data["categories"],
             values=sample_data["values"],
             sort_by_value=True,
-            descending=True
+            descending=True,
         )
 
         # 값이 내림차순으로 정렬
@@ -60,11 +63,13 @@ class TestStackedBarChart:
 
     @pytest.fixture
     def sample_data(self):
-        return pl.DataFrame({
-            "category": ["A", "A", "B", "B", "C", "C"],
-            "group": ["X", "Y", "X", "Y", "X", "Y"],
-            "value": [10, 20, 15, 25, 30, 10]
-        })
+        return pl.DataFrame(
+            {
+                "category": ["A", "A", "B", "B", "C", "C"],
+                "group": ["X", "Y", "X", "Y", "X", "Y"],
+                "value": [10, 20, 15, 25, 30, 10],
+            }
+        )
 
     def test_calculate_stacked(self, sample_data):
         """스택 계산"""
@@ -73,7 +78,7 @@ class TestStackedBarChart:
             data=sample_data,
             category_col="category",
             group_col="group",
-            value_col="value"
+            value_col="value",
         )
 
         assert "categories" in result
@@ -89,7 +94,7 @@ class TestStackedBarChart:
             category_col="category",
             group_col="group",
             value_col="value",
-            normalize=True
+            normalize=True,
         )
 
         # 각 카테고리의 합이 100%
@@ -107,7 +112,7 @@ class TestBubbleChart:
             "x": [1, 2, 3, 4, 5],
             "y": [10, 20, 15, 25, 30],
             "size": [100, 200, 150, 300, 250],
-            "labels": ["A", "B", "C", "D", "E"]
+            "labels": ["A", "B", "C", "D", "E"],
         }
 
     def test_calculate_bubble_sizes(self, sample_data):
@@ -118,7 +123,7 @@ class TestBubbleChart:
             y=sample_data["y"],
             size=sample_data["size"],
             min_bubble_size=10,
-            max_bubble_size=100
+            max_bubble_size=100,
         )
 
         assert len(result["scaled_sizes"]) == 5
@@ -129,10 +134,7 @@ class TestBubbleChart:
         """크기 데이터 없을 때 기본 크기"""
         chart = BubbleChart()
         result = chart.calculate(
-            x=sample_data["x"],
-            y=sample_data["y"],
-            size=None,
-            default_size=50
+            x=sample_data["x"], y=sample_data["y"], size=None, default_size=50
         )
 
         assert all(s == 50 for s in result["scaled_sizes"])
@@ -143,17 +145,13 @@ class TestDonutChart:
 
     @pytest.fixture
     def sample_data(self):
-        return {
-            "labels": ["A", "B", "C", "D"],
-            "values": [30, 20, 35, 15]
-        }
+        return {"labels": ["A", "B", "C", "D"], "values": [30, 20, 35, 15]}
 
     def test_calculate_angles(self, sample_data):
         """각도 계산"""
         chart = DonutChart()
         result = chart.calculate(
-            labels=sample_data["labels"],
-            values=sample_data["values"]
+            labels=sample_data["labels"], values=sample_data["values"]
         )
 
         assert "angles" in result
@@ -173,7 +171,7 @@ class TestDonutChart:
         result = chart.calculate(
             labels=sample_data["labels"],
             values=sample_data["values"],
-            inner_radius_ratio=0.5
+            inner_radius_ratio=0.5,
         )
 
         assert result["inner_radius_ratio"] == 0.5
@@ -187,7 +185,7 @@ class TestCombinationChart:
         return {
             "x": ["Jan", "Feb", "Mar", "Apr", "May"],
             "bar_values": [100, 120, 90, 150, 130],
-            "line_values": [10, 12, 9, 15, 13]
+            "line_values": [10, 12, 9, 15, 13],
         }
 
     def test_calculate_combined(self, sample_data):
@@ -196,7 +194,7 @@ class TestCombinationChart:
         result = chart.calculate(
             x=sample_data["x"],
             bar_series=[{"name": "Sales", "values": sample_data["bar_values"]}],
-            line_series=[{"name": "Growth", "values": sample_data["line_values"]}]
+            line_series=[{"name": "Growth", "values": sample_data["line_values"]}],
         )
 
         assert "bar_data" in result
@@ -210,11 +208,20 @@ class TestCrossTable:
 
     @pytest.fixture
     def sample_data(self):
-        return pl.DataFrame({
-            "region": ["Asia", "Asia", "Europe", "Europe", "America", "America"],
-            "category": ["Electronics", "Clothing", "Electronics", "Clothing", "Electronics", "Clothing"],
-            "sales": [100, 50, 80, 60, 120, 70]
-        })
+        return pl.DataFrame(
+            {
+                "region": ["Asia", "Asia", "Europe", "Europe", "America", "America"],
+                "category": [
+                    "Electronics",
+                    "Clothing",
+                    "Electronics",
+                    "Clothing",
+                    "Electronics",
+                    "Clothing",
+                ],
+                "sales": [100, 50, 80, 60, 120, 70],
+            }
+        )
 
     def test_calculate_pivot(self, sample_data):
         """피벗 계산"""
@@ -224,7 +231,7 @@ class TestCrossTable:
             row_columns=["region"],
             col_columns=["category"],
             value_column="sales",
-            agg_func="sum"
+            agg_func="sum",
         )
 
         assert "row_headers" in result
@@ -245,7 +252,7 @@ class TestCrossTable:
             value_column="sales",
             agg_func="sum",
             show_row_totals=True,
-            show_col_totals=True
+            show_col_totals=True,
         )
 
         assert "row_totals" in result
@@ -254,12 +261,14 @@ class TestCrossTable:
 
     def test_hierarchical_rows(self):
         """계층적 행 테스트"""
-        data = pl.DataFrame({
-            "region": ["Asia", "Asia", "Asia", "Asia"],
-            "country": ["Korea", "Korea", "Japan", "Japan"],
-            "category": ["A", "B", "A", "B"],
-            "value": [10, 20, 30, 40]
-        })
+        data = pl.DataFrame(
+            {
+                "region": ["Asia", "Asia", "Asia", "Asia"],
+                "country": ["Korea", "Korea", "Japan", "Japan"],
+                "category": ["A", "B", "A", "B"],
+                "value": [10, 20, 30, 40],
+            }
+        )
 
         calc = CrossTableCalculator()
         result = calc.calculate(
@@ -267,7 +276,7 @@ class TestCrossTable:
             row_columns=["region", "country"],
             col_columns=["category"],
             value_column="value",
-            agg_func="sum"
+            agg_func="sum",
         )
 
         # 계층적 헤더
@@ -279,11 +288,13 @@ class TestTreeMap:
 
     @pytest.fixture
     def sample_data(self):
-        return pl.DataFrame({
-            "category": ["A", "A", "B", "B", "C"],
-            "subcategory": ["A1", "A2", "B1", "B2", "C1"],
-            "value": [30, 20, 25, 15, 10]
-        })
+        return pl.DataFrame(
+            {
+                "category": ["A", "A", "B", "B", "C"],
+                "subcategory": ["A1", "A2", "B1", "B2", "C1"],
+                "value": [30, 20, 25, 15, 10],
+            }
+        )
 
     def test_calculate_rectangles(self, sample_data):
         """사각형 계산"""
@@ -293,7 +304,7 @@ class TestTreeMap:
             hierarchy_columns=["category", "subcategory"],
             value_column="value",
             width=100,
-            height=100
+            height=100,
         )
 
         assert "rectangles" in result
@@ -314,7 +325,7 @@ class TestTreeMap:
             hierarchy_columns=["category"],
             value_column="value",
             width=100,
-            height=100
+            height=100,
         )
 
         # 총 면적이 100 * 100 = 10000 (구현에 따라 패딩/여백으로 차이 발생 가능)
@@ -329,15 +340,14 @@ class TestFunnelChart:
     def sample_data(self):
         return {
             "stages": ["Visitors", "Leads", "Opportunities", "Customers"],
-            "values": [1000, 500, 200, 50]
+            "values": [1000, 500, 200, 50],
         }
 
     def test_calculate_funnel(self, sample_data):
         """퍼널 계산"""
         calc = FunnelCalculator()
         result = calc.calculate(
-            stages=sample_data["stages"],
-            values=sample_data["values"]
+            stages=sample_data["stages"], values=sample_data["values"]
         )
 
         assert "widths" in result
@@ -351,8 +361,7 @@ class TestFunnelChart:
         """전환율 계산"""
         calc = FunnelCalculator()
         result = calc.calculate(
-            stages=sample_data["stages"],
-            values=sample_data["values"]
+            stages=sample_data["stages"], values=sample_data["values"]
         )
 
         # 전환율이 계산되어야 함
@@ -372,17 +381,15 @@ class TestRadarChart:
             "axes": ["Speed", "Power", "Defense", "Magic", "Luck"],
             "series": [
                 {"name": "Player A", "values": [80, 60, 70, 90, 50]},
-                {"name": "Player B", "values": [70, 80, 60, 50, 90]}
-            ]
+                {"name": "Player B", "values": [70, 80, 60, 50, 90]},
+            ],
         }
 
     def test_calculate_coordinates(self, sample_data):
         """좌표 계산"""
         calc = RadarCalculator()
         result = calc.calculate(
-            axes=sample_data["axes"],
-            series=sample_data["series"],
-            max_value=100
+            axes=sample_data["axes"], series=sample_data["series"], max_value=100
         )
 
         assert "axis_angles" in result
@@ -403,9 +410,7 @@ class TestRadarChart:
         """폴리곤 면적 계산"""
         calc = RadarCalculator()
         result = calc.calculate(
-            axes=sample_data["axes"],
-            series=sample_data["series"],
-            max_value=100
+            axes=sample_data["axes"], series=sample_data["series"], max_value=100
         )
 
         # 면적 계산 (optional)

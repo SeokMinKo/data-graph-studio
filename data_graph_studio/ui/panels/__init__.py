@@ -15,5 +15,5 @@ __all__ = [
     "DatasetManagerPanel",
     "SideBySideLayout",
     "ComparisonStatsPanel",
-    "OverlayStatsWidget"
+    "OverlayStatsWidget",
 ]

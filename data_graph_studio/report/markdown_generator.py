@@ -9,42 +9,24 @@ Generates clean, readable Markdown reports suitable for:
 - Converting to other formats
 """
 
-from typing import Optional, List, Dict, Any
-from datetime import datetime
 import base64
 
 from data_graph_studio.core.report import (
     ReportGenerator,
     ReportData,
     ReportOptions,
-    ReportTemplate,
-    ReportTheme,
-    DatasetSummary,
-    StatisticalSummary,
-    ComparisonResult,
-    DifferenceAnalysis,
-    ChartData,
-    TableData,
 )
 
 
 class MarkdownReportGenerator(ReportGenerator):
     """Markdown 레포트 생성기"""
 
-    def generate(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> bytes:
+    def generate(self, report_data: ReportData, options: ReportOptions) -> bytes:
         """Markdown 레포트 생성"""
         md_content = self._build_markdown(report_data, options)
-        return md_content.encode('utf-8')
+        return md_content.encode("utf-8")
 
-    def _build_markdown(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _build_markdown(self, report_data: ReportData, options: ReportOptions) -> str:
         """마크다운 문서 빌드"""
         sections = []
 
@@ -85,13 +67,9 @@ class MarkdownReportGenerator(ReportGenerator):
         # Footer
         sections.append(self._render_footer(report_data, options))
 
-        return '\n\n'.join(filter(None, sections))
+        return "\n\n".join(filter(None, sections))
 
-    def _render_header(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_header(self, report_data: ReportData, options: ReportOptions) -> str:
         """헤더 렌더링"""
         meta = report_data.metadata
         lines = []
@@ -122,15 +100,11 @@ class MarkdownReportGenerator(ReportGenerator):
         lines.append("")
         lines.append("---")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
-    def _render_toc(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_toc(self, report_data: ReportData, options: ReportOptions) -> str:
         """목차 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         toc_title = "## 목차" if is_ko else "## Table of Contents"
@@ -140,22 +114,34 @@ class MarkdownReportGenerator(ReportGenerator):
         toc_items = []
 
         if options.include_executive_summary:
-            toc_items.append(("요약" if is_ko else "Executive Summary", "executive-summary"))
+            toc_items.append(
+                ("요약" if is_ko else "Executive Summary", "executive-summary")
+            )
 
         if options.include_data_overview:
-            toc_items.append(("데이터 개요" if is_ko else "Data Overview", "data-overview"))
+            toc_items.append(
+                ("데이터 개요" if is_ko else "Data Overview", "data-overview")
+            )
 
         if options.include_statistics:
-            toc_items.append(("통계 요약" if is_ko else "Statistical Summary", "statistical-summary"))
+            toc_items.append(
+                ("통계 요약" if is_ko else "Statistical Summary", "statistical-summary")
+            )
 
         if options.include_visualizations and report_data.charts:
-            toc_items.append(("시각화" if is_ko else "Visualizations", "visualizations"))
+            toc_items.append(
+                ("시각화" if is_ko else "Visualizations", "visualizations")
+            )
 
         if options.include_comparison and report_data.is_multi_dataset():
-            toc_items.append(("비교 분석" if is_ko else "Comparison Analysis", "comparison-analysis"))
+            toc_items.append(
+                ("비교 분석" if is_ko else "Comparison Analysis", "comparison-analysis")
+            )
 
         if options.include_tables and report_data.tables:
-            toc_items.append(("데이터 테이블" if is_ko else "Data Tables", "data-tables"))
+            toc_items.append(
+                ("데이터 테이블" if is_ko else "Data Tables", "data-tables")
+            )
 
         if options.include_appendix:
             toc_items.append(("부록" if is_ko else "Appendix", "appendix"))
@@ -163,15 +149,13 @@ class MarkdownReportGenerator(ReportGenerator):
         for title, anchor in toc_items:
             lines.append(f"- [{title}](#{anchor})")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _render_executive_summary(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """Executive Summary 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         title = "## 요약" if is_ko else "## Executive Summary"
@@ -180,16 +164,26 @@ class MarkdownReportGenerator(ReportGenerator):
 
         # Key Metrics
         metrics = []
-        metrics.append(f"| {'지표' if is_ko else 'Metric'} | {'값' if is_ko else 'Value'} |")
+        metrics.append(
+            f"| {'지표' if is_ko else 'Metric'} | {'값' if is_ko else 'Value'} |"
+        )
         metrics.append("|:---|---:|")
-        metrics.append(f"| {'총 행 수' if is_ko else 'Total Rows'} | {self.format_number(report_data.get_total_rows(), 0)} |")
-        metrics.append(f"| {'데이터셋' if is_ko else 'Datasets'} | {len(report_data.datasets)} |")
+        metrics.append(
+            f"| {'총 행 수' if is_ko else 'Total Rows'} | {self.format_number(report_data.get_total_rows(), 0)} |"
+        )
+        metrics.append(
+            f"| {'데이터셋' if is_ko else 'Datasets'} | {len(report_data.datasets)} |"
+        )
 
         if report_data.datasets:
-            metrics.append(f"| {'컬럼 수' if is_ko else 'Columns'} | {report_data.datasets[0].column_count} |")
+            metrics.append(
+                f"| {'컬럼 수' if is_ko else 'Columns'} | {report_data.datasets[0].column_count} |"
+            )
 
         if report_data.charts:
-            metrics.append(f"| {'차트' if is_ko else 'Charts'} | {len(report_data.charts)} |")
+            metrics.append(
+                f"| {'차트' if is_ko else 'Charts'} | {len(report_data.charts)} |"
+            )
 
         lines.extend(metrics)
         lines.append("")
@@ -211,15 +205,13 @@ class MarkdownReportGenerator(ReportGenerator):
             for rec in report_data.recommendations:
                 lines.append(f"- 💡 {rec}")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _render_data_overview(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """Data Overview 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         title = "## 데이터 개요" if is_ko else "## Data Overview"
@@ -231,19 +223,29 @@ class MarkdownReportGenerator(ReportGenerator):
             lines.append("")
 
             # Info table
-            lines.append(f"| {'항목' if is_ko else 'Property'} | {'값' if is_ko else 'Value'} |")
+            lines.append(
+                f"| {'항목' if is_ko else 'Property'} | {'값' if is_ko else 'Value'} |"
+            )
             lines.append("|:---|:---|")
 
             if ds.file_path:
-                lines.append(f"| {'파일' if is_ko else 'File'} | `{ds.file_path.split('/')[-1]}` |")
+                lines.append(
+                    f"| {'파일' if is_ko else 'File'} | `{ds.file_path.split('/')[-1]}` |"
+                )
 
-            lines.append(f"| {'행 수' if is_ko else 'Rows'} | {self.format_number(ds.row_count, 0)} |")
+            lines.append(
+                f"| {'행 수' if is_ko else 'Rows'} | {self.format_number(ds.row_count, 0)} |"
+            )
             lines.append(f"| {'컬럼 수' if is_ko else 'Columns'} | {ds.column_count} |")
-            lines.append(f"| {'메모리' if is_ko else 'Memory'} | {self.format_bytes(ds.memory_bytes)} |")
+            lines.append(
+                f"| {'메모리' if is_ko else 'Memory'} | {self.format_bytes(ds.memory_bytes)} |"
+            )
 
             if ds.date_range:
                 date_str = f"{ds.date_range['min']} ~ {ds.date_range['max']}"
-                lines.append(f"| {'날짜 범위' if is_ko else 'Date Range'} | {date_str} |")
+                lines.append(
+                    f"| {'날짜 범위' if is_ko else 'Date Range'} | {date_str} |"
+                )
 
             lines.append("")
 
@@ -253,8 +255,12 @@ class MarkdownReportGenerator(ReportGenerator):
                 for col, dtype in ds.column_types.items():
                     type_counts[dtype] = type_counts.get(dtype, 0) + 1
 
-                type_summary = ", ".join([f"{t}: {c}" for t, c in sorted(type_counts.items())])
-                lines.append(f"**{'데이터 타입' if is_ko else 'Data Types'}:** {type_summary}")
+                type_summary = ", ".join(
+                    [f"{t}: {c}" for t, c in sorted(type_counts.items())]
+                )
+                lines.append(
+                    f"**{'데이터 타입' if is_ko else 'Data Types'}:** {type_summary}"
+                )
                 lines.append("")
 
             # Missing values
@@ -262,7 +268,9 @@ class MarkdownReportGenerator(ReportGenerator):
                 missing_title = "#### 결측값" if is_ko else "#### Missing Values"
                 lines.append(missing_title)
                 lines.append("")
-                lines.append(f"| {'컬럼' if is_ko else 'Column'} | {'개수' if is_ko else 'Count'} |")
+                lines.append(
+                    f"| {'컬럼' if is_ko else 'Column'} | {'개수' if is_ko else 'Count'} |"
+                )
                 lines.append("|:---|---:|")
                 for col, count in list(ds.missing_values.items())[:10]:
                     lines.append(f"| {col} | {count} |")
@@ -270,15 +278,13 @@ class MarkdownReportGenerator(ReportGenerator):
                     lines.append(f"| ... | ({len(ds.missing_values) - 10} more) |")
                 lines.append("")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _render_statistics(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """Statistics 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         title = "## 통계 요약" if is_ko else "## Statistical Summary"
@@ -300,9 +306,21 @@ class MarkdownReportGenerator(ReportGenerator):
             lines.append("")
 
             # Statistics table
-            headers = ["Column", "Count", "Mean", "Median", "Std", "Min", "Max", "Q1", "Q3"]
+            headers = [
+                "Column",
+                "Count",
+                "Mean",
+                "Median",
+                "Std",
+                "Min",
+                "Max",
+                "Q1",
+                "Q3",
+            ]
             lines.append("| " + " | ".join(headers) + " |")
-            lines.append("|:---|" + "|".join(["---:" for _ in range(len(headers) - 1)]) + "|")
+            lines.append(
+                "|:---|" + "|".join(["---:" for _ in range(len(headers) - 1)]) + "|"
+            )
 
             for stat in stats_list[:30]:
                 row = [
@@ -323,15 +341,13 @@ class MarkdownReportGenerator(ReportGenerator):
 
             lines.append("")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _render_visualizations(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """Visualizations 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         title = "## 시각화" if is_ko else "## Visualizations"
@@ -344,10 +360,14 @@ class MarkdownReportGenerator(ReportGenerator):
 
             # Chart image (if base64, embed as data URL)
             if chart.image_base64:
-                lines.append(f"![{chart.title}](data:image/{chart.image_format};base64,{chart.image_base64})")
+                lines.append(
+                    f"![{chart.title}](data:image/{chart.image_format};base64,{chart.image_base64})"
+                )
             elif chart.image_bytes:
-                b64 = base64.b64encode(chart.image_bytes).decode('utf-8')
-                lines.append(f"![{chart.title}](data:image/{chart.image_format};base64,{b64})")
+                b64 = base64.b64encode(chart.image_bytes).decode("utf-8")
+                lines.append(
+                    f"![{chart.title}](data:image/{chart.image_format};base64,{b64})"
+                )
             else:
                 lines.append(f"*[Chart image: {chart.title}]*")
 
@@ -373,15 +393,13 @@ class MarkdownReportGenerator(ReportGenerator):
                 lines.append(f"> {' | '.join(metadata)}")
                 lines.append("")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _render_comparison(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """Comparison Analysis 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         title = "## 비교 분석" if is_ko else "## Comparison Analysis"
@@ -390,23 +408,31 @@ class MarkdownReportGenerator(ReportGenerator):
 
         # Statistical Test Results
         if report_data.comparisons:
-            test_title = "### 통계 검정 결과" if is_ko else "### Statistical Test Results"
+            test_title = (
+                "### 통계 검정 결과" if is_ko else "### Statistical Test Results"
+            )
             lines.append(test_title)
             lines.append("")
 
             for comp in report_data.comparisons:
-                lines.append(f"#### {comp.test_type}: {comp.dataset_a_name} vs {comp.dataset_b_name}")
+                lines.append(
+                    f"#### {comp.test_type}: {comp.dataset_a_name} vs {comp.dataset_b_name}"
+                )
                 lines.append("")
 
                 # Results table
-                lines.append(f"| {'항목' if is_ko else 'Metric'} | {'값' if is_ko else 'Value'} |")
+                lines.append(
+                    f"| {'항목' if is_ko else 'Metric'} | {'값' if is_ko else 'Value'} |"
+                )
                 lines.append("|:---|:---|")
                 lines.append(f"| Column | {comp.column} |")
                 lines.append(f"| Test Statistic | {comp.test_statistic:.4f} |")
                 lines.append(f"| p-value | {comp.p_value:.4f} |")
 
                 if comp.effect_size is not None:
-                    lines.append(f"| Effect Size | {comp.effect_size:.3f} ({comp.effect_size_interpretation}) |")
+                    lines.append(
+                        f"| Effect Size | {comp.effect_size:.3f} ({comp.effect_size_interpretation}) |"
+                    )
 
                 # Significance
                 sig_emoji = "⚪"
@@ -439,17 +465,31 @@ class MarkdownReportGenerator(ReportGenerator):
                 lines.append("")
 
                 # Summary table
-                lines.append(f"| {'구분' if is_ko else 'Category'} | {'개수' if is_ko else 'Count'} | {'비율' if is_ko else 'Percentage'} |")
+                lines.append(
+                    f"| {'구분' if is_ko else 'Category'} | {'개수' if is_ko else 'Count'} | {'비율' if is_ko else 'Percentage'} |"
+                )
                 lines.append("|:---|---:|---:|")
-                lines.append(f"| 🟢 {'증가 (A > B)' if is_ko else 'Positive (A > B)'} | {diff.positive_count} | {diff.positive_percentage:.1f}% |")
-                lines.append(f"| 🔴 {'감소 (A < B)' if is_ko else 'Negative (A < B)'} | {diff.negative_count} | {diff.negative_percentage:.1f}% |")
-                lines.append(f"| ⚪ {'변화없음' if is_ko else 'No Change'} | {diff.neutral_count} | {diff.neutral_percentage:.1f}% |")
+                lines.append(
+                    f"| 🟢 {'증가 (A > B)' if is_ko else 'Positive (A > B)'} | {diff.positive_count} | {diff.positive_percentage:.1f}% |"
+                )
+                lines.append(
+                    f"| 🔴 {'감소 (A < B)' if is_ko else 'Negative (A < B)'} | {diff.negative_count} | {diff.negative_percentage:.1f}% |"
+                )
+                lines.append(
+                    f"| ⚪ {'변화없음' if is_ko else 'No Change'} | {diff.neutral_count} | {diff.neutral_percentage:.1f}% |"
+                )
                 lines.append("")
 
                 # Key metrics
-                lines.append(f"- **{'총 차이' if is_ko else 'Total Difference'}:** {self.format_number(diff.total_difference)}")
-                lines.append(f"- **{'평균 차이' if is_ko else 'Mean Difference'}:** {self.format_number(diff.mean_difference)}")
-                lines.append(f"- **{'매칭 레코드' if is_ko else 'Matched Records'}:** {self.format_number(diff.matched_records, 0)}")
+                lines.append(
+                    f"- **{'총 차이' if is_ko else 'Total Difference'}:** {self.format_number(diff.total_difference)}"
+                )
+                lines.append(
+                    f"- **{'평균 차이' if is_ko else 'Mean Difference'}:** {self.format_number(diff.mean_difference)}"
+                )
+                lines.append(
+                    f"- **{'매칭 레코드' if is_ko else 'Matched Records'}:** {self.format_number(diff.matched_records, 0)}"
+                )
                 lines.append("")
 
                 # Top differences
@@ -457,28 +497,28 @@ class MarkdownReportGenerator(ReportGenerator):
                     top_title = "**상위 차이:**" if is_ko else "**Top Differences:**"
                     lines.append(top_title)
                     lines.append("")
-                    lines.append("| Key | Value (A) | Value (B) | Difference | Change % |")
+                    lines.append(
+                        "| Key | Value (A) | Value (B) | Difference | Change % |"
+                    )
                     lines.append("|:---|---:|---:|---:|---:|")
 
                     for item in diff.top_differences[:10]:
-                        key = str(item.get('key', ''))[:20]
-                        val_a = self.format_number(item.get('value_a'))
-                        val_b = self.format_number(item.get('value_b'))
-                        diff_val = self.format_number(item.get('difference'))
-                        change_pct = self.format_percentage(item.get('change_percent'))
-                        lines.append(f"| {key} | {val_a} | {val_b} | {diff_val} | {change_pct} |")
+                        key = str(item.get("key", ""))[:20]
+                        val_a = self.format_number(item.get("value_a"))
+                        val_b = self.format_number(item.get("value_b"))
+                        diff_val = self.format_number(item.get("difference"))
+                        change_pct = self.format_percentage(item.get("change_percent"))
+                        lines.append(
+                            f"| {key} | {val_a} | {val_b} | {diff_val} | {change_pct} |"
+                        )
 
                     lines.append("")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
-    def _render_tables(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_tables(self, report_data: ReportData, options: ReportOptions) -> str:
         """Data Tables 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         title = "## 데이터 테이블" if is_ko else "## Data Tables"
@@ -524,15 +564,11 @@ class MarkdownReportGenerator(ReportGenerator):
 
             lines.append("")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
-    def _render_appendix(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_appendix(self, report_data: ReportData, options: ReportOptions) -> str:
         """Appendix 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         if not report_data.methodology_notes and not report_data.data_quality_notes:
@@ -553,22 +589,20 @@ class MarkdownReportGenerator(ReportGenerator):
 
         # Data Quality Notes
         if report_data.data_quality_notes:
-            quality_title = "### 데이터 품질 노트" if is_ko else "### Data Quality Notes"
+            quality_title = (
+                "### 데이터 품질 노트" if is_ko else "### Data Quality Notes"
+            )
             lines.append(quality_title)
             lines.append("")
             for note in report_data.data_quality_notes:
                 lines.append(f"- {note}")
             lines.append("")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
-    def _render_footer(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_footer(self, report_data: ReportData, options: ReportOptions) -> str:
         """Footer 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         lines = []
 
         lines.append("---")
@@ -577,10 +611,16 @@ class MarkdownReportGenerator(ReportGenerator):
         generated_text = "생성일시" if is_ko else "Generated"
         powered_text = "Powered by" if not is_ko else ""
 
-        lines.append(f"*{generated_text}: {report_data.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}*")
+        lines.append(
+            f"*{generated_text}: {report_data.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}*"
+        )
         if powered_text:
-            lines.append(f"*{powered_text} [Data Graph Studio](https://github.com/SeokMinKo/data-graph-studio) v{report_data.metadata.version}*")
+            lines.append(
+                f"*{powered_text} [Data Graph Studio](https://github.com/SeokMinKo/data-graph-studio) v{report_data.metadata.version}*"
+            )
         else:
-            lines.append(f"*[Data Graph Studio](https://github.com/SeokMinKo/data-graph-studio) v{report_data.metadata.version}*")
+            lines.append(
+                f"*[Data Graph Studio](https://github.com/SeokMinKo/data-graph-studio) v{report_data.metadata.version}*"
+            )
 
-        return '\n'.join(lines)
+        return "\n".join(lines)

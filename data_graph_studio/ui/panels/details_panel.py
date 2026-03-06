@@ -5,20 +5,30 @@ Details-on-Demand Panel - Spotfire 스타일 상세 정보 패널
 """
 
 from typing import Dict, List, Optional, Set, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableView, QHeaderView,
-    QLabel, QPushButton, QMenu, QFileDialog, QApplication,
-    QFrame, QToolButton, QSizePolicy
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTableView,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QMenu,
+    QFileDialog,
+    QApplication,
+    QFrame,
+    QToolButton,
 )
-from PySide6.QtGui import QAction, QClipboard
+from PySide6.QtGui import QAction
 import polars as pl
 
 
 @dataclass
 class DetailsColumnConfig:
     """Details 컬럼 설정"""
+
     name: str
     display_name: Optional[str] = None
     visible: bool = True
@@ -67,8 +77,7 @@ class DetailsOnDemandModel(QAbstractTableModel):
 
         # 기본 컬럼 설정 생성
         self._column_configs = {
-            col: DetailsColumnConfig(name=col, display_name=col)
-            for col in data.columns
+            col: DetailsColumnConfig(name=col, display_name=col) for col in data.columns
         }
 
         self._update_display_data()
@@ -140,7 +149,12 @@ class DetailsOnDemandModel(QAbstractTableModel):
 
         return None
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole):
+    def headerData(
+        self,
+        section: int,
+        orientation: Qt.Orientation,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ):
         """헤더 데이터"""
         if role != Qt.ItemDataRole.DisplayRole:
             return None
@@ -162,9 +176,9 @@ class DetailsOnDemandModel(QAbstractTableModel):
     def get_visible_columns(self) -> List[str]:
         """가시적인 컬럼 목록"""
         return [
-            col for col in self._column_order
-            if col in self._column_configs
-            and self._column_configs[col].visible
+            col
+            for col in self._column_order
+            if col in self._column_configs and self._column_configs[col].visible
         ]
 
     def set_column_visible(self, column: str, visible: bool) -> None:
@@ -203,7 +217,9 @@ class DetailsOnDemandModel(QAbstractTableModel):
         headers = []
         for col in visible_cols:
             config = self._column_configs.get(col)
-            headers.append(config.display_name if config and config.display_name else col)
+            headers.append(
+                config.display_name if config and config.display_name else col
+            )
         lines.append(delimiter.join(headers))
 
         # 데이터
@@ -408,7 +424,9 @@ class DetailsOnDemandPanel(QWidget):
         headers = []
         for col in visible_cols:
             config = self._model._column_configs.get(col)
-            headers.append(config.display_name if config and config.display_name else col)
+            headers.append(
+                config.display_name if config and config.display_name else col
+            )
         lines.append("\t".join(headers))
 
         # 데이터
@@ -430,10 +448,7 @@ class DetailsOnDemandPanel(QWidget):
     def _export_to_file(self) -> None:
         """파일로 내보내기"""
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Details",
-            "details.csv",
-            "CSV Files (*.csv);;All Files (*)"
+            self, "Export Details", "details.csv", "CSV Files (*.csv);;All Files (*)"
         )
 
         if file_path:

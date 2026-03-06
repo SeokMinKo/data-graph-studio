@@ -65,7 +65,9 @@ class FinishStep(QWizardPage):
         if wizard is not None:
             # Use typed reference if available, fall back to page(0)
             parsing_page = getattr(wizard, "_parsing_step", None) or wizard.page(0)
-            if parsing_page is not None and hasattr(parsing_page, "get_parsing_settings"):
+            if parsing_page is not None and hasattr(
+                parsing_page, "get_parsing_settings"
+            ):
                 parsing_settings = parsing_page.get_parsing_settings()
             if parsing_page is not None and hasattr(parsing_page, "get_preview_df"):
                 preview_df = parsing_page.get_preview_df()
@@ -84,7 +86,9 @@ class FinishStep(QWizardPage):
         encoding = getattr(parsing_settings, "encoding", "-")
         delimiter = getattr(parsing_settings, "delimiter", "-")
         has_header = getattr(parsing_settings, "has_header", None)
-        header_text = "있음" if has_header else "없음" if has_header is not None else "-"
+        header_text = (
+            "있음" if has_header else "없음" if has_header is not None else "-"
+        )
 
         delimiter_text = self._format_delimiter(delimiter)
         self._parsing_info_label.setText(
@@ -99,9 +103,7 @@ class FinishStep(QWizardPage):
                 f"{total_columns}개 ({excluded_count}개 제외)"
             )
         else:
-            self._columns_info_label.setText(
-                f"알 수 없음 ({excluded_count}개 제외)"
-            )
+            self._columns_info_label.setText(f"알 수 없음 ({excluded_count}개 제외)")
 
     def get_project_name(self) -> str:
         return self._project_name_input.text().strip()

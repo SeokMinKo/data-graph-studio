@@ -6,10 +6,7 @@ Self-contained HTML with embedded CSS and images.
 Supports light/dark themes and interactive charts.
 """
 
-from typing import Optional, List, Dict, Any
-from datetime import datetime
 import html
-import json
 
 from data_graph_studio.core.report import (
     ReportGenerator,
@@ -17,35 +14,19 @@ from data_graph_studio.core.report import (
     ReportOptions,
     ReportTemplate,
     ReportTheme,
-    DatasetSummary,
-    StatisticalSummary,
-    ComparisonResult,
-    DifferenceAnalysis,
     ChartData,
-    TableData,
-    ChartStatistics,
-    StatisticType,
-    get_default_statistics_for_chart,
 )
 
 
 class HTMLReportGenerator(ReportGenerator):
     """HTML 레포트 생성기"""
 
-    def generate(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> bytes:
+    def generate(self, report_data: ReportData, options: ReportOptions) -> bytes:
         """HTML 레포트 생성"""
         html_content = self._build_html(report_data, options)
-        return html_content.encode('utf-8')
+        return html_content.encode("utf-8")
 
-    def _build_html(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _build_html(self, report_data: ReportData, options: ReportOptions) -> str:
         """HTML 문서 빌드"""
         theme = options.theme
         template = self.template
@@ -85,7 +66,7 @@ class HTMLReportGenerator(ReportGenerator):
             sections_html.append(self._render_appendix(report_data, options))
 
         # 전체 HTML 조립
-        body_content = '\n'.join(sections_html)
+        body_content = "\n".join(sections_html)
 
         # Table of Contents
         toc = self._generate_toc(report_data, options)
@@ -96,7 +77,7 @@ class HTMLReportGenerator(ReportGenerator):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="Data Graph Studio">
-    <meta name="author" content="{html.escape(report_data.metadata.author or '')}">
+    <meta name="author" content="{html.escape(report_data.metadata.author or "")}">
     <title>{html.escape(report_data.metadata.title)}</title>
     <style>
 {css}
@@ -140,7 +121,7 @@ class HTMLReportGenerator(ReportGenerator):
             border_color = "#e2e8f0"
             card_shadow = "0 4px 6px rgba(0, 0, 0, 0.05)"
 
-        return f'''
+        return f"""
 /* Reset and base styles */
 * {{
     margin: 0;
@@ -690,21 +671,17 @@ body {{
         padding: 8px 10px;
     }}
 }}
-'''
+"""
 
     def _hex_to_rgb(self, hex_color: str) -> str:
         """HEX 색상을 RGB로 변환"""
-        hex_color = hex_color.lstrip('#')
+        hex_color = hex_color.lstrip("#")
         r = int(hex_color[0:2], 16)
         g = int(hex_color[2:4], 16)
         b = int(hex_color[4:6], 16)
         return f"{r}, {g}, {b}"
 
-    def _render_header(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_header(self, report_data: ReportData, options: ReportOptions) -> str:
         """헤더 렌더링"""
         meta = report_data.metadata
 
@@ -718,173 +695,181 @@ body {{
         if meta.subtitle:
             subtitle_html = f'<p class="subtitle">{html.escape(meta.subtitle)}</p>'
 
-        return f'''
+        return f"""
 <header class="report-header">
     {logo_html}
     <h1>{html.escape(meta.title)}</h1>
     {subtitle_html}
     <div class="report-meta">
         <span>📅 {meta.created_at.strftime("%Y-%m-%d %H:%M")}</span>
-        {f'<span>👤 {html.escape(meta.author)}</span>' if meta.author else ''}
+        {f"<span>👤 {html.escape(meta.author)}</span>" if meta.author else ""}
         <span>📊 Data Graph Studio v{meta.version}</span>
     </div>
-</header>'''
+</header>"""
 
-    def _generate_toc(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _generate_toc(self, report_data: ReportData, options: ReportOptions) -> str:
         """목차 생성"""
         items = []
 
         if options.include_executive_summary:
-            items.append(('executive-summary', 'Executive Summary', '요약'))
+            items.append(("executive-summary", "Executive Summary", "요약"))
 
         if options.include_data_overview:
-            items.append(('data-overview', 'Data Overview', '데이터 개요'))
+            items.append(("data-overview", "Data Overview", "데이터 개요"))
 
         if options.include_statistics:
-            items.append(('statistics', 'Statistical Summary', '통계 요약'))
+            items.append(("statistics", "Statistical Summary", "통계 요약"))
 
         if options.include_visualizations and report_data.charts:
-            items.append(('visualizations', 'Visualizations', '시각화'))
+            items.append(("visualizations", "Visualizations", "시각화"))
 
         if options.include_comparison and report_data.is_multi_dataset():
-            items.append(('comparison', 'Comparison Analysis', '비교 분석'))
+            items.append(("comparison", "Comparison Analysis", "비교 분석"))
 
         if options.include_tables and report_data.tables:
-            items.append(('data-tables', 'Data Tables', '데이터 테이블'))
+            items.append(("data-tables", "Data Tables", "데이터 테이블"))
 
         if options.include_appendix:
-            items.append(('appendix', 'Appendix', '부록'))
+            items.append(("appendix", "Appendix", "부록"))
 
         toc_items = []
         for id, en_title, ko_title in items:
-            title = ko_title if options.language == 'ko' else en_title
+            title = ko_title if options.language == "ko" else en_title
             toc_items.append(f'<li><a href="#{id}">{title}</a></li>')
 
-        toc_title = "목차" if options.language == 'ko' else "Table of Contents"
+        toc_title = "목차" if options.language == "ko" else "Table of Contents"
 
-        return f'''
+        return f"""
 <nav class="toc">
     <h2>{toc_title}</h2>
     <ul>
-        {''.join(toc_items)}
+        {"".join(toc_items)}
     </ul>
-</nav>'''
+</nav>"""
 
     def _render_executive_summary(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """Executive Summary 렌더링 - 객관적 수치만 표시"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         # 주요 지표 카드
         metrics = []
 
         # 전체 행 수
         total_rows = report_data.get_total_rows()
-        metrics.append({
-            'label': '총 행 수' if is_ko else 'Total Rows',
-            'value': self.format_number(total_rows, 0)
-        })
+        metrics.append(
+            {
+                "label": "총 행 수" if is_ko else "Total Rows",
+                "value": self.format_number(total_rows, 0),
+            }
+        )
 
         # 데이터셋 수
-        metrics.append({
-            'label': '데이터셋' if is_ko else 'Datasets',
-            'value': str(len(report_data.datasets))
-        })
+        metrics.append(
+            {
+                "label": "데이터셋" if is_ko else "Datasets",
+                "value": str(len(report_data.datasets)),
+            }
+        )
 
         # 컬럼 수 (첫 번째 데이터셋 기준)
         if report_data.datasets:
-            metrics.append({
-                'label': '컬럼 수' if is_ko else 'Columns',
-                'value': str(report_data.datasets[0].column_count)
-            })
+            metrics.append(
+                {
+                    "label": "컬럼 수" if is_ko else "Columns",
+                    "value": str(report_data.datasets[0].column_count),
+                }
+            )
 
         # 차트 수
         if report_data.charts:
-            metrics.append({
-                'label': '차트' if is_ko else 'Charts',
-                'value': str(len(report_data.charts))
-            })
+            metrics.append(
+                {
+                    "label": "차트" if is_ko else "Charts",
+                    "value": str(len(report_data.charts)),
+                }
+            )
 
-        metrics_html = ''.join([
-            f'''
+        metrics_html = "".join(
+            [
+                f"""
             <div class="metric-card">
-                <div class="label">{m['label']}</div>
-                <div class="value">{m['value']}</div>
-            </div>'''
-            for m in metrics
-        ])
+                <div class="label">{m["label"]}</div>
+                <div class="value">{m["value"]}</div>
+            </div>"""
+                for m in metrics
+            ]
+        )
 
         # key_findings와 recommendations는 주관적 의견이므로 제거됨
 
         section_title = "Executive Summary" if not is_ko else "요약"
 
-        return f'''
+        return f"""
 <section id="executive-summary" class="section">
     <h2>{section_title}</h2>
     <div class="metrics-grid">
         {metrics_html}
     </div>
-</section>'''
+</section>"""
 
     def _render_data_overview(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """Data Overview 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         datasets_html = []
         for ds in report_data.datasets:
-            color_style = f'border-color: {ds.color};'
+            color_style = f"border-color: {ds.color};"
 
             # 기본 정보
             info_items = [
-                (('행 수' if is_ko else 'Rows'), self.format_number(ds.row_count, 0)),
-                (('컬럼 수' if is_ko else 'Columns'), str(ds.column_count)),
-                (('메모리' if is_ko else 'Memory'), self.format_bytes(ds.memory_bytes)),
+                (("행 수" if is_ko else "Rows"), self.format_number(ds.row_count, 0)),
+                (("컬럼 수" if is_ko else "Columns"), str(ds.column_count)),
+                (("메모리" if is_ko else "Memory"), self.format_bytes(ds.memory_bytes)),
             ]
 
             if ds.file_path:
-                info_items.insert(0, (('파일' if is_ko else 'File'), ds.file_path.split('/')[-1]))
+                info_items.insert(
+                    0, (("파일" if is_ko else "File"), ds.file_path.split("/")[-1])
+                )
 
             if ds.date_range:
                 date_str = f"{ds.date_range['min']} ~ {ds.date_range['max']}"
-                info_items.append(('날짜 범위' if is_ko else 'Date Range', date_str))
+                info_items.append(("날짜 범위" if is_ko else "Date Range", date_str))
 
-            info_html = ''.join([
-                f'<tr><td>{label}</td><td class="numeric">{value}</td></tr>'
-                for label, value in info_items
-            ])
+            info_html = "".join(
+                [
+                    f'<tr><td>{label}</td><td class="numeric">{value}</td></tr>'
+                    for label, value in info_items
+                ]
+            )
 
             # 컬럼 타입 요약
             type_counts = {}
             for col, dtype in ds.column_types.items():
                 type_counts[dtype] = type_counts.get(dtype, 0) + 1
 
-            type_summary = ', '.join([f"{t}: {c}" for t, c in type_counts.items()])
+            type_summary = ", ".join([f"{t}: {c}" for t, c in type_counts.items()])
 
             # 결측값 정보
             missing_html = ""
             if ds.missing_values:
                 missing_title = "결측값" if is_ko else "Missing Values"
-                missing_items = ''.join([
-                    f'<tr><td>{col}</td><td class="numeric">{count}</td></tr>'
-                    for col, count in ds.missing_values.items()
-                ])
-                missing_html = f'''
+                missing_items = "".join(
+                    [
+                        f'<tr><td>{col}</td><td class="numeric">{count}</td></tr>'
+                        for col, count in ds.missing_values.items()
+                    ]
+                )
+                missing_html = f"""
                 <h4>{missing_title}</h4>
                 <table class="data-table" style="max-width: 300px;">
-                    <thead><tr><th>{'컬럼' if is_ko else 'Column'}</th><th>{'개수' if is_ko else 'Count'}</th></tr></thead>
+                    <thead><tr><th>{"컬럼" if is_ko else "Column"}</th><th>{"개수" if is_ko else "Count"}</th></tr></thead>
                     <tbody>{missing_items}</tbody>
-                </table>'''
+                </table>"""
 
             datasets_html.append(f'''
             <div class="comparison-card" style="{color_style}">
@@ -896,28 +881,26 @@ body {{
                     <tbody>{info_html}</tbody>
                 </table>
                 <p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-secondary);">
-                    <strong>{'데이터 타입' if is_ko else 'Data Types'}:</strong> {type_summary}
+                    <strong>{"데이터 타입" if is_ko else "Data Types"}:</strong> {type_summary}
                 </p>
                 {missing_html}
             </div>''')
 
         section_title = "데이터 개요" if is_ko else "Data Overview"
 
-        return f'''
+        return f"""
 <section id="data-overview" class="section">
     <h2>{section_title}</h2>
     <div class="comparison-grid">
-        {''.join(datasets_html)}
+        {"".join(datasets_html)}
     </div>
-</section>'''
+</section>"""
 
     def _render_statistics(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """통계 요약 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         if not report_data.statistics:
             return ""
@@ -937,15 +920,24 @@ body {{
                     break
 
             # 테이블 헤더
-            headers = ['컬럼' if is_ko else 'Column', 'Count', 'Mean', 'Median',
-                       'Std', 'Min', 'Max', 'Q1', 'Q3']
+            headers = [
+                "컬럼" if is_ko else "Column",
+                "Count",
+                "Mean",
+                "Median",
+                "Std",
+                "Min",
+                "Max",
+                "Q1",
+                "Q3",
+            ]
 
-            header_html = ''.join([f'<th>{h}</th>' for h in headers])
+            header_html = "".join([f"<th>{h}</th>" for h in headers])
 
             # 테이블 행
             rows_html = []
             for stat in stats_list:
-                row = f'''
+                row = f"""
                 <tr>
                     <td>{html.escape(stat.column)}</td>
                     <td class="numeric">{self.format_number(stat.count, 0)}</td>
@@ -956,112 +948,112 @@ body {{
                     <td class="numeric">{self.format_number(stat.max)}</td>
                     <td class="numeric">{self.format_number(stat.q1)}</td>
                     <td class="numeric">{self.format_number(stat.q3)}</td>
-                </tr>'''
+                </tr>"""
                 rows_html.append(row)
 
-            tables_html.append(f'''
+            tables_html.append(f"""
             <h3>{html.escape(dataset_name)}</h3>
             <table class="data-table">
                 <thead><tr>{header_html}</tr></thead>
-                <tbody>{''.join(rows_html)}</tbody>
-            </table>''')
+                <tbody>{"".join(rows_html)}</tbody>
+            </table>""")
 
         section_title = "통계 요약" if is_ko else "Statistical Summary"
 
-        return f'''
+        return f"""
 <section id="statistics" class="section">
     <h2>{section_title}</h2>
-    {''.join(tables_html)}
-</section>'''
+    {"".join(tables_html)}
+</section>"""
 
-    def _render_chart_statistics(
-        self,
-        chart: ChartData,
-        options: ReportOptions
-    ) -> str:
+    def _render_chart_statistics(self, chart: ChartData, options: ReportOptions) -> str:
         """차트 통계 테이블 렌더링"""
         if not options.include_chart_statistics:
             return ""
-        
+
         # 표시할 통계 가져오기
         stats_to_display = chart.get_statistics_for_display()
         if not stats_to_display:
             return ""
-        
-        is_ko = options.language == 'ko'
-        
+
+        is_ko = options.language == "ko"
+
         # 통계 이름 번역
         stat_labels = {
-            'count': ('개수', 'Count'),
-            'total': ('합계', 'Total'),
-            'mean': ('평균', 'Mean'),
-            'median': ('중앙값', 'Median'),
-            'min': ('최소', 'Min'),
-            'max': ('최대', 'Max'),
-            'std': ('표준편차', 'Std'),
-            'change_percent': ('변화율', 'Change%'),
-            'start_value': ('시작값', 'Start'),
-            'end_value': ('종료값', 'End'),
-            'trend_direction': ('추세', 'Trend'),
-            'percentage': ('비율', '%'),
-            'correlation': ('상관계수', 'r'),
-            'r_squared': ('결정계수', 'R²'),
-            'x_range': ('X 범위', 'X Range'),
-            'y_range': ('Y 범위', 'Y Range'),
-            'max_cell_location': ('최대 위치', 'Max Cell'),
-            'min_cell_location': ('최소 위치', 'Min Cell'),
-            'q1': ('Q1', 'Q1'),
-            'q3': ('Q3', 'Q3'),
-            'iqr': ('IQR', 'IQR'),
-            'outlier_count': ('이상치 수', 'Outliers'),
-            'skewness': ('왜도', 'Skewness'),
-            'mode': ('최빈값', 'Mode'),
-            'bin_count': ('구간 수', 'Bins'),
+            "count": ("개수", "Count"),
+            "total": ("합계", "Total"),
+            "mean": ("평균", "Mean"),
+            "median": ("중앙값", "Median"),
+            "min": ("최소", "Min"),
+            "max": ("최대", "Max"),
+            "std": ("표준편차", "Std"),
+            "change_percent": ("변화율", "Change%"),
+            "start_value": ("시작값", "Start"),
+            "end_value": ("종료값", "End"),
+            "trend_direction": ("추세", "Trend"),
+            "percentage": ("비율", "%"),
+            "correlation": ("상관계수", "r"),
+            "r_squared": ("결정계수", "R²"),
+            "x_range": ("X 범위", "X Range"),
+            "y_range": ("Y 범위", "Y Range"),
+            "max_cell_location": ("최대 위치", "Max Cell"),
+            "min_cell_location": ("최소 위치", "Min Cell"),
+            "q1": ("Q1", "Q1"),
+            "q3": ("Q3", "Q3"),
+            "iqr": ("IQR", "IQR"),
+            "outlier_count": ("이상치 수", "Outliers"),
+            "skewness": ("왜도", "Skewness"),
+            "mode": ("최빈값", "Mode"),
+            "bin_count": ("구간 수", "Bins"),
         }
-        
+
         rows = []
         for stat_key, value in stats_to_display.items():
             label_ko, label_en = stat_labels.get(stat_key, (stat_key, stat_key))
             label = label_ko if is_ko else label_en
-            
+
             # 값 포맷팅
             if isinstance(value, float):
-                if stat_key == 'change_percent':
+                if stat_key == "change_percent":
                     formatted_value = self.format_percentage(value)
-                elif stat_key in ('correlation', 'r_squared'):
+                elif stat_key in ("correlation", "r_squared"):
                     formatted_value = f"{value:.4f}"
                 else:
                     formatted_value = self.format_number(value)
             elif isinstance(value, (list, tuple)):
-                formatted_value = f"{self.format_number(value[0])} ~ {self.format_number(value[1])}"
+                formatted_value = (
+                    f"{self.format_number(value[0])} ~ {self.format_number(value[1])}"
+                )
             elif isinstance(value, dict):
                 # For percentage breakdown in pie charts
-                formatted_items = [f"{k}: {self.format_percentage(v)}" for k, v in value.items()]
+                formatted_items = [
+                    f"{k}: {self.format_percentage(v)}" for k, v in value.items()
+                ]
                 formatted_value = ", ".join(formatted_items[:5])  # Limit display
                 if len(value) > 5:
                     formatted_value += "..."
             else:
                 formatted_value = str(value) if value is not None else "-"
-            
-            rows.append(f'<tr><td>{label}</td><td class="numeric">{formatted_value}</td></tr>')
-        
+
+            rows.append(
+                f'<tr><td>{label}</td><td class="numeric">{formatted_value}</td></tr>'
+            )
+
         stats_title = "통계" if is_ko else "Statistics"
-        
-        return f'''
+
+        return f"""
             <div class="chart-statistics">
                 <table class="data-table stats-table">
                     <thead><tr><th colspan="2">{stats_title}</th></tr></thead>
-                    <tbody>{''.join(rows)}</tbody>
+                    <tbody>{"".join(rows)}</tbody>
                 </table>
-            </div>'''
+            </div>"""
 
     def _render_visualizations(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """시각화 렌더링 - 통계 테이블 포함, description 제외"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         charts_html = []
         for chart in report_data.charts:
@@ -1070,36 +1062,35 @@ body {{
                 img_html = f'<img src="data:image/{chart.image_format};base64,{chart.image_base64}" alt="{html.escape(chart.title)}">'
             elif chart.image_bytes:
                 import base64
-                b64 = base64.b64encode(chart.image_bytes).decode('utf-8')
+
+                b64 = base64.b64encode(chart.image_bytes).decode("utf-8")
                 img_html = f'<img src="data:image/{chart.image_format};base64,{b64}" alt="{html.escape(chart.title)}">'
 
             # 차트 통계 렌더링
             stats_html = self._render_chart_statistics(chart, options)
 
-            charts_html.append(f'''
+            charts_html.append(f"""
             <div class="chart-container">
                 <h4>{html.escape(chart.title)}</h4>
                 {img_html}
                 {stats_html}
-            </div>''')
+            </div>""")
 
         section_title = "시각화" if is_ko else "Visualizations"
 
-        return f'''
+        return f"""
 <section id="visualizations" class="section">
     <h2>{section_title}</h2>
     <div class="charts-grid">
-        {''.join(charts_html)}
+        {"".join(charts_html)}
     </div>
-</section>'''
+</section>"""
 
     def _render_comparison(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
+        self, report_data: ReportData, options: ReportOptions
     ) -> str:
         """비교 분석 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         content_parts = []
 
@@ -1123,7 +1114,7 @@ body {{
                 if comp.effect_size is not None:
                     effect_text = f'<span class="stat-item"><span class="label">Effect Size:</span><span class="value">{comp.effect_size:.3f} ({comp.effect_size_interpretation})</span></span>'
 
-                tests_html.append(f'''
+                tests_html.append(f"""
                 <div class="test-result">
                     <div class="test-name">{html.escape(comp.test_type)}: {html.escape(comp.dataset_a_name)} vs {html.escape(comp.dataset_b_name)}</div>
                     <div class="stats-row">
@@ -1133,13 +1124,13 @@ body {{
                         {effect_text}
                     </div>
                     <p><span class="significance {sig_class}">{sig_text}</span></p>
-                    {f'<p style="margin-top: 10px;">{html.escape(comp.interpretation)}</p>' if comp.interpretation else ''}
-                </div>''')
+                    {f'<p style="margin-top: 10px;">{html.escape(comp.interpretation)}</p>' if comp.interpretation else ""}
+                </div>""")
 
             test_title = "통계 검정 결과" if is_ko else "Statistical Test Results"
-            content_parts.append(f'''
+            content_parts.append(f"""
             <h3>{test_title}</h3>
-            {''.join(tests_html)}''')
+            {"".join(tests_html)}""")
 
         # Difference Analysis
         if report_data.differences:
@@ -1150,7 +1141,7 @@ body {{
 
                 diff_title = "차이 분석" if is_ko else "Difference Analysis"
 
-                content_parts.append(f'''
+                content_parts.append(f"""
             <h3>{diff_title}: {html.escape(diff.dataset_a_name)} vs {html.escape(diff.dataset_b_name)}</h3>
             <div class="diff-bar">
                 <div class="positive" style="width: {pos_pct}%;" title="Positive: {pos_pct:.1f}%"></div>
@@ -1158,70 +1149,76 @@ body {{
                 <div class="neutral" style="width: {neu_pct}%;" title="Neutral: {neu_pct:.1f}%"></div>
             </div>
             <div class="diff-legend">
-                <span><span class="dot" style="background: #22c55e;"></span> {'증가' if is_ko else 'Positive'}: {pos_pct:.1f}% ({diff.positive_count})</span>
-                <span><span class="dot" style="background: #ef4444;"></span> {'감소' if is_ko else 'Negative'}: {neg_pct:.1f}% ({diff.negative_count})</span>
-                <span><span class="dot" style="background: #94a3b8;"></span> {'변화없음' if is_ko else 'No Change'}: {neu_pct:.1f}% ({diff.neutral_count})</span>
+                <span><span class="dot" style="background: #22c55e;"></span> {"증가" if is_ko else "Positive"}: {pos_pct:.1f}% ({diff.positive_count})</span>
+                <span><span class="dot" style="background: #ef4444;"></span> {"감소" if is_ko else "Negative"}: {neg_pct:.1f}% ({diff.negative_count})</span>
+                <span><span class="dot" style="background: #94a3b8;"></span> {"변화없음" if is_ko else "No Change"}: {neu_pct:.1f}% ({diff.neutral_count})</span>
             </div>
             <div class="metrics-grid" style="margin-top: 20px;">
                 <div class="metric-card">
-                    <div class="label">{'총 차이' if is_ko else 'Total Difference'}</div>
+                    <div class="label">{"총 차이" if is_ko else "Total Difference"}</div>
                     <div class="value">{self.format_number(diff.total_difference)}</div>
                 </div>
                 <div class="metric-card">
-                    <div class="label">{'평균 차이' if is_ko else 'Mean Difference'}</div>
+                    <div class="label">{"평균 차이" if is_ko else "Mean Difference"}</div>
                     <div class="value">{self.format_number(diff.mean_difference)}</div>
                 </div>
                 <div class="metric-card">
-                    <div class="label">{'매칭 레코드' if is_ko else 'Matched Records'}</div>
+                    <div class="label">{"매칭 레코드" if is_ko else "Matched Records"}</div>
                     <div class="value">{self.format_number(diff.matched_records, 0)}</div>
                 </div>
-            </div>''')
+            </div>""")
 
                 # Top differences table
                 if diff.top_differences:
                     top_diff_title = "상위 차이" if is_ko else "Top Differences"
-                    headers = ['Key', diff.value_column + ' (A)', diff.value_column + ' (B)', 'Difference', 'Change %']
-                    header_html = ''.join([f'<th>{h}</th>' for h in headers])
+                    headers = [
+                        "Key",
+                        diff.value_column + " (A)",
+                        diff.value_column + " (B)",
+                        "Difference",
+                        "Change %",
+                    ]
+                    header_html = "".join([f"<th>{h}</th>" for h in headers])
 
                     rows = []
                     for item in diff.top_differences[:10]:
-                        change_class = "positive" if item.get('difference', 0) > 0 else "negative"
-                        rows.append(f'''
+                        change_class = (
+                            "positive" if item.get("difference", 0) > 0 else "negative"
+                        )
+                        rows.append(f"""
                         <tr>
-                            <td>{html.escape(str(item.get('key', '')))}</td>
-                            <td class="numeric">{self.format_number(item.get('value_a'))}</td>
-                            <td class="numeric">{self.format_number(item.get('value_b'))}</td>
-                            <td class="numeric {change_class}">{self.format_number(item.get('difference'))}</td>
-                            <td class="numeric {change_class}">{self.format_percentage(item.get('change_percent'))}</td>
-                        </tr>''')
+                            <td>{html.escape(str(item.get("key", "")))}</td>
+                            <td class="numeric">{self.format_number(item.get("value_a"))}</td>
+                            <td class="numeric">{self.format_number(item.get("value_b"))}</td>
+                            <td class="numeric {change_class}">{self.format_number(item.get("difference"))}</td>
+                            <td class="numeric {change_class}">{self.format_percentage(item.get("change_percent"))}</td>
+                        </tr>""")
 
-                    content_parts.append(f'''
+                    content_parts.append(f"""
             <h4>{top_diff_title}</h4>
             <table class="data-table">
                 <thead><tr>{header_html}</tr></thead>
-                <tbody>{''.join(rows)}</tbody>
-            </table>''')
+                <tbody>{"".join(rows)}</tbody>
+            </table>""")
 
         section_title = "비교 분석" if is_ko else "Comparison Analysis"
 
-        return f'''
+        return f"""
 <section id="comparison" class="section">
     <h2>{section_title}</h2>
-    {''.join(content_parts)}
-</section>'''
+    {"".join(content_parts)}
+</section>"""
 
-    def _render_tables(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_tables(self, report_data: ReportData, options: ReportOptions) -> str:
         """데이터 테이블 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         tables_html = []
         for table in report_data.tables:
             # 헤더
-            header_html = ''.join([f'<th>{html.escape(col)}</th>' for col in table.columns])
+            header_html = "".join(
+                [f"<th>{html.escape(col)}</th>" for col in table.columns]
+            )
 
             # 행
             rows_html = []
@@ -1234,90 +1231,92 @@ body {{
                     if col_format in ["integer", "float"]:
                         cell_html = f'<td class="numeric">{self.format_number(cell) if cell is not None else "-"}</td>'
                     else:
-                        cell_html = f'<td>{html.escape(str(cell)) if cell is not None else "-"}</td>'
+                        cell_html = f"<td>{html.escape(str(cell)) if cell is not None else '-'}</td>"
                     cells.append(cell_html)
-                rows_html.append(f'<tr>{"".join(cells)}</tr>')
+                rows_html.append(f"<tr>{''.join(cells)}</tr>")
 
             # 페이지네이션 정보
             pagination = ""
             if table.total_rows > table.shown_rows:
                 pagination = f'<p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-secondary);">{"표시" if is_ko else "Showing"} {table.shown_rows} / {table.total_rows} {"행" if is_ko else "rows"}</p>'
 
-            tables_html.append(f'''
+            tables_html.append(f"""
             <div class="chart-container">
                 <h4>{html.escape(table.title)}</h4>
                 <table class="data-table">
                     <thead><tr>{header_html}</tr></thead>
-                    <tbody>{''.join(rows_html)}</tbody>
+                    <tbody>{"".join(rows_html)}</tbody>
                 </table>
                 {pagination}
-            </div>''')
+            </div>""")
 
         section_title = "데이터 테이블" if is_ko else "Data Tables"
 
-        return f'''
+        return f"""
 <section id="data-tables" class="section">
     <h2>{section_title}</h2>
-    {''.join(tables_html)}
-</section>'''
+    {"".join(tables_html)}
+</section>"""
 
-    def _render_appendix(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_appendix(self, report_data: ReportData, options: ReportOptions) -> str:
         """부록 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         content_parts = []
 
         # Methodology
         if report_data.methodology_notes:
             method_title = "분석 방법론" if is_ko else "Methodology"
-            items = ''.join([f'<li>{html.escape(note)}</li>' for note in report_data.methodology_notes])
-            content_parts.append(f'''
+            items = "".join(
+                [
+                    f"<li>{html.escape(note)}</li>"
+                    for note in report_data.methodology_notes
+                ]
+            )
+            content_parts.append(f"""
             <h3>{method_title}</h3>
-            <ul>{items}</ul>''')
+            <ul>{items}</ul>""")
 
         # Data Quality Notes
         if report_data.data_quality_notes:
             quality_title = "데이터 품질 노트" if is_ko else "Data Quality Notes"
-            items = ''.join([f'<li>{html.escape(note)}</li>' for note in report_data.data_quality_notes])
-            content_parts.append(f'''
+            items = "".join(
+                [
+                    f"<li>{html.escape(note)}</li>"
+                    for note in report_data.data_quality_notes
+                ]
+            )
+            content_parts.append(f"""
             <h3>{quality_title}</h3>
-            <ul>{items}</ul>''')
+            <ul>{items}</ul>""")
 
         if not content_parts:
             return ""
 
         section_title = "부록" if is_ko else "Appendix"
 
-        return f'''
+        return f"""
 <section id="appendix" class="section">
     <h2>{section_title}</h2>
-    {''.join(content_parts)}
-</section>'''
+    {"".join(content_parts)}
+</section>"""
 
-    def _render_footer(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> str:
+    def _render_footer(self, report_data: ReportData, options: ReportOptions) -> str:
         """푸터 렌더링"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
 
         generated_text = "생성일시" if is_ko else "Generated on"
         powered_text = "Powered by" if not is_ko else ""
 
-        return f'''
+        return f"""
 <footer class="report-footer">
     <p>{generated_text}: {report_data.metadata.created_at.strftime("%Y-%m-%d %H:%M:%S")}</p>
     <p>{powered_text} <a href="#">Data Graph Studio</a> v{report_data.metadata.version}</p>
-</footer>'''
+</footer>"""
 
     def _get_scripts(self, options: ReportOptions) -> str:
         """JavaScript 스크립트"""
-        return '''
+        return """
 <script>
 // Collapsible sections
 document.querySelectorAll('.collapsible').forEach(function(element) {
@@ -1334,4 +1333,4 @@ document.querySelectorAll('.collapsible').forEach(function(element) {
 function printReport() {
     window.print();
 }
-</script>'''
+</script>"""

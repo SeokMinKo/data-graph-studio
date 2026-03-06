@@ -1,8 +1,6 @@
 """Tests for zone-change undo (#1, #4, #5) and related improvements."""
 
-import copy
-
-from data_graph_studio.core.state import AppState, AggregationType, GridDirection
+from data_graph_studio.core.state import AppState, GridDirection
 from data_graph_studio.core.undo_manager import UndoStack, UndoActionType
 
 
@@ -180,6 +178,7 @@ class TestGridViewUndo:
 class TestUndoCommandTimestamp:
     def test_timestamp_auto_set(self):
         from data_graph_studio.core.undo_manager import UndoCommand
+
         cmd = UndoCommand(
             action_type=UndoActionType.ZONE_X_CHANGE,
             description="test",
@@ -190,6 +189,7 @@ class TestUndoCommandTimestamp:
 
     def test_timestamp_preserved_if_set(self):
         from data_graph_studio.core.undo_manager import UndoCommand
+
         cmd = UndoCommand(
             action_type=UndoActionType.ZONE_X_CHANGE,
             description="test",
@@ -204,13 +204,16 @@ class TestSizeHintEviction:
     def test_large_commands_evicted(self):
         stack = UndoStack(max_depth=100, max_memory_bytes=100)
         from data_graph_studio.core.undo_manager import UndoCommand
+
         for i in range(5):
-            stack.record(UndoCommand(
-                action_type=UndoActionType.COLUMN_ADD,
-                description=f"big {i}",
-                do=lambda: None,
-                undo=lambda: None,
-                size_hint=50,
-            ))
+            stack.record(
+                UndoCommand(
+                    action_type=UndoActionType.COLUMN_ADD,
+                    description=f"big {i}",
+                    do=lambda: None,
+                    undo=lambda: None,
+                    size_hint=50,
+                )
+            )
         # 5 * 50 = 250 > 100, should evict oldest
         assert len(stack.commands) < 5

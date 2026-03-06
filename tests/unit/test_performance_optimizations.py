@@ -1,20 +1,21 @@
 """Tests for performance and memory optimizations (items #1-#19)."""
-import sys
-import copy
-from unittest.mock import MagicMock, patch
+
 import polars as pl
-import pytest
 
 
 # ---------------------------------------------------------------------------
 # #4: data_quality_report uses is_duplicated instead of df.unique()
 # ---------------------------------------------------------------------------
 
+
 class TestDataQualityReport:
     def test_duplicate_count_correct(self):
         from data_graph_studio.core.data_engine import DataEngine
+
         engine = DataEngine()
-        df = pl.DataFrame({"a": [1, 2, 2, 3, 3, 3], "b": ["x", "y", "y", "z", "z", "z"]})
+        df = pl.DataFrame(
+            {"a": [1, 2, 2, 3, 3, 3], "b": ["x", "y", "y", "z", "z", "z"]}
+        )
         engine.update_dataframe(df)
         report = engine.data_quality_report()
         assert report["duplicate_rows"] == 3  # 6 total - 3 unique = 3 duplicate rows
@@ -23,6 +24,7 @@ class TestDataQualityReport:
 
     def test_no_duplicates(self):
         from data_graph_studio.core.data_engine import DataEngine
+
         engine = DataEngine()
         df = pl.DataFrame({"a": [1, 2, 3]})
         engine.update_dataframe(df)
@@ -34,9 +36,11 @@ class TestDataQualityReport:
 # #5 & #6: Batch update mechanism
 # ---------------------------------------------------------------------------
 
+
 class TestBatchUpdate:
     def test_begin_end_batch(self):
         from data_graph_studio.core.state import AppState
+
         state = AppState()
         signals_received = []
 
@@ -56,6 +60,7 @@ class TestBatchUpdate:
 
     def test_nested_batch(self):
         from data_graph_studio.core.state import AppState
+
         state = AppState()
         signals_received = []
         state.chart_settings_changed.connect(lambda: signals_received.append("chart"))
@@ -71,6 +76,7 @@ class TestBatchUpdate:
     def test_sync_from_dataset_state_uses_batch(self):
         """_sync_from_dataset_state should emit signals via batch."""
         from data_graph_studio.core.state import AppState, DatasetState
+
         state = AppState()
         ds = DatasetState(dataset_id="test1")
         state._dataset_states["test1"] = ds
@@ -93,15 +99,18 @@ class TestBatchUpdate:
 # #7: Cache memory-based eviction
 # ---------------------------------------------------------------------------
 
+
 class TestCacheMemoryEviction:
     def test_cache_tracks_bytes(self):
         from data_graph_studio.core.data_engine import DataEngine
+
         engine = DataEngine()
         engine._set_cache("key1", pl.DataFrame({"a": list(range(100))}))
         assert engine._cache_total_bytes > 0
 
     def test_cache_clear_resets_bytes(self):
         from data_graph_studio.core.data_engine import DataEngine
+
         engine = DataEngine()
         engine._set_cache("key1", pl.DataFrame({"a": list(range(100))}))
         engine._clear_cache()
@@ -110,6 +119,7 @@ class TestCacheMemoryEviction:
 
     def test_cache_eviction_by_memory(self):
         from data_graph_studio.core.data_engine import DataEngine
+
         engine = DataEngine()
         # Set very low memory limit
         engine.CACHE_MAX_MEMORY_BYTES = 1000
@@ -126,9 +136,11 @@ class TestCacheMemoryEviction:
 # #8: Search returns mask via search_mask
 # ---------------------------------------------------------------------------
 
+
 class TestSearchMask:
     def test_search_mask_returns_bool_series(self):
         from data_graph_studio.core.data_query import DataQuery
+
         dq = DataQuery()
         df = pl.DataFrame({"name": ["alice", "bob", "charlie"], "age": [25, 30, 35]})
         mask = dq.search_mask(df, "bob")
@@ -138,6 +150,7 @@ class TestSearchMask:
 
     def test_search_mask_none_on_no_match(self):
         from data_graph_studio.core.data_query import DataQuery
+
         dq = DataQuery()
         df = pl.DataFrame({"name": ["alice"]})
         mask = dq.search_mask(df, "zzz")
@@ -147,6 +160,7 @@ class TestSearchMask:
     def test_search_still_returns_dataframe(self):
         """search() should still return DataFrame for backward compat."""
         from data_graph_studio.core.data_query import DataQuery
+
         dq = DataQuery()
         df = pl.DataFrame({"name": ["alice", "bob"], "v": [1, 2]})
         result = dq.search(df, "alice")
@@ -157,6 +171,7 @@ class TestSearchMask:
 # ---------------------------------------------------------------------------
 # #9: pl.arange in _apply_limit_to_marking (tested indirectly)
 # ---------------------------------------------------------------------------
+
 
 class TestPlArange:
     def test_arange_produces_series(self):
@@ -171,9 +186,11 @@ class TestPlArange:
 # #10: _sync_to_dataset_state deepcopy minimization
 # ---------------------------------------------------------------------------
 
+
 class TestSyncToDatasetState:
     def test_sync_preserves_data(self):
-        from data_graph_studio.core.state import AppState, DatasetState, GroupColumn, AggregationType
+        from data_graph_studio.core.state import AppState, DatasetState, GroupColumn
+
         state = AppState()
         ds = DatasetState(dataset_id="t1")
         state._dataset_states["t1"] = ds
@@ -197,9 +214,11 @@ class TestSyncToDatasetState:
 # #12: headerData tooltip cache
 # ---------------------------------------------------------------------------
 
+
 class TestHeaderTooltipCache:
     def test_stats_precomputed(self):
         from data_graph_studio.ui.panels.table_panel import PolarsTableModel
+
         model = PolarsTableModel()
         df = pl.DataFrame({"a": [1.0, 2.0, 3.0], "b": ["x", "y", "z"]})
         model.set_dataframe(df)
@@ -211,6 +230,7 @@ class TestHeaderTooltipCache:
     def test_headerdata_uses_cache(self):
         from data_graph_studio.ui.panels.table_panel import PolarsTableModel
         from PySide6.QtCore import Qt
+
         model = PolarsTableModel()
         df = pl.DataFrame({"col": [10, 20, 30]})
         model.set_dataframe(df)
@@ -223,18 +243,25 @@ class TestHeaderTooltipCache:
 # #14: Filter result cache
 # ---------------------------------------------------------------------------
 
+
 class TestFilterCache:
     def test_filter_cache_hash_logic(self):
         """Filter cache hash should be deterministic for same filters."""
         from data_graph_studio.core.state import FilterCondition
 
         filters = [FilterCondition("a", "gt", 2, True)]
-        h1 = hash(tuple((f.column, f.operator, str(f.value), f.enabled) for f in filters))
-        h2 = hash(tuple((f.column, f.operator, str(f.value), f.enabled) for f in filters))
+        h1 = hash(
+            tuple((f.column, f.operator, str(f.value), f.enabled) for f in filters)
+        )
+        h2 = hash(
+            tuple((f.column, f.operator, str(f.value), f.enabled) for f in filters)
+        )
         assert h1 == h2
 
         filters2 = [FilterCondition("a", "gt", 3, True)]
-        h3 = hash(tuple((f.column, f.operator, str(f.value), f.enabled) for f in filters2))
+        h3 = hash(
+            tuple((f.column, f.operator, str(f.value), f.enabled) for f in filters2)
+        )
         assert h1 != h3
 
 
@@ -242,9 +269,14 @@ class TestFilterCache:
 # #15: Conditional format ranges cached
 # ---------------------------------------------------------------------------
 
+
 class TestConditionalFormatRangesCache:
     def test_ranges_cached_on_set_dataframe(self):
-        from data_graph_studio.ui.panels.table_panel import PolarsTableModel, ConditionalFormat
+        from data_graph_studio.ui.panels.table_panel import (
+            PolarsTableModel,
+            ConditionalFormat,
+        )
+
         model = PolarsTableModel()
         fmt = ConditionalFormat(mode="heatmap")
         model.set_conditional_format("val", fmt)
@@ -258,9 +290,11 @@ class TestConditionalFormatRangesCache:
 # #17: DatasetState.clone() selective deepcopy
 # ---------------------------------------------------------------------------
 
+
 class TestDatasetStateClone:
     def test_clone_empty_selection(self):
         from data_graph_studio.core.state import DatasetState
+
         ds = DatasetState(dataset_id="x")
         cloned = ds.clone()
         assert cloned.dataset_id == "x"
@@ -269,6 +303,7 @@ class TestDatasetStateClone:
 
     def test_clone_with_selection(self):
         from data_graph_studio.core.state import DatasetState
+
         ds = DatasetState(dataset_id="y")
         ds.selection.select([1, 2, 3])
         cloned = ds.clone()
@@ -279,6 +314,7 @@ class TestDatasetStateClone:
 
     def test_clone_hover_isolation(self):
         from data_graph_studio.core.state import DatasetState
+
         ds = DatasetState(dataset_id="z")
         ds.hover_columns = ["a", "b"]
         cloned = ds.clone()

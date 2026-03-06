@@ -5,11 +5,17 @@ Splash Screen - Professional animated splash for app startup
 import os
 import sys
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar, QApplication
+from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import Qt, QTimer, QRect
 from PySide6.QtGui import (
-    QPainter, QColor, QLinearGradient, QPixmap, QFont, QPen,
-    QBrush, QPainterPath,
+    QPainter,
+    QColor,
+    QLinearGradient,
+    QPixmap,
+    QFont,
+    QPen,
+    QBrush,
+    QPainterPath,
 )
 
 
@@ -37,7 +43,9 @@ class SplashScreen(QWidget):
         base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
         candidates = [
             os.path.join(base_dir, "..", "..", "resources", "icons", "dgs-512.png"),
-            os.path.join(base_dir, "..", "..", "resources", "icons", "dgs-tech-1024.png"),
+            os.path.join(
+                base_dir, "..", "..", "resources", "icons", "dgs-tech-1024.png"
+            ),
         ]
         for path in candidates:
             resolved = os.path.normpath(path)
@@ -122,7 +130,9 @@ class SplashScreen(QWidget):
         painter.setPen(QColor("#94A3B8"))
         tag_font = QFont("Helvetica Neue", 12)
         painter.setFont(tag_font)
-        painter.drawText(QRect(0, tag_y, w, 22), Qt.AlignCenter, "Big Data Visualization")
+        painter.drawText(
+            QRect(0, tag_y, w, 22), Qt.AlignCenter, "Big Data Visualization"
+        )
 
         # --- Version ---
         if self._version:
@@ -130,7 +140,9 @@ class SplashScreen(QWidget):
             painter.setPen(QColor("#64748B"))
             ver_font = QFont("Helvetica Neue", 10)
             painter.setFont(ver_font)
-            painter.drawText(QRect(0, ver_y, w, 18), Qt.AlignCenter, f"v{self._version}")
+            painter.drawText(
+                QRect(0, ver_y, w, 18), Qt.AlignCenter, f"v{self._version}"
+            )
 
         # --- Progress bar ---
         bar_y = h - 60

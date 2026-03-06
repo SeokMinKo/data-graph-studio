@@ -19,11 +19,7 @@ class TestFilter:
 
     def test_init(self):
         """초기화 테스트"""
-        f = Filter(
-            column="sales",
-            operator=FilterOperator.GREATER_THAN,
-            value=100
-        )
+        f = Filter(column="sales", operator=FilterOperator.GREATER_THAN, value=100)
 
         assert f.column == "sales"
         assert f.operator == FilterOperator.GREATER_THAN
@@ -36,7 +32,7 @@ class TestFilter:
             column="sales",
             operator=FilterOperator.GREATER_THAN,
             value=100,
-            filter_type=FilterType.NUMERIC
+            filter_type=FilterType.NUMERIC,
         )
 
         assert f.filter_type == FilterType.NUMERIC
@@ -47,18 +43,14 @@ class TestFilter:
             column="name",
             operator=FilterOperator.CONTAINS,
             value="apple",
-            filter_type=FilterType.TEXT
+            filter_type=FilterType.TEXT,
         )
 
         assert f.filter_type == FilterType.TEXT
 
     def test_disable_enable(self):
         """필터 활성화/비활성화"""
-        f = Filter(
-            column="sales",
-            operator=FilterOperator.GREATER_THAN,
-            value=100
-        )
+        f = Filter(column="sales", operator=FilterOperator.GREATER_THAN, value=100)
 
         assert f.enabled is True
         f.enabled = False
@@ -78,11 +70,7 @@ class TestFilteringScheme:
     def test_add_filter(self):
         """필터 추가"""
         scheme = FilteringScheme(name="Main")
-        f = Filter(
-            column="sales",
-            operator=FilterOperator.GREATER_THAN,
-            value=100
-        )
+        f = Filter(column="sales", operator=FilterOperator.GREATER_THAN, value=100)
         scheme.add_filter(f)
 
         assert len(scheme.filters) == 1
@@ -148,15 +136,48 @@ class TestFilteringManager:
     @pytest.fixture
     def sample_data(self):
         """샘플 데이터"""
-        return pl.DataFrame({
-            "id": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            "name": ["Apple", "Banana", "Cherry", "Date", "Elderberry",
-                     "Fig", "Grape", "Honeydew", "Apple", "Banana"],
-            "sales": [100, 200, 150, 300, 50, 400, 250, 180, 90, 220],
-            "region": ["Asia", "Europe", "Asia", "America", "Europe",
-                       "Asia", "America", "Europe", "Asia", "America"],
-            "active": [True, True, False, True, False, True, True, False, True, True]
-        })
+        return pl.DataFrame(
+            {
+                "id": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                "name": [
+                    "Apple",
+                    "Banana",
+                    "Cherry",
+                    "Date",
+                    "Elderberry",
+                    "Fig",
+                    "Grape",
+                    "Honeydew",
+                    "Apple",
+                    "Banana",
+                ],
+                "sales": [100, 200, 150, 300, 50, 400, 250, 180, 90, 220],
+                "region": [
+                    "Asia",
+                    "Europe",
+                    "Asia",
+                    "America",
+                    "Europe",
+                    "Asia",
+                    "America",
+                    "Europe",
+                    "Asia",
+                    "America",
+                ],
+                "active": [
+                    True,
+                    True,
+                    False,
+                    True,
+                    False,
+                    True,
+                    True,
+                    False,
+                    True,
+                    True,
+                ],
+            }
+        )
 
     def test_init(self, manager):
         """초기화 테스트 - 기본 필터링 스킴 존재"""
@@ -193,7 +214,7 @@ class TestFilteringManager:
                 scheme_name="Page",
                 column="sales",
                 operator=FilterOperator.GREATER_THAN,
-                value=100
+                value=100,
             )
 
         assert len(manager.schemes["Page"].filters) == 1
@@ -304,10 +325,9 @@ class TestFilteringManager:
 
     def test_apply_filters_is_null(self, manager):
         """필터 적용 - IS_NULL"""
-        data = pl.DataFrame({
-            "a": [1, None, 3, None, 5],
-            "b": ["x", "y", None, "w", None]
-        })
+        data = pl.DataFrame(
+            {"a": [1, None, 3, None, 5], "b": ["x", "y", None, "w", None]}
+        )
 
         manager.add_filter("Page", "a", FilterOperator.IS_NULL, None)
         result = manager.apply_filters("Page", data)
@@ -316,9 +336,11 @@ class TestFilteringManager:
 
     def test_apply_filters_is_not_null(self, manager):
         """필터 적용 - IS_NOT_NULL"""
-        data = pl.DataFrame({
-            "a": [1, None, 3, None, 5],
-        })
+        data = pl.DataFrame(
+            {
+                "a": [1, None, 3, None, 5],
+            }
+        )
 
         manager.add_filter("Page", "a", FilterOperator.IS_NOT_NULL, None)
         result = manager.apply_filters("Page", data)
@@ -398,7 +420,9 @@ class TestFilteringManager:
 
         assert len(result) == len(sample_data)
 
-    def test_scheme_circular_inheritance_does_not_recurse_infinitely(self, manager, sample_data):
+    def test_scheme_circular_inheritance_does_not_recurse_infinitely(
+        self, manager, sample_data
+    ):
         """스킴 상속 순환이 있어도 안전하게 종료되어야 한다."""
         manager.create_scheme("A", inherit_from="B")
         manager.create_scheme("B", inherit_from="A")
@@ -448,7 +472,9 @@ class TestCheckboxFilter:
         manager.add_checkbox_filter("Page", "region", ["Asia"])
 
         with qtbot.waitSignal(manager.filter_changed):
-            manager.update_checkbox_filter("Page", "region", ["Asia", "Europe", "America"])
+            manager.update_checkbox_filter(
+                "Page", "region", ["Asia", "Europe", "America"]
+            )
 
         filters = [f for f in manager.schemes["Page"].filters if f.column == "region"]
         assert len(filters) == 1
@@ -464,9 +490,9 @@ class TestTextSearchFilter:
 
     @pytest.fixture
     def sample_data(self):
-        return pl.DataFrame({
-            "name": ["Apple", "Banana", "Cherry", "Date", "Elderberry"]
-        })
+        return pl.DataFrame(
+            {"name": ["Apple", "Banana", "Cherry", "Date", "Elderberry"]}
+        )
 
     def test_text_search_filter(self, manager, sample_data):
         """텍스트 검색 필터"""

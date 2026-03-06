@@ -12,39 +12,46 @@ from datetime import datetime
 
 # DirectWrite 폰트 오류 방지 (Windows)
 # Qt 초기화 전에 설정해야 함
-if sys.platform == 'win32':
-    os.environ.setdefault('QT_QPA_PLATFORM', 'windows:fontengine=freetype')
+if sys.platform == "win32":
+    os.environ.setdefault("QT_QPA_PLATFORM", "windows:fontengine=freetype")
 
 
 def setup_logging():
     """로깅 설정"""
-    log_dir = os.path.join(os.path.expanduser("~"), '.data_graph_studio', 'logs')
+    log_dir = os.path.join(os.path.expanduser("~"), ".data_graph_studio", "logs")
     os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f'app_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-    
+    log_file = os.path.join(
+        log_dir, f"app_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    )
+
     logging.basicConfig(
         level=logging.DEBUG,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ]
+            logging.FileHandler(log_file, encoding="utf-8"),
+            logging.StreamHandler(sys.stdout),
+        ],
     )
-    return logging.getLogger('DataGraphStudio')
+    return logging.getLogger("DataGraphStudio")
 
 
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Data Graph Studio")
     parser.add_argument("files", nargs="*", help="Files to open")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode (enables IPC execute handler)")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode (enables IPC execute handler)",
+    )
     return parser.parse_args()
 
 
 def main():
     import faulthandler
+
     faulthandler.enable()  # segfault 시 traceback 출력
-    
+
     args = parse_args()
     logger = setup_logging()
     logger.info("=" * 60)
@@ -53,7 +60,7 @@ def main():
     if args.debug:
         logger.info("Debug mode enabled")
     logger.info("=" * 60)
-    
+
     try:
         from data_graph_studio.core.ipc_server import (
             is_another_instance_running,
@@ -73,23 +80,23 @@ def main():
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import Qt
         from PySide6.QtGui import QFont, QFontDatabase
-        
+
         from data_graph_studio.ui.main_window import MainWindow
-        
+
         # High DPI
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
         )
-        
+
         app = QApplication(sys.argv)
         app.setApplicationName("Data Graph Studio")
         app.setApplicationVersion("0.1.0")
         app.setOrganizationName("Godol")
-        
+
         # Use platform-safe default UI font with Korean fallback.
         preferred_fonts = [
-            "Segoe UI",          # Windows
-            "Malgun Gothic",     # Windows Korean
+            "Segoe UI",  # Windows
+            "Malgun Gothic",  # Windows Korean
             "Apple SD Gothic Neo",  # macOS Korean
             "Noto Sans CJK KR",  # Linux/packaged CJK
             "Noto Sans",
@@ -107,16 +114,16 @@ def main():
         app.setStyle("Fusion")
 
         logger.info("UI font selected: %s", chosen or "Qt default")
-        
+
         window = MainWindow(debug=args.debug)
         window.show()
-        
+
         # 커맨드라인 인자로 파일 로드
         for file_path in file_paths:
             window._load_file(file_path)
-        
+
         sys.exit(app.exec())
-        
+
     except ImportError as e:
         logger.critical(f"Import Error: {e}")
         print(f"\nImport Error: {e}")

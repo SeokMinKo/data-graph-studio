@@ -10,8 +10,12 @@ from __future__ import annotations
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QPushButton, QSizePolicy,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QPushButton,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
@@ -114,7 +118,9 @@ class ProfileOverlayRenderer(QWidget):
         if not series_data:
             return [], []
 
-        maxes = [(i, sd["y_max"]) for i, sd in enumerate(series_data) if sd["y_max"] > 0]
+        maxes = [
+            (i, sd["y_max"]) for i, sd in enumerate(series_data) if sd["y_max"] > 0
+        ]
         if len(maxes) <= 1:
             return list(range(len(series_data))), []
 
@@ -193,7 +199,9 @@ class ProfileOverlayRenderer(QWidget):
 
         # Warning label (hidden by default)
         self._warning_label = QLabel("")
-        self._warning_label.setStyleSheet("color: #e67e22; font-size: 11px; padding: 2px 8px;")
+        self._warning_label.setStyleSheet(
+            "color: #e67e22; font-size: 11px; padding: 2px 8px;"
+        )
         self._warning_label.setVisible(False)
         layout.addWidget(self._warning_label)
 
@@ -232,7 +240,9 @@ class ProfileOverlayRenderer(QWidget):
         header_fg_muted = "rgba(0,0,0,0.6)" if is_light else "rgba(255,255,255,0.8)"
 
         if self._header:
-            self._header.setStyleSheet(f"background-color: {header_bg}; border-radius: 4px;")
+            self._header.setStyleSheet(
+                f"background-color: {header_bg}; border-radius: 4px;"
+            )
         if self._header_title:
             self._header_title.setStyleSheet(f"color: {header_fg}; font-weight: bold;")
         if self._x_col_label:
@@ -249,7 +259,7 @@ class ProfileOverlayRenderer(QWidget):
     def _on_legend_clicked(self, item, label_item):
         """Toggle series visibility when legend item is clicked."""
         try:
-            name = label_item.text if hasattr(label_item, 'text') else str(label_item)
+            name = label_item.text if hasattr(label_item, "text") else str(label_item)
             if name in self._series_items:
                 visible = self._series_visible.get(name, True)
                 new_visible = not visible
@@ -266,7 +276,7 @@ class ProfileOverlayRenderer(QWidget):
 
     def _install_legend_click_handlers(self):
         """Install click event handlers on legend items."""
-        if not hasattr(self, '_legend') or self._legend is None:
+        if not hasattr(self, "_legend") or self._legend is None:
             return
         try:
             for sample, label in self._legend.items:
@@ -274,7 +284,9 @@ class ProfileOverlayRenderer(QWidget):
                 def make_handler(s, l):
                     def handler(event):
                         self._on_legend_clicked(s, l)
+
                     return handler
+
                 label.mousePressEvent = make_handler(sample, label)
                 sample.mousePressEvent = make_handler(sample, label)
                 # Set cursor to pointing hand
@@ -297,7 +309,9 @@ class ProfileOverlayRenderer(QWidget):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _get_profile_style(gs: "GraphSetting", fallback_color: str, fallback_width: int = 2):
+    def _get_profile_style(
+        gs: "GraphSetting", fallback_color: str, fallback_width: int = 2
+    ):
         """Extract line color/width from a GraphSetting's chart_settings.
 
         Returns (color: str, width: int).
@@ -311,7 +325,11 @@ class ProfileOverlayRenderer(QWidget):
         vc = list(gs.value_columns)
         if vc:
             first = vc[0]
-            vc_color = first.get("color", None) if isinstance(first, dict) else getattr(first, "color", None)
+            vc_color = (
+                first.get("color", None)
+                if isinstance(first, dict)
+                else getattr(first, "color", None)
+            )
             if vc_color:
                 color = vc_color
         return color, int(width)
@@ -423,7 +441,11 @@ class ProfileOverlayRenderer(QWidget):
         try:
             if x_col and hasattr(df, "__contains__") and x_col in df:
                 x_series = df[x_col]
-                x_data = x_series.to_numpy() if hasattr(x_series, "to_numpy") else np.arange(len(df))
+                x_data = (
+                    x_series.to_numpy()
+                    if hasattr(x_series, "to_numpy")
+                    else np.arange(len(df))
+                )
             else:
                 x_data = np.arange(len(df))
         except Exception:
@@ -441,13 +463,19 @@ class ProfileOverlayRenderer(QWidget):
             if not vc:
                 continue
             first_vc = vc[0]
-            y_col = first_vc.get("name", "") if isinstance(first_vc, dict) else getattr(first_vc, "name", "")
+            y_col = (
+                first_vc.get("name", "")
+                if isinstance(first_vc, dict)
+                else getattr(first_vc, "name", "")
+            )
             if not y_col:
                 continue
             try:
                 if hasattr(df, "__contains__") and y_col in df:
                     y_series = df[y_col]
-                    y_data = y_series.to_numpy() if hasattr(y_series, "to_numpy") else None
+                    y_data = (
+                        y_series.to_numpy() if hasattr(y_series, "to_numpy") else None
+                    )
                 else:
                     y_data = None
             except Exception:
@@ -464,14 +492,18 @@ class ProfileOverlayRenderer(QWidget):
             if color == "#1f77b4":
                 color = fallback_color
 
-            series_data.append({
-                "profile": gs,
-                "y_col": y_col,
-                "y_data": y_data,
-                "color": color,
-                "line_width": line_w,
-                "y_max": float(np.nanmax(np.abs(y_data))) if len(y_data) > 0 else 0.0,
-            })
+            series_data.append(
+                {
+                    "profile": gs,
+                    "y_col": y_col,
+                    "y_data": y_data,
+                    "color": color,
+                    "line_width": line_w,
+                    "y_max": float(np.nanmax(np.abs(y_data)))
+                    if len(y_data) > 0
+                    else 0.0,
+                }
+            )
 
         if not series_data:
             return
@@ -483,7 +515,9 @@ class ProfileOverlayRenderer(QWidget):
         if use_dual:
             self._plot_widget.showAxis("right")
         else:
-            self._plot_widget.hideAxis("right") if hasattr(self._plot_widget, "hideAxis") else None
+            self._plot_widget.hideAxis("right") if hasattr(
+                self._plot_widget, "hideAxis"
+            ) else None
 
         # Plot each series
         self._secondary_vb = None
@@ -494,7 +528,11 @@ class ProfileOverlayRenderer(QWidget):
             y_plot = sd["y_data"]
 
             # Downsample based on profile's sampling settings
-            profile_cs = dict(sd["profile"].chart_settings) if sd["profile"].chart_settings else {}
+            profile_cs = (
+                dict(sd["profile"].chart_settings)
+                if sd["profile"].chart_settings
+                else {}
+            )
             show_all = profile_cs.get("show_all_data", False)
             if not show_all:
                 mp = profile_cs.get("max_points", MAX_POINTS_PER_SERIES)
@@ -518,7 +556,9 @@ class ProfileOverlayRenderer(QWidget):
 
                     # Sync secondary viewbox geometry
                     def _update_views():
-                        p2.setGeometry(self._plot_widget.getViewBox().sceneBoundingRect())
+                        p2.setGeometry(
+                            self._plot_widget.getViewBox().sceneBoundingRect()
+                        )
                         p2.linkedViewChanged(self._plot_widget.getViewBox(), p2.XAxis)
 
                     self._plot_widget.getViewBox().sigResized.connect(_update_views)
@@ -541,7 +581,9 @@ class ProfileOverlayRenderer(QWidget):
                 self._series_visible[label] = True
                 if use_dual and left_indices and idx == left_indices[0]:
                     # Label left axis with first left-series colour
-                    self._plot_widget.getAxis("left").setLabel(sd["y_col"], color=sd["color"])
+                    self._plot_widget.getAxis("left").setLabel(
+                        sd["y_col"], color=sd["color"]
+                    )
                     self._plot_widget.getAxis("left").setPen(pg.mkPen(sd["color"]))
 
         # Install interactive legend click handlers

@@ -12,8 +12,11 @@ def test_start_trace_uses_oneshot_command() -> None:
     proc.poll.return_value = None
     proc.pid = 4242
 
-    with patch.object(ctrl, "find_trace_processor", return_value="/tmp/trace_processor"),          patch("subprocess.Popen", return_value=proc) as mock_popen,          patch("time.sleep", return_value=None):
-
+    with (
+        patch.object(ctrl, "find_trace_processor", return_value="/tmp/trace_processor"),
+        patch("subprocess.Popen", return_value=proc) as mock_popen,
+        patch("time.sleep", return_value=None),
+    ):
         ctrl.start_trace(
             "SERIAL123",
             {

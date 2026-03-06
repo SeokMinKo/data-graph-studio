@@ -1,4 +1,7 @@
-from data_graph_studio.ui.wizards.wpr_convert_step import is_wpr_file, build_wpr_output_path
+from data_graph_studio.ui.wizards.wpr_convert_step import (
+    is_wpr_file,
+    build_wpr_output_path,
+)
 
 
 def test_is_wpr_file() -> None:

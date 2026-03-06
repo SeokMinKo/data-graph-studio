@@ -50,17 +50,18 @@ FALLBACK_SECTION = "📌 Other Changes"
 
 # Conventional Commit 패턴: type(scope): description
 CC_PATTERN = re.compile(
-    r"^(?P<type>[a-z]+)"       # type
+    r"^(?P<type>[a-z]+)"  # type
     r"(?:\((?P<scope>[^)]+)\))?"  # optional (scope)
-    r"(?P<breaking>!)?"        # optional breaking change marker
-    r":\s*"                    # colon + space
-    r"(?P<desc>.+)$"           # description
+    r"(?P<breaking>!)?"  # optional breaking change marker
+    r":\s*"  # colon + space
+    r"(?P<desc>.+)$"  # description
 )
 
 KST = timezone(timedelta(hours=9))
 
 
 # ── 데이터 ────────────────────────────────────────────────
+
 
 @dataclass
 class Commit:
@@ -82,10 +83,13 @@ class VersionNotes:
 
 # ── Git 헬퍼 ─────────────────────────────────────────────
 
+
 def git(*args: str) -> str:
     result = subprocess.run(
         ["git", *args],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
@@ -121,6 +125,7 @@ def get_commits_between(from_ref: Optional[str], to_ref: str) -> list[str]:
 
 
 # ── 파싱 ─────────────────────────────────────────────────
+
 
 def parse_commit(line: str) -> Commit:
     parts = line.split(" ", 1)
@@ -162,6 +167,7 @@ def build_version_notes(tag: str, prev_tag: Optional[str]) -> VersionNotes:
 
 
 # ── 렌더링 ────────────────────────────────────────────────
+
 
 def render_commit(c: Commit, include_hash: bool = True) -> str:
     scope_part = f"**{c.scope}:** " if c.scope else ""
@@ -238,12 +244,17 @@ def render_full_changelog(tags: list[str]) -> str:
 
 # ── CLI ───────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="릴리즈 노트 자동 생성")
     parser.add_argument("tag", nargs="?", help="대상 태그 (기본: 최신)")
     parser.add_argument("--full", action="store_true", help="전체 CHANGELOG.md 생성")
-    parser.add_argument("--format", choices=["changelog", "github"], default="changelog",
-                        help="출력 형식")
+    parser.add_argument(
+        "--format",
+        choices=["changelog", "github"],
+        default="changelog",
+        help="출력 형식",
+    )
     parser.add_argument("--output", "-o", help="출력 파일 (기본: stdout)")
     args = parser.parse_args()
 

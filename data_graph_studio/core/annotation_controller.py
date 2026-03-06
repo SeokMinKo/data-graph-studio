@@ -40,7 +40,9 @@ class AnnotationController:
 
     def _snapshot_for_undo(self) -> Dict[str, Dict]:
         """Snapshot all annotations for undo/redo (small enough in practice)."""
-        return {aid: copy.deepcopy(ann.to_dict()) for aid, ann in self._annotations.items()}
+        return {
+            aid: copy.deepcopy(ann.to_dict()) for aid, ann in self._annotations.items()
+        }
 
     def _restore_from_undo_state(self, state: Any) -> None:
         """Restore annotations from a snapshot."""
@@ -293,7 +295,8 @@ class AnnotationController:
     def clear_profile(self, profile_id: str) -> None:
         """특정 프로파일의 모든 주석 제거."""
         to_remove = [
-            aid for aid, ann in self._annotations.items()
+            aid
+            for aid, ann in self._annotations.items()
             if ann.profile_id == profile_id
         ]
         for aid in to_remove:

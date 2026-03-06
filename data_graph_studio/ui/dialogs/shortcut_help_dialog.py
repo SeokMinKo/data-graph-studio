@@ -8,13 +8,19 @@ Cmd+/ 또는 메뉴에서 호출.
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget,
-    QTreeWidgetItem, QPushButton, QHeaderView, QWidget
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QPushButton,
+    QHeaderView,
+    QWidget,
 )
 from PySide6.QtGui import QKeySequence, QFont
 
 from ...core.shortcut_controller import ShortcutController
-from ..shortcuts import ShortcutCategory
 
 
 class ShortcutHelpDialog(QDialog):
@@ -40,9 +46,7 @@ class ShortcutHelpDialog(QDialog):
     """
 
     def __init__(
-        self,
-        controller: ShortcutController,
-        parent: Optional[QWidget] = None
+        self, controller: ShortcutController, parent: Optional[QWidget] = None
     ):
         super().__init__(parent)
         self._controller = controller
@@ -112,13 +116,13 @@ class ShortcutHelpDialog(QDialog):
                     else str(shortcut.keys)
                 )
                 # macOS에서 Ctrl → Cmd 표시
-                display_keys = keys_str.replace("Ctrl+", "⌘").replace(
-                    "Shift+", "⇧"
-                ).replace("Alt+", "⌥").replace("Meta+", "⌘")
-
-                item = QTreeWidgetItem(
-                    category_item,
-                    [shortcut.name, display_keys]
+                display_keys = (
+                    keys_str.replace("Ctrl+", "⌘")
+                    .replace("Shift+", "⇧")
+                    .replace("Alt+", "⌥")
+                    .replace("Meta+", "⌘")
                 )
+
+                item = QTreeWidgetItem(category_item, [shortcut.name, display_keys])
                 if shortcut.description:
                     item.setToolTip(0, shortcut.description)

@@ -25,7 +25,9 @@ class TestPerfettoNormalization:
             }
         )
 
-        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(
+            perfetto_df
+        )
 
         assert raw_df.columns == [
             "timestamp",
@@ -60,7 +62,9 @@ class TestPerfettoToBlocklayerPipeline:
             }
         )
 
-        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(
+            perfetto_df
+        )
 
         parser = FtraceParser()
         settings = parser.default_settings()
@@ -96,5 +100,6 @@ class TestPerfettoTaskNormalization:
 
         raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
 
-        assert raw_df["task"][0] == "binder:5582_5"
+        # task column keeps original perfetto track name (comm extraction removed)
+        assert raw_df["task"][0] == "perfetto-track-name"
         assert raw_df["details"][0] == "2048 WS 4096 () 49005344 + 8"

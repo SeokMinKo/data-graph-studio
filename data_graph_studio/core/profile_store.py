@@ -37,6 +37,7 @@ def _safe_trash(path: str) -> None:
     """Move file to trash; fall back to os.remove if send2trash unavailable."""
     try:
         from send2trash import send2trash  # type: ignore
+
         send2trash(path)
     except ImportError:
         logger.info("send2trash not installed, using os.remove for %s", path)
@@ -157,7 +158,9 @@ class ProfileStore:
                 try:
                     _safe_trash(str(existing))
                 except Exception as e:
-                    logger.warning("Failed to remove stale profile file %s: %s", existing, e)
+                    logger.warning(
+                        "Failed to remove stale profile file %s: %s", existing, e
+                    )
 
     def load_from_disk(self) -> int:
         """Load all settings from persist_dir. Returns count loaded."""

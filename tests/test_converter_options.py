@@ -104,6 +104,7 @@ def qapp():
     """Create QApplication if not running; skip if display unavailable."""
     try:
         from PySide6.QtWidgets import QApplication
+
         app = QApplication.instance()
         if app is None:
             app = QApplication([])
@@ -114,12 +115,18 @@ def qapp():
 
 class TestConverterOptionsPanel:
     def test_create_panel(self, qapp):
-        from data_graph_studio.ui.panels.converter_options_panel import ConverterOptionsPanel
+        from data_graph_studio.ui.panels.converter_options_panel import (
+            ConverterOptionsPanel,
+        )
+
         panel = ConverterOptionsPanel()
         assert panel is not None
 
     def test_set_converter_blocklayer(self, qapp):
-        from data_graph_studio.ui.panels.converter_options_panel import ConverterOptionsPanel
+        from data_graph_studio.ui.panels.converter_options_panel import (
+            ConverterOptionsPanel,
+        )
+
         panel = ConverterOptionsPanel()
         panel.set_converter("blocklayer")
         opts = panel.get_options()
@@ -127,14 +134,20 @@ class TestConverterOptionsPanel:
         assert opts["busy_queue_depth"] == 32
 
     def test_set_converter_empty(self, qapp):
-        from data_graph_studio.ui.panels.converter_options_panel import ConverterOptionsPanel
+        from data_graph_studio.ui.panels.converter_options_panel import (
+            ConverterOptionsPanel,
+        )
+
         panel = ConverterOptionsPanel()
         panel.set_converter("sched")
         opts = panel.get_options()
         assert opts == {}
 
     def test_reset_defaults(self, qapp):
-        from data_graph_studio.ui.panels.converter_options_panel import ConverterOptionsPanel
+        from data_graph_studio.ui.panels.converter_options_panel import (
+            ConverterOptionsPanel,
+        )
+
         panel = ConverterOptionsPanel()
         panel.set_converter("blocklayer")
         # Change a value
@@ -145,7 +158,10 @@ class TestConverterOptionsPanel:
         assert panel.get_options()["busy_queue_depth"] == 32
 
     def test_options_changed_signal(self, qapp, qtbot):
-        from data_graph_studio.ui.panels.converter_options_panel import ConverterOptionsPanel
+        from data_graph_studio.ui.panels.converter_options_panel import (
+            ConverterOptionsPanel,
+        )
+
         panel = ConverterOptionsPanel()
         panel.set_converter("blocklayer")
 

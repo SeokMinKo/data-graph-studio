@@ -8,16 +8,32 @@ import subprocess
 import tempfile
 import platform
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QComboBox, QSpinBox, QLineEdit, QCheckBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QGroupBox,
-    QSplitter, QTextEdit, QFrame, QSizePolicy, QHeaderView,
-    QWidget, QScrollArea, QListWidget, QListWidgetItem, QProgressBar
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QLabel,
+    QComboBox,
+    QSpinBox,
+    QLineEdit,
+    QCheckBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QGroupBox,
+    QSplitter,
+    QTextEdit,
+    QHeaderView,
+    QWidget,
+    QScrollArea,
+    QListWidget,
+    QListWidgetItem,
+    QProgressBar,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QThread
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QColor
 
 from ...core.data_engine import FileType, DelimiterType
 from ...core.parsing import ParsingSettings
@@ -25,6 +41,7 @@ from ...core.parsing import ParsingSettings
 
 class ETLConverterThread(QThread):
     """Background thread for converting ETL files using tracerpt"""
+
     finished = Signal(bool, str, str)  # success, csv_path, error_msg
 
     def __init__(self, etl_path: str):
@@ -35,22 +52,25 @@ class ETLConverterThread(QThread):
     def run(self):
         system = platform.system()
         if system != "Windows":
-            self.finished.emit(False, "",
+            self.finished.emit(
+                False,
+                "",
                 "ETL files can only be converted on Windows.\n"
-                "Please convert the file to CSV using Windows tools first.")
+                "Please convert the file to CSV using Windows tools first.",
+            )
             return
 
         try:
             # Create temp file for output
-            tmp_fd, tmp_path = tempfile.mkstemp(suffix='.csv', prefix='etl_preview_')
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix=".csv", prefix="etl_preview_")
             os.close(tmp_fd)
 
             # Run tracerpt to convert ETL to CSV
             result = subprocess.run(
-                ['tracerpt', self.etl_path, '-o', tmp_path, '-of', 'CSV', '-y'],
+                ["tracerpt", self.etl_path, "-o", tmp_path, "-of", "CSV", "-y"],
                 capture_output=True,
                 text=True,
-                timeout=120  # 2 minute timeout
+                timeout=120,  # 2 minute timeout
             )
 
             if result.returncode == 0 and os.path.exists(tmp_path):
@@ -60,24 +80,31 @@ class ETLConverterThread(QThread):
                     self.finished.emit(True, tmp_path, "")
                 else:
                     os.unlink(tmp_path)
-                    self.finished.emit(False, "",
+                    self.finished.emit(
+                        False,
+                        "",
                         "ETL conversion produced empty output.\n"
-                        "The file may be corrupted or unsupported.")
+                        "The file may be corrupted or unsupported.",
+                    )
             else:
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
                 error_msg = result.stderr if result.stderr else "Unknown error"
-                self.finished.emit(False, "",
-                    f"ETL conversion failed:\n{error_msg}")
+                self.finished.emit(False, "", f"ETL conversion failed:\n{error_msg}")
 
         except subprocess.TimeoutExpired:
-            self.finished.emit(False, "",
-                "ETL conversion timed out (2 minutes).\n"
-                "The file may be too large.")
+            self.finished.emit(
+                False,
+                "",
+                "ETL conversion timed out (2 minutes).\nThe file may be too large.",
+            )
         except FileNotFoundError:
-            self.finished.emit(False, "",
+            self.finished.emit(
+                False,
+                "",
                 "tracerpt command not found.\n"
-                "This command requires Windows and admin privileges.")
+                "This command requires Windows and admin privileges.",
+            )
         except Exception as e:
             self.finished.emit(False, "", f"ETL conversion error: {e}")
 
@@ -85,16 +112,16 @@ class ETLConverterThread(QThread):
 class ParsingPreviewDialog(QDialog):
     """
     파일 파싱 미리보기 다이얼로그
-    
+
     Features:
     - 실시간 파싱 결과 미리보기
     - 구분자, 인코딩, 헤더 등 옵션 조절
     - 원본 텍스트와 파싱 결과 비교
     """
-    
+
     # 미리보기에 로드할 최대 라인 수
     PREVIEW_LINES = 100
-    
+
     def __init__(self, file_path: str, parent=None):
         super().__init__(parent)
         self.file_path = file_path
@@ -117,7 +144,7 @@ class ParsingPreviewDialog(QDialog):
 
         # Check if it's a binary ETL file
         ext = Path(file_path).suffix.lower()
-        if ext == '.etl':
+        if ext == ".etl":
             self._is_binary_etl = self._check_binary_etl(file_path)
 
         self._setup_ui()
@@ -132,8 +159,8 @@ class ParsingPreviewDialog(QDialog):
             QGroupBox { color: #E2E8F0; border: 1px solid #334155; border-radius: 6px; margin-top: 8px; }
             QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
             QLabel { color: #E2E8F0; }
-            QLineEdit, QComboBox, QSpinBox, QTextEdit, QPlainTextEdit { 
-                background: #1E293B; color: #E2E8F0; border: 1px solid #334155; border-radius: 4px; padding: 4px; 
+            QLineEdit, QComboBox, QSpinBox, QTextEdit, QPlainTextEdit {
+                background: #1E293B; color: #E2E8F0; border: 1px solid #334155; border-radius: 4px; padding: 4px;
             }
             QComboBox::drop-down { border: none; }
             QTableWidget { background: #0B1120; color: #E2E8F0; gridline-color: #334155; alternate-background-color: #111827; }
@@ -152,24 +179,24 @@ class ParsingPreviewDialog(QDialog):
     def _check_binary_etl(self, path: str) -> bool:
         """Check if the ETL file is in binary format"""
         try:
-            with open(path, 'rb') as f:
+            with open(path, "rb") as f:
                 header = f.read(512)
 
             # Binary ETL detection: null bytes or high ratio of non-printable chars
-            null_count = header.count(b'\x00')
+            null_count = header.count(b"\x00")
             non_printable = sum(1 for b in header if b < 32 and b not in (9, 10, 13))
 
             # If null bytes present or >5% non-printable, it's binary
             return null_count > 0 or (non_printable / max(len(header), 1)) > 0.05
         except Exception:
             return False
-    
+
     def _setup_ui(self):
         """UI 설정"""
         self.setWindowTitle(f"Import: {self.file_name}")
         self.setMinimumSize(1000, 700)
         self.resize(1100, 750)
-        
+
         # Modern style
         self.setStyleSheet("""
             QDialog {
@@ -270,131 +297,129 @@ class ParsingPreviewDialog(QDialog):
                 padding: 8px;
             }
         """)
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
-        
+
         # Header
         header = QLabel(f"📄 {self.file_name}")
         header.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6E9EF;")
         layout.addWidget(header)
-        
+
         # Main content - settings on left, preview on right
         content_splitter = QSplitter(Qt.Horizontal)
-        
+
         # Left side - Settings
         settings_widget = self._create_settings_panel()
         content_splitter.addWidget(settings_widget)
-        
+
         # Right side - Preview
         preview_widget = self._create_preview_panel()
         content_splitter.addWidget(preview_widget)
-        
+
         # Set initial sizes (30% settings, 70% preview)
         content_splitter.setSizes([300, 700])
         layout.addWidget(content_splitter, 1)
-        
+
         # Bottom buttons
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        
+
         cancel_btn = QPushButton("Cancel")
         cancel_btn.setToolTip("Cancel import and close")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
-        
+
         import_btn = QPushButton("Import")
         import_btn.setToolTip("Import file with current parsing settings")
         import_btn.setObjectName("primary")
         import_btn.clicked.connect(self.accept)
         button_layout.addWidget(import_btn)
-        
+
         layout.addLayout(button_layout)
-    
+
     def _create_settings_panel(self) -> QWidget:
         """설정 패널 생성"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        
+
         # Delimiter Group
         delimiter_group = QGroupBox("Delimiter")
         delimiter_layout = QGridLayout(delimiter_group)
         delimiter_layout.setSpacing(8)
-        
+
         delimiter_layout.addWidget(QLabel("Type:"), 0, 0)
         self.delimiter_combo = QComboBox()
         self.delimiter_combo.setToolTip("Select column delimiter for parsing")
-        self.delimiter_combo.addItems([
-            "Auto Detect",
-            "Comma (,)",
-            "Tab (\\t)",
-            "Space",
-            "Semicolon (;)",
-            "Pipe (|)",
-            "Custom Regex"
-        ])
+        self.delimiter_combo.addItems(
+            [
+                "Auto Detect",
+                "Comma (,)",
+                "Tab (\\t)",
+                "Space",
+                "Semicolon (;)",
+                "Pipe (|)",
+                "Custom Regex",
+            ]
+        )
         self.delimiter_combo.currentIndexChanged.connect(self._on_delimiter_changed)
         delimiter_layout.addWidget(self.delimiter_combo, 0, 1)
-        
+
         delimiter_layout.addWidget(QLabel("Regex Pattern:"), 1, 0)
         self.regex_edit = QLineEdit()
         self.regex_edit.setPlaceholderText("e.g. \\s+ for multiple spaces")
         self.regex_edit.setEnabled(False)
         self.regex_edit.textChanged.connect(self._schedule_update)
         delimiter_layout.addWidget(self.regex_edit, 1, 1)
-        
+
         layout.addWidget(delimiter_group)
-        
+
         # Encoding Group
         encoding_group = QGroupBox("Encoding")
         encoding_layout = QGridLayout(encoding_group)
         encoding_layout.setSpacing(8)
-        
+
         self.encoding_combo = QComboBox()
         self.encoding_combo.setToolTip("Select file text encoding")
-        self.encoding_combo.addItems([
-            "utf8",
-            "utf8-lossy",
-            "cp949",
-            "euc-kr",
-            "latin-1",
-            "utf16",
-            "ascii"
-        ])
+        self.encoding_combo.addItems(
+            ["utf8", "utf8-lossy", "cp949", "euc-kr", "latin-1", "utf16", "ascii"]
+        )
         self.encoding_combo.currentTextChanged.connect(self._on_encoding_changed)
         encoding_layout.addWidget(self.encoding_combo, 0, 0)
-        
+
         layout.addWidget(encoding_group)
-        
+
         # Structure Group
         structure_group = QGroupBox("Structure")
         structure_layout = QGridLayout(structure_group)
         structure_layout.setSpacing(8)
-        
+
         self.header_checkbox = QCheckBox("First row is header")
         self.header_checkbox.setToolTip("Treat the first data row as column headers")
         self.header_checkbox.setChecked(True)
         self.header_checkbox.stateChanged.connect(self._schedule_update)
         structure_layout.addWidget(self.header_checkbox, 0, 0, 1, 2)
-        
+
         structure_layout.addWidget(QLabel("Skip rows:"), 1, 0)
         self.skip_rows_spin = QSpinBox()
-        self.skip_rows_spin.setToolTip("Number of rows to skip at the beginning of the file")
+        self.skip_rows_spin.setToolTip(
+            "Number of rows to skip at the beginning of the file"
+        )
         self.skip_rows_spin.setRange(0, 1000)
         self.skip_rows_spin.setValue(0)
         self.skip_rows_spin.valueChanged.connect(self._schedule_update)
         structure_layout.addWidget(self.skip_rows_spin, 1, 1)
-        
+
         structure_layout.addWidget(QLabel("Comment char:"), 2, 0)
         self.comment_edit = QLineEdit()
         self.comment_edit.setPlaceholderText("e.g. #")
         self.comment_edit.setMaxLength(1)
         self.comment_edit.textChanged.connect(self._schedule_update)
         structure_layout.addWidget(self.comment_edit, 2, 1)
-        
+
         layout.addWidget(structure_group)
 
         # ETL Process Filter Group (only visible for binary ETL files)
@@ -431,7 +456,9 @@ class ParsingPreviewDialog(QDialog):
         self.etl_process_list = QListWidget()
         self.etl_process_list.setSelectionMode(QListWidget.MultiSelection)
         self.etl_process_list.setMaximumHeight(150)
-        self.etl_process_list.itemSelectionChanged.connect(self._on_etl_process_selection_changed)
+        self.etl_process_list.itemSelectionChanged.connect(
+            self._on_etl_process_selection_changed
+        )
         etl_layout.addWidget(self.etl_process_list)
 
         # Select all/none buttons
@@ -464,7 +491,7 @@ class ParsingPreviewDialog(QDialog):
         layout.addStretch()
 
         return widget
-    
+
     def _create_preview_panel(self) -> QWidget:
         """미리보기 패널 생성"""
         widget = QWidget()
@@ -531,13 +558,17 @@ class ParsingPreviewDialog(QDialog):
         column_scroll = QScrollArea()
         column_scroll.setWidgetResizable(True)
         column_scroll.setMaximumHeight(100)
-        column_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        column_scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
 
         self.column_checkbox_container = QWidget()
         self.column_checkbox_layout = QHBoxLayout(self.column_checkbox_container)
         self.column_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         self.column_checkbox_layout.setSpacing(8)
-        self.column_checkbox_container.setStyleSheet("color: #E2E8F0; background: transparent;")
+        self.column_checkbox_container.setStyleSheet(
+            "color: #E2E8F0; background: transparent;"
+        )
 
         column_scroll.setWidget(self.column_checkbox_container)
         column_group_layout.addWidget(column_scroll)
@@ -578,7 +609,7 @@ class ParsingPreviewDialog(QDialog):
         total = len(self._column_checkboxes)
         selected = total - len(self._excluded_columns)
         self.column_count_label.setText(f"Loading {selected} of {total} columns")
-    
+
     def _load_raw_preview(self):
         """원본 파일 미리보기 로드"""
         # Handle binary ETL files specially
@@ -586,29 +617,33 @@ class ParsingPreviewDialog(QDialog):
             self._load_binary_etl_preview()
             return
 
-        encoding = self.encoding_combo.currentText() if hasattr(self, 'encoding_combo') else "utf8"
+        encoding = (
+            self.encoding_combo.currentText()
+            if hasattr(self, "encoding_combo")
+            else "utf8"
+        )
 
         try:
-            with open(self.file_path, 'r', encoding=encoding, errors='replace') as f:
+            with open(self.file_path, "r", encoding=encoding, errors="replace") as f:
                 self._raw_lines = []
                 for i, line in enumerate(f):
                     if i >= self.PREVIEW_LINES:
                         break
-                    self._raw_lines.append(line.rstrip('\n\r'))
+                    self._raw_lines.append(line.rstrip("\n\r"))
 
             # Update raw text display
-            if hasattr(self, 'raw_text'):
+            if hasattr(self, "raw_text"):
                 display_lines = self._raw_lines[:20]
-                self.raw_text.setText('\n'.join(display_lines))
+                self.raw_text.setText("\n".join(display_lines))
 
         except Exception as e:
             self._raw_lines = [f"Error reading file: {e}"]
-            if hasattr(self, 'raw_text'):
+            if hasattr(self, "raw_text"):
                 self.raw_text.setText(f"Error reading file: {e}")
 
     def _load_binary_etl_preview(self):
         """Load binary ETL file preview by converting first"""
-        if hasattr(self, 'raw_text'):
+        if hasattr(self, "raw_text"):
             self.raw_text.setText(
                 "Binary ETL (Event Trace Log) file detected.\n\n"
                 "Converting to CSV for preview...\n"
@@ -616,7 +651,7 @@ class ParsingPreviewDialog(QDialog):
             )
 
         # Show progress
-        if hasattr(self, 'etl_progress'):
+        if hasattr(self, "etl_progress"):
             self.etl_progress.setVisible(True)
             self.etl_status_label.setText("Converting ETL file...")
 
@@ -639,28 +674,28 @@ class ParsingPreviewDialog(QDialog):
         else:
             self.etl_status_label.setText("Conversion failed")
             self.etl_status_label.setStyleSheet("color: #EF4444; font-size: 11px;")
-            if hasattr(self, 'raw_text'):
+            if hasattr(self, "raw_text"):
                 self.raw_text.setText(
                     f"Failed to convert ETL file:\n\n{error_msg}\n\n"
                     "You can manually convert the ETL file using:\n"
-                    "  tracerpt \"file.etl\" -o output.csv -of CSV\n\n"
+                    '  tracerpt "file.etl" -o output.csv -of CSV\n\n'
                     "Or use Windows Performance Analyzer (WPA) to export as CSV."
                 )
 
     def _load_converted_etl_csv(self, csv_path: str):
         """Load the converted ETL CSV and extract processes"""
         try:
-            with open(csv_path, 'r', encoding='utf-8', errors='replace') as f:
+            with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
                 self._raw_lines = []
                 for i, line in enumerate(f):
                     if i >= self.PREVIEW_LINES:
                         break
-                    self._raw_lines.append(line.rstrip('\n\r'))
+                    self._raw_lines.append(line.rstrip("\n\r"))
 
             # Update raw text display
-            if hasattr(self, 'raw_text'):
+            if hasattr(self, "raw_text"):
                 display_lines = self._raw_lines[:20]
-                self.raw_text.setText('\n'.join(display_lines))
+                self.raw_text.setText("\n".join(display_lines))
 
             # Extract process names from the data
             self._extract_etl_processes()
@@ -669,7 +704,7 @@ class ParsingPreviewDialog(QDialog):
             self._schedule_update()
 
         except Exception as e:
-            if hasattr(self, 'raw_text'):
+            if hasattr(self, "raw_text"):
                 self.raw_text.setText(f"Error reading converted ETL: {e}")
 
     def _extract_etl_processes(self):
@@ -686,9 +721,15 @@ class ParsingPreviewDialog(QDialog):
         headers = [h.strip().strip('"') for h in header_line.split(delimiter)]
 
         process_col_idx = -1
-        process_col_names = ['Process Name', 'ProcessName', 'Process', 'Image', 'Image Name']
+        process_col_names = [
+            "Process Name",
+            "ProcessName",
+            "Process",
+            "Image",
+            "Image Name",
+        ]
         for i, header in enumerate(headers):
-            if header in process_col_names or 'process' in header.lower():
+            if header in process_col_names or "process" in header.lower():
                 process_col_idx = i
                 break
 
@@ -727,111 +768,111 @@ class ParsingPreviewDialog(QDialog):
     def _deselect_all_processes(self):
         """Deselect all processes"""
         self.etl_process_list.clearSelection()
-    
+
     def _detect_settings(self):
         """파일 설정 자동 감지"""
         # File type detection
         ext = Path(self.file_path).suffix.lower()
         type_map = {
-            '.csv': FileType.CSV,
-            '.tsv': FileType.TSV,
-            '.txt': FileType.TXT,
-            '.log': FileType.TXT,
-            '.dat': FileType.TXT,
-            '.etl': FileType.ETL,
+            ".csv": FileType.CSV,
+            ".tsv": FileType.TSV,
+            ".txt": FileType.TXT,
+            ".log": FileType.TXT,
+            ".dat": FileType.TXT,
+            ".etl": FileType.ETL,
         }
-        file_type = type_map.get(ext, FileType.TXT)
-        
+        type_map.get(ext, FileType.TXT)
+
         # Delimiter detection
-        if ext == '.tsv':
+        if ext == ".tsv":
             self.delimiter_combo.setCurrentIndex(2)  # Tab
-        elif ext == '.csv':
+        elif ext == ".csv":
             self.delimiter_combo.setCurrentIndex(1)  # Comma
         else:
             # Auto-detect
             self.delimiter_combo.setCurrentIndex(0)
-    
+
     def _on_delimiter_changed(self, index: int):
         """구분자 변경"""
         # Enable regex field only for custom regex
         self.regex_edit.setEnabled(index == 6)  # Custom Regex
         self._schedule_update()
-    
+
     def _on_encoding_changed(self, encoding: str):
         """인코딩 변경"""
         self._load_raw_preview()
         self._schedule_update()
-    
+
     def _schedule_update(self):
         """업데이트 예약 (디바운스)"""
         self._update_timer.start(150)  # 150ms 디바운스
-    
+
     def _do_update_preview(self):
         """실제 미리보기 업데이트"""
         self._update_preview()
-    
+
     def _get_delimiter(self) -> tuple[str, DelimiterType]:
         """현재 선택된 구분자 반환"""
         index = self.delimiter_combo.currentIndex()
-        
+
         delimiters = [
-            (None, DelimiterType.AUTO),      # Auto Detect
-            (",", DelimiterType.COMMA),      # Comma
-            ("\t", DelimiterType.TAB),       # Tab
-            (" ", DelimiterType.SPACE),      # Space
+            (None, DelimiterType.AUTO),  # Auto Detect
+            (",", DelimiterType.COMMA),  # Comma
+            ("\t", DelimiterType.TAB),  # Tab
+            (" ", DelimiterType.SPACE),  # Space
             (";", DelimiterType.SEMICOLON),  # Semicolon
-            ("|", DelimiterType.PIPE),       # Pipe
+            ("|", DelimiterType.PIPE),  # Pipe
             (self.regex_edit.text(), DelimiterType.REGEX),  # Custom Regex
         ]
-        
+
         return delimiters[index]
-    
+
     def _detect_delimiter_auto(self) -> str:
         """구분자 자동 감지"""
         if not self._raw_lines:
             return ","
-        
-        delimiters = [',', '\t', ';', '|']
+
+        delimiters = [",", "\t", ";", "|"]
         counts = {d: 0 for d in delimiters}
-        
+
         for line in self._raw_lines[:10]:
             for d in delimiters:
                 counts[d] += line.count(d)
-        
+
         # 가장 많이 등장하는 구분자
         best = max(counts, key=counts.get)
-        
+
         # 공백은 다른 구분자가 없을 때만
         if counts[best] == 0:
             return " "
-        
+
         return best
-    
+
     def _parse_preview(self) -> List[List[str]]:
         """미리보기 파싱"""
         if not self._raw_lines:
             return []
-        
+
         delimiter, delimiter_type = self._get_delimiter()
         skip_rows = self.skip_rows_spin.value()
         comment_char = self.comment_edit.text().strip()
-        
+
         # Auto detect delimiter if needed
         if delimiter_type == DelimiterType.AUTO:
             delimiter = self._detect_delimiter_auto()
-        
+
         rows = []
         lines = self._raw_lines[skip_rows:]
-        
+
         for line in lines:
             # Skip comments
             if comment_char and line.strip().startswith(comment_char):
                 continue
-            
+
             # Skip empty lines
             if not line.strip():
                 continue
-            
+
             # Parse based on delimiter type
             if delimiter_type == DelimiterType.REGEX and delimiter:
                 try:
@@ -842,11 +883,11 @@ class ParsingPreviewDialog(QDialog):
                 fields = line.split()
             else:
                 fields = line.split(delimiter)
-            
+
             rows.append([f.strip() for f in fields])
-        
+
         return rows
-    
+
     def _update_preview(self):
         """미리보기 테이블 업데이트"""
         parsed = self._parse_preview()
@@ -867,7 +908,7 @@ class ParsingPreviewDialog(QDialog):
             data = parsed[1:]
         else:
             max_cols = max(len(row) for row in parsed)
-            headers = [f"Column {i+1}" for i in range(max_cols)]
+            headers = [f"Column {i + 1}" for i in range(max_cols)]
             data = parsed
 
         # Normalize column count
@@ -894,7 +935,9 @@ class ParsingPreviewDialog(QDialog):
                 self.preview_table.setItem(i, j, item)
 
         # Resize columns to content
-        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.preview_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeToContents
+        )
 
         # Update stats
         total_lines = len(self._raw_lines)
@@ -938,12 +981,14 @@ class ParsingPreviewDialog(QDialog):
                     height: 14px;
                 }
             """)
-            cb.stateChanged.connect(lambda state, idx=i: self._on_column_toggled(idx, state == Qt.Checked))
+            cb.stateChanged.connect(
+                lambda state, idx=i: self._on_column_toggled(idx, state == Qt.Checked)
+            )
             self.column_checkbox_layout.addWidget(cb)
             self._column_checkboxes.append(cb)
 
         self._update_column_count()
-    
+
     def get_settings(self) -> ParsingSettings:
         """현재 설정 반환"""
         delimiter, delimiter_type = self._get_delimiter()
@@ -953,27 +998,27 @@ class ParsingPreviewDialog(QDialog):
             delimiter = self._detect_delimiter_auto()
             # Map back to actual type
             type_map = {
-                ',': DelimiterType.COMMA,
-                '\t': DelimiterType.TAB,
-                ';': DelimiterType.SEMICOLON,
-                '|': DelimiterType.PIPE,
-                ' ': DelimiterType.SPACE,
+                ",": DelimiterType.COMMA,
+                "\t": DelimiterType.TAB,
+                ";": DelimiterType.SEMICOLON,
+                "|": DelimiterType.PIPE,
+                " ": DelimiterType.SPACE,
             }
             delimiter_type = type_map.get(delimiter, DelimiterType.COMMA)
 
         # Detect file type
         ext = Path(self.file_path).suffix.lower()
         type_map = {
-            '.csv': FileType.CSV,
-            '.tsv': FileType.TSV,
-            '.txt': FileType.TXT,
-            '.log': FileType.TXT,
-            '.dat': FileType.TXT,
-            '.etl': FileType.ETL,
-            '.xlsx': FileType.EXCEL,
-            '.xls': FileType.EXCEL,
-            '.parquet': FileType.PARQUET,
-            '.json': FileType.JSON,
+            ".csv": FileType.CSV,
+            ".tsv": FileType.TSV,
+            ".txt": FileType.TXT,
+            ".log": FileType.TXT,
+            ".dat": FileType.TXT,
+            ".etl": FileType.ETL,
+            ".xlsx": FileType.EXCEL,
+            ".xls": FileType.EXCEL,
+            ".parquet": FileType.PARQUET,
+            ".json": FileType.JSON,
         }
         file_type = type_map.get(ext, FileType.TXT)
 
@@ -1001,7 +1046,9 @@ class ParsingPreviewDialog(QDialog):
             encoding=self.encoding_combo.currentText(),
             delimiter=delimiter,
             delimiter_type=delimiter_type,
-            regex_pattern=self.regex_edit.text() if delimiter_type == DelimiterType.REGEX else "",
+            regex_pattern=self.regex_edit.text()
+            if delimiter_type == DelimiterType.REGEX
+            else "",
             has_header=self.header_checkbox.isChecked(),
             skip_rows=self.skip_rows_spin.value(),
             comment_char=self.comment_edit.text().strip(),

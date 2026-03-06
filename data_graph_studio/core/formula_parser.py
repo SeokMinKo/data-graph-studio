@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 
 import polars as pl
 
@@ -29,21 +29,25 @@ import polars as pl
 
 class FormulaError(Exception):
     """Base error for formula operations."""
+
     pass
 
 
 class FormulaSecurityError(FormulaError):
     """Raised when a disallowed function / pattern is detected (FR-3.11)."""
+
     pass
 
 
 class FormulaColumnError(FormulaError):
     """Raised when a referenced column does not exist (ERR-3.1)."""
+
     pass
 
 
 class FormulaTypeError(FormulaError):
     """Raised on type mismatch — e.g. math on string column (ERR-3.3)."""
+
     pass
 
 
@@ -53,35 +57,72 @@ class FormulaTypeError(FormulaError):
 
 ALLOWED_FUNCTIONS: Set[str] = {
     # Math
-    'abs', 'round', 'log', 'sqrt', 'pow', 'clip',
+    "abs",
+    "round",
+    "log",
+    "sqrt",
+    "pow",
+    "clip",
     # Aggregate
-    'min', 'max', 'mean', 'std', 'sum', 'count',
+    "min",
+    "max",
+    "mean",
+    "std",
+    "sum",
+    "count",
     # Positional
-    'first', 'last',
+    "first",
+    "last",
     # Window / transform
-    'shift', 'diff', 'cumsum', 'rolling_mean',
+    "shift",
+    "diff",
+    "cumsum",
+    "rolling_mean",
 }
 
 BLOCKED_NAMES: Set[str] = {
-    'eval', 'exec', 'compile', 'open',
-    'getattr', 'setattr', 'delattr',
-    'globals', 'locals', 'vars', 'dir',
-    'type', 'isinstance', 'issubclass',
-    'breakpoint', 'exit', 'quit',
+    "eval",
+    "exec",
+    "compile",
+    "open",
+    "getattr",
+    "setattr",
+    "delattr",
+    "globals",
+    "locals",
+    "vars",
+    "dir",
+    "type",
+    "isinstance",
+    "issubclass",
+    "breakpoint",
+    "exit",
+    "quit",
 }
 
 BLOCKED_PREFIXES: Tuple[str, ...] = (
-    '__', 'import', 'os.', 'sys.', 'subprocess',
+    "__",
+    "import",
+    "os.",
+    "sys.",
+    "subprocess",
 )
 
 # Column reference pattern: {column_name}
-_COL_REF_RE = re.compile(r'\{([^}]+)\}')
+_COL_REF_RE = re.compile(r"\{([^}]+)\}")
 
 # Polars numeric dtypes
 _NUMERIC_DTYPES = (
-    pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-    pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
-    pl.Float32, pl.Float64,
+    pl.Int8,
+    pl.Int16,
+    pl.Int32,
+    pl.Int64,
+    pl.UInt8,
+    pl.UInt16,
+    pl.UInt32,
+    pl.UInt64,
+    pl.Float32,
+    pl.Float64,
 )
 
 
@@ -116,8 +157,7 @@ class FormulaParser:
         for ref in refs:
             if ref not in available:
                 raise FormulaColumnError(
-                    f"Column '{ref}' not found. "
-                    f"Available columns: {sorted(available)}"
+                    f"Column '{ref}' not found. Available columns: {sorted(available)}"
                 )
 
     def evaluate(self, formula: str, df: pl.DataFrame) -> pl.Series:
@@ -140,9 +180,7 @@ class FormulaParser:
         self._check_numeric(column, df)
         return df[column].rolling_mean(window_size=window)
 
-    def evaluate_diff(
-        self, column: str, n: int, df: pl.DataFrame
-    ) -> pl.Series:
+    def evaluate_diff(self, column: str, n: int, df: pl.DataFrame) -> pl.Series:
         """Convenience: diff for a single column (FR-3.3)."""
         self._check_numeric(column, df)
         return df[column].diff(n=n)
@@ -163,14 +201,14 @@ class FormulaParser:
         self._check_numeric(column, df)
         series = df[column].cast(pl.Float64)
 
-        if method == 'min_max':
+        if method == "min_max":
             mn = series.min()
             mx = series.max()
             if mn == mx:
                 return pl.Series([0.0] * len(series))
             return (series - mn) / (mx - mn)
 
-        elif method == 'z_score':
+        elif method == "z_score":
             mean_val = series.mean()
             std_val = series.std()
             if std_val is None or std_val == 0:
@@ -194,11 +232,11 @@ class FormulaParser:
                 )
 
         # Remove column references before AST check
-        cleaned = _COL_REF_RE.sub('_placeholder', formula)
+        cleaned = _COL_REF_RE.sub("_placeholder", formula)
 
         # Try to parse as Python AST for deeper inspection
         try:
-            tree = ast.parse(cleaned, mode='eval')
+            tree = ast.parse(cleaned, mode="eval")
         except SyntaxError:
             # If it doesn't parse as Python, let the evaluator handle it
             return
@@ -212,19 +250,22 @@ class FormulaParser:
                             f"Function '{func_name}' is not allowed. "
                             f"Allowed functions: {sorted(ALLOWED_FUNCTIONS)}"
                         )
-                    if func_name.startswith('__'):
+                    if func_name.startswith("__"):
                         raise FormulaSecurityError(
                             f"Identifier '{func_name}' is not allowed (dunder). "
                             f"Allowed functions: {sorted(ALLOWED_FUNCTIONS)}"
                         )
-                    if func_name not in ALLOWED_FUNCTIONS and func_name != '_placeholder':
+                    if (
+                        func_name not in ALLOWED_FUNCTIONS
+                        and func_name != "_placeholder"
+                    ):
                         raise FormulaSecurityError(
                             f"Function '{func_name}' is not allowed. "
                             f"Allowed functions: {sorted(ALLOWED_FUNCTIONS)}"
                         )
             elif isinstance(node, ast.Name):
                 name = node.id
-                if name.startswith('__'):
+                if name.startswith("__"):
                     raise FormulaSecurityError(
                         f"Identifier '{name}' is not allowed (dunder). "
                         f"Allowed functions: {sorted(ALLOWED_FUNCTIONS)}"
@@ -259,8 +300,7 @@ class FormulaParser:
         for ref in refs:
             if ref not in available:
                 raise FormulaColumnError(
-                    f"Column '{ref}' not found. "
-                    f"Available columns: {sorted(available)}"
+                    f"Column '{ref}' not found. Available columns: {sorted(available)}"
                 )
 
         return formula
@@ -271,8 +311,7 @@ class FormulaParser:
         """Raise FormulaTypeError if column is not numeric."""
         if column not in df.columns:
             raise FormulaColumnError(
-                f"Column '{column}' not found. "
-                f"Available columns: {sorted(df.columns)}"
+                f"Column '{column}' not found. Available columns: {sorted(df.columns)}"
             )
         dtype = df[column].dtype
         if dtype not in _NUMERIC_DTYPES:
@@ -305,7 +344,7 @@ class FormulaParser:
 
         # ── Special function forms ────────────────────────────
         # rolling_mean({col}, window)
-        m = re.match(r'^rolling_mean\(\s*\{([^}]+)\}\s*,\s*(\d+)\s*\)$', stripped)
+        m = re.match(r"^rolling_mean\(\s*\{([^}]+)\}\s*,\s*(\d+)\s*\)$", stripped)
         if m:
             col, window = m.group(1), int(m.group(2))
             if window <= 0:
@@ -314,7 +353,7 @@ class FormulaParser:
             return df[col].rolling_mean(window_size=window)
 
         # diff({col}) or diff({col}, n)
-        m = re.match(r'^diff\(\s*\{([^}]+)\}\s*(?:,\s*(\d+)\s*)?\)$', stripped)
+        m = re.match(r"^diff\(\s*\{([^}]+)\}\s*(?:,\s*(\d+)\s*)?\)$", stripped)
         if m:
             col = m.group(1)
             n = int(m.group(2)) if m.group(2) else 1
@@ -322,22 +361,22 @@ class FormulaParser:
             return df[col].diff(n=n)
 
         # cumsum({col})
-        m = re.match(r'^cumsum\(\s*\{([^}]+)\}\s*\)$', stripped)
+        m = re.match(r"^cumsum\(\s*\{([^}]+)\}\s*\)$", stripped)
         if m:
             col = m.group(1)
             self._check_numeric(col, df)
             return df[col].cum_sum()
 
         # shift({col}, n)
-        m = re.match(r'^shift\(\s*\{([^}]+)\}\s*,\s*(-?\d+)\s*\)$', stripped)
+        m = re.match(r"^shift\(\s*\{([^}]+)\}\s*,\s*(-?\d+)\s*\)$", stripped)
         if m:
             col, n = m.group(1), int(m.group(2))
             self._check_numeric(col, df)
             return df[col].shift(n)
 
         # Aggregate functions on single column
-        for fn in ('sum', 'mean', 'std', 'count', 'first', 'last', 'min', 'max'):
-            m = re.match(rf'^{fn}\(\s*\{{([^}}]+)\}}\s*\)$', stripped)
+        for fn in ("sum", "mean", "std", "count", "first", "last", "min", "max"):
+            m = re.match(rf"^{fn}\(\s*\{{([^}}]+)\}}\s*\)$", stripped)
             if m:
                 col = m.group(1)
                 self._check_numeric(col, df)
@@ -345,7 +384,7 @@ class FormulaParser:
 
         # clip({col}, lo, hi)
         m = re.match(
-            r'^clip\(\s*\{([^}]+)\}\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)$',
+            r"^clip\(\s*\{([^}]+)\}\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)$",
             stripped,
         )
         if m:
@@ -356,35 +395,35 @@ class FormulaParser:
             return df[col].clip(lo, hi)
 
         # abs({col})
-        m = re.match(r'^abs\(\s*\{([^}]+)\}\s*\)$', stripped)
+        m = re.match(r"^abs\(\s*\{([^}]+)\}\s*\)$", stripped)
         if m:
             col = m.group(1)
             self._check_numeric(col, df)
             return df[col].abs()
 
         # round({col}, decimals)
-        m = re.match(r'^round\(\s*\{([^}]+)\}\s*,\s*(\d+)\s*\)$', stripped)
+        m = re.match(r"^round\(\s*\{([^}]+)\}\s*,\s*(\d+)\s*\)$", stripped)
         if m:
             col, decimals = m.group(1), int(m.group(2))
             self._check_numeric(col, df)
             return df[col].round(decimals)
 
         # sqrt({col})
-        m = re.match(r'^sqrt\(\s*\{([^}]+)\}\s*\)$', stripped)
+        m = re.match(r"^sqrt\(\s*\{([^}]+)\}\s*\)$", stripped)
         if m:
             col = m.group(1)
             self._check_numeric(col, df)
             return df[col].sqrt()
 
         # log({col})
-        m = re.match(r'^log\(\s*\{([^}]+)\}\s*\)$', stripped)
+        m = re.match(r"^log\(\s*\{([^}]+)\}\s*\)$", stripped)
         if m:
             col = m.group(1)
             self._check_numeric(col, df)
             return df[col].log()
 
         # pow({col}, exp)
-        m = re.match(r'^pow\(\s*\{([^}]+)\}\s*,\s*([^)]+)\s*\)$', stripped)
+        m = re.match(r"^pow\(\s*\{([^}]+)\}\s*,\s*([^)]+)\s*\)$", stripped)
         if m:
             col = m.group(1)
             exp_val = float(m.group(2))
@@ -392,20 +431,26 @@ class FormulaParser:
             return df[col].pow(exp_val)
 
         # min({col1}, {col2})  — element-wise
-        m = re.match(r'^min\(\s*\{([^}]+)\}\s*,\s*\{([^}]+)\}\s*\)$', stripped)
+        m = re.match(r"^min\(\s*\{([^}]+)\}\s*,\s*\{([^}]+)\}\s*\)$", stripped)
         if m:
             c1, c2 = m.group(1), m.group(2)
             self._check_numeric(c1, df)
             self._check_numeric(c2, df)
-            return df.select(pl.min_horizontal(c1, c2))[df.columns[0] if False else df.select(pl.min_horizontal(c1, c2)).columns[0]]
+            return df.select(pl.min_horizontal(c1, c2))[
+                df.columns[0]
+                if False
+                else df.select(pl.min_horizontal(c1, c2)).columns[0]
+            ]
 
         # max({col1}, {col2})  — element-wise
-        m = re.match(r'^max\(\s*\{([^}]+)\}\s*,\s*\{([^}]+)\}\s*\)$', stripped)
+        m = re.match(r"^max\(\s*\{([^}]+)\}\s*,\s*\{([^}]+)\}\s*\)$", stripped)
         if m:
             c1, c2 = m.group(1), m.group(2)
             self._check_numeric(c1, df)
             self._check_numeric(c2, df)
-            return df.select(pl.max_horizontal(c1, c2))[df.select(pl.max_horizontal(c1, c2)).columns[0]]
+            return df.select(pl.max_horizontal(c1, c2))[
+                df.select(pl.max_horizontal(c1, c2)).columns[0]
+            ]
 
         # ── General expression (arithmetic, comparison, logic) ─
         return self._eval_general_expression(stripped, df)
@@ -414,14 +459,14 @@ class FormulaParser:
         """Evaluate an aggregate function, returning a scalar broadcast to len(df)."""
         series = df[col]
         mapping = {
-            'sum': series.sum,
-            'mean': series.mean,
-            'std': series.std,
-            'count': series.count,
-            'first': lambda: series[0] if len(series) > 0 else None,
-            'last': lambda: series[-1] if len(series) > 0 else None,
-            'min': series.min,
-            'max': series.max,
+            "sum": series.sum,
+            "mean": series.mean,
+            "std": series.std,
+            "count": series.count,
+            "first": lambda: series[0] if len(series) > 0 else None,
+            "last": lambda: series[-1] if len(series) > 0 else None,
+            "min": series.min,
+            "max": series.max,
         }
         val = mapping[fn]()
         return pl.Series([val] * len(df))
@@ -442,15 +487,15 @@ class FormulaParser:
         # Replace {col} with safe placeholder variable names
         col_map: Dict[str, str] = {}
         for ref in refs:
-            safe = f'__col_{ref.replace(" ", "_").replace("-", "_")}__'
+            safe = f"__col_{ref.replace(' ', '_').replace('-', '_')}__"
             col_map[safe] = ref
-            expr = expr.replace(f'{{{ref}}}', safe)
+            expr = expr.replace(f"{{{ref}}}", safe)
 
         # Replace ** before we parse (Python AST handles it natively)
         # Replace // for floor division
 
         try:
-            tree = ast.parse(expr, mode='eval')
+            tree = ast.parse(expr, mode="eval")
         except SyntaxError as e:
             raise FormulaError(f"Syntax error in formula: {e}")
 
@@ -486,9 +531,9 @@ class FormulaParser:
                 col_name = col_map[name]
                 return df[col_name].cast(pl.Float64)
             # Boolean constants
-            if name == 'True':
+            if name == "True":
                 return True
-            if name == 'False':
+            if name == "False":
                 return False
             raise FormulaError(f"Unknown identifier: {name}")
 
@@ -578,7 +623,9 @@ class FormulaParser:
             result = (left / right).floor()
             if isinstance(mask, pl.Series) and mask.any():
                 result = result.to_frame("__tmp__").select(
-                    pl.when(pl.col("__tmp__").is_infinite() | pl.col("__tmp__").is_nan())
+                    pl.when(
+                        pl.col("__tmp__").is_infinite() | pl.col("__tmp__").is_nan()
+                    )
                     .then(None)
                     .otherwise(pl.col("__tmp__"))
                     .alias("__tmp__")
@@ -591,11 +638,17 @@ class FormulaParser:
             if isinstance(mask, pl.Series) and mask.any():
                 # Replace zeros with 1 to avoid crash, then mask result
                 safe_right = right.to_frame("__r__").select(
-                    pl.when(pl.col("__r__") == 0).then(1).otherwise(pl.col("__r__")).alias("__r__")
+                    pl.when(pl.col("__r__") == 0)
+                    .then(1)
+                    .otherwise(pl.col("__r__"))
+                    .alias("__r__")
                 )["__r__"]
                 result = left % safe_right
                 result = result.to_frame("__tmp__").with_columns(
-                    pl.when(pl.Series("__mask__", mask)).then(None).otherwise(pl.col("__tmp__")).alias("__tmp__")
+                    pl.when(pl.Series("__mask__", mask))
+                    .then(None)
+                    .otherwise(pl.col("__tmp__"))
+                    .alias("__tmp__")
                 )["__tmp__"]
                 return result
             return left % right
@@ -643,50 +696,57 @@ class FormulaParser:
 
         args = [self._eval_ast_node(a, df, col_map) for a in node.args]
 
-        if func_name == 'abs':
+        if func_name == "abs":
             return self._to_series(args[0], df).abs()
-        if func_name == 'round':
+        if func_name == "round":
             decimals = int(args[1]) if len(args) > 1 else 0
             return self._to_series(args[0], df).round(decimals)
-        if func_name == 'sqrt':
+        if func_name == "sqrt":
             return self._to_series(args[0], df).sqrt()
-        if func_name == 'log':
+        if func_name == "log":
             return self._to_series(args[0], df).log()
-        if func_name == 'pow':
+        if func_name == "pow":
             return self._to_series(args[0], df).pow(args[1])
-        if func_name == 'clip':
-            lo = float(args[1]) if len(args) > 1 else float('-inf')
-            hi = float(args[2]) if len(args) > 2 else float('inf')
+        if func_name == "clip":
+            lo = float(args[1]) if len(args) > 1 else float("-inf")
+            hi = float(args[2]) if len(args) > 2 else float("inf")
             return self._to_series(args[0], df).clip(lo, hi)
-        if func_name in ('min', 'max'):
-            if len(args) == 2 and isinstance(args[0], pl.Series) and isinstance(args[1], pl.Series):
-                tmp = pl.DataFrame({'__a': args[0], '__b': args[1]})
-                if func_name == 'min':
-                    return tmp.select(pl.min_horizontal('__a', '__b'))['__a']
+        if func_name in ("min", "max"):
+            if (
+                len(args) == 2
+                and isinstance(args[0], pl.Series)
+                and isinstance(args[1], pl.Series)
+            ):
+                tmp = pl.DataFrame({"__a": args[0], "__b": args[1]})
+                if func_name == "min":
+                    return tmp.select(pl.min_horizontal("__a", "__b"))["__a"]
                 else:
-                    return tmp.select(pl.max_horizontal('__a', '__b'))['__a']
+                    return tmp.select(pl.max_horizontal("__a", "__b"))["__a"]
             # single arg aggregate
             s = self._to_series(args[0], df)
-            val = s.min() if func_name == 'min' else s.max()
+            val = s.min() if func_name == "min" else s.max()
             return pl.Series([val] * len(df))
-        if func_name in ('mean', 'std', 'sum', 'count', 'first', 'last'):
+        if func_name in ("mean", "std", "sum", "count", "first", "last"):
             s = self._to_series(args[0], df)
             fn_map = {
-                'mean': s.mean, 'std': s.std, 'sum': s.sum, 'count': s.count,
-                'first': lambda: s[0] if len(s) > 0 else None,
-                'last': lambda: s[-1] if len(s) > 0 else None,
+                "mean": s.mean,
+                "std": s.std,
+                "sum": s.sum,
+                "count": s.count,
+                "first": lambda: s[0] if len(s) > 0 else None,
+                "last": lambda: s[-1] if len(s) > 0 else None,
             }
             val = fn_map[func_name]()
             return pl.Series([val] * len(df))
-        if func_name == 'shift':
+        if func_name == "shift":
             n = int(args[1]) if len(args) > 1 else 1
             return self._to_series(args[0], df).shift(n)
-        if func_name == 'diff':
+        if func_name == "diff":
             n = int(args[1]) if len(args) > 1 else 1
             return self._to_series(args[0], df).diff(n=n)
-        if func_name == 'cumsum':
+        if func_name == "cumsum":
             return self._to_series(args[0], df).cum_sum()
-        if func_name == 'rolling_mean':
+        if func_name == "rolling_mean":
             window = int(args[1]) if len(args) > 1 else 3
             if window <= 0:
                 raise ValueError(f"Window must be positive, got {window}")

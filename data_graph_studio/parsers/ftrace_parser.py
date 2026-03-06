@@ -55,21 +55,41 @@ class FtraceParser(BaseParser):
     # Converter option definitions: converter name → list of option defs
     _converter_option_defs: Dict[str, list] = {
         "blocklayer": [
-            {"key": "busy_queue_depth", "type": "int", "default": 32,
-             "label": "Busy Queue Depth",
-             "description": "Queue depth threshold to classify I/O as 'busy'"},
-            {"key": "idle_queue_depth", "type": "int", "default": 4,
-             "label": "Idle Queue Depth",
-             "description": "Queue depth threshold to classify I/O as 'idle'"},
-            {"key": "window_sec", "type": "float", "default": 1.0,
-             "label": "Window (sec)",
-             "description": "Sliding window size in seconds for time-based aggregation"},
-            {"key": "latency_percentiles", "type": "str", "default": "50,90,99",
-             "label": "Latency Percentiles",
-             "description": "Comma-separated percentile values to compute (e.g. 50,90,99)"},
-            {"key": "drain_target_depth", "type": "int", "default": 0,
-             "label": "Drain Target Depth",
-             "description": "Target queue depth for drain analysis (0 = fully drained)"},
+            {
+                "key": "busy_queue_depth",
+                "type": "int",
+                "default": 32,
+                "label": "Busy Queue Depth",
+                "description": "Queue depth threshold to classify I/O as 'busy'",
+            },
+            {
+                "key": "idle_queue_depth",
+                "type": "int",
+                "default": 4,
+                "label": "Idle Queue Depth",
+                "description": "Queue depth threshold to classify I/O as 'idle'",
+            },
+            {
+                "key": "window_sec",
+                "type": "float",
+                "default": 1.0,
+                "label": "Window (sec)",
+                "description": "Sliding window size in seconds for time-based aggregation",
+            },
+            {
+                "key": "latency_percentiles",
+                "type": "str",
+                "default": "50,90,99",
+                "label": "Latency Percentiles",
+                "description": "Comma-separated percentile values to compute (e.g. 50,90,99)",
+            },
+            {
+                "key": "drain_target_depth",
+                "type": "int",
+                "default": 0,
+                "label": "Drain Target Depth",
+                "description": "Target queue depth for drain analysis (0 = fully drained)",
+            },
         ],
         "sched": [],
     }
@@ -87,15 +107,17 @@ class FtraceParser(BaseParser):
     def default_settings(self) -> Dict[str, Any]:
         return {
             # --- Step 1: parsing ---
-            "skip_comments": True,       # skip lines starting with #
-            "events": [],                # filter specific events (empty = all)
-            "cpus": [],                  # filter specific CPUs (empty = all)
+            "skip_comments": True,  # skip lines starting with #
+            "events": [],  # filter specific events (empty = all)
+            "cpus": [],  # filter specific CPUs (empty = all)
             # --- Step 2: conversion ---
-            "converter": "",             # converter name (e.g. "blocklayer")
-            "converter_options": {},     # converter-specific options
+            "converter": "",  # converter name (e.g. "blocklayer")
+            "converter_options": {},  # converter-specific options
         }
 
-    def parse(self, file_path: str, settings: Optional[Dict[str, Any]] = None) -> pl.DataFrame:
+    def parse(
+        self, file_path: str, settings: Optional[Dict[str, Any]] = None
+    ) -> pl.DataFrame:
         """Full pipeline: parse_raw → convert."""
         settings = settings or self.default_settings()
 
@@ -195,8 +217,7 @@ class FtraceParser(BaseParser):
         if evt_filter:
             # ftrace events from UI may include category prefix (e.g. "block/block_rq_issue")
             normalized_evt_filter = [
-                e.split("/", 1)[-1] if "/" in e else e
-                for e in evt_filter
+                e.split("/", 1)[-1] if "/" in e else e for e in evt_filter
             ]
             df = df.filter(pl.col("event").is_in(normalized_evt_filter))
         if cpu_filter:
@@ -273,13 +294,12 @@ class FtraceParser(BaseParser):
     @staticmethod
     def _cmd_category_from_rwbs(rwbs: str) -> str:
         rw = (rwbs or "").upper()
-        # Priority rule requested by user: Read -> Write -> Flush.
+        if "F" in rw:
+            return "Flush"
         if "R" in rw:
             return "Read"
         if "W" in rw:
             return "Write"
-        if "F" in rw:
-            return "Flush"
         return "ETC"
 
     @classmethod
@@ -303,8 +323,10 @@ class FtraceParser(BaseParser):
         try:
             return self._convert_blocklayer_vectorized(raw_df, options)
         except Exception:
-            logger.warning("[blocklayer] vectorized path failed, falling back to legacy",
-                           exc_info=True)
+            logger.warning(
+                "[blocklayer] vectorized path failed, falling back to legacy",
+                exc_info=True,
+            )
             return self._convert_blocklayer_legacy(raw_df, options)
 
     def _convert_blocklayer_vectorized(
@@ -321,9 +343,13 @@ class FtraceParser(BaseParser):
         logger.info("[blocklayer-vec] converting %d raw events", len(raw_df))
 
         block_events = raw_df.filter(
-            pl.col("event").is_in([
-                "block_rq_insert", "block_rq_issue", "block_rq_complete",
-            ])
+            pl.col("event").is_in(
+                [
+                    "block_rq_insert",
+                    "block_rq_issue",
+                    "block_rq_complete",
+                ]
+            )
         )
         if len(block_events) == 0:
             logger.info("[blocklayer-vec] no block events found, returning empty")
@@ -342,46 +368,60 @@ class FtraceParser(BaseParser):
         issue_parse_cols = [
             pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
             pl.col("details").str.extract(r"^\S+\s+(\S+)", 1).alias("rwbs"),
-            pl.col("details").str.extract(r"^\S+\s+\S+\s+(\d+)", 1).cast(pl.Int64).alias("size_bytes"),
-            pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
-            pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
+            pl.col("details")
+            .str.extract(r"^\S+\s+\S+\s+(\d+)", 1)
+            .cast(pl.Int64)
+            .alias("size_bytes"),
+            pl.col("details")
+            .str.extract(r"\(\)\s+(\d+)", 1)
+            .cast(pl.Int64)
+            .alias("sector"),
+            pl.col("details")
+            .str.extract(r"\+\s*(\d+)", 1)
+            .cast(pl.Int32)
+            .alias("nr_sectors"),
         ]
         issues = issues.with_columns(issue_parse_cols)
-        # Drop malformed issue rows early (prevents null-filled pseudo rows)
-        issues = issues.filter(
-            pl.col("device").is_not_null()
-            & pl.col("rwbs").is_not_null()
-            & pl.col("size_bytes").is_not_null()
-            & pl.col("sector").is_not_null()
-            & pl.col("nr_sectors").is_not_null()
-        )
         issues = issues.with_columns(
-            (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
-             pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
+            (
+                pl.col("device")
+                + ":"
+                + pl.col("sector").cast(pl.Utf8)
+                + ":"
+                + pl.col("nr_sectors").cast(pl.Utf8)
+            ).alias("key")
         ).with_row_index("issue_idx")
 
-        if len(issues) == 0:
-            return pl.DataFrame(schema=self._RESULT_SCHEMA)
-
         # complete format: <dev> <rwbs> () <sector> + <nr_sectors> [<errno>]
-        completes = completes.with_columns([
-            pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
-            pl.col("details").str.extract(r"\(\)\s+(\d+)", 1).cast(pl.Int64).alias("sector"),
-            pl.col("details").str.extract(r"\+\s*(\d+)", 1).cast(pl.Int32).alias("nr_sectors"),
-        ]).filter(
-            pl.col("device").is_not_null()
-            & pl.col("sector").is_not_null()
-            & pl.col("nr_sectors").is_not_null()
+        completes = completes.with_columns(
+            [
+                pl.col("details").str.extract(r"^(\S+)\s+", 1).alias("device"),
+                pl.col("details")
+                .str.extract(r"\(\)\s+(\d+)", 1)
+                .cast(pl.Int64)
+                .alias("sector"),
+                pl.col("details")
+                .str.extract(r"\+\s*(\d+)", 1)
+                .cast(pl.Int32)
+                .alias("nr_sectors"),
+            ]
         ).with_columns(
-            (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
-             pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
+            (
+                pl.col("device")
+                + ":"
+                + pl.col("sector").cast(pl.Utf8)
+                + ":"
+                + pl.col("nr_sectors").cast(pl.Utf8)
+            ).alias("key")
         )
 
         # ── 3. Match issue→complete (first complete after issue timestamp per key) ──
         matched = (
             issues.select(["issue_idx", "key", "timestamp"])
             .join(
-                completes.select(["key", "timestamp"]).rename({"timestamp": "complete_time"}),
+                completes.select(["key", "timestamp"]).rename(
+                    {"timestamp": "complete_time"}
+                ),
                 on="key",
                 how="left",
             )
@@ -394,19 +434,22 @@ class FtraceParser(BaseParser):
 
         # ── 4. Match insert→issue (Q2D) ──
         if len(inserts) > 0:
-            inserts = inserts.with_columns(issue_parse_cols).filter(
-                pl.col("device").is_not_null()
-                & pl.col("sector").is_not_null()
-                & pl.col("nr_sectors").is_not_null()
-            ).with_columns(
-                (pl.col("device") + ":" + pl.col("sector").cast(pl.Utf8) + ":" +
-                 pl.col("nr_sectors").cast(pl.Utf8)).alias("key")
+            inserts = inserts.with_columns(issue_parse_cols).with_columns(
+                (
+                    pl.col("device")
+                    + ":"
+                    + pl.col("sector").cast(pl.Utf8)
+                    + ":"
+                    + pl.col("nr_sectors").cast(pl.Utf8)
+                ).alias("key")
             )
             # For each issue, find the latest insert before it with the same key
             insert_matched = (
                 result.select(["issue_idx", "key", "timestamp"])
                 .join(
-                    inserts.select(["key", "timestamp"]).rename({"timestamp": "insert_time"}),
+                    inserts.select(["key", "timestamp"]).rename(
+                        {"timestamp": "insert_time"}
+                    ),
                     on="key",
                     how="left",
                 )
@@ -416,49 +459,80 @@ class FtraceParser(BaseParser):
             )
             result = result.join(insert_matched, on="issue_idx", how="left")
         else:
-            result = result.with_columns(pl.lit(None).cast(pl.Float64).alias("insert_time"))
+            result = result.with_columns(
+                pl.lit(None).cast(pl.Float64).alias("insert_time")
+            )
 
         # ── 5. Compute metrics ──
-        result = result.with_columns([
-            ((pl.col("complete_time") - pl.col("timestamp")) * 1000).alias("d2c_ms"),
-            pl.when(pl.col("insert_time").is_not_null())
-            .then((pl.col("timestamp") - pl.col("insert_time")) * 1000)
-            .otherwise(None)
-            .alias("q2d_ms"),
-            (pl.col("sector").cast(pl.Float64) * 512 / (1024 * 1024)).alias("lba_mb"),
-            (pl.col("size_bytes").cast(pl.Float64) / 1024).alias("size_kb"),
-        ]).with_columns([
-            pl.when(pl.col("rwbs").str.to_uppercase().str.contains("R"))
-            .then(pl.lit("Read"))
-            .when(pl.col("rwbs").str.to_uppercase().str.contains("W"))
-            .then(pl.lit("Write"))
-            .when(pl.col("rwbs").str.to_uppercase().str.contains("F"))
-            .then(pl.lit("Flush"))
-            .otherwise(pl.lit("ETC"))
-            .alias("cmd_category"),
-        ]).with_columns([
-            pl.when((pl.col("cmd_category") == "Read") & (pl.col("size_kb") < 32.0))
-            .then(pl.lit("Small Read"))
-            .when((pl.col("cmd_category") == "Read") & (pl.col("size_kb") >= 32.0))
-            .then(pl.lit("Big Read"))
-            .when((pl.col("cmd_category") == "Write") & (pl.col("size_kb") < 32.0))
-            .then(pl.lit("Small Write"))
-            .when((pl.col("cmd_category") == "Write") & (pl.col("size_kb") >= 32.0))
-            .then(pl.lit("Big Write"))
-            .when(pl.col("cmd_category") == "Flush")
-            .then(pl.lit("Flush"))
-            .otherwise(pl.lit("ETC"))
-            .alias("cmd_class"),
-        ])
+        result = (
+            result.with_columns(
+                [
+                    ((pl.col("complete_time") - pl.col("timestamp")) * 1000).alias(
+                        "d2c_ms"
+                    ),
+                    pl.when(pl.col("insert_time").is_not_null())
+                    .then((pl.col("timestamp") - pl.col("insert_time")) * 1000)
+                    .otherwise(None)
+                    .alias("q2d_ms"),
+                    (pl.col("sector").cast(pl.Float64) * 512 / (1024 * 1024)).alias(
+                        "lba_mb"
+                    ),
+                    (pl.col("size_bytes").cast(pl.Float64) / 1024).alias("size_kb"),
+                ]
+            )
+            .with_columns(
+                [
+                    pl.when(pl.col("rwbs").str.to_uppercase().str.contains("F"))
+                    .then(pl.lit("Flush"))
+                    .when(pl.col("rwbs").str.to_uppercase().str.contains("R"))
+                    .then(pl.lit("Read"))
+                    .when(pl.col("rwbs").str.to_uppercase().str.contains("W"))
+                    .then(pl.lit("Write"))
+                    .otherwise(pl.lit("ETC"))
+                    .alias("cmd_category"),
+                ]
+            )
+            .with_columns(
+                [
+                    pl.when(
+                        (pl.col("cmd_category") == "Read") & (pl.col("size_kb") < 32.0)
+                    )
+                    .then(pl.lit("Small Read"))
+                    .when(
+                        (pl.col("cmd_category") == "Read") & (pl.col("size_kb") >= 32.0)
+                    )
+                    .then(pl.lit("Big Read"))
+                    .when(
+                        (pl.col("cmd_category") == "Write") & (pl.col("size_kb") < 32.0)
+                    )
+                    .then(pl.lit("Small Write"))
+                    .when(
+                        (pl.col("cmd_category") == "Write")
+                        & (pl.col("size_kb") >= 32.0)
+                    )
+                    .then(pl.lit("Big Write"))
+                    .when(pl.col("cmd_category") == "Flush")
+                    .then(pl.lit("Flush"))
+                    .otherwise(pl.lit("ETC"))
+                    .alias("cmd_class"),
+                ]
+            )
+        )
 
         # Sort by issue timestamp for D2D/C2C/queue_depth/sequentiality
         result = result.sort("timestamp")
 
         # D2D, C2C via shift
-        result = result.with_columns([
-            ((pl.col("timestamp") - pl.col("timestamp").shift(1)) * 1000).alias("d2d_ms"),
-            ((pl.col("complete_time") - pl.col("complete_time").shift(1)) * 1000).alias("c2c_ms"),
-        ])
+        result = result.with_columns(
+            [
+                ((pl.col("timestamp") - pl.col("timestamp").shift(1)) * 1000).alias(
+                    "d2d_ms"
+                ),
+                (
+                    (pl.col("complete_time") - pl.col("complete_time").shift(1)) * 1000
+                ).alias("c2c_ms"),
+            ]
+        )
 
         # Queue depth: cumulative issues up to this point minus cumulative completes
         # We compute it by counting how many issues occurred before each issue
@@ -476,13 +550,18 @@ class FtraceParser(BaseParser):
 
         # Simple approach: at each issue, outstanding = issues_so_far - completes_before_issue
         for i in range(n):
-            while complete_idx < len(all_completes_sorted) and all_completes_sorted[complete_idx] <= issue_times[i]:
+            while (
+                complete_idx < len(all_completes_sorted)
+                and all_completes_sorted[complete_idx] <= issue_times[i]
+            ):
                 outstanding -= 1
                 complete_idx += 1
             outstanding += 1
             queue_depths[i] = outstanding
 
-        result = result.with_columns(pl.Series("queue_depth", queue_depths, dtype=pl.Int32))
+        result = result.with_columns(
+            pl.Series("queue_depth", queue_depths, dtype=pl.Int32)
+        )
 
         # Is_sequential: per-device, sector == prev_sector + prev_nr_sectors
         devices = result["device"].to_list()
@@ -499,28 +578,32 @@ class FtraceParser(BaseParser):
                 seq_flags.append("random")
             prev_lba_end[dev] = sec + nr_sectors_list[i]
 
-        result = result.with_columns(pl.Series("is_sequential", seq_flags, dtype=pl.Utf8))
+        result = result.with_columns(
+            pl.Series("is_sequential", seq_flags, dtype=pl.Utf8)
+        )
 
         # ── 6. Select final columns ──
-        result = result.select([
-            pl.col("timestamp").alias("send_time"),
-            "complete_time",
-            "insert_time",
-            "lba_mb",
-            "d2c_ms",
-            "q2d_ms",
-            "d2d_ms",
-            "c2c_ms",
-            "size_kb",
-            pl.col("rwbs").alias("cmd"),
-            "cmd_category",
-            "cmd_class",
-            "queue_depth",
-            "sector",
-            "nr_sectors",
-            "device",
-            "is_sequential",
-        ])
+        result = result.select(
+            [
+                pl.col("timestamp").alias("send_time"),
+                "complete_time",
+                "insert_time",
+                "lba_mb",
+                "d2c_ms",
+                "q2d_ms",
+                "d2d_ms",
+                "c2c_ms",
+                "size_kb",
+                pl.col("rwbs").alias("cmd"),
+                "cmd_category",
+                "cmd_class",
+                "queue_depth",
+                "sector",
+                "nr_sectors",
+                "device",
+                "is_sequential",
+            ]
+        )
 
         logger.info("[blocklayer-vec] result: %d rows", len(result))
         return result
@@ -535,9 +618,13 @@ class FtraceParser(BaseParser):
         logger.info("[blocklayer-legacy] converting %d raw events", len(raw_df))
 
         block_events = raw_df.filter(
-            pl.col("event").is_in([
-                "block_rq_insert", "block_rq_issue", "block_rq_complete",
-            ])
+            pl.col("event").is_in(
+                [
+                    "block_rq_insert",
+                    "block_rq_issue",
+                    "block_rq_complete",
+                ]
+            )
         )
 
         if len(block_events) == 0:
@@ -636,25 +723,27 @@ class FtraceParser(BaseParser):
             cmd_category = self._cmd_category_from_rwbs(cmd)
             cmd_class = self._cmd_class_from_category(cmd_category, size_kb)
 
-            result_rows.append({
-                "send_time": issue_ts,
-                "complete_time": complete_ts,
-                "insert_time": insert_ts,
-                "lba_mb": sector * 512.0 / (1024.0 * 1024.0),
-                "d2c_ms": (complete_ts - issue_ts) * 1000.0,
-                "q2d_ms": q2d_ms,
-                "d2d_ms": d2d_ms,
-                "c2c_ms": c2c_ms,
-                "size_kb": size_kb,
-                "cmd": cmd,
-                "cmd_category": cmd_category,
-                "cmd_class": cmd_class,
-                "queue_depth": entry["queue_depth"],
-                "sector": sector,
-                "nr_sectors": nr_sects,
-                "device": dev,
-                "is_sequential": is_seq,
-            })
+            result_rows.append(
+                {
+                    "send_time": issue_ts,
+                    "complete_time": complete_ts,
+                    "insert_time": insert_ts,
+                    "lba_mb": sector * 512.0 / (1024.0 * 1024.0),
+                    "d2c_ms": (complete_ts - issue_ts) * 1000.0,
+                    "q2d_ms": q2d_ms,
+                    "d2d_ms": d2d_ms,
+                    "c2c_ms": c2c_ms,
+                    "size_kb": size_kb,
+                    "cmd": cmd,
+                    "cmd_category": cmd_category,
+                    "cmd_class": cmd_class,
+                    "queue_depth": entry["queue_depth"],
+                    "sector": sector,
+                    "nr_sectors": nr_sects,
+                    "device": dev,
+                    "is_sequential": is_seq,
+                }
+            )
 
         if not result_rows:
             return pl.DataFrame(schema=self._RESULT_SCHEMA)
@@ -715,34 +804,55 @@ class FtraceParser(BaseParser):
             logger.info("[sched] no sched_switch events, returning empty")
             return pl.DataFrame(schema=self._SCHED_SCHEMA)
 
-        switches = switches.with_columns([
-            pl.lit("switch").alias("event_type"),
-            pl.col("details").str.extract(self._SWITCH_RE, 1).alias("prev_comm"),
-            pl.col("details").str.extract(self._SWITCH_RE, 2).cast(pl.Int32).alias("prev_pid"),
-            pl.col("details").str.extract(self._SWITCH_RE, 3).alias("prev_state"),
-            pl.col("details").str.extract(self._SWITCH_RE, 4).alias("next_comm"),
-            pl.col("details").str.extract(self._SWITCH_RE, 5).cast(pl.Int32).alias("next_pid"),
-        ])
+        switches = switches.with_columns(
+            [
+                pl.lit("switch").alias("event_type"),
+                pl.col("details").str.extract(self._SWITCH_RE, 1).alias("prev_comm"),
+                pl.col("details")
+                .str.extract(self._SWITCH_RE, 2)
+                .cast(pl.Int32)
+                .alias("prev_pid"),
+                pl.col("details").str.extract(self._SWITCH_RE, 3).alias("prev_state"),
+                pl.col("details").str.extract(self._SWITCH_RE, 4).alias("next_comm"),
+                pl.col("details")
+                .str.extract(self._SWITCH_RE, 5)
+                .cast(pl.Int32)
+                .alias("next_pid"),
+            ]
+        )
 
         # runtime: per-CPU consecutive switch time delta
         switches = switches.sort(["cpu", "timestamp"])
-        switches = switches.with_columns([
-            (
-                (pl.col("timestamp") - pl.col("timestamp").shift(1).over("cpu")) * 1000.0
-            ).alias("runtime_ms"),
-        ])
+        switches = switches.with_columns(
+            [
+                (
+                    (pl.col("timestamp") - pl.col("timestamp").shift(1).over("cpu"))
+                    * 1000.0
+                ).alias("runtime_ms"),
+            ]
+        )
 
         # TODO: wait_time_ms — wakeup→switch matching (complex pid-based join)
-        switches = switches.with_columns([
-            pl.lit(None, dtype=pl.Float64).alias("wait_time_ms"),
-        ])
+        switches = switches.with_columns(
+            [
+                pl.lit(None, dtype=pl.Float64).alias("wait_time_ms"),
+            ]
+        )
 
-        result = switches.select([
-            "timestamp", "cpu", "event_type",
-            "prev_comm", "prev_pid", "prev_state",
-            "next_comm", "next_pid",
-            "runtime_ms", "wait_time_ms",
-        ])
+        result = switches.select(
+            [
+                "timestamp",
+                "cpu",
+                "event_type",
+                "prev_comm",
+                "prev_pid",
+                "prev_state",
+                "next_comm",
+                "next_pid",
+                "runtime_ms",
+                "wait_time_ms",
+            ]
+        )
 
         matched = len(result)
         logger.info("[sched] produced %d switch records", matched)

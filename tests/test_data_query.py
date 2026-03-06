@@ -1,7 +1,6 @@
 """Tests for DataQuery module."""
 
 import pytest
-import polars as pl
 
 from data_graph_studio.core.data_query import DataQuery
 

@@ -2,8 +2,7 @@
 Stacked Bar Chart - 누적 막대 차트
 """
 
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Any
 import polars as pl
 
 
@@ -15,8 +14,16 @@ class StackedBarChart:
     """
 
     DEFAULT_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     def calculate(
@@ -28,7 +35,7 @@ class StackedBarChart:
         agg_func: str = "sum",
         normalize: bool = False,
         sort_categories: bool = False,
-        sort_groups: bool = False
+        sort_groups: bool = False,
     ) -> Dict[str, Any]:
         """
         누적 막대 데이터 계산
@@ -61,15 +68,19 @@ class StackedBarChart:
             agg_expr = pl.col(value_col).sum()
 
         # 그룹별 집계
-        grouped = (
-            data
-            .group_by([category_col, group_col])
-            .agg(agg_expr.alias("value"))
-        )
+        grouped = data.group_by([category_col, group_col]).agg(agg_expr.alias("value"))
 
         # 카테고리 및 그룹 목록
-        categories = grouped[category_col].unique().sort().to_list() if sort_categories else grouped[category_col].unique().to_list()
-        groups = grouped[group_col].unique().sort().to_list() if sort_groups else grouped[group_col].unique().to_list()
+        categories = (
+            grouped[category_col].unique().sort().to_list()
+            if sort_categories
+            else grouped[category_col].unique().to_list()
+        )
+        groups = (
+            grouped[group_col].unique().sort().to_list()
+            if sort_groups
+            else grouped[group_col].unique().to_list()
+        )
 
         # 스택 값 구성
         stacked_values = {}
@@ -90,7 +101,9 @@ class StackedBarChart:
                 total = sum(stacked_values[cat].values())
                 if total > 0:
                     for grp in groups:
-                        stacked_values[cat][grp] = (stacked_values[cat][grp] / total) * 100
+                        stacked_values[cat][grp] = (
+                            stacked_values[cat][grp] / total
+                        ) * 100
 
         # 스택 시작 위치 계산
         stack_positions = {}
@@ -101,13 +114,15 @@ class StackedBarChart:
                 stack_positions[cat][grp] = {
                     "start": cumsum,
                     "end": cumsum + stacked_values[cat][grp],
-                    "value": stacked_values[cat][grp]
+                    "value": stacked_values[cat][grp],
                 }
                 cumsum += stacked_values[cat][grp]
 
         # 색상 매핑
-        colors = {grp: self.DEFAULT_COLORS[i % len(self.DEFAULT_COLORS)]
-                  for i, grp in enumerate(groups)}
+        colors = {
+            grp: self.DEFAULT_COLORS[i % len(self.DEFAULT_COLORS)]
+            for i, grp in enumerate(groups)
+        }
 
         return {
             "categories": categories,
@@ -115,7 +130,7 @@ class StackedBarChart:
             "stacked_values": stacked_values,
             "stack_positions": stack_positions,
             "colors": colors,
-            "normalized": normalize
+            "normalized": normalize,
         }
 
     def get_bar_rects(
@@ -128,7 +143,7 @@ class StackedBarChart:
         height: float,
         margin: float = 0.1,
         horizontal: bool = False,
-        **kwargs
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """
         실제 그리기용 사각형 좌표 계산
@@ -152,10 +167,11 @@ class StackedBarChart:
         usable_height = height * (1 - 2 * m)
 
         # 최대값
-        max_val = max(
-            stack_positions[cat][groups[-1]]["end"]
-            for cat in categories
-        ) if categories and groups else 1
+        max_val = (
+            max(stack_positions[cat][groups[-1]]["end"] for cat in categories)
+            if categories and groups
+            else 1
+        )
 
         # 막대 너비/높이
         n_cats = len(categories)
@@ -167,23 +183,29 @@ class StackedBarChart:
             bar_height = bar_height_total * 0.8
 
             for i, cat in enumerate(categories):
-                y = height * m + i * bar_height_total + (bar_height_total - bar_height) / 2
+                y = (
+                    height * m
+                    + i * bar_height_total
+                    + (bar_height_total - bar_height) / 2
+                )
 
                 for grp in groups:
                     pos = stack_positions[cat][grp]
                     x_start = width * m + (pos["start"] / max_val) * usable_width
                     bar_width = (pos["value"] / max_val) * usable_width
 
-                    rects.append({
-                        "x": x_start,
-                        "y": y,
-                        "width": bar_width,
-                        "height": bar_height,
-                        "category": cat,
-                        "group": grp,
-                        "value": pos["value"],
-                        "color": colors[grp]
-                    })
+                    rects.append(
+                        {
+                            "x": x_start,
+                            "y": y,
+                            "width": bar_width,
+                            "height": bar_height,
+                            "category": cat,
+                            "group": grp,
+                            "value": pos["value"],
+                            "color": colors[grp],
+                        }
+                    )
         else:
             bar_width_total = usable_width / n_cats
             bar_width = bar_width_total * 0.8
@@ -193,18 +215,22 @@ class StackedBarChart:
 
                 for grp in groups:
                     pos = stack_positions[cat][grp]
-                    y_start = height - height * m - (pos["end"] / max_val) * usable_height
+                    y_start = (
+                        height - height * m - (pos["end"] / max_val) * usable_height
+                    )
                     bar_height = (pos["value"] / max_val) * usable_height
 
-                    rects.append({
-                        "x": x,
-                        "y": y_start,
-                        "width": bar_width,
-                        "height": bar_height,
-                        "category": cat,
-                        "group": grp,
-                        "value": pos["value"],
-                        "color": colors[grp]
-                    })
+                    rects.append(
+                        {
+                            "x": x,
+                            "y": y_start,
+                            "width": bar_width,
+                            "height": bar_height,
+                            "category": cat,
+                            "group": grp,
+                            "value": pos["value"],
+                            "color": colors[grp],
+                        }
+                    )
 
         return rects

@@ -8,8 +8,16 @@ import logging
 import numpy as np
 
 from PySide6.QtWidgets import (
-    QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QSpinBox, QScrollArea, QGroupBox, QGridLayout, QComboBox, QGraphicsPathItem,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QFrame,
+    QSpinBox,
+    QScrollArea,
+    QGroupBox,
+    QGridLayout,
+    QComboBox,
+    QGraphicsPathItem,
 )
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QPainterPath
@@ -22,10 +30,11 @@ logger = logging.getLogger(__name__)
 
 # ==================== Stat Panel ====================
 
+
 class StatPanel(QFrame):
     """
     Statistics Panel with 2x2 Grid Layout - Minimal Design
-    
+
     Layout:
     ┌─────────────────────────────────────┐
     │  📈 Statistics                      │
@@ -43,7 +52,9 @@ class StatPanel(QFrame):
         self.state = state
         self.setObjectName("StatPanel")
         self.setAccessibleName("Statistics Panel")
-        self.setAccessibleDescription("Shows distribution histograms and summary statistics for selected data")
+        self.setAccessibleDescription(
+            "Shows distribution histograms and summary statistics for selected data"
+        )
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(240)
         self.setMaximumWidth(560)
@@ -62,11 +73,11 @@ class StatPanel(QFrame):
         self._setup_ui()
         self._apply_style()
         self.state.selection_changed.connect(self._on_selection_changed)
-    
+
     def _apply_style(self):
         # Styles now handled by global theme stylesheet
         pass
-    
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -92,7 +103,9 @@ class StatPanel(QFrame):
         # Selection count label
         self._selection_label = QLabel("")
         self._selection_label.setObjectName("selectionLabel")
-        self._selection_label.setStyleSheet("color: #EF4444; font-weight: bold; font-size: 11px;")
+        self._selection_label.setStyleSheet(
+            "color: #EF4444; font-weight: bold; font-size: 11px;"
+        )
         self._selection_label.hide()
         header_layout.addWidget(self._selection_label)
 
@@ -110,7 +123,7 @@ class StatPanel(QFrame):
         self.y_bins_spin.setValue(30)
         self.y_bins_spin.valueChanged.connect(self._on_y_bins_changed)
         self.y_bins_spin.hide()
-        
+
         layout.addLayout(header_layout)
 
         # 2x2 Grid for graphs - compact
@@ -120,21 +133,21 @@ class StatPanel(QFrame):
 
         # Create mini plot widgets with minimal chrome
         self._mini_plot_widgets = []  # Store for theme updates
-        
+
         def create_plot_group(title: str) -> tuple:
             group = QGroupBox(title)
             group.setToolTip("Double-click to expand")
             grp_layout = QVBoxLayout(group)
             grp_layout.setContentsMargins(2, 2, 2, 2)
             grp_layout.setSpacing(0)
-            
+
             widget = ClickablePlotWidget()
             widget.setMinimumHeight(60)
             widget.setMaximumHeight(80)
             # Default dark background - will be updated by apply_theme()
-            widget.setBackground('#2B3440')
-            widget.hideAxis('bottom')
-            widget.hideAxis('left')
+            widget.setBackground("#2B3440")
+            widget.hideAxis("bottom")
+            widget.hideAxis("left")
             widget.setCursor(Qt.PointingHandCursor)
             widget.getPlotItem().setContentsMargins(0, 0, 0, 0)
             grp_layout.addWidget(widget)
@@ -190,16 +203,19 @@ class StatPanel(QFrame):
     def _setup_mini_graph_hover(self):
         """Setup mouse hover tooltip for mini stat graphs"""
         for widget in self._mini_plot_widgets:
-            hover_label = pg.TextItem(text="", anchor=(0, 1), color='#E2E8F0')
+            hover_label = pg.TextItem(text="", anchor=(0, 1), color="#E2E8F0")
             hover_label.setZValue(1000)
-            hover_label.setFont(pg.QtGui.QFont('Arial', 9))
+            hover_label.setFont(pg.QtGui.QFont("Arial", 9))
             hover_label.hide()
             widget.addItem(hover_label)
             widget._hover_label = hover_label
             widget.setMouseTracking(True)
 
-            proxy = pg.SignalProxy(widget.scene().sigMouseMoved, rateLimit=30,
-                                  slot=lambda evt, w=widget: self._on_mini_graph_hover(evt, w))
+            proxy = pg.SignalProxy(
+                widget.scene().sigMouseMoved,
+                rateLimit=30,
+                slot=lambda evt, w=widget: self._on_mini_graph_hover(evt, w),
+            )
             widget._hover_proxy = proxy  # prevent GC
 
     def _on_mini_graph_hover(self, evt, widget):
@@ -242,8 +258,13 @@ class StatPanel(QFrame):
                 clean_x = self._x_data[~np.isnan(self._x_data)]
                 if len(clean_x) > 0:
                     hist, bins = np.histogram(clean_x, bins=self._x_bins)
-                    self.x_hist_widget.plot(bins, hist, stepMode="center", fillLevel=0,
-                                            brush=(100, 100, 200, 100))
+                    self.x_hist_widget.plot(
+                        bins,
+                        hist,
+                        stepMode="center",
+                        fillLevel=0,
+                        brush=(100, 100, 200, 100),
+                    )
             except:
                 pass
 
@@ -264,7 +285,7 @@ class StatPanel(QFrame):
                         width=hist,
                         height=bar_height,
                         brush=(100, 200, 100, 100),
-                        pen=pg.mkPen((100, 200, 100, 255), width=1)
+                        pen=pg.mkPen((100, 200, 100, 255), width=1),
                     )
                     self.y_hist_widget.addItem(bar_item)
             except:
@@ -281,8 +302,8 @@ class StatPanel(QFrame):
                 return
 
             self.pie_widget.setAspectLocked(True)
-            self.pie_widget.hideAxis('bottom')
-            self.pie_widget.hideAxis('left')
+            self.pie_widget.hideAxis("bottom")
+            self.pie_widget.hideAxis("left")
 
             pie_rect = QRectF(-1.0, -1.0, 2.0, 2.0)
             start_angle = 90.0
@@ -298,7 +319,7 @@ class StatPanel(QFrame):
 
                 wedge = QGraphicsPathItem(path)
                 wedge.setBrush(pg.mkBrush(color))
-                wedge.setPen(pg.mkPen(color='w', width=1))
+                wedge.setPen(pg.mkPen(color="w", width=1))
                 wedge.setZValue(10)
                 self.pie_widget.addItem(wedge)
 
@@ -308,13 +329,12 @@ class StatPanel(QFrame):
             # Fallback: bar chart
             x = np.arange(len(labels))
             bars = pg.BarGraphItem(
-                x=x, height=values, width=0.6,
-                brushes=[pg.mkBrush(c) for c in colors]
+                x=x, height=values, width=0.6, brushes=[pg.mkBrush(c) for c in colors]
             )
             self.pie_widget.addItem(bars)
             # Set X-axis labels to group names
-            self.pie_widget.showAxis('bottom')
-            ax = self.pie_widget.getAxis('bottom')
+            self.pie_widget.showAxis("bottom")
+            ax = self.pie_widget.getAxis("bottom")
             ticks = [(i, str(lbl)) for i, lbl in enumerate(labels)]
             ax.setTicks([ticks])
 
@@ -330,22 +350,24 @@ class StatPanel(QFrame):
                         q1 = np.percentile(clean_y, 25)
                         q2 = np.percentile(clean_y, 50)
                         q3 = np.percentile(clean_y, 75)
-                        
+
                         # Count values in each quartile
                         c1 = np.sum(clean_y <= q1)
                         c2 = np.sum((clean_y > q1) & (clean_y <= q2))
                         c3 = np.sum((clean_y > q2) & (clean_y <= q3))
                         c4 = np.sum(clean_y > q3)
-                        
-                        labels = ['Q1', 'Q2', 'Q3', 'Q4']
+
+                        labels = ["Q1", "Q2", "Q3", "Q4"]
                         values = [c1, c2, c3, c4]
-                        colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444']
-                        
+                        colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444"]
+
                         # Mini pie chart
                         self._render_pie(labels, values, colors)
-                        
+
                         # Store for expansion
-                        self.pie_widget.set_pie_data(labels, values, "Y Value Distribution by Quartile", colors)
+                        self.pie_widget.set_pie_data(
+                            labels, values, "Y Value Distribution by Quartile", colors
+                        )
                 except:
                     pass
             return
@@ -353,17 +375,29 @@ class StatPanel(QFrame):
         try:
             labels = list(self._group_data.keys())[:10]  # Limit to 10 categories
             values = [self._group_data[k] for k in labels]
-            
+
             colors = [
-                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+                "#1f77b4",
+                "#ff7f0e",
+                "#2ca02c",
+                "#d62728",
+                "#9467bd",
+                "#8c564b",
+                "#e377c2",
+                "#7f7f7f",
+                "#bcbd22",
+                "#17becf",
             ]
-            
+
             # Mini pie chart representation
-            self._render_pie(labels, values, [colors[i % len(colors)] for i in range(len(labels))])
-            
+            self._render_pie(
+                labels, values, [colors[i % len(colors)] for i in range(len(labels))]
+            )
+
             # Store for expansion
-            self.pie_widget.set_pie_data(labels, values, "Y Groupby Aggregation", colors)
+            self.pie_widget.set_pie_data(
+                labels, values, "Y Groupby Aggregation", colors
+            )
         except:
             pass
 
@@ -379,27 +413,55 @@ class StatPanel(QFrame):
                 return
 
             # Detailed percentiles
-            percentiles = np.array([0, 1, 2, 3, 4, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.7, 99.9, 99.99, 100])
+            percentiles = np.array(
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    10,
+                    25,
+                    50,
+                    75,
+                    90,
+                    95,
+                    97,
+                    99,
+                    99.7,
+                    99.9,
+                    99.99,
+                    100,
+                ]
+            )
             values = np.percentile(clean_y, percentiles)
-            
+
             # Line plot with markers
             pen = pg.mkPen(color=(148, 103, 189), width=2)  # Purple
             self.percentile_widget.plot(
-                percentiles, values, pen=pen,
-                symbol='o', symbolSize=5,
+                percentiles,
+                values,
+                pen=pen,
+                symbol="o",
+                symbolSize=5,
                 symbolBrush=pg.mkBrush(148, 103, 189),
-                symbolPen=pg.mkPen('w', width=0.5)
+                symbolPen=pg.mkPen("w", width=0.5),
             )
-            
+
             # Store for expansion
             self.percentile_widget.set_percentile_data(
                 clean_y, "Y Values Percentile Distribution", (148, 103, 189)
             )
         except:
             pass
-    
-    def update_histograms(self, x_data: Optional[np.ndarray], y_data: Optional[np.ndarray],
-                          group_data: Optional[Dict[str, float]] = None):
+
+    def update_histograms(
+        self,
+        x_data: Optional[np.ndarray],
+        y_data: Optional[np.ndarray],
+        group_data: Optional[Dict[str, float]] = None,
+    ):
         """Update all charts with new data"""
         self._x_data = x_data
         self._y_data = y_data
@@ -409,14 +471,20 @@ class StatPanel(QFrame):
         # X Distribution: vertical histogram (default)
         if x_data is not None:
             self.x_hist_widget.set_data(
-                x_data, "X-Axis Distribution", (100, 100, 200, 150),
-                bins=self._x_bins, horizontal=False
+                x_data,
+                "X-Axis Distribution",
+                (100, 100, 200, 150),
+                bins=self._x_bins,
+                horizontal=False,
             )
         # Y Distribution: horizontal histogram
         if y_data is not None:
             self.y_hist_widget.set_data(
-                y_data, "Y-Axis Distribution", (100, 200, 100, 150),
-                bins=self._y_bins, horizontal=True
+                y_data,
+                "Y-Axis Distribution",
+                (100, 200, 100, 150),
+                bins=self._y_bins,
+                horizontal=True,
             )
 
         # Update all charts
@@ -429,7 +497,7 @@ class StatPanel(QFrame):
         """Set groupby aggregation data for pie chart"""
         self._group_data = group_data
         self._update_pie_chart()
-    
+
     def _on_stats_col_changed(self, col_name: str):
         """P1-5: Switch displayed stats when user selects a different Y column."""
         if not col_name:
@@ -439,10 +507,13 @@ class StatPanel(QFrame):
         percentiles = self._all_y_percentiles.get(col_name)
         self.update_stats(stats, percentiles)
 
-    def update_multi_y_stats(self, stats_by_col: Dict[str, Dict[str, Any]],
-                             percentiles_by_col: Dict[str, Dict[str, float]] = None,
-                             group_counts: Dict[str, int] = None,
-                             group_sums: Dict[str, float] = None):
+    def update_multi_y_stats(
+        self,
+        stats_by_col: Dict[str, Dict[str, Any]],
+        percentiles_by_col: Dict[str, Dict[str, float]] = None,
+        group_counts: Dict[str, int] = None,
+        group_sums: Dict[str, float] = None,
+    ):
         """P1-5: Update stats for all value columns. Shows combo if 2+ columns."""
         self._all_y_stats = stats_by_col or {}
         self._all_y_percentiles = percentiles_by_col or {}
@@ -469,8 +540,13 @@ class StatPanel(QFrame):
             pcts = self._all_y_percentiles.get(self._current_stats_col)
             self.update_stats(stats, pcts, group_counts, group_sums)
 
-    def update_stats(self, stats: Dict[str, Any], percentiles: Dict[str, float] = None,
-                     group_counts: Dict[str, int] = None, group_sums: Dict[str, float] = None):
+    def update_stats(
+        self,
+        stats: Dict[str, Any],
+        percentiles: Dict[str, float] = None,
+        group_counts: Dict[str, int] = None,
+        group_sums: Dict[str, float] = None,
+    ):
         if stats is None:
             self.stats_label.setText("Load data to see statistics")
             return
@@ -478,18 +554,26 @@ class StatPanel(QFrame):
             # stats is empty dict {} — data is loaded but no columns selected
             self.stats_label.setText("Select data columns to view statistics")
             return
-        
+
         lines = []
         # Format stats in a more compact 2-column layout
         items = list(stats.items())
         for i in range(0, len(items), 2):
             left = items[i]
             right = items[i + 1] if i + 1 < len(items) else None
-            
-            left_str = f"{left[0]}: {left[1]:.2f}" if isinstance(left[1], float) else f"{left[0]}: {left[1]}"
-            
+
+            left_str = (
+                f"{left[0]}: {left[1]:.2f}"
+                if isinstance(left[1], float)
+                else f"{left[0]}: {left[1]}"
+            )
+
             if right:
-                right_str = f"{right[0]}: {right[1]:.2f}" if isinstance(right[1], float) else f"{right[0]}: {right[1]}"
+                right_str = (
+                    f"{right[0]}: {right[1]:.2f}"
+                    if isinstance(right[1], float)
+                    else f"{right[0]}: {right[1]}"
+                )
                 lines.append(f"{left_str:<20} {right_str}")
             else:
                 lines.append(left_str)
@@ -509,13 +593,13 @@ class StatPanel(QFrame):
             if group_sums:
                 for k, v in group_sums.items():
                     lines.append(f"  {k} sum: {v:.4f}")
-        
+
         self.stats_label.setText("\n".join(lines))
 
     def apply_theme(self, is_light: bool):
         """Apply theme colors to mini-graphs"""
-        bg_color = '#F8FAFC' if is_light else '#2B3440'
-        if hasattr(self, '_mini_plot_widgets'):
+        bg_color = "#F8FAFC" if is_light else "#2B3440"
+        if hasattr(self, "_mini_plot_widgets"):
             for widget in self._mini_plot_widgets:
                 widget.setBackground(bg_color)
 

@@ -10,6 +10,7 @@ Usage:
         -F "x=Time" -F "y=Value" \
         -o chart.png
 """
+
 import os
 import io
 import json
@@ -31,6 +32,7 @@ try:
     from fastapi.responses import StreamingResponse
     from pydantic import BaseModel
     import uvicorn
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -40,6 +42,7 @@ def _get_api_version() -> str:
     """API 버전을 패키지 버전에서 가져온다."""
     try:
         from . import __version__
+
         return __version__
     except Exception:
         return "0.0.0"
@@ -88,7 +91,8 @@ if FASTAPI_AVAILABLE:
         now = time.time()
         # TTL eviction
         expired = [
-            sid for sid, ts in _data_store_timestamps.items()
+            sid
+            for sid, ts in _data_store_timestamps.items()
             if now - ts > _DATA_STORE_TTL_SECONDS
         ]
         for sid in expired:
@@ -143,7 +147,7 @@ if FASTAPI_AVAILABLE:
                 "/api/v1/data/upload",
                 "/api/v1/data/info",
                 "/api/v1/convert",
-            ]
+            ],
         )
 
     @app.post("/api/v1/plot")
@@ -200,38 +204,33 @@ if FASTAPI_AVAILABLE:
             raise HTTPException(400, "No data provided")
 
         # 플롯 설정
-        x_col = x or plot_config.get('x')
-        y_cols = (y.split(',') if y else None) or plot_config.get('y')
-        chart_type = plot_config.get('chart', chart)
+        x_col = x or plot_config.get("x")
+        y_cols = (y.split(",") if y else None) or plot_config.get("y")
+        chart_type = plot_config.get("chart", chart)
 
         dgs.plot(x=x_col, y=y_cols, chart=chart_type)
 
-        if title or plot_config.get('title'):
-            dgs.set_title(title or plot_config.get('title'))
+        if title or plot_config.get("title"):
+            dgs.set_title(title or plot_config.get("title"))
 
-        dgs.set_size(
-            plot_config.get('width', width),
-            plot_config.get('height', height)
-        )
+        dgs.set_size(plot_config.get("width", width), plot_config.get("height", height))
 
         # 이미지 생성
         img_bytes = dgs.to_image(format=format)
 
         # 응답
         media_types = {
-            'png': 'image/png',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'svg': 'image/svg+xml',
-            'pdf': 'application/pdf',
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "svg": "image/svg+xml",
+            "pdf": "application/pdf",
         }
 
         return StreamingResponse(
             io.BytesIO(img_bytes),
-            media_type=media_types.get(format, 'image/png'),
-            headers={
-                'Content-Disposition': f'attachment; filename=chart.{format}'
-            }
+            media_type=media_types.get(format, "image/png"),
+            headers={"Content-Disposition": f"attachment; filename=chart.{format}"},
         )
 
     @app.post("/api/v1/plot/json")
@@ -258,18 +257,15 @@ if FASTAPI_AVAILABLE:
 
         dgs.set_size(config.width, config.height)
 
-        img_bytes = dgs.to_image('png', dpi=config.dpi)
+        img_bytes = dgs.to_image("png", dpi=config.dpi)
 
-        return StreamingResponse(
-            io.BytesIO(img_bytes),
-            media_type='image/png'
-        )
+        return StreamingResponse(io.BytesIO(img_bytes), media_type="image/png")
 
     @app.post("/api/v1/data/upload")
     async def upload_data(
         request: Request,
         file: UploadFile = File(...),
-        session_id: Optional[str] = Form(None)
+        session_id: Optional[str] = Form(None),
     ):
         """데이터 파일 업로드"""
         _require_api_token(request)
@@ -279,19 +275,19 @@ if FASTAPI_AVAILABLE:
 
         # 파싱
         try:
-            if ext == '.csv':
+            if ext == ".csv":
                 df = pl.read_csv(io.BytesIO(content))
-            elif ext == '.tsv':
-                df = pl.read_csv(io.BytesIO(content), separator='\t')
-            elif ext in ['.xlsx', '.xls']:
+            elif ext == ".tsv":
+                df = pl.read_csv(io.BytesIO(content), separator="\t")
+            elif ext in [".xlsx", ".xls"]:
                 with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
                     f.write(content)
                     temp_path = f.name
                 df = pl.read_excel(temp_path)
                 os.remove(temp_path)
-            elif ext == '.parquet':
+            elif ext == ".parquet":
                 df = pl.read_parquet(io.BytesIO(content))
-            elif ext == '.json':
+            elif ext == ".json":
                 df = pl.read_json(io.BytesIO(content))
             else:
                 raise HTTPException(400, f"Unsupported format: {ext}")
@@ -302,6 +298,7 @@ if FASTAPI_AVAILABLE:
 
         # 저장 (LRU eviction)
         import uuid
+
         sid = session_id or str(uuid.uuid4())[:8]
         _data_store[sid] = df
         _data_store.move_to_end(sid)
@@ -352,7 +349,7 @@ if FASTAPI_AVAILABLE:
         dgs = DataGraphStudio()
         dgs.load_polars(df)
 
-        y_cols = y.split(',') if y else None
+        y_cols = y.split(",") if y else None
         dgs.plot(x=x, y=y_cols, chart=chart)
 
         if title:
@@ -360,10 +357,7 @@ if FASTAPI_AVAILABLE:
 
         img_bytes = dgs.to_image(format=format)
 
-        return StreamingResponse(
-            io.BytesIO(img_bytes),
-            media_type=f'image/{format}'
-        )
+        return StreamingResponse(io.BytesIO(img_bytes), media_type=f"image/{format}")
 
     @app.post("/api/v1/convert")
     async def convert_file(
@@ -379,13 +373,13 @@ if FASTAPI_AVAILABLE:
 
         # 로드
         try:
-            if in_ext == '.csv':
+            if in_ext == ".csv":
                 df = pl.read_csv(io.BytesIO(content))
-            elif in_ext == '.tsv':
-                df = pl.read_csv(io.BytesIO(content), separator='\t')
-            elif in_ext == '.parquet':
+            elif in_ext == ".tsv":
+                df = pl.read_csv(io.BytesIO(content), separator="\t")
+            elif in_ext == ".parquet":
                 df = pl.read_parquet(io.BytesIO(content))
-            elif in_ext == '.json':
+            elif in_ext == ".json":
                 df = pl.read_json(io.BytesIO(content))
             else:
                 raise HTTPException(400, f"Unsupported input format: {in_ext}")
@@ -397,23 +391,23 @@ if FASTAPI_AVAILABLE:
         # 변환
         output = io.BytesIO()
 
-        if output_format == 'csv':
+        if output_format == "csv":
             df.write_csv(output)
-            media_type = 'text/csv'
-        elif output_format == 'tsv':
-            df.write_csv(output, separator='\t')
-            media_type = 'text/tab-separated-values'
-        elif output_format == 'json':
+            media_type = "text/csv"
+        elif output_format == "tsv":
+            df.write_csv(output, separator="\t")
+            media_type = "text/tab-separated-values"
+        elif output_format == "json":
             df.write_json(output)
-            media_type = 'application/json'
-        elif output_format == 'parquet':
+            media_type = "application/json"
+        elif output_format == "parquet":
             # parquet는 바이트 버퍼에 직접 쓸 수 없어서 임시 파일 사용
-            with tempfile.NamedTemporaryFile(suffix='.parquet', delete=False) as f:
+            with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
                 df.write_parquet(f.name)
-                with open(f.name, 'rb') as pf:
+                with open(f.name, "rb") as pf:
                     output.write(pf.read())
                 os.remove(f.name)
-            media_type = 'application/octet-stream'
+            media_type = "application/octet-stream"
         else:
             raise HTTPException(400, f"Unsupported output format: {output_format}")
 
@@ -423,8 +417,8 @@ if FASTAPI_AVAILABLE:
             output,
             media_type=media_type,
             headers={
-                'Content-Disposition': f'attachment; filename=data.{output_format}'
-            }
+                "Content-Disposition": f"attachment; filename=data.{output_format}"
+            },
         )
 
     @app.delete("/api/v1/data/{session_id}")
@@ -441,7 +435,9 @@ if FASTAPI_AVAILABLE:
 def run_server(host: str = "127.0.0.1", port: int = 8080):
     """서버 실행"""
     if not FASTAPI_AVAILABLE:
-        print("FastAPI not installed. Run: pip install fastapi uvicorn python-multipart")
+        print(
+            "FastAPI not installed. Run: pip install fastapi uvicorn python-multipart"
+        )
         return
 
     uvicorn.run(app, host=host, port=port)

@@ -14,9 +14,9 @@ Provides:
 
 from __future__ import annotations
 
-from typing import Optional, Dict, Any
+from typing import Optional
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -185,7 +185,9 @@ class ExportDialog(QDialog):
 
         # --- Buttons ---
         self.button_box = QDialogButtonBox()
-        self.export_btn = self.button_box.addButton("Export", QDialogButtonBox.AcceptRole)
+        self.export_btn = self.button_box.addButton(
+            "Export", QDialogButtonBox.AcceptRole
+        )
         self.export_btn.setToolTip("Start export with current settings")
         self.cancel_btn = self.button_box.addButton(QDialogButtonBox.Cancel)
         self.cancel_btn.setToolTip("Cancel and close dialog")
@@ -261,7 +263,9 @@ class ExportDialog(QDialog):
             dpi=self.dpi_spin.value(),
             background=bg,
             include_legend=self.legend_check.isChecked(),
-            include_stats=self.stats_check.isChecked() if fmt == ExportFormat.PDF else False,
+            include_stats=self.stats_check.isChecked()
+            if fmt == ExportFormat.PDF
+            else False,
             page_size=page_size,
         )
 

@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
-    QListWidgetItem, QComboBox, QPushButton, QDialogButtonBox,
-    QGroupBox, QAbstractItemView,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QComboBox,
+    QDialogButtonBox,
+    QGroupBox,
+    QAbstractItemView,
 )
 from PySide6.QtCore import Qt
 
@@ -17,7 +24,6 @@ from ..panels.profile_difference import ProfileDifferenceRenderer
 
 if TYPE_CHECKING:
     from ...core.profile import GraphSetting
-    from ...core.profile_store import ProfileStore
 
 
 class ProfileComparisonDialog(QDialog):
@@ -111,7 +117,9 @@ class ProfileComparisonDialog(QDialog):
         n = len(checked)
 
         can_overlay = ProfileOverlayRenderer.can_overlay(checked) if n >= 2 else False
-        can_diff = ProfileDifferenceRenderer.can_difference(checked) if n >= 2 else False
+        can_diff = (
+            ProfileDifferenceRenderer.can_difference(checked) if n >= 2 else False
+        )
 
         # Side-by-Side: always available when n>=2
         # Overlay: only when same X
@@ -130,7 +138,9 @@ class ProfileComparisonDialog(QDialog):
         if n < 2:
             self._hint_label.setText("Select 2 or more profiles to compare")
         elif not can_overlay:
-            self._hint_label.setText("Overlay requires all profiles to share the same X column")
+            self._hint_label.setText(
+                "Overlay requires all profiles to share the same X column"
+            )
         elif not can_diff and n != 2:
             self._hint_label.setText("Difference requires exactly 2 profiles")
         else:

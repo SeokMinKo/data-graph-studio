@@ -3,10 +3,17 @@ Floating Graph Window - 독립된 그래프 창
 """
 
 import uuid
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QPushButton, QToolButton, QCheckBox, QWidget, QApplication
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QToolButton,
+    QCheckBox,
+    QWidget,
+    QApplication,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
@@ -33,7 +40,7 @@ class FloatingGraphWindow(QDialog):
         setting: GraphSetting,
         state: AppState,
         engine: DataEngine,
-        parent=None
+        parent=None,
     ):
         super().__init__(parent)
         self._window_id = window_id
@@ -44,7 +51,9 @@ class FloatingGraphWindow(QDialog):
         self._graph_panel = None
 
         self.setWindowTitle(f"{setting.icon} {setting.name}")
-        self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint)
+        self.setWindowFlags(
+            Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint
+        )
         self.setMinimumSize(600, 400)
         self.resize(800, 600)
 
@@ -169,20 +178,21 @@ class FloatingGraphWindow(QDialog):
         """메인 창 선택 변경 (Sync ON인 경우)"""
         if self._sync_selection and self._graph_panel:
             selected = list(self._state.selection.selected_rows)
-            if hasattr(self._graph_panel, 'main_graph'):
+            if hasattr(self._graph_panel, "main_graph"):
                 self._graph_panel.main_graph.highlight_selection(selected)
 
     def _on_copy(self):
         """클립보드에 복사"""
-        if self._graph_panel and hasattr(self._graph_panel, 'main_graph'):
+        if self._graph_panel and hasattr(self._graph_panel, "main_graph"):
             try:
                 from pyqtgraph.exporters import ImageExporter
                 import tempfile
                 import os
                 from PySide6.QtGui import QImage
+
                 exporter = ImageExporter(self._graph_panel.main_graph.plotItem)
-                exporter.parameters()['width'] = 1920
-                temp_path = os.path.join(tempfile.gettempdir(), 'dgs_float_chart.png')
+                exporter.parameters()["width"] = 1920
+                temp_path = os.path.join(tempfile.gettempdir(), "dgs_float_chart.png")
                 exporter.export(temp_path)
                 image = QImage(temp_path)
                 if not image.isNull():
@@ -197,11 +207,12 @@ class FloatingGraphWindow(QDialog):
         """이미지로 내보내기"""
         if self._graph_panel:
             from PySide6.QtWidgets import QFileDialog
+
             path, _ = QFileDialog.getSaveFileName(
                 self,
                 "Export Graph",
                 f"{self._setting.name}.png",
-                "PNG Image (*.png);;SVG Vector (*.svg)"
+                "PNG Image (*.png);;SVG Vector (*.svg)",
             )
             if path:
                 self._graph_panel.export_image(path)
@@ -239,9 +250,7 @@ class FloatingGraphManager:
         self._windows: Dict[str, FloatingGraphWindow] = {}
 
     def open_floating_graph(
-        self,
-        setting: GraphSetting,
-        parent=None
+        self, setting: GraphSetting, parent=None
     ) -> FloatingGraphWindow:
         """
         새 플로팅 그래프 창 열기
@@ -260,7 +269,7 @@ class FloatingGraphManager:
             setting=setting,
             state=self._state,
             engine=self._engine,
-            parent=parent
+            parent=parent,
         )
 
         window.closed.connect(self._on_window_closed)
@@ -304,27 +313,18 @@ class FloatingGraphManager:
             width = screen.width() // n
             for i, window in enumerate(windows):
                 window.setGeometry(
-                    screen.x() + i * width,
-                    screen.y(),
-                    width,
-                    screen.height()
+                    screen.x() + i * width, screen.y(), width, screen.height()
                 )
         elif mode == "vertical":
             height = screen.height() // n
             for i, window in enumerate(windows):
                 window.setGeometry(
-                    screen.x(),
-                    screen.y() + i * height,
-                    screen.width(),
-                    height
+                    screen.x(), screen.y() + i * height, screen.width(), height
                 )
         elif mode == "cascade":
             offset = 30
             for i, window in enumerate(windows):
-                window.move(
-                    screen.x() + i * offset,
-                    screen.y() + i * offset
-                )
+                window.move(screen.x() + i * offset, screen.y() + i * offset)
                 window.resize(800, 600)
 
     def sync_all_selections(self, sync: bool):

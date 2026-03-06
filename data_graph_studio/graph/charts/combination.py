@@ -2,8 +2,7 @@
 Combination Chart - 결합 차트 (Bar + Line)
 """
 
-from typing import List, Dict, Any, Optional
-import numpy as np
+from typing import List, Dict, Any
 
 
 class CombinationChart:
@@ -19,7 +18,7 @@ class CombinationChart:
         x: List[Any],
         bar_series: List[Dict[str, Any]],
         line_series: List[Dict[str, Any]],
-        bar_on_secondary: bool = False
+        bar_on_secondary: bool = False,
     ) -> Dict[str, Any]:
         """
         결합 차트 데이터 계산
@@ -44,12 +43,14 @@ class CombinationChart:
             elif len(values) > n:
                 values = values[:n]
 
-            bar_data.append({
-                "name": series.get("name", "Bar"),
-                "values": values,
-                "color": series.get("color", "#1f77b4"),
-                "use_secondary": series.get("use_secondary", bar_on_secondary)
-            })
+            bar_data.append(
+                {
+                    "name": series.get("name", "Bar"),
+                    "values": values,
+                    "color": series.get("color", "#1f77b4"),
+                    "use_secondary": series.get("use_secondary", bar_on_secondary),
+                }
+            )
 
         # 라인 데이터 처리
         line_data = []
@@ -60,19 +61,18 @@ class CombinationChart:
             elif len(values) > n:
                 values = values[:n]
 
-            line_data.append({
-                "name": series.get("name", "Line"),
-                "values": values,
-                "color": series.get("color", "#ff7f0e"),
-                "use_secondary": series.get("use_secondary", not bar_on_secondary),
-                "line_style": series.get("line_style", "solid"),
-                "marker": series.get("marker", True)
-            })
+            line_data.append(
+                {
+                    "name": series.get("name", "Line"),
+                    "values": values,
+                    "color": series.get("color", "#ff7f0e"),
+                    "use_secondary": series.get("use_secondary", not bar_on_secondary),
+                    "line_style": series.get("line_style", "solid"),
+                    "marker": series.get("marker", True),
+                }
+            )
 
         # Y축 범위 계산
-        all_bar_values = [v for s in bar_data for v in s["values"] if v is not None]
-        all_line_values = [v for s in line_data for v in s["values"] if v is not None]
-
         primary_values = []
         secondary_values = []
 
@@ -92,10 +92,14 @@ class CombinationChart:
             "x": list(x),
             "bar_data": bar_data,
             "line_data": line_data,
-            "primary_y_range": (min(primary_values) if primary_values else 0,
-                                max(primary_values) if primary_values else 1),
-            "secondary_y_range": (min(secondary_values) if secondary_values else 0,
-                                  max(secondary_values) if secondary_values else 1)
+            "primary_y_range": (
+                min(primary_values) if primary_values else 0,
+                max(primary_values) if primary_values else 1,
+            ),
+            "secondary_y_range": (
+                min(secondary_values) if secondary_values else 0,
+                max(secondary_values) if secondary_values else 1,
+            ),
         }
 
     def get_render_data(
@@ -106,7 +110,7 @@ class CombinationChart:
         width: float,
         height: float,
         margin: float = 0.1,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         실제 렌더링용 데이터 계산
@@ -146,28 +150,38 @@ class CombinationChart:
         bars = []
         for s_idx, series in enumerate(result["bar_data"]):
             scale_fn = scale_secondary if series["use_secondary"] else scale_primary
-            y_min = result["secondary_y_range"][0] if series["use_secondary"] else result["primary_y_range"][0]
+            y_min = (
+                result["secondary_y_range"][0]
+                if series["use_secondary"]
+                else result["primary_y_range"][0]
+            )
 
             for i, v in enumerate(series["values"]):
                 if v is None:
                     continue
 
-                x_pos = width * m + i * bar_total_width + (bar_total_width - bar_width * len(result["bar_data"])) / 2
+                x_pos = (
+                    width * m
+                    + i * bar_total_width
+                    + (bar_total_width - bar_width * len(result["bar_data"])) / 2
+                )
                 x_pos += s_idx * bar_width
 
                 y_top = scale_fn(v)
                 y_bottom = scale_fn(y_min)
 
-                bars.append({
-                    "x": x_pos,
-                    "y": min(y_top, y_bottom),
-                    "width": bar_width,
-                    "height": abs(y_bottom - y_top),
-                    "value": v,
-                    "series": series["name"],
-                    "color": series["color"],
-                    "index": i
-                })
+                bars.append(
+                    {
+                        "x": x_pos,
+                        "y": min(y_top, y_bottom),
+                        "width": bar_width,
+                        "height": abs(y_bottom - y_top),
+                        "value": v,
+                        "series": series["name"],
+                        "color": series["color"],
+                        "index": i,
+                    }
+                )
 
         # 라인 렌더링 데이터
         lines = []
@@ -182,25 +196,22 @@ class CombinationChart:
                 x_pos = width * m + i * bar_total_width + bar_total_width / 2
                 y_pos = scale_fn(v)
 
-                points.append({
-                    "x": x_pos,
-                    "y": y_pos,
-                    "value": v,
-                    "index": i
-                })
+                points.append({"x": x_pos, "y": y_pos, "value": v, "index": i})
 
-            lines.append({
-                "name": series["name"],
-                "color": series["color"],
-                "points": points,
-                "line_style": series["line_style"],
-                "marker": series["marker"]
-            })
+            lines.append(
+                {
+                    "name": series["name"],
+                    "color": series["color"],
+                    "points": points,
+                    "line_style": series["line_style"],
+                    "marker": series["marker"],
+                }
+            )
 
         return {
             "bars": bars,
             "lines": lines,
             "x_labels": result["x"],
             "primary_y_range": result["primary_y_range"],
-            "secondary_y_range": result["secondary_y_range"]
+            "secondary_y_range": result["secondary_y_range"],
         }

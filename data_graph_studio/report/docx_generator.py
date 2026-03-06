@@ -6,9 +6,6 @@ Uses python-docx for document generation.
 Supports styles, tables, images, and table of contents.
 """
 
-from typing import Optional, List, Dict, Any, Union
-from pathlib import Path
-from datetime import datetime
 import io
 import base64
 import logging
@@ -17,15 +14,8 @@ from data_graph_studio.core.report import (
     ReportGenerator,
     ReportData,
     ReportOptions,
-    ReportTemplate,
-    ReportTheme,
     PageSize,
     PageOrientation,
-    DatasetSummary,
-    StatisticalSummary,
-    ComparisonResult,
-    ChartData,
-    TableData,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,6 +30,7 @@ try:
     from docx.enum.style import WD_STYLE_TYPE
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
+
     DOCX_AVAILABLE = True
 except ImportError:
     pass
@@ -56,11 +47,7 @@ class DOCXReportGenerator(ReportGenerator):
         PageSize.A3: (29.7, 42.0),
     }
 
-    def generate(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> bytes:
+    def generate(self, report_data: ReportData, options: ReportOptions) -> bytes:
         """Word 문서 생성"""
         if not DOCX_AVAILABLE:
             raise ImportError(
@@ -119,7 +106,7 @@ class DOCXReportGenerator(ReportGenerator):
 
     def _hex_to_rgb(self, hex_color: str) -> "RGBColor":
         """HEX를 RGBColor로 변환"""
-        hex_color = hex_color.lstrip('#')
+        hex_color = hex_color.lstrip("#")
         r = int(hex_color[0:2], 16)
         g = int(hex_color[2:4], 16)
         b = int(hex_color[4:6], 16)
@@ -141,10 +128,10 @@ class DOCXReportGenerator(ReportGenerator):
 
         # 마진
         margins = options.margins
-        section.top_margin = Cm(margins.get('top', 2.54))
-        section.bottom_margin = Cm(margins.get('bottom', 2.54))
-        section.left_margin = Cm(margins.get('left', 2.54))
-        section.right_margin = Cm(margins.get('right', 2.54))
+        section.top_margin = Cm(margins.get("top", 2.54))
+        section.bottom_margin = Cm(margins.get("bottom", 2.54))
+        section.left_margin = Cm(margins.get("left", 2.54))
+        section.right_margin = Cm(margins.get("right", 2.54))
 
         # 헤더/푸터
         if options.header_text:
@@ -164,8 +151,8 @@ class DOCXReportGenerator(ReportGenerator):
         styles = doc.styles
 
         # 제목 스타일
-        if 'Report Title' not in [s.name for s in styles]:
-            title_style = styles.add_style('Report Title', WD_STYLE_TYPE.PARAGRAPH)
+        if "Report Title" not in [s.name for s in styles]:
+            title_style = styles.add_style("Report Title", WD_STYLE_TYPE.PARAGRAPH)
             title_style.font.size = Pt(28)
             title_style.font.bold = True
             title_style.font.color.rgb = self._hex_to_rgb(self.template.primary_color)
@@ -173,8 +160,8 @@ class DOCXReportGenerator(ReportGenerator):
             title_style.paragraph_format.space_after = Pt(12)
 
         # 섹션 제목 스타일
-        if 'Section Title' not in [s.name for s in styles]:
-            section_style = styles.add_style('Section Title', WD_STYLE_TYPE.PARAGRAPH)
+        if "Section Title" not in [s.name for s in styles]:
+            section_style = styles.add_style("Section Title", WD_STYLE_TYPE.PARAGRAPH)
             section_style.font.size = Pt(16)
             section_style.font.bold = True
             section_style.font.color.rgb = self._hex_to_rgb(self.template.primary_color)
@@ -182,18 +169,17 @@ class DOCXReportGenerator(ReportGenerator):
             section_style.paragraph_format.space_after = Pt(12)
 
         # 서브섹션 스타일
-        if 'Subsection Title' not in [s.name for s in styles]:
-            subsection_style = styles.add_style('Subsection Title', WD_STYLE_TYPE.PARAGRAPH)
+        if "Subsection Title" not in [s.name for s in styles]:
+            subsection_style = styles.add_style(
+                "Subsection Title", WD_STYLE_TYPE.PARAGRAPH
+            )
             subsection_style.font.size = Pt(13)
             subsection_style.font.bold = True
             subsection_style.paragraph_format.space_before = Pt(12)
             subsection_style.paragraph_format.space_after = Pt(6)
 
     def _add_header(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """문서 헤더 (제목 페이지)"""
         meta = report_data.metadata
@@ -211,7 +197,7 @@ class DOCXReportGenerator(ReportGenerator):
 
         # 제목
         title_para = doc.add_paragraph(meta.title)
-        title_para.style = 'Report Title'
+        title_para.style = "Report Title"
 
         # 부제목
         if meta.subtitle:
@@ -238,35 +224,37 @@ class DOCXReportGenerator(ReportGenerator):
 
     def _add_table_of_contents(self, doc: "Document", options: ReportOptions):
         """목차 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         toc_title = "목차" if is_ko else "Table of Contents"
 
-        doc.add_paragraph(toc_title, style='Section Title')
+        doc.add_paragraph(toc_title, style="Section Title")
 
         # 목차 필드 (Word에서 자동 업데이트)
         paragraph = doc.add_paragraph()
         run = paragraph.add_run()
 
         # TOC 필드 코드
-        fld_char_begin = OxmlElement('w:fldChar')
-        fld_char_begin.set(qn('w:fldCharType'), 'begin')
+        fld_char_begin = OxmlElement("w:fldChar")
+        fld_char_begin.set(qn("w:fldCharType"), "begin")
 
-        instr_text = OxmlElement('w:instrText')
-        instr_text.set(qn('xml:space'), 'preserve')
+        instr_text = OxmlElement("w:instrText")
+        instr_text.set(qn("xml:space"), "preserve")
         instr_text.text = 'TOC \\o "1-3" \\h \\z \\u'
 
-        fld_char_separate = OxmlElement('w:fldChar')
-        fld_char_separate.set(qn('w:fldCharType'), 'separate')
+        fld_char_separate = OxmlElement("w:fldChar")
+        fld_char_separate.set(qn("w:fldCharType"), "separate")
 
-        fld_char_end = OxmlElement('w:fldChar')
-        fld_char_end.set(qn('w:fldCharType'), 'end')
+        fld_char_end = OxmlElement("w:fldChar")
+        fld_char_end.set(qn("w:fldCharType"), "end")
 
         run._r.append(fld_char_begin)
         run._r.append(instr_text)
         run._r.append(fld_char_separate)
 
         # 플레이스홀더 텍스트
-        placeholder = doc.add_paragraph("(Update this table of contents in Word: Right-click → Update Field)")
+        placeholder = doc.add_paragraph(
+            "(Update this table of contents in Word: Right-click → Update Field)"
+        )
         placeholder.runs[0].font.italic = True
         placeholder.runs[0].font.size = Pt(9)
 
@@ -274,56 +262,50 @@ class DOCXReportGenerator(ReportGenerator):
 
         doc.add_page_break()
 
-    def _add_section_heading(
-        self,
-        doc: "Document",
-        title: str,
-        level: int = 1
-    ):
+    def _add_section_heading(self, doc: "Document", title: str, level: int = 1):
         """섹션 제목 추가"""
         if level == 1:
             heading = doc.add_heading(title, level=1)
-            heading.style = doc.styles['Heading 1']
+            heading.style = doc.styles["Heading 1"]
         elif level == 2:
             heading = doc.add_heading(title, level=2)
         else:
-            doc.add_paragraph(title, style='Subsection Title')
+            doc.add_paragraph(title, style="Subsection Title")
 
     def _add_executive_summary(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """Executive Summary 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         title = "요약" if is_ko else "Executive Summary"
 
         self._add_section_heading(doc, title, 1)
 
         # 주요 지표 테이블
         metrics = [
-            ("Total Rows" if not is_ko else "총 행 수",
-             self.format_number(report_data.get_total_rows(), 0)),
-            ("Datasets" if not is_ko else "데이터셋",
-             str(len(report_data.datasets))),
+            (
+                "Total Rows" if not is_ko else "총 행 수",
+                self.format_number(report_data.get_total_rows(), 0),
+            ),
+            ("Datasets" if not is_ko else "데이터셋", str(len(report_data.datasets))),
         ]
 
         if report_data.datasets:
-            metrics.append((
-                "Columns" if not is_ko else "컬럼 수",
-                str(report_data.datasets[0].column_count)
-            ))
+            metrics.append(
+                (
+                    "Columns" if not is_ko else "컬럼 수",
+                    str(report_data.datasets[0].column_count),
+                )
+            )
 
         if report_data.charts:
-            metrics.append((
-                "Charts" if not is_ko else "차트",
-                str(len(report_data.charts))
-            ))
+            metrics.append(
+                ("Charts" if not is_ko else "차트", str(len(report_data.charts)))
+            )
 
         # 2열 테이블로 메트릭 표시
         table = doc.add_table(rows=1, cols=len(metrics))
-        table.style = 'Table Grid'
+        table.style = "Table Grid"
 
         header_cells = table.rows[0].cells
         for i, (label, value) in enumerate(metrics):
@@ -335,7 +317,7 @@ class DOCXReportGenerator(ReportGenerator):
             for para in cell.paragraphs:
                 for run in para.runs:
                     run.font.size = Pt(11)
-                para.runs[0].font.bold = True if '\n' not in para.text else False
+                para.runs[0].font.bold = True if "\n" not in para.text else False
 
         doc.add_paragraph()  # 공백
 
@@ -345,7 +327,7 @@ class DOCXReportGenerator(ReportGenerator):
             self._add_section_heading(doc, findings_title, 2)
 
             for finding in report_data.key_findings:
-                para = doc.add_paragraph(finding, style='List Bullet')
+                para = doc.add_paragraph(finding, style="List Bullet")
 
         # Recommendations
         if report_data.recommendations:
@@ -353,16 +335,13 @@ class DOCXReportGenerator(ReportGenerator):
             self._add_section_heading(doc, rec_title, 2)
 
             for rec in report_data.recommendations:
-                para = doc.add_paragraph(rec, style='List Bullet')
+                para = doc.add_paragraph(rec, style="List Bullet")
 
     def _add_data_overview(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """Data Overview 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         title = "데이터 개요" if is_ko else "Data Overview"
 
         self._add_section_heading(doc, title, 1)
@@ -374,18 +353,25 @@ class DOCXReportGenerator(ReportGenerator):
             info_items = [
                 ("Rows" if not is_ko else "행 수", self.format_number(ds.row_count, 0)),
                 ("Columns" if not is_ko else "컬럼 수", str(ds.column_count)),
-                ("Memory" if not is_ko else "메모리", self.format_bytes(ds.memory_bytes)),
+                (
+                    "Memory" if not is_ko else "메모리",
+                    self.format_bytes(ds.memory_bytes),
+                ),
             ]
 
             if ds.file_path:
-                info_items.insert(0, ("File" if not is_ko else "파일", ds.file_path.split('/')[-1]))
+                info_items.insert(
+                    0, ("File" if not is_ko else "파일", ds.file_path.split("/")[-1])
+                )
 
             if ds.date_range:
                 date_str = f"{ds.date_range['min']} ~ {ds.date_range['max']}"
-                info_items.append(("Date Range" if not is_ko else "날짜 범위", date_str))
+                info_items.append(
+                    ("Date Range" if not is_ko else "날짜 범위", date_str)
+                )
 
             table = doc.add_table(rows=len(info_items), cols=2)
-            table.style = 'Table Grid'
+            table.style = "Table Grid"
 
             for i, (label, value) in enumerate(info_items):
                 row = table.rows[i]
@@ -398,11 +384,11 @@ class DOCXReportGenerator(ReportGenerator):
             # 컬럼 목록
             if ds.columns:
                 columns_title = "컬럼 목록" if is_ko else "Columns"
-                doc.add_paragraph(columns_title, style='Subsection Title')
+                doc.add_paragraph(columns_title, style="Subsection Title")
 
                 # 컬럼 테이블
                 col_table = doc.add_table(rows=1, cols=3)
-                col_table.style = 'Table Grid'
+                col_table.style = "Table Grid"
 
                 headers = ["Column", "Type", "Missing"]
                 for i, header in enumerate(headers):
@@ -421,13 +407,10 @@ class DOCXReportGenerator(ReportGenerator):
                 doc.add_paragraph()
 
     def _add_statistics(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """Statistics 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         title = "통계 요약" if is_ko else "Statistical Summary"
 
         self._add_section_heading(doc, title, 1)
@@ -446,10 +429,20 @@ class DOCXReportGenerator(ReportGenerator):
             self._add_section_heading(doc, dataset_name, 2)
 
             # 통계 테이블
-            headers = ['Column', 'Count', 'Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3']
+            headers = [
+                "Column",
+                "Count",
+                "Mean",
+                "Median",
+                "Std",
+                "Min",
+                "Max",
+                "Q1",
+                "Q3",
+            ]
 
             table = doc.add_table(rows=1, cols=len(headers))
-            table.style = 'Table Grid'
+            table.style = "Table Grid"
 
             # 헤더
             for i, header in enumerate(headers):
@@ -479,13 +472,10 @@ class DOCXReportGenerator(ReportGenerator):
             doc.add_paragraph()
 
     def _add_visualizations(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """Visualizations 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         title = "시각화" if is_ko else "Visualizations"
 
         self._add_section_heading(doc, title, 1)
@@ -529,13 +519,10 @@ class DOCXReportGenerator(ReportGenerator):
             doc.add_paragraph()
 
     def _add_comparison(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """Comparison Analysis 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         title = "비교 분석" if is_ko else "Comparison Analysis"
 
         self._add_section_heading(doc, title, 1)
@@ -549,7 +536,7 @@ class DOCXReportGenerator(ReportGenerator):
                 # 검정 제목
                 doc.add_paragraph(
                     f"{comp.test_type}: {comp.dataset_a_name} vs {comp.dataset_b_name}",
-                    style='Subsection Title'
+                    style="Subsection Title",
                 )
 
                 # 결과 테이블
@@ -560,7 +547,12 @@ class DOCXReportGenerator(ReportGenerator):
                 ]
 
                 if comp.effect_size is not None:
-                    results.append(("Effect Size", f"{comp.effect_size:.3f} ({comp.effect_size_interpretation})"))
+                    results.append(
+                        (
+                            "Effect Size",
+                            f"{comp.effect_size:.3f} ({comp.effect_size_interpretation})",
+                        )
+                    )
 
                 # 유의성
                 sig_text = "Not Significant"
@@ -574,7 +566,7 @@ class DOCXReportGenerator(ReportGenerator):
                 results.append(("Significance", sig_text))
 
                 table = doc.add_table(rows=len(results), cols=2)
-                table.style = 'Table Grid'
+                table.style = "Table Grid"
 
                 for i, (label, value) in enumerate(results):
                     table.rows[i].cells[0].text = label
@@ -596,21 +588,30 @@ class DOCXReportGenerator(ReportGenerator):
             for diff in report_data.differences:
                 doc.add_paragraph(
                     f"{diff.dataset_a_name} vs {diff.dataset_b_name}",
-                    style='Subsection Title'
+                    style="Subsection Title",
                 )
 
                 # 차이 요약 테이블
                 summary = [
                     ("Matched Records", str(diff.matched_records)),
-                    ("Positive (A > B)", f"{diff.positive_count} ({diff.positive_percentage:.1f}%)"),
-                    ("Negative (A < B)", f"{diff.negative_count} ({diff.negative_percentage:.1f}%)"),
-                    ("No Change", f"{diff.neutral_count} ({diff.neutral_percentage:.1f}%)"),
+                    (
+                        "Positive (A > B)",
+                        f"{diff.positive_count} ({diff.positive_percentage:.1f}%)",
+                    ),
+                    (
+                        "Negative (A < B)",
+                        f"{diff.negative_count} ({diff.negative_percentage:.1f}%)",
+                    ),
+                    (
+                        "No Change",
+                        f"{diff.neutral_count} ({diff.neutral_percentage:.1f}%)",
+                    ),
                     ("Total Difference", self.format_number(diff.total_difference)),
                     ("Mean Difference", self.format_number(diff.mean_difference)),
                 ]
 
                 table = doc.add_table(rows=len(summary), cols=2)
-                table.style = 'Table Grid'
+                table.style = "Table Grid"
 
                 for i, (label, value) in enumerate(summary):
                     table.rows[i].cells[0].text = label
@@ -620,13 +621,10 @@ class DOCXReportGenerator(ReportGenerator):
                 doc.add_paragraph()
 
     def _add_tables(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """Data Tables 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         title = "데이터 테이블" if is_ko else "Data Tables"
 
         self._add_section_heading(doc, title, 1)
@@ -639,7 +637,7 @@ class DOCXReportGenerator(ReportGenerator):
             num_rows = min(len(table_data.rows), 25) + 1  # 헤더 + 최대 25행
 
             table = doc.add_table(rows=num_rows, cols=num_cols)
-            table.style = 'Table Grid'
+            table.style = "Table Grid"
 
             # 헤더
             for i, col in enumerate(table_data.columns[:num_cols]):
@@ -660,20 +658,17 @@ class DOCXReportGenerator(ReportGenerator):
 
             # 페이지네이션 정보
             if table_data.total_rows > 25:
-                doc.add_paragraph(
-                    f"Showing 25 of {table_data.total_rows} rows"
-                ).runs[0].font.italic = True
+                doc.add_paragraph(f"Showing 25 of {table_data.total_rows} rows").runs[
+                    0
+                ].font.italic = True
 
             doc.add_paragraph()
 
     def _add_appendix(
-        self,
-        doc: "Document",
-        report_data: ReportData,
-        options: ReportOptions
+        self, doc: "Document", report_data: ReportData, options: ReportOptions
     ):
         """Appendix 추가"""
-        is_ko = options.language == 'ko'
+        is_ko = options.language == "ko"
         title = "부록" if is_ko else "Appendix"
 
         self._add_section_heading(doc, title, 1)
@@ -684,7 +679,7 @@ class DOCXReportGenerator(ReportGenerator):
             self._add_section_heading(doc, method_title, 2)
 
             for note in report_data.methodology_notes:
-                doc.add_paragraph(note, style='List Bullet')
+                doc.add_paragraph(note, style="List Bullet")
 
         # Data Quality Notes
         if report_data.data_quality_notes:
@@ -692,4 +687,4 @@ class DOCXReportGenerator(ReportGenerator):
             self._add_section_heading(doc, quality_title, 2)
 
             for note in report_data.data_quality_notes:
-                doc.add_paragraph(note, style='List Bullet')
+                doc.add_paragraph(note, style="List Bullet")

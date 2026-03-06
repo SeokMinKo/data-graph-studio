@@ -3,9 +3,15 @@ from __future__ import annotations
 import warnings
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal, QSize, QSortFilterProxyModel
-from PySide6.QtGui import QPainter, QPalette, QAccessible
-from PySide6.QtWidgets import QTreeView, QMenu, QStyledItemDelegate, QStyleOptionViewItem, QStyle
+from PySide6.QtCore import Qt, Signal, QSortFilterProxyModel
+from PySide6.QtGui import QPainter, QPalette
+from PySide6.QtWidgets import (
+    QTreeView,
+    QMenu,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QStyle,
+)
 
 from ..models.profile_model import ProfileModel
 from ..utils import chart_type_icon as _chart_type_icon  # noqa: F401 (available for delegate)
@@ -24,12 +30,14 @@ class _SafeAccessibleTreeView(QTreeView):
         # Install an empty model immediately so Qt accessibility never queries
         # an uninitialized tree.  The real model replaces it via set_model().
         from PySide6.QtGui import QStandardItemModel
+
         self._placeholder_model = QStandardItemModel(0, 1, self)
         self.setModel(self._placeholder_model)
 
 
 class _ChartIconDelegate(QStyledItemDelegate):
     """Profile 항목에 차트 아이콘 + 이름을 렌더링하는 delegate"""
+
     ICON_ROLE = Qt.UserRole + 1
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index):
@@ -41,7 +49,9 @@ class _ChartIconDelegate(QStyledItemDelegate):
             # 선택/호버 배경 먼저 그리기
             style = option.widget.style() if option.widget else None
             if style:
-                style.drawPrimitive(QStyle.PE_PanelItemViewItem, option, painter, option.widget)
+                style.drawPrimitive(
+                    QStyle.PE_PanelItemViewItem, option, painter, option.widget
+                )
 
             painter.save()
 
@@ -89,24 +99,24 @@ class ProjectTreeView(_SafeAccessibleTreeView):
     """
 
     # -- Navigation signals --
-    profile_activated = Signal(str)   # profile_id — apply/open profile
-    profile_selected = Signal(str)    # profile_id — selection changed
-    project_activated = Signal(str)   # dataset_id — switch active dataset
+    profile_activated = Signal(str)  # profile_id — apply/open profile
+    profile_selected = Signal(str)  # profile_id — selection changed
+    project_activated = Signal(str)  # dataset_id — switch active dataset
 
     # -- CRUD signals --
-    new_profile_requested = Signal(str)   # dataset_id
-    rename_requested = Signal(str)        # profile_id
-    delete_requested = Signal(str)        # profile_id or dataset_id
-    duplicate_requested = Signal(str)     # profile_id
+    new_profile_requested = Signal(str)  # dataset_id
+    rename_requested = Signal(str)  # profile_id
+    delete_requested = Signal(str)  # profile_id or dataset_id
+    duplicate_requested = Signal(str)  # profile_id
 
     # -- I/O signals --
-    export_requested = Signal(str)        # profile_id
-    import_requested = Signal(str)        # dataset_id
+    export_requested = Signal(str)  # profile_id
+    import_requested = Signal(str)  # dataset_id
 
     # -- Comparison / cross-dataset signals --
-    compare_requested = Signal(list, dict)      # profile_ids, options
-    copy_to_dataset_requested = Signal(str)     # profile_id
-    favorite_toggled = Signal(str)              # profile_id
+    compare_requested = Signal(list, dict)  # profile_ids, options
+    copy_to_dataset_requested = Signal(str)  # profile_id
+    favorite_toggled = Signal(str)  # profile_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -146,7 +156,7 @@ class ProjectTreeView(_SafeAccessibleTreeView):
         self._proxy.setFilterRole(Qt.DisplayRole)
         self.setModel(self._proxy)
         # Discard placeholder now that real model is installed
-        if hasattr(self, '_placeholder_model'):
+        if hasattr(self, "_placeholder_model"):
             self._placeholder_model = None
         if self.selectionModel():
             self.selectionModel().selectionChanged.connect(self._on_selection_changed)
@@ -242,7 +252,9 @@ class ProjectTreeView(_SafeAccessibleTreeView):
         menu = QMenu(self)
 
         new_profile_action = menu.addAction("New Profile")
-        new_profile_action.triggered.connect(lambda: self.new_profile_requested.emit(dataset_id))
+        new_profile_action.triggered.connect(
+            lambda: self.new_profile_requested.emit(dataset_id)
+        )
 
         import_action = menu.addAction("Import")
         import_action.triggered.connect(lambda: self.import_requested.emit(dataset_id))
@@ -262,13 +274,17 @@ class ProjectTreeView(_SafeAccessibleTreeView):
         rename_action.triggered.connect(lambda: self.rename_requested.emit(profile_id))
 
         duplicate_action = menu.addAction("Duplicate")
-        duplicate_action.triggered.connect(lambda: self.duplicate_requested.emit(profile_id))
+        duplicate_action.triggered.connect(
+            lambda: self.duplicate_requested.emit(profile_id)
+        )
 
         export_action = menu.addAction("Export")
         export_action.triggered.connect(lambda: self.export_requested.emit(profile_id))
 
         copy_to_action = menu.addAction("Copy to Dataset...")
-        copy_to_action.triggered.connect(lambda: self.copy_to_dataset_requested.emit(profile_id))
+        copy_to_action.triggered.connect(
+            lambda: self.copy_to_dataset_requested.emit(profile_id)
+        )
 
         menu.addSeparator()
 
@@ -288,26 +304,28 @@ class ProjectTreeView(_SafeAccessibleTreeView):
 
         # Compare 실행
         compare_sbs = menu.addAction("📊 Compare — Side by Side")
-        compare_sbs.triggered.connect(lambda: self.compare_requested.emit(
-            profile_ids, {"mode": "side_by_side"}
-        ))
+        compare_sbs.triggered.connect(
+            lambda: self.compare_requested.emit(profile_ids, {"mode": "side_by_side"})
+        )
 
         compare_overlay = menu.addAction("🔀 Compare — Overlay")
-        compare_overlay.triggered.connect(lambda: self.compare_requested.emit(
-            profile_ids, {"mode": "overlay"}
-        ))
+        compare_overlay.triggered.connect(
+            lambda: self.compare_requested.emit(profile_ids, {"mode": "overlay"})
+        )
 
         if len(profile_ids) >= 2:
             compare_diff = menu.addAction("🔍 Compare — Difference")
-            compare_diff.triggered.connect(lambda: self.compare_requested.emit(
-                profile_ids, {"mode": "difference"}
-            ))
+            compare_diff.triggered.connect(
+                lambda: self.compare_requested.emit(profile_ids, {"mode": "difference"})
+            )
 
         menu.addSeparator()
 
         # Remove selected profiles
         remove_action = menu.addAction("🗑️ Remove Selected")
-        remove_action.triggered.connect(lambda: self._remove_selected_profiles(profile_ids))
+        remove_action.triggered.connect(
+            lambda: self._remove_selected_profiles(profile_ids)
+        )
 
         menu.exec(self.viewport().mapToGlobal(pos))
 
@@ -324,7 +342,7 @@ class ProjectTreeView(_SafeAccessibleTreeView):
 
     def _map_to_source(self, index):
         """프록시 인덱스를 소스 모델 인덱스로 변환"""
-        if hasattr(self, '_proxy') and self._proxy:
+        if hasattr(self, "_proxy") and self._proxy:
             return self._proxy.mapToSource(index)
         return index
 

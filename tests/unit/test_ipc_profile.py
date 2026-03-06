@@ -6,7 +6,6 @@ without needing an actual TCP connection.
 
 import time
 import uuid
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,13 +16,13 @@ from data_graph_studio.core.state import (
     AppState,
     ChartType,
     ComparisonMode,
-    ComparisonSettings,
 )
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_setting(**overrides) -> GraphSetting:
     return GraphSetting(
@@ -34,7 +33,9 @@ def make_setting(**overrides) -> GraphSetting:
         chart_type=overrides.get("chart_type", "line"),
         x_column=overrides.get("x_column", "time"),
         group_columns=overrides.get("group_columns", ()),
-        value_columns=overrides.get("value_columns", ({"name": "voltage", "aggregation": "sum"},)),
+        value_columns=overrides.get(
+            "value_columns", ({"name": "voltage", "aggregation": "sum"},)
+        ),
         hover_columns=overrides.get("hover_columns", ()),
         filters=overrides.get("filters", ()),
         sorts=overrides.get("sorts", ()),
@@ -116,7 +117,9 @@ class FakeMainWindow:
         setting = self.profile_store.get(new_id)
         return {"id": setting.id, "name": setting.name}
 
-    def _ipc_start_profile_comparison(self, profile_ids: list, mode: str = "side_by_side"):
+    def _ipc_start_profile_comparison(
+        self, profile_ids: list, mode: str = "side_by_side"
+    ):
         if len(profile_ids) < 2:
             raise ValueError("At least 2 profiles required for comparison")
 
@@ -199,6 +202,7 @@ class FakeMainWindow:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def win():
     return FakeMainWindow()
@@ -217,6 +221,7 @@ def win_with_profiles(win):
 # ---------------------------------------------------------------------------
 # list_profiles
 # ---------------------------------------------------------------------------
+
 
 class TestListProfiles:
     def test_empty(self, win):
@@ -251,6 +256,7 @@ class TestListProfiles:
 # create_profile
 # ---------------------------------------------------------------------------
 
+
 class TestCreateProfile:
     def test_creates_and_returns(self, win):
         result = win._ipc_create_profile(name="New Profile")
@@ -282,6 +288,7 @@ class TestCreateProfile:
 # apply_profile
 # ---------------------------------------------------------------------------
 
+
 class TestApplyProfile:
     def test_apply_success(self, win):
         s = make_setting(id="p1", name="Test", chart_type="scatter", x_column="x")
@@ -298,6 +305,7 @@ class TestApplyProfile:
 # ---------------------------------------------------------------------------
 # delete_profile
 # ---------------------------------------------------------------------------
+
 
 class TestDeleteProfile:
     def test_delete_success(self, win):
@@ -316,6 +324,7 @@ class TestDeleteProfile:
 # duplicate_profile
 # ---------------------------------------------------------------------------
 
+
 class TestDuplicateProfile:
     def test_duplicate_success(self, win):
         s = make_setting(id="p1", name="Original", dataset_id="ds-1")
@@ -332,6 +341,7 @@ class TestDuplicateProfile:
 # ---------------------------------------------------------------------------
 # start_profile_comparison
 # ---------------------------------------------------------------------------
+
 
 class TestStartProfileComparison:
     def test_side_by_side(self, win_with_profiles):
@@ -355,9 +365,7 @@ class TestStartProfileComparison:
         win.profile_store.add(s1)
         win.profile_store.add(s2)
         with pytest.raises(ValueError, match="X-axis mismatch"):
-            win._ipc_start_profile_comparison(
-                profile_ids=["p1", "p2"], mode="overlay"
-            )
+            win._ipc_start_profile_comparison(profile_ids=["p1", "p2"], mode="overlay")
 
     def test_difference_exactly_two(self, win_with_profiles):
         result = win_with_profiles._ipc_start_profile_comparison(
@@ -408,6 +416,7 @@ class TestStartProfileComparison:
 # stop_profile_comparison
 # ---------------------------------------------------------------------------
 
+
 class TestStopProfileComparison:
     def test_stop(self, win_with_profiles):
         win_with_profiles._ipc_start_profile_comparison(
@@ -426,6 +435,7 @@ class TestStopProfileComparison:
 # ---------------------------------------------------------------------------
 # get_profile_comparison_state
 # ---------------------------------------------------------------------------
+
 
 class TestGetProfileComparisonState:
     def test_inactive(self, win):
@@ -457,6 +467,7 @@ class TestGetProfileComparisonState:
 # set_comparison_sync
 # ---------------------------------------------------------------------------
 
+
 class TestSetComparisonSync:
     def test_set_sync_x(self, win):
         win._ipc_set_comparison_sync(sync_x=False)
@@ -484,6 +495,7 @@ class TestSetComparisonSync:
 # ---------------------------------------------------------------------------
 # Integration: full workflow
 # ---------------------------------------------------------------------------
+
 
 class TestProfileComparisonWorkflow:
     def test_create_compare_stop(self, win):

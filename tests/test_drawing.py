@@ -3,17 +3,19 @@ Tests for Drawing functionality
 """
 
 import pytest
-import numpy as np
-import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Test drawing module imports
 from data_graph_studio.ui.drawing import (
-    DrawingType, LineStyle,
-    DrawingStyle, DrawingObjectBase,
-    LineDrawing, CircleDrawing, RectDrawing, TextDrawing,
+    DrawingType,
+    LineStyle,
+    DrawingStyle,
+    LineDrawing,
+    CircleDrawing,
+    RectDrawing,
+    TextDrawing,
     DrawingManager,
-    snap_to_angle
+    snap_to_angle,
 )
 from data_graph_studio.core.state import ToolMode
 
@@ -31,7 +33,7 @@ class TestLineStyle:
     def test_to_qt(self):
         """Test conversion to Qt pen style"""
         from PySide6.QtCore import Qt
-        
+
         assert LineStyle.SOLID.to_qt() == Qt.SolidLine
         assert LineStyle.DASHED.to_qt() == Qt.DashLine
         assert LineStyle.DOTTED.to_qt() == Qt.DotLine
@@ -57,7 +59,7 @@ class TestDrawingStyle:
             stroke_width=5.0,
             line_style=LineStyle.DASHED,
             fill_color="#00FF00",
-            fill_opacity=0.5
+            fill_opacity=0.5,
         )
         assert style.stroke_color == "#FF0000"
         assert style.stroke_width == 5.0
@@ -94,17 +96,20 @@ class TestLineDrawing:
         style = DrawingStyle(stroke_color="#FF0000", stroke_width=3.0)
         line = LineDrawing(
             id="test123",
-            x1=0, y1=0, x2=100, y2=100,
+            x1=0,
+            y1=0,
+            x2=100,
+            y2=100,
             style=style,
             visible=True,
-            locked=False
+            locked=False,
         )
-        
+
         data = line.to_dict()
-        assert data['type'] == 'line'
-        assert data['x1'] == 0
-        assert data['x2'] == 100
-        assert data['style']['stroke_color'] == "#FF0000"
+        assert data["type"] == "line"
+        assert data["x1"] == 0
+        assert data["x2"] == 100
+        assert data["style"]["stroke_color"] == "#FF0000"
 
         # Deserialize
         restored = LineDrawing.from_dict(data)
@@ -141,14 +146,17 @@ class TestCircleDrawing:
         """Test circle serialization"""
         circle = CircleDrawing(
             id="circ1",
-            cx=100, cy=100, rx=50, ry=50,
-            style=DrawingStyle(fill_color="#0000FF")
+            cx=100,
+            cy=100,
+            rx=50,
+            ry=50,
+            style=DrawingStyle(fill_color="#0000FF"),
         )
-        
+
         data = circle.to_dict()
-        assert data['type'] == 'circle'
-        assert data['cx'] == 100
-        assert data['rx'] == 50
+        assert data["type"] == "circle"
+        assert data["cx"] == 100
+        assert data["rx"] == 50
 
         restored = CircleDrawing.from_dict(data)
         assert restored.cx == 100
@@ -181,15 +189,13 @@ class TestRectDrawing:
     def test_rect_serialization(self):
         """Test rectangle serialization"""
         rect = RectDrawing(
-            id="rect1",
-            x=0, y=0, width=200, height=100,
-            corner_radius=15
+            id="rect1", x=0, y=0, width=200, height=100, corner_radius=15
         )
-        
+
         data = rect.to_dict()
-        assert data['type'] == 'rect'
-        assert data['width'] == 200
-        assert data['corner_radius'] == 15
+        assert data["type"] == "rect"
+        assert data["width"] == 200
+        assert data["corner_radius"] == 15
 
         restored = RectDrawing.from_dict(data)
         assert restored.width == 200
@@ -202,10 +208,7 @@ class TestTextDrawing:
     def test_create_text(self):
         """Test creating a text drawing"""
         text = TextDrawing(
-            x=100, y=100,
-            text="Hello World",
-            font_family="Arial",
-            font_size=16
+            x=100, y=100, text="Hello World", font_family="Arial", font_size=16
         )
         assert text.type == DrawingType.TEXT
         assert text.text == "Hello World"
@@ -215,12 +218,13 @@ class TestTextDrawing:
     def test_text_styling(self):
         """Test text styling options"""
         text = TextDrawing(
-            x=0, y=0,
+            x=0,
+            y=0,
             text="Styled",
             bold=True,
             italic=True,
             text_color="#FF0000",
-            alignment="center"
+            alignment="center",
         )
         assert text.bold is True
         assert text.italic is True
@@ -230,18 +234,14 @@ class TestTextDrawing:
     def test_text_serialization(self):
         """Test text serialization"""
         text = TextDrawing(
-            id="text1",
-            x=50, y=50,
-            text="Test Text",
-            font_size=24,
-            bold=True
+            id="text1", x=50, y=50, text="Test Text", font_size=24, bold=True
         )
-        
+
         data = text.to_dict()
-        assert data['type'] == 'text'
-        assert data['text'] == "Test Text"
-        assert data['font_size'] == 24
-        assert data['bold'] is True
+        assert data["type"] == "text"
+        assert data["text"] == "Test Text"
+        assert data["font_size"] == 24
+        assert data["bold"] is True
 
         restored = TextDrawing.from_dict(data)
         assert restored.text == "Test Text"
@@ -289,9 +289,9 @@ class TestDrawingManager:
         """Test adding a drawing"""
         manager = DrawingManager(mock_plot_widget)
         line = LineDrawing(x1=0, y1=0, x2=100, y2=100)
-        
+
         drawing_id = manager.add_drawing(line)
-        
+
         assert drawing_id == line.id
         assert len(manager.get_all_drawings()) == 1
         mock_plot_widget.addItem.assert_called()
@@ -301,9 +301,9 @@ class TestDrawingManager:
         manager = DrawingManager(mock_plot_widget)
         line = LineDrawing(x1=0, y1=0, x2=100, y2=100)
         drawing_id = manager.add_drawing(line)
-        
+
         result = manager.remove_drawing(drawing_id)
-        
+
         assert result is True
         assert len(manager.get_all_drawings()) == 0
         mock_plot_widget.removeItem.assert_called()
@@ -319,9 +319,9 @@ class TestDrawingManager:
         manager = DrawingManager(mock_plot_widget)
         line = LineDrawing(x1=0, y1=0, x2=100, y2=100)
         drawing_id = manager.add_drawing(line)
-        
+
         manager.select_drawing(drawing_id)
-        
+
         assert manager.get_selected_id() == drawing_id
 
     def test_delete_selected(self, mock_plot_widget):
@@ -330,9 +330,9 @@ class TestDrawingManager:
         line = LineDrawing(x1=0, y1=0, x2=100, y2=100)
         drawing_id = manager.add_drawing(line)
         manager.select_drawing(drawing_id)
-        
+
         result = manager.delete_selected()
-        
+
         assert result is True
         assert len(manager.get_all_drawings()) == 0
         assert manager.get_selected_id() is None
@@ -342,41 +342,44 @@ class TestDrawingManager:
         manager = DrawingManager(mock_plot_widget)
         manager.add_drawing(LineDrawing(x1=0, y1=0, x2=100, y2=100))
         manager.add_drawing(CircleDrawing(cx=50, cy=50, rx=25, ry=25))
-        
+
         data = manager.to_dict()
-        
-        assert 'drawings' in data
-        assert len(data['drawings']) == 2
+
+        assert "drawings" in data
+        assert len(data["drawings"]) == 2
 
     def test_deserialization(self, mock_plot_widget):
         """Test manager deserialization"""
         manager = DrawingManager(mock_plot_widget)
-        
+
         data = {
-            'drawings': [
+            "drawings": [
                 {
-                    'id': 'line1',
-                    'type': 'line',
-                    'x1': 0, 'y1': 0, 'x2': 100, 'y2': 100,
-                    'visible': True,
-                    'locked': False,
-                    'z_order': 100,
-                    'style': {
-                        'stroke_color': '#000000',
-                        'stroke_width': 2.0,
-                        'line_style': 'solid',
-                        'fill_color': None,
-                        'fill_opacity': 0.3
-                    }
+                    "id": "line1",
+                    "type": "line",
+                    "x1": 0,
+                    "y1": 0,
+                    "x2": 100,
+                    "y2": 100,
+                    "visible": True,
+                    "locked": False,
+                    "z_order": 100,
+                    "style": {
+                        "stroke_color": "#000000",
+                        "stroke_width": 2.0,
+                        "line_style": "solid",
+                        "fill_color": None,
+                        "fill_opacity": 0.3,
+                    },
                 }
             ],
-            'z_counter': 101
+            "z_counter": 101,
         }
-        
+
         manager.from_dict(data)
-        
+
         assert len(manager.get_all_drawings()) == 1
-        line = manager.get_drawing('line1')
+        line = manager.get_drawing("line1")
         assert line is not None
         assert line.x1 == 0
         assert line.x2 == 100
@@ -386,9 +389,9 @@ class TestDrawingManager:
         manager = DrawingManager(mock_plot_widget)
         manager.add_drawing(LineDrawing(x1=0, y1=0, x2=100, y2=100))
         manager.add_drawing(CircleDrawing(cx=50, cy=50, rx=25, ry=25))
-        
+
         manager.clear()
-        
+
         assert len(manager.get_all_drawings()) == 0
 
 
@@ -407,9 +410,9 @@ class TestUndoRedo:
         """Test undo after adding"""
         manager = DrawingManager(mock_plot_widget)
         manager.add_drawing(LineDrawing(x1=0, y1=0, x2=100, y2=100))
-        
+
         result = manager.undo()
-        
+
         assert result is True
         assert len(manager.get_all_drawings()) == 0
 
@@ -419,9 +422,9 @@ class TestUndoRedo:
         line = LineDrawing(x1=0, y1=0, x2=100, y2=100)
         manager.add_drawing(line)
         manager.undo()
-        
+
         result = manager.redo()
-        
+
         assert result is True
         assert len(manager.get_all_drawings()) == 1
 
@@ -442,10 +445,10 @@ class TestUndoRedo:
         manager = DrawingManager(mock_plot_widget)
         manager.add_drawing(LineDrawing(x1=0, y1=0, x2=100, y2=100))
         manager.undo()
-        
+
         # New action should clear redo stack
         manager.add_drawing(CircleDrawing(cx=50, cy=50, rx=25, ry=25))
-        
+
         result = manager.redo()
         assert result is False
 
@@ -490,7 +493,7 @@ class TestHitTesting:
         manager = DrawingManager(mock_plot_widget)
         line = LineDrawing(x1=0, y1=0, x2=100, y2=100)
         manager.add_drawing(line)
-        
+
         # Point on the line
         found_id = manager.find_drawing_at(50, 50)
         assert found_id == line.id
@@ -500,7 +503,7 @@ class TestHitTesting:
         manager = DrawingManager(mock_plot_widget)
         line = LineDrawing(x1=0, y1=0, x2=10, y2=10)
         manager.add_drawing(line)
-        
+
         # Point far from the line
         found_id = manager.find_drawing_at(500, 500)
         assert found_id is None
@@ -512,7 +515,7 @@ class TestHitTesting:
         line2 = LineDrawing(x1=0, y1=0, x2=100, y2=100)
         manager.add_drawing(line1)
         manager.add_drawing(line2)
-        
+
         # Should find the last added (topmost)
         found_id = manager.find_drawing_at(50, 50)
         assert found_id == line2.id

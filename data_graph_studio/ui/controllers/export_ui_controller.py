@@ -1,9 +1,10 @@
 """ExportUIController - extracted from MainWindow."""
+
 from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QFileDialog, QApplication, QMessageBox
 
@@ -15,10 +16,11 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
+
 class ExportUIController:
     """Controller extracted from MainWindow."""
 
-    def __init__(self, main_window: 'MainWindow'):
+    def __init__(self, main_window: "MainWindow"):
         self.w = main_window
 
     # ============================================================
@@ -30,11 +32,15 @@ class ExportUIController:
         if not self.w.state.is_data_loaded:
             return
 
-        ext_map = {ExportFormat.PNG: ("PNG Files (*.png)", ".png"),
-                   ExportFormat.SVG: ("SVG Files (*.svg)", ".svg"),
-                   ExportFormat.PDF: ("PDF Files (*.pdf)", ".pdf")}
+        ext_map = {
+            ExportFormat.PNG: ("PNG Files (*.png)", ".png"),
+            ExportFormat.SVG: ("SVG Files (*.svg)", ".svg"),
+            ExportFormat.PDF: ("PDF Files (*.pdf)", ".pdf"),
+        }
         filter_str, ext = ext_map.get(fmt, ("All Files (*)", ""))
-        path, _ = QFileDialog.getSaveFileName(self.w, f"Export {fmt.value.upper()}", f"chart{ext}", filter_str)
+        path, _ = QFileDialog.getSaveFileName(
+            self.w, f"Export {fmt.value.upper()}", f"chart{ext}", filter_str
+        )
         if not path:
             return
 
@@ -71,11 +77,15 @@ class ExportUIController:
         if not self.w.state.is_data_loaded or self.w.engine.df is None:
             return
 
-        ext_map = {ExportFormat.CSV: ("CSV Files (*.csv)", ".csv"),
-                   ExportFormat.EXCEL: ("Excel Files (*.xlsx)", ".xlsx"),
-                   ExportFormat.PARQUET: ("Parquet Files (*.parquet)", ".parquet")}
+        ext_map = {
+            ExportFormat.CSV: ("CSV Files (*.csv)", ".csv"),
+            ExportFormat.EXCEL: ("Excel Files (*.xlsx)", ".xlsx"),
+            ExportFormat.PARQUET: ("Parquet Files (*.parquet)", ".parquet"),
+        }
         filter_str, ext = ext_map.get(fmt, ("All Files (*)", ""))
-        path, _ = QFileDialog.getSaveFileName(self.w, f"Export {fmt.value.upper()}", f"data{ext}", filter_str)
+        path, _ = QFileDialog.getSaveFileName(
+            self.w, f"Export {fmt.value.upper()}", f"data{ext}", filter_str
+        )
         if not path:
             return
 
@@ -109,7 +119,10 @@ class ExportUIController:
             return
 
         from ..dialogs.export_dialog import ExportDialog
-        mode = "chart" if (self.w.state.value_columns or self.w.state.x_column) else "data"
+
+        mode = (
+            "chart" if (self.w.state.value_columns or self.w.state.x_column) else "data"
+        )
         dlg = ExportDialog(self.w, mode=mode)
 
         # Connect dialog signals to controller
@@ -146,9 +159,12 @@ class ExportUIController:
 
         try:
             from ..dialogs.report_dialog import ReportDialog
-            dialog = ReportDialog(self.w.engine, self.w.state, self.w.graph_panel, self.w)
+
+            dialog = ReportDialog(
+                self.w.engine, self.w.state, self.w.graph_panel, self.w
+            )
             # Pre-select format if the dialog supports it
-            if hasattr(dialog, 'set_format'):
+            if hasattr(dialog, "set_format"):
                 dialog.set_format(fmt)
             dialog.exec()
         except ImportError:
@@ -211,26 +227,40 @@ class ExportUIController:
         if not directory:
             return
 
-        datasets = self.w.engine.list_datasets() if hasattr(self.w.engine, 'list_datasets') else []
+        datasets = (
+            self.w.engine.list_datasets()
+            if hasattr(self.w.engine, "list_datasets")
+            else []
+        )
         if not datasets:
             # Single dataset mode
             path = os.path.join(directory, "data_export.csv")
-            self.w._export_controller.export_data_async(self.w.engine.df, path, ExportFormat.CSV)
+            self.w._export_controller.export_data_async(
+                self.w.engine.df, path, ExportFormat.CSV
+            )
             self.w.statusbar.showMessage(f"✓ Exporting to {directory}", 3000)
             return
 
         exported = 0
         for ds in datasets:
-            ds_name = getattr(ds, 'name', str(ds)) if not isinstance(ds, str) else ds
-            ds_id = getattr(ds, 'id', ds) if not isinstance(ds, str) else ds
-            df = self.w.engine.get_dataset_df(ds_id) if hasattr(self.w.engine, 'get_dataset_df') else None
+            ds_name = getattr(ds, "name", str(ds)) if not isinstance(ds, str) else ds
+            ds_id = getattr(ds, "id", ds) if not isinstance(ds, str) else ds
+            df = (
+                self.w.engine.get_dataset_df(ds_id)
+                if hasattr(self.w.engine, "get_dataset_df")
+                else None
+            )
             if df is not None:
-                safe_name = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in ds_name)
+                safe_name = "".join(
+                    c if c.isalnum() or c in ("-", "_") else "_" for c in ds_name
+                )
                 path = os.path.join(directory, f"{safe_name}.csv")
                 self.w._export_controller.export_data_sync(df, path, ExportFormat.CSV)
                 exported += 1
 
-        self.w.statusbar.showMessage(f"✓ Exported {exported} dataset(s) to {directory}", 5000)
+        self.w.statusbar.showMessage(
+            f"✓ Exported {exported} dataset(s) to {directory}", 5000
+        )
 
     # ============================================================
     # Auto Export (file watch integration)
@@ -238,22 +268,24 @@ class ExportUIController:
 
     def _on_toggle_auto_export(self, checked: bool):
         """Toggle auto-export on file change"""
-        if not hasattr(self.w, '_auto_export_enabled'):
+        if not hasattr(self.w, "_auto_export_enabled"):
             self.w._auto_export_enabled = False
             self.w._auto_export_path = None
             self.w._auto_export_format = ExportFormat.CSV
 
         if checked:
             path, _ = QFileDialog.getSaveFileName(
-                self.w, "Auto-Export Destination", "auto_export.csv",
-                "CSV (*.csv);;Excel (*.xlsx);;Parquet (*.parquet)"
+                self.w,
+                "Auto-Export Destination",
+                "auto_export.csv",
+                "CSV (*.csv);;Excel (*.xlsx);;Parquet (*.parquet)",
             )
             if path:
                 self.w._auto_export_enabled = True
                 self.w._auto_export_path = path
-                if path.endswith('.xlsx'):
+                if path.endswith(".xlsx"):
                     self.w._auto_export_format = ExportFormat.EXCEL
-                elif path.endswith('.parquet'):
+                elif path.endswith(".parquet"):
                     self.w._auto_export_format = ExportFormat.PARQUET
                 else:
                     self.w._auto_export_format = ExportFormat.CSV
@@ -267,10 +299,10 @@ class ExportUIController:
 
     def _do_auto_export(self):
         """Perform auto-export (called on file change)"""
-        if not getattr(self.w, '_auto_export_enabled', False):
+        if not getattr(self.w, "_auto_export_enabled", False):
             return
-        path = getattr(self.w, '_auto_export_path', None)
-        fmt = getattr(self.w, '_auto_export_format', ExportFormat.CSV)
+        path = getattr(self.w, "_auto_export_path", None)
+        fmt = getattr(self.w, "_auto_export_format", ExportFormat.CSV)
         if path and self.w.engine.df is not None:
             self.w._export_controller.export_data_async(self.w.engine.df, path, fmt)
             logger.info(f"Auto-exported to {path}")
@@ -282,13 +314,18 @@ class ExportUIController:
     def _capture_graph_image(self):
         """Capture the current graph panel as QImage"""
         try:
-            if hasattr(self.w.graph_panel, 'main_graph') and self.w.graph_panel.main_graph:
+            if (
+                hasattr(self.w.graph_panel, "main_graph")
+                and self.w.graph_panel.main_graph
+            ):
                 from pyqtgraph.exporters import ImageExporter
                 from PySide6.QtGui import QImage
-                import tempfile, os
+                import tempfile
+                import os
+
                 exporter = ImageExporter(self.w.graph_panel.main_graph.plotItem)
-                exporter.parameters()['width'] = 1920
-                temp_path = os.path.join(tempfile.gettempdir(), 'dgs_export_temp.png')
+                exporter.parameters()["width"] = 1920
+                temp_path = os.path.join(tempfile.gettempdir(), "dgs_export_temp.png")
                 exporter.export(temp_path)
                 image = QImage(temp_path)
                 try:

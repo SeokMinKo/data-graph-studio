@@ -6,15 +6,12 @@ UT-6.2: 테마 설정 영속화
 UT-6.3: 테마 설정 파일 손상 → 기본 테마 폴백
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from data_graph_studio.core.state import ThemeState
 from data_graph_studio.ui.theme import (
     ThemeManager,
     Theme,
-    TAILWIND_THEME,
-    TAILWIND_DARK_THEME,
 )
 
 
@@ -104,7 +101,9 @@ class TestThemeToggle:
         mgr = ThemeManager()
         mgr.set_theme_preference("system")
 
-        with patch.object(mgr, "_detect_system_dark_mode", side_effect=Exception("OS error")):
+        with patch.object(
+            mgr, "_detect_system_dark_mode", side_effect=Exception("OS error")
+        ):
             resolved = mgr.resolve_theme()
             assert resolved.is_light()
 

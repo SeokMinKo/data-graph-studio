@@ -4,22 +4,33 @@ Overlay Statistics Widget - 오버레이 통계 위젯
 오버레이 비교 모드에서 그래프 위에 표시되는 통계 정보 위젯
 """
 
-from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QGridLayout, QPushButton, QSizePolicy, QGraphicsOpacityEffect
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QGridLayout,
+    QPushButton,
+    QGraphicsOpacityEffect,
 )
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QPoint
-from PySide6.QtGui import QColor, QPalette, QFont
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation
 
 from ...core.data_engine import DataEngine
-from ...core.state import AppState, ComparisonMode
+from ...core.state import AppState
 
 
 class DatasetLegendItem(QFrame):
     """데이터셋 범례 아이템"""
 
-    def __init__(self, dataset_id: str, name: str, color: str, is_light: bool = False, parent=None):
+    def __init__(
+        self,
+        dataset_id: str,
+        name: str,
+        color: str,
+        is_light: bool = False,
+        parent=None,
+    ):
         super().__init__(parent)
         self.dataset_id = dataset_id
 
@@ -53,7 +64,14 @@ class DatasetLegendItem(QFrame):
 class StatisticBadge(QFrame):
     """통계 배지 (작은 통계 정보 표시)"""
 
-    def __init__(self, label: str, value: str, color: str = "#333", is_light: bool = False, parent=None):
+    def __init__(
+        self,
+        label: str,
+        value: str,
+        color: str = "#333",
+        is_light: bool = False,
+        parent=None,
+    ):
         super().__init__(parent)
 
         bg = "rgba(255, 255, 255, 0.85)" if is_light else "rgba(30, 41, 59, 0.85)"
@@ -78,7 +96,9 @@ class StatisticBadge(QFrame):
         layout.addWidget(label_widget)
 
         value_widget = QLabel(value)
-        value_widget.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {color};")
+        value_widget.setStyleSheet(
+            f"font-size: 11px; font-weight: bold; color: {color};"
+        )
         value_widget.setAlignment(Qt.AlignCenter)
         layout.addWidget(value_widget)
 
@@ -187,8 +207,10 @@ class OverlayStatsWidget(QWidget):
             }}
         """)
         title_fg = "#333" if is_light else "#E2E8F0"
-        if hasattr(self, '_title_label'):
-            self._title_label.setStyleSheet(f"font-weight: bold; font-size: 12px; color: {title_fg};")
+        if hasattr(self, "_title_label"):
+            self._title_label.setStyleSheet(
+                f"font-weight: bold; font-size: 12px; color: {title_fg};"
+            )
 
     def _connect_signals(self):
         self.state.comparison_settings_changed.connect(self.refresh)
@@ -219,7 +241,9 @@ class OverlayStatsWidget(QWidget):
         for did in dataset_ids[:4]:  # 최대 4개
             metadata = self.state.get_dataset_metadata(did)
             if metadata:
-                legend_item = DatasetLegendItem(did, metadata.name, metadata.color, self._is_light)
+                legend_item = DatasetLegendItem(
+                    did, metadata.name, metadata.color, self._is_light
+                )
                 self.legend_layout.addWidget(legend_item)
 
         self.legend_layout.addStretch()
@@ -231,7 +255,7 @@ class OverlayStatsWidget(QWidget):
             ds = self.engine.get_dataset(dataset_ids[0])
             if ds and ds.df is not None and col in ds.df.columns:
                 dtype = str(ds.df[col].dtype)
-                if dtype.startswith(('Int', 'Float', 'UInt')):
+                if dtype.startswith(("Int", "Float", "UInt")):
                     numeric_cols.append(col)
 
         if not numeric_cols:
@@ -290,7 +314,9 @@ class OverlayStatsWidget(QWidget):
                         v = stats[did].get(stat_key)
                         if v == max_val:
                             widget = self.stats_grid.itemAtPosition(row, col).widget()
-                            widget.setStyleSheet("font-size: 10px; font-weight: bold; color: #2e7d32;")
+                            widget.setStyleSheet(
+                                "font-size: 10px; font-weight: bold; color: #2e7d32;"
+                            )
 
         # 통계적 유의성 검정 (두 데이터셋일 때만)
         if len(dataset_ids) == 2:
@@ -320,7 +346,9 @@ class OverlayStatsWidget(QWidget):
         else:
             muted = "#666" if self._is_light else "#9CA3AF"
             self.significance_label.setText(f"Comparing {len(dataset_ids)} datasets")
-            self.significance_label.setStyleSheet(f"font-size: 10px; padding: 4px; color: {muted};")
+            self.significance_label.setStyleSheet(
+                f"font-size: 10px; padding: 4px; color: {muted};"
+            )
 
     def set_position(self, position: str = "top-right"):
         """위젯 위치 설정"""
@@ -351,6 +379,7 @@ class OverlayStatsWidget(QWidget):
     def _reduce_animations() -> bool:
         """Check if animations should be reduced (Item 13)"""
         from PySide6.QtCore import QSettings
+
         settings = QSettings("DataGraphStudio", "DGS")
         return settings.value("accessibility/reduce_animations", False, type=bool)
 

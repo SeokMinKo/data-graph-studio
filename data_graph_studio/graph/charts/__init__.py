@@ -10,11 +10,11 @@ from .waterfall import WaterfallChart
 
 
 _CHART_REGISTRY = {
-    'box': BoxPlotChart,
-    'violin': ViolinPlotChart,
-    'heatmap': HeatmapChart,
-    'candlestick': CandlestickChart,
-    'waterfall': WaterfallChart,
+    "box": BoxPlotChart,
+    "violin": ViolinPlotChart,
+    "heatmap": HeatmapChart,
+    "candlestick": CandlestickChart,
+    "waterfall": WaterfallChart,
 }
 
 
@@ -27,10 +27,10 @@ def get_chart(chart_type: str):
 
 
 __all__ = [
-    'BoxPlotChart',
-    'ViolinPlotChart', 
-    'HeatmapChart',
-    'CandlestickChart',
-    'WaterfallChart',
-    'get_chart',
+    "BoxPlotChart",
+    "ViolinPlotChart",
+    "HeatmapChart",
+    "CandlestickChart",
+    "WaterfallChart",
+    "get_chart",
 ]

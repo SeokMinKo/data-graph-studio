@@ -23,14 +23,17 @@ def create_large_df(n_rows: int, seed: int = 42) -> pl.DataFrame:
         name, age, score, city 컬럼을 가진 DataFrame.
     """
     import random
+
     random.seed(seed)
     cities = ["Seoul", "Busan", "Incheon", "Daegu", "Daejeon"]
-    return pl.DataFrame({
-        "name": [f"user_{i}" for i in range(n_rows)],
-        "age": [random.randint(18, 80) for _ in range(n_rows)],
-        "score": [random.uniform(0, 100) for _ in range(n_rows)],
-        "city": [random.choice(cities) for _ in range(n_rows)],
-    })
+    return pl.DataFrame(
+        {
+            "name": [f"user_{i}" for i in range(n_rows)],
+            "age": [random.randint(18, 80) for _ in range(n_rows)],
+            "score": [random.uniform(0, 100) for _ in range(n_rows)],
+            "city": [random.choice(cities) for _ in range(n_rows)],
+        }
+    )
 
 
 @pytest.fixture

@@ -6,10 +6,8 @@ Tests for streaming UI integration:
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog
 
 from data_graph_studio.ui.dialogs.streaming_dialog import StreamingDialog
 from data_graph_studio.core.streaming_controller import StreamingController
@@ -17,6 +15,7 @@ from data_graph_studio.core.io_abstract import IFileSystem, ITimerFactory
 
 
 # ── Fixtures ──────────────────────────────────────────────
+
 
 class _StubFS(IFileSystem):
     def read_file(self, path):
@@ -27,6 +26,7 @@ class _StubFS(IFileSystem):
 
     def stat(self, path):
         import os
+
         return os.stat_result((0, 0, 0, 0, 0, 0, 100, 0, 1000.0, 0))
 
     def exists(self, path):
@@ -52,6 +52,7 @@ def stub_timer():
 
 
 # ── StreamingDialog tests ─────────────────────────────────
+
 
 class TestStreamingDialog:
     def test_default_values(self, qtbot):
@@ -93,6 +94,7 @@ class TestStreamingDialog:
 
 
 # ── StreamingController integration tests ─────────────────
+
 
 class TestStreamingControllerSignals:
     def test_state_transitions(self, stub_fs, stub_timer):

@@ -14,7 +14,6 @@ from data_graph_studio.core.statistics import (
     TimeSeriesAnalyzer,
     HypothesisTest,
     HypothesisTester,
-    StatisticalSummary,
     DescriptiveStatistics,
 )
 
@@ -34,19 +33,12 @@ class TestCorrelationAnalyzer:
         z = -1.5 * x + np.random.randn(100) * 0.5  # 강한 음의 상관
         w = np.random.randn(100)  # 상관 없음
 
-        return pl.DataFrame({
-            "x": x,
-            "y": y,
-            "z": z,
-            "w": w
-        })
+        return pl.DataFrame({"x": x, "y": y, "z": z, "w": w})
 
     def test_pearson_correlation(self, analyzer, sample_data):
         """피어슨 상관계수"""
         result = analyzer.calculate_correlation(
-            sample_data,
-            columns=["x", "y", "z", "w"],
-            method=CorrelationMethod.PEARSON
+            sample_data, columns=["x", "y", "z", "w"], method=CorrelationMethod.PEARSON
         )
 
         assert result is not None
@@ -64,9 +56,7 @@ class TestCorrelationAnalyzer:
     def test_spearman_correlation(self, analyzer, sample_data):
         """스피어만 상관계수"""
         result = analyzer.calculate_correlation(
-            sample_data,
-            columns=["x", "y"],
-            method=CorrelationMethod.SPEARMAN
+            sample_data, columns=["x", "y"], method=CorrelationMethod.SPEARMAN
         )
 
         assert result is not None
@@ -77,9 +67,7 @@ class TestCorrelationAnalyzer:
     def test_kendall_correlation(self, analyzer, sample_data):
         """켄달 타우"""
         result = analyzer.calculate_correlation(
-            sample_data,
-            columns=["x", "y"],
-            method=CorrelationMethod.KENDALL
+            sample_data, columns=["x", "y"], method=CorrelationMethod.KENDALL
         )
 
         assert result is not None
@@ -90,7 +78,7 @@ class TestCorrelationAnalyzer:
         corr, p_value = analyzer.pairwise_correlation(
             sample_data["x"].to_numpy(),
             sample_data["y"].to_numpy(),
-            method=CorrelationMethod.PEARSON
+            method=CorrelationMethod.PEARSON,
         )
 
         assert corr > 0.9
@@ -99,9 +87,7 @@ class TestCorrelationAnalyzer:
     def test_correlation_significance(self, analyzer, sample_data):
         """상관 유의성 검정"""
         result = analyzer.calculate_correlation(
-            sample_data,
-            columns=["x", "y", "w"],
-            method=CorrelationMethod.PEARSON
+            sample_data, columns=["x", "y", "w"], method=CorrelationMethod.PEARSON
         )
 
         p_matrix = analyzer.get_p_value_matrix(result)
@@ -132,18 +118,12 @@ class TestClusterAnalyzer:
         c3 = np.random.randn(30, 2) + [-5, 5]
 
         data = np.vstack([c1, c2, c3])
-        return pl.DataFrame({
-            "x": data[:, 0],
-            "y": data[:, 1]
-        })
+        return pl.DataFrame({"x": data[:, 0], "y": data[:, 1]})
 
     def test_kmeans_clustering(self, analyzer, cluster_data):
         """K-Means 클러스터링"""
         result = analyzer.cluster(
-            cluster_data,
-            columns=["x", "y"],
-            method=ClusterMethod.KMEANS,
-            n_clusters=3
+            cluster_data, columns=["x", "y"], method=ClusterMethod.KMEANS, n_clusters=3
         )
 
         assert result is not None
@@ -157,7 +137,7 @@ class TestClusterAnalyzer:
             cluster_data,
             columns=["x", "y"],
             method=ClusterMethod.HIERARCHICAL,
-            n_clusters=3
+            n_clusters=3,
         )
 
         assert result is not None
@@ -171,7 +151,7 @@ class TestClusterAnalyzer:
             columns=["x", "y"],
             method=ClusterMethod.DBSCAN,
             eps=1.0,
-            min_samples=5
+            min_samples=5,
         )
 
         assert result is not None
@@ -181,10 +161,7 @@ class TestClusterAnalyzer:
     def test_cluster_statistics(self, analyzer, cluster_data):
         """클러스터 통계"""
         result = analyzer.cluster(
-            cluster_data,
-            columns=["x", "y"],
-            method=ClusterMethod.KMEANS,
-            n_clusters=3
+            cluster_data, columns=["x", "y"], method=ClusterMethod.KMEANS, n_clusters=3
         )
 
         stats = analyzer.get_cluster_statistics(result, cluster_data, ["x", "y"])
@@ -197,10 +174,7 @@ class TestClusterAnalyzer:
     def test_silhouette_score(self, analyzer, cluster_data):
         """실루엣 스코어"""
         result = analyzer.cluster(
-            cluster_data,
-            columns=["x", "y"],
-            method=ClusterMethod.KMEANS,
-            n_clusters=3
+            cluster_data, columns=["x", "y"], method=ClusterMethod.KMEANS, n_clusters=3
         )
 
         score = analyzer.silhouette_score(result, cluster_data, ["x", "y"])
@@ -213,9 +187,7 @@ class TestClusterAnalyzer:
     def test_find_optimal_k(self, analyzer, cluster_data):
         """최적 클러스터 수 찾기 (엘보우 방법)"""
         k_values, scores = analyzer.find_optimal_k(
-            cluster_data,
-            columns=["x", "y"],
-            k_range=(2, 6)
+            cluster_data, columns=["x", "y"], k_range=(2, 6)
         )
 
         assert len(k_values) == 4
@@ -241,10 +213,14 @@ class TestTimeSeriesAnalyzer:
 
         values = trend + seasonal + noise
 
-        return pl.DataFrame({
-            "date": pl.date_range(pl.date(2020, 1, 1), pl.date(2020, 4, 9), eager=True),
-            "value": values
-        })
+        return pl.DataFrame(
+            {
+                "date": pl.date_range(
+                    pl.date(2020, 1, 1), pl.date(2020, 4, 9), eager=True
+                ),
+                "value": values,
+            }
+        )
 
     def test_moving_average(self, analyzer, time_series_data):
         """이동 평균"""

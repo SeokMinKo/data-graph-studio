@@ -5,17 +5,22 @@ Side-by-Side Layout - 병렬 비교 레이아웃
 스크롤/줌 동기화 지원 (ViewSyncManager 사용)
 """
 
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, TYPE_CHECKING
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QSplitter, QScrollArea, QGroupBox, QCheckBox,
-    QSizePolicy, QPushButton
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QSplitter,
+    QCheckBox,
+    QPushButton,
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QColor
 
 from ...core.data_engine import DataEngine
-from ...core.state import AppState, ComparisonMode
+from ...core.state import AppState
 from ...core.view_sync import ViewSyncManager
 
 if TYPE_CHECKING:
@@ -44,7 +49,7 @@ class MiniGraphWidget(QWidget):
         dataset_id: str,
         engine: DataEngine,
         state: AppState,
-        graph_setting: 'Optional[GraphSetting]' = None,
+        graph_setting: "Optional[GraphSetting]" = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -68,7 +73,7 @@ class MiniGraphWidget(QWidget):
         # Rect selection state
         self._rect_selecting = False
         self._rect_start = None  # (x, y) in view coords
-        self._rect_roi = None    # QGraphicsRectItem for visual feedback
+        self._rect_roi = None  # QGraphicsRectItem for visual feedback
         self._current_tool_mode = None
 
         self._setup_ui()
@@ -109,12 +114,23 @@ class MiniGraphWidget(QWidget):
     def effective_chart_settings(self) -> dict:
         """Chart style settings (line_width, marker_size, opacity, etc.)."""
         if self.graph_setting is not None:
-            return dict(self.graph_setting.chart_settings) if self.graph_setting.chart_settings else {}
+            return (
+                dict(self.graph_setting.chart_settings)
+                if self.graph_setting.chart_settings
+                else {}
+            )
         try:
             cs = self.state._chart_settings
             result = {}
-            for attr in ['show_legend', 'show_grid', 'show_markers', 'line_width',
-                         'marker_size', 'opacity', 'color_palette']:
+            for attr in [
+                "show_legend",
+                "show_grid",
+                "show_markers",
+                "line_width",
+                "marker_size",
+                "opacity",
+                "color_palette",
+            ]:
                 if hasattr(cs, attr):
                     result[attr] = getattr(cs, attr)
             return result
@@ -126,14 +142,22 @@ class MiniGraphWidget(QWidget):
         """Group columns: from graph_setting if present, else from state."""
         if self.graph_setting is not None:
             return list(self.graph_setting.group_columns)
-        return [gc.name for gc in self.state.group_columns] if self.state.group_columns else []
+        return (
+            [gc.name for gc in self.state.group_columns]
+            if self.state.group_columns
+            else []
+        )
 
     @property
     def effective_hover_columns(self) -> list:
         """Hover columns: from graph_setting if present, else from state."""
         if self.graph_setting is not None:
             return list(self.graph_setting.hover_columns)
-        return list(self.state.hover_columns) if hasattr(self.state, 'hover_columns') else []
+        return (
+            list(self.state.hover_columns)
+            if hasattr(self.state, "hover_columns")
+            else []
+        )
 
     @property
     def _header_name(self) -> str:
@@ -154,7 +178,7 @@ class MiniGraphWidget(QWidget):
 
         # 헤더 — always use dataset color for background
         metadata = self.state.get_dataset_metadata(self.dataset_id)
-        color = metadata.color if metadata else '#1f77b4'
+        color = metadata.color if metadata else "#1f77b4"
 
         header = QFrame()
         header.setStyleSheet(f"background-color: {color}; border-radius: 4px;")
@@ -187,13 +211,15 @@ class MiniGraphWidget(QWidget):
             layout.addWidget(self.plot_widget, 1)
 
             # ViewBox 범위 변경 시그널 연결
-            self.plot_widget.getViewBox().sigRangeChanged.connect(self._on_view_range_changed)
+            self.plot_widget.getViewBox().sigRangeChanged.connect(
+                self._on_view_range_changed
+            )
 
             # Selection region (LinearRegionItem) — hidden by default
             self._selection_region = pg.LinearRegionItem(
                 values=(0, 1),
                 brush=pg.mkBrush(41, 128, 185, 50),  # semi-transparent blue
-                pen=pg.mkPen('#2980b9', width=1),
+                pen=pg.mkPen("#2980b9", width=1),
                 movable=True,
             )
             self._selection_region.setZValue(10)
@@ -204,7 +230,9 @@ class MiniGraphWidget(QWidget):
             )
 
             # Enable right-click drag to create selection region
-            self.plot_widget.scene().sigMouseClicked.connect(self._on_plot_mouse_clicked)
+            self.plot_widget.scene().sigMouseClicked.connect(
+                self._on_plot_mouse_clicked
+            )
 
             # 간단한 데이터 플롯
             self._plot_data(color)
@@ -227,10 +255,10 @@ class MiniGraphWidget(QWidget):
             eff_cols = self.effective_value_columns
             stat_col_names = []
             for vc in eff_cols:
-                if hasattr(vc, 'name'):
+                if hasattr(vc, "name"):
                     stat_col_names.append(vc.name)
                 elif isinstance(vc, dict):
-                    stat_col_names.append(vc.get('name', ''))
+                    stat_col_names.append(vc.get("name", ""))
 
             # Fallback to first numeric column
             if not stat_col_names:
@@ -243,7 +271,9 @@ class MiniGraphWidget(QWidget):
                     try:
                         series = dataset.df[col]
                         label_prefix = f"{col}: " if len(stat_col_names) > 1 else ""
-                        stats_layout.addWidget(QLabel(f"{label_prefix}Mean: {series.mean():.2f}"))
+                        stats_layout.addWidget(
+                            QLabel(f"{label_prefix}Mean: {series.mean():.2f}")
+                        )
                         stats_layout.addWidget(QLabel(f"Min: {series.min():.2f}"))
                         stats_layout.addWidget(QLabel(f"Max: {series.max():.2f}"))
                     except Exception:
@@ -254,10 +284,26 @@ class MiniGraphWidget(QWidget):
 
     # Color palette for multi-series / group-by rendering
     COLOR_PALETTE = [
-        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-        '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
-        '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5',
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
+        "#aec7e8",
+        "#ffbb78",
+        "#98df8a",
+        "#ff9896",
+        "#c5b0d5",
+        "#c49c94",
+        "#f7b6d2",
+        "#c7c7c7",
+        "#dbdb8d",
+        "#9edae5",
     ]
 
     def _plot_data(self, color: str):
@@ -285,9 +331,9 @@ class MiniGraphWidget(QWidget):
         # Apply chart style settings (grid, legend) to plot widget
         cs = self.effective_chart_settings
         if self.plot_widget is not None:
-            show_grid = cs.get('show_grid', True)
+            show_grid = cs.get("show_grid", True)
             self.plot_widget.showGrid(x=show_grid, y=show_grid, alpha=0.3)
-            show_legend = cs.get('show_legend', False)
+            show_legend = cs.get("show_legend", False)
             if show_legend:
                 self.plot_widget.addLegend()
 
@@ -308,12 +354,12 @@ class MiniGraphWidget(QWidget):
         y_col_colors: dict = {}
         if value_cols:
             for vc in value_cols:
-                if hasattr(vc, 'name'):
+                if hasattr(vc, "name"):
                     name = vc.name
-                    vc_color = getattr(vc, 'color', None)
+                    vc_color = getattr(vc, "color", None)
                 elif isinstance(vc, dict):
-                    name = vc.get('name', '')
-                    vc_color = vc.get('color', None)
+                    name = vc.get("name", "")
+                    vc_color = vc.get("color", None)
                 else:
                     continue
                 if name and name in df.columns:
@@ -351,9 +397,15 @@ class MiniGraphWidget(QWidget):
         # --- Group-by rendering ---
         if group_cols:
             # Use first group column for coloring
-            grp_col = group_cols[0] if isinstance(group_cols[0], str) else group_cols[0].get('name', '')
+            grp_col = (
+                group_cols[0]
+                if isinstance(group_cols[0], str)
+                else group_cols[0].get("name", "")
+            )
             if grp_col and grp_col in df.columns:
-                self._plot_grouped(df, x_data_full, x_col, y_col_names, grp_col, chart_type, pg, np)
+                self._plot_grouped(
+                    df, x_data_full, x_col, y_col_names, grp_col, chart_type, pg, np
+                )
                 return
 
         # --- Multi-column rendering (no group-by) ---
@@ -364,12 +416,19 @@ class MiniGraphWidget(QWidget):
             except Exception:
                 continue
 
-            pen_color = y_col_colors.get(y_col) or self.COLOR_PALETTE[color_idx % len(self.COLOR_PALETTE)]
+            pen_color = (
+                y_col_colors.get(y_col)
+                or self.COLOR_PALETTE[color_idx % len(self.COLOR_PALETTE)]
+            )
             x_sampled, y_sampled = self._sample(x_data_full, y_data, np)
-            self._render_series(x_sampled, y_sampled, pen_color, chart_type, pg, np, name=y_col)
+            self._render_series(
+                x_sampled, y_sampled, pen_color, chart_type, pg, np, name=y_col
+            )
             color_idx += 1
 
-    def _plot_grouped(self, df, x_data_full, x_col, y_col_names, grp_col, chart_type, pg, np):
+    def _plot_grouped(
+        self, df, x_data_full, x_col, y_col_names, grp_col, chart_type, pg, np
+    ):
         """Render grouped data with per-group colors."""
         try:
             groups = df[grp_col].unique()
@@ -397,8 +456,12 @@ class MiniGraphWidget(QWidget):
                     continue
 
                 x_sampled, y_sampled = self._sample(x_grp, y_grp, np)
-                label = f"{group_val}" if len(y_col_names) == 1 else f"{group_val}/{y_col}"
-                self._render_series(x_sampled, y_sampled, grp_color, chart_type, pg, np, name=label)
+                label = (
+                    f"{group_val}" if len(y_col_names) == 1 else f"{group_val}/{y_col}"
+                )
+                self._render_series(
+                    x_sampled, y_sampled, grp_color, chart_type, pg, np, name=label
+                )
 
             color_idx += 1
 
@@ -408,26 +471,29 @@ class MiniGraphWidget(QWidget):
             cs = self.effective_chart_settings
         except Exception:
             cs = {}
+
         def _num(key, default):
             v = cs.get(key, default)
             return v if isinstance(v, (int, float)) else default
+
         def _bool(key, default):
             v = cs.get(key, default)
             return bool(v) if isinstance(v, (bool, int)) else default
+
         return {
-            'line_width': _num('line_width', 2),
-            'marker_size': _num('marker_size', 5),
-            'opacity': _num('opacity', 1.0),
-            'show_markers': _bool('show_markers', False),
+            "line_width": _num("line_width", 2),
+            "marker_size": _num("marker_size", 5),
+            "opacity": _num("opacity", 1.0),
+            "show_markers": _bool("show_markers", False),
         }
 
     def _render_series(self, x_data, y_data, color, chart_type, pg, np, name: str = ""):
         """Render a single data series based on chart_type and chart_settings."""
         style = self._get_style()
-        line_width = style['line_width']
-        marker_size = style['marker_size']
-        opacity = style['opacity']
-        show_markers = style['show_markers']
+        line_width = style["line_width"]
+        marker_size = style["marker_size"]
+        opacity = style["opacity"]
+        show_markers = style["show_markers"]
 
         try:
             # Apply opacity to color
@@ -462,8 +528,9 @@ class MiniGraphWidget(QWidget):
             else:
                 # Default: line
                 pen = pg.mkPen(pen_color, width=line_width)
-                plot_item = self.plot_widget.plot(
-                    x_data, y_data,
+                self.plot_widget.plot(
+                    x_data,
+                    y_data,
                     pen=pen,
                     name=name,
                 )
@@ -484,10 +551,10 @@ class MiniGraphWidget(QWidget):
         """Downsample arrays based on profile/state sampling settings."""
         cs = self.effective_chart_settings
         # If show_all_data is set, skip sampling entirely
-        if cs.get('show_all_data', False):
+        if cs.get("show_all_data", False):
             return x_data, y_data
         if max_points is None:
-            max_points = cs.get('max_points', 10000)
+            max_points = cs.get("max_points", 10000)
         if len(x_data) > max_points:
             step = len(x_data) // max_points
             return x_data[::step], y_data[::step]
@@ -509,21 +576,37 @@ class MiniGraphWidget(QWidget):
         if self.graph_setting is not None:
             cs = self.graph_setting.chart_settings
             if cs:
-                bg = cs.get('bg_color') if isinstance(cs, dict) else getattr(cs, 'bg_color', None)
+                bg = (
+                    cs.get("bg_color")
+                    if isinstance(cs, dict)
+                    else getattr(cs, "bg_color", None)
+                )
                 if bg:
-                    return bg if isinstance(bg, str) else bg.name() if hasattr(bg, 'name') else str(bg)
+                    return (
+                        bg
+                        if isinstance(bg, str)
+                        else bg.name()
+                        if hasattr(bg, "name")
+                        else str(bg)
+                    )
 
         # 2. From state chart_settings
         try:
             state_cs = self.state._chart_settings
-            bg = getattr(state_cs, 'bg_color', None)
+            bg = getattr(state_cs, "bg_color", None)
             if bg:
-                return bg if isinstance(bg, str) else bg.name() if hasattr(bg, 'name') else str(bg)
+                return (
+                    bg
+                    if isinstance(bg, str)
+                    else bg.name()
+                    if hasattr(bg, "name")
+                    else str(bg)
+                )
         except Exception:
             pass
 
         # 3. Theme-aware default (dark theme)
-        return '#1E293B'
+        return "#1E293B"
 
     # ------------------------------------------------------------------
     # Public API
@@ -593,7 +676,8 @@ class MiniGraphWidget(QWidget):
         import pyqtgraph as pg
 
         if self.plot_widget is None or self._current_tool_mode not in (
-            ToolMode.RECT_SELECT, ToolMode.LASSO_SELECT
+            ToolMode.RECT_SELECT,
+            ToolMode.LASSO_SELECT,
         ):
             return super().eventFilter(obj, event)
 
@@ -638,7 +722,11 @@ class MiniGraphWidget(QWidget):
 
             return True
 
-        elif event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton and self._rect_selecting:
+        elif (
+            event.type() == QEvent.MouseButtonRelease
+            and event.button() == Qt.LeftButton
+            and self._rect_selecting
+        ):
             pos = self.plot_widget.getViewBox().mapSceneToView(
                 self.plot_widget.mapToScene(event.position().toPoint())
             )
@@ -669,7 +757,7 @@ class MiniGraphWidget(QWidget):
                 x_mask = (x_arr >= x_min) & (x_arr <= x_max)
 
                 # Hit-test across all Y columns
-                y_data_sources = getattr(self, '_plot_y_data_dict', {})
+                y_data_sources = getattr(self, "_plot_y_data_dict", {})
                 if not y_data_sources and self._plot_y_data is not None:
                     y_data_sources = {"_default": self._plot_y_data}
 
@@ -678,7 +766,7 @@ class MiniGraphWidget(QWidget):
                     try:
                         y_arr = np.asarray(y_arr_raw, dtype=float)
                         y_mask = (y_arr >= y_min) & (y_arr <= y_max)
-                        combined_mask |= (x_mask & y_mask)
+                        combined_mask |= x_mask & y_mask
                     except Exception:
                         pass
 
@@ -703,6 +791,7 @@ class MiniGraphWidget(QWidget):
         # Keep the rect visible briefly, then auto-remove after 2s
         if self._rect_roi is not None:
             from PySide6.QtCore import QTimer
+
             roi = self._rect_roi
             QTimer.singleShot(2000, lambda: self._remove_rect_roi(roi))
 
@@ -743,9 +832,9 @@ class MiniGraphWidget(QWidget):
                 x=sel_x,
                 y=sel_y,
                 size=10,
-                pen=pg.mkPen('#EF4444', width=2),
-                brush=pg.mkBrush('#EF444480'),
-                symbol='o',
+                pen=pg.mkPen("#EF4444", width=2),
+                brush=pg.mkBrush("#EF444480"),
+                symbol="o",
                 pxMode=True,
             )
             scatter.setZValue(200)
@@ -760,7 +849,7 @@ class MiniGraphWidget(QWidget):
             if self.plot_widget is not None:
                 self.plot_widget.clear()
                 metadata = self.state.get_dataset_metadata(self.dataset_id)
-                color = metadata.color if metadata else '#1f77b4'
+                color = metadata.color if metadata else "#1f77b4"
                 self._plot_data(color)
         except Exception:
             pass
@@ -769,7 +858,9 @@ class MiniGraphWidget(QWidget):
     # ViewSyncManager duck-typing interface
     # ------------------------------------------------------------------
 
-    def set_view_range(self, x_range, y_range, sync_x: bool = True, sync_y: bool = True):
+    def set_view_range(
+        self, x_range, y_range, sync_x: bool = True, sync_y: bool = True
+    ):
         """외부에서 뷰 범위 설정 (동기화용).
 
         When x_range/y_range are None → auto-range.
@@ -871,7 +962,9 @@ class MiniGraphWidget(QWidget):
                 x_min, x_max = view_range[0]
                 width = (x_max - x_min) * 0.2  # 20% of visible range
                 center = (x_min + x_max) / 2
-                self._selection_region.setRegion([center - width / 2, center + width / 2])
+                self._selection_region.setRegion(
+                    [center - width / 2, center + width / 2]
+                )
                 self._selection_region.show()
                 region = list(self._selection_region.getRegion())
                 self._selected_indices = region
@@ -963,12 +1056,20 @@ class SideBySideLayout(QWidget):
     # ------------------------------------------------------------------
 
     def _on_sync_scroll_changed(self, checkbox_state):
-        checked = checkbox_state == Qt.Checked.value if isinstance(checkbox_state, int) else checkbox_state == Qt.Checked
+        checked = (
+            checkbox_state == Qt.Checked.value
+            if isinstance(checkbox_state, int)
+            else checkbox_state == Qt.Checked
+        )
         self._view_sync_manager.sync_x = checked
         self.state.update_comparison_settings(sync_scroll=checked)
 
     def _on_sync_zoom_changed(self, checkbox_state):
-        checked = checkbox_state == Qt.Checked.value if isinstance(checkbox_state, int) else checkbox_state == Qt.Checked
+        checked = (
+            checkbox_state == Qt.Checked.value
+            if isinstance(checkbox_state, int)
+            else checkbox_state == Qt.Checked
+        )
         self._view_sync_manager.sync_y = checked
         self.state.update_comparison_settings(sync_zoom=checked)
 
@@ -1003,7 +1104,7 @@ class SideBySideLayout(QWidget):
         self._panels.clear()
 
         # 비교 대상 데이터셋
-        dataset_ids = self.state.comparison_dataset_ids[:self.MAX_PANELS]
+        dataset_ids = self.state.comparison_dataset_ids[: self.MAX_PANELS]
 
         if not dataset_ids:
             # 활성 데이터셋만 표시
@@ -1016,15 +1117,21 @@ class SideBySideLayout(QWidget):
             panel.activated.connect(self._on_panel_activated)
             # Route view_range_changed through ViewSyncManager
             panel.view_range_changed.connect(
-                lambda src_id, xr, yr: self._view_sync_manager.on_source_range_changed(src_id, xr, yr)
+                lambda src_id, xr, yr: self._view_sync_manager.on_source_range_changed(
+                    src_id, xr, yr
+                )
             )
             # Route selection_changed through ViewSyncManager
             panel.selection_changed.connect(
-                lambda src_id, region: self._view_sync_manager.on_source_selection_changed(src_id, region)
+                lambda src_id, region: (
+                    self._view_sync_manager.on_source_selection_changed(src_id, region)
+                )
             )
             # Route row_selection_changed → always sync highlight to other panels
             panel.row_selection_changed.connect(
-                lambda src_id, indices, _did=dataset_id: self._on_row_selection(_did, indices)
+                lambda src_id, indices, _did=dataset_id: self._on_row_selection(
+                    _did, indices
+                )
             )
             self._panels[dataset_id] = panel
             self._view_sync_manager.register_panel(dataset_id, panel)
@@ -1032,7 +1139,9 @@ class SideBySideLayout(QWidget):
 
         # 동일 크기로 분할
         if self.splitter.count() > 0:
-            sizes = [self.splitter.width() // self.splitter.count()] * self.splitter.count()
+            sizes = [
+                self.splitter.width() // self.splitter.count()
+            ] * self.splitter.count()
             self.splitter.setSizes(sizes)
 
     # ------------------------------------------------------------------
@@ -1045,7 +1154,7 @@ class SideBySideLayout(QWidget):
 
     def set_comparison_datasets(self, dataset_ids: List[str]):
         """비교 대상 데이터셋 설정"""
-        self.state.set_comparison_datasets(dataset_ids[:self.MAX_PANELS])
+        self.state.set_comparison_datasets(dataset_ids[: self.MAX_PANELS])
         self.refresh()
 
     def sync_all_panels_to(self, source_id: str):

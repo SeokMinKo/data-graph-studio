@@ -2,14 +2,19 @@
 Summary Panel - Modern Statistics Cards with Micro-animations
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QScrollArea, QSizePolicy, QGraphicsDropShadowEffect, QPushButton
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QFrame,
+    QScrollArea,
+    QGraphicsDropShadowEffect,
 )
 from PySide6.QtCore import Qt, Slot, QPointF
-from PySide6.QtGui import QFont, QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen
 
 from ...core.state import AppState
 from ..floatable import FloatButton
@@ -18,7 +23,14 @@ from ..floatable import FloatButton
 class StatCard(QFrame):
     """Compact stat card with colored left accent bar and hover shadow"""
 
-    def __init__(self, icon: str, title: str, value: str = "-", subtitle: str = "", color: str = "#59B8E3"):
+    def __init__(
+        self,
+        icon: str,
+        title: str,
+        value: str = "-",
+        subtitle: str = "",
+        color: str = "#59B8E3",
+    ):
         super().__init__()
         self.color = color
 
@@ -86,12 +98,12 @@ class StatCard(QFrame):
     def leaveEvent(self, event):
         self.setGraphicsEffect(None)
         super().leaveEvent(event)
-    
+
     def set_value(self, value: str, subtitle: str = ""):
         self.value_label.setText(value)
         if self.subtitle_label:
             self.subtitle_label.setText(subtitle)
-    
+
     def set_trend(self, trend: float, suffix: str = "%"):
         """Set trend indicator (positive/negative)"""
         if self.subtitle_label:
@@ -110,7 +122,7 @@ class StatCard(QFrame):
 
 class MiniSparkline(QFrame):
     """Mini sparkline chart for trends"""
-    
+
     def __init__(self, data: list = None, color: str = "#59B8E3"):
         super().__init__()
         self._data = data or []
@@ -165,17 +177,17 @@ class SummaryPanel(QWidget):
 
         self._setup_ui()
         self._connect_signals()
-    
+
     def _setup_ui(self):
         """Setup compact UI"""
         self.setMinimumHeight(90)
         self.setMaximumHeight(110)
-        
+
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(8, 4, 8, 4)
         main_layout.setSpacing(4)
-        
+
         # Header with title and context
         header = QHBoxLayout()
         header.setSpacing(8)
@@ -197,7 +209,7 @@ class SummaryPanel(QWidget):
         header.addWidget(self.float_btn)
 
         main_layout.addLayout(header)
-        
+
         # Cards scroll area - compact
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -206,14 +218,14 @@ class SummaryPanel(QWidget):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setStyleSheet("background: transparent; border: none;")
         scroll.setMaximumHeight(70)
-        
+
         # Card container
         self.card_container = QWidget()
         self.card_container.setStyleSheet("background: transparent;")
         self.card_layout = QHBoxLayout(self.card_container)
         self.card_layout.setContentsMargins(0, 0, 0, 0)
         self.card_layout.setSpacing(8)
-        
+
         # Default stat cards - compact
         self.cards = {}
         self._add_card("file", "📄", "File", "-", color="#0EA5E9")
@@ -226,117 +238,125 @@ class SummaryPanel(QWidget):
         self._add_card("memory", "💾", "Memory", "-", color="#3B82F6")
         self._add_card("x_range", "↔", "X Range", "-", color="#6366F1")
         self._add_card("y_range", "↕", "Y Range", "-", color="#F43F5E")
-        
+
         self.card_layout.addStretch()
-        
+
         scroll.setWidget(self.card_container)
         main_layout.addWidget(scroll)
-    
-    def _add_card(self, key: str, icon: str, title: str, value: str = "-", color: str = "#59B8E3") -> StatCard:
+
+    def _add_card(
+        self, key: str, icon: str, title: str, value: str = "-", color: str = "#59B8E3"
+    ) -> StatCard:
         """Add a stat card"""
         card = StatCard(icon, title, value, "", color)
         self.cards[key] = card
         self.card_layout.addWidget(card)
         return card
-    
+
     def _connect_signals(self):
         """Connect state signals"""
         self.state.summary_updated.connect(self._on_summary_updated)
         self.state.selection_changed.connect(self._on_selection_changed)
         self.state.group_zone_changed.connect(self._on_group_changed)
         self.state.value_zone_changed.connect(self._on_value_changed)
-    
+
     @Slot(dict)
     def _on_summary_updated(self, stats: Dict[str, Any]):
         """Update summary with new stats"""
         # File name
-        if 'file_name' in stats:
-            self._file_name = stats['file_name']
+        if "file_name" in stats:
+            self._file_name = stats["file_name"]
             # Truncate long file names
             display_name = self._file_name
             if len(display_name) > 15:
                 display_name = display_name[:12] + "..."
-            self.cards['file'].set_value(display_name)
-            self.cards['file'].setToolTip(self._file_name)
+            self.cards["file"].set_value(display_name)
+            self.cards["file"].setToolTip(self._file_name)
 
         # Basic stats
-        if 'total_rows' in stats:
-            self._raw_rows = stats['total_rows']
-            self.cards['rows'].set_value(f"{stats['total_rows']:,}")
+        if "total_rows" in stats:
+            self._raw_rows = stats["total_rows"]
+            self.cards["rows"].set_value(f"{stats['total_rows']:,}")
 
         # Sampled rows (for graph)
-        if 'sampled_rows' in stats:
-            self._sampled_rows = stats['sampled_rows']
-            ratio = (self._sampled_rows / self._raw_rows * 100) if self._raw_rows > 0 else 100
+        if "sampled_rows" in stats:
+            self._sampled_rows = stats["sampled_rows"]
+            ratio = (
+                (self._sampled_rows / self._raw_rows * 100)
+                if self._raw_rows > 0
+                else 100
+            )
             if self._sampled_rows == self._raw_rows:
-                self.cards['sampled'].set_value(f"{self._sampled_rows:,}", "100%")
+                self.cards["sampled"].set_value(f"{self._sampled_rows:,}", "100%")
             else:
-                self.cards['sampled'].set_value(f"{self._sampled_rows:,}", f"{ratio:.1f}%")
-        elif 'total_rows' in stats:
+                self.cards["sampled"].set_value(
+                    f"{self._sampled_rows:,}", f"{ratio:.1f}%"
+                )
+        elif "total_rows" in stats:
             # Default: no sampling
-            self.cards['sampled'].set_value(f"{stats['total_rows']:,}", "100%")
+            self.cards["sampled"].set_value(f"{stats['total_rows']:,}", "100%")
 
-        if 'total_columns' in stats:
-            self.cards['columns'].set_value(f"{stats['total_columns']}")
+        if "total_columns" in stats:
+            self.cards["columns"].set_value(f"{stats['total_columns']}")
 
         # Numeric columns count
-        if 'numeric_columns' in stats:
-            self.cards['numeric'].set_value(f"{stats['numeric_columns']}")
+        if "numeric_columns" in stats:
+            self.cards["numeric"].set_value(f"{stats['numeric_columns']}")
 
         # Text/Category columns count
-        if 'text_columns' in stats:
-            self.cards['text'].set_value(f"{stats['text_columns']}")
+        if "text_columns" in stats:
+            self.cards["text"].set_value(f"{stats['text_columns']}")
 
         # Missing data percentage
-        if 'missing_percent' in stats:
-            pct = stats['missing_percent']
+        if "missing_percent" in stats:
+            pct = stats["missing_percent"]
             if pct == 0:
-                self.cards['missing'].set_value("0%", "Clean!")
+                self.cards["missing"].set_value("0%", "Clean!")
             elif pct < 5:
-                self.cards['missing'].set_value(f"{pct:.1f}%", "Low")
+                self.cards["missing"].set_value(f"{pct:.1f}%", "Low")
             else:
-                self.cards['missing'].set_value(f"{pct:.1f}%", "High")
+                self.cards["missing"].set_value(f"{pct:.1f}%", "High")
 
-        if 'memory_mb' in stats:
-            mb = stats['memory_mb']
+        if "memory_mb" in stats:
+            mb = stats["memory_mb"]
             if mb >= 1024:
-                self.cards['memory'].set_value(f"{mb/1024:.1f}", "GB")
+                self.cards["memory"].set_value(f"{mb / 1024:.1f}", "GB")
             elif mb >= 1:
-                self.cards['memory'].set_value(f"{mb:.1f}", "MB")
+                self.cards["memory"].set_value(f"{mb:.1f}", "MB")
             else:
-                self.cards['memory'].set_value(f"{mb*1024:.0f}", "KB")
+                self.cards["memory"].set_value(f"{mb * 1024:.0f}", "KB")
 
         # X/Y Range cards
-        if 'x_range' in stats:
-            xr = stats['x_range']
-            x_range_val = xr.get('range', 0)
-            x_col = xr.get('column', 'X')
-            self.cards['x_range'].set_value(
+        if "x_range" in stats:
+            xr = stats["x_range"]
+            x_range_val = xr.get("range", 0)
+            x_col = xr.get("column", "X")
+            self.cards["x_range"].set_value(
                 self._format_value(x_range_val),
-                f"{self._format_value(xr.get('min', '-'))} → {self._format_value(xr.get('max', '-'))}"
+                f"{self._format_value(xr.get('min', '-'))} → {self._format_value(xr.get('max', '-'))}",
             )
-            self.cards['x_range'].setToolTip(
+            self.cards["x_range"].setToolTip(
                 f"X Column: {x_col}\nMin: {xr.get('min', '-')}\nMax: {xr.get('max', '-')}\nRange: {x_range_val}"
             )
 
-        if 'y_range' in stats:
-            yr = stats['y_range']
-            y_range_val = yr.get('range', 0)
-            y_cols = yr.get('columns', [])
-            self.cards['y_range'].set_value(
+        if "y_range" in stats:
+            yr = stats["y_range"]
+            y_range_val = yr.get("range", 0)
+            y_cols = yr.get("columns", [])
+            self.cards["y_range"].set_value(
                 self._format_value(y_range_val),
-                f"{self._format_value(yr.get('min', '-'))} → {self._format_value(yr.get('max', '-'))}"
+                f"{self._format_value(yr.get('min', '-'))} → {self._format_value(yr.get('max', '-'))}",
             )
             cols_str = ", ".join(y_cols[:3])
             if len(y_cols) > 3:
                 cols_str += f" +{len(y_cols) - 3}"
-            self.cards['y_range'].setToolTip(
+            self.cards["y_range"].setToolTip(
                 f"Y Columns: {cols_str}\nMin: {yr.get('min', '-')}\nMax: {yr.get('max', '-')}\nRange: {y_range_val}"
             )
 
         # Dynamic value cards
         self._update_value_cards(stats)
-    
+
     @Slot()
     def _on_selection_changed(self):
         """Handle selection change"""
@@ -345,14 +365,16 @@ class SummaryPanel(QWidget):
             total = self.state.total_rows
             pct = (count / total * 100) if total > 0 else 0
 
-            self.context_label.setText(f"Selected: {count:,} of {total:,} rows ({pct:.1f}%)")
+            self.context_label.setText(
+                f"Selected: {count:,} of {total:,} rows ({pct:.1f}%)"
+            )
             self.context_label.setProperty("state", "selection")
         else:
             self.context_label.setText("")
             self.context_label.setProperty("state", "")
         self.context_label.style().unpolish(self.context_label)
         self.context_label.style().polish(self.context_label)
-    
+
     @Slot()
     def _on_group_changed(self):
         """Handle group change"""
@@ -361,17 +383,17 @@ class SummaryPanel(QWidget):
             group_names = ", ".join(g.name for g in groups[:3])
             if len(groups) > 3:
                 group_names += f" +{len(groups) - 3}"
-            
+
             self.context_label.setText(f"Grouped by: {group_names}")
             self.context_label.setProperty("state", "grouped")
             self.context_label.style().unpolish(self.context_label)
             self.context_label.style().polish(self.context_label)
-    
+
     @Slot()
     def _on_value_changed(self):
         """Handle value zone change"""
         pass
-    
+
     def _update_value_cards(self, stats: Dict[str, Any]):
         """Update dynamic value-based cards"""
         # Remove old dynamic cards
@@ -380,55 +402,57 @@ class SummaryPanel(QWidget):
                 card = self.cards.pop(key)
                 self.card_layout.removeWidget(card)
                 card.deleteLater()
-        
+
         # Add new value cards
         colors = ["#EC4899", "#3B82F6", "#14B8A6", "#F97316", "#8B5CF6"]
-        
+
         for i, value_col in enumerate(self.state.value_columns):
             name = value_col.name
-            agg = value_col.aggregation.value.upper()
-            
+            value_col.aggregation.value.upper()
+
             if name in stats and isinstance(stats[name], dict):
                 col_stats = stats[name]
                 color = colors[i % len(colors)]
-                
+
                 # Create card
                 card = StatCard(
                     "📈",
                     f"{name[:12]}{'...' if len(name) > 12 else ''}",
-                    self._format_value(col_stats.get('mean', col_stats.get('sum', '-'))),
+                    self._format_value(
+                        col_stats.get("mean", col_stats.get("sum", "-"))
+                    ),
                     f"Min: {self._format_value(col_stats.get('min', '-'))} → Max: {self._format_value(col_stats.get('max', '-'))}",
-                    color
+                    color,
                 )
-                
+
                 key = f"value_{name}"
                 self.cards[key] = card
                 self.card_layout.insertWidget(self.card_layout.count() - 1, card)
-    
+
     def _format_value(self, value) -> str:
         """Format value with smart number formatting"""
-        if value is None or value == '-':
+        if value is None or value == "-":
             return "-"
-        
+
         if isinstance(value, (int, float)):
             if abs(value) >= 1_000_000_000:
-                return f"{value/1_000_000_000:.1f}B"
+                return f"{value / 1_000_000_000:.1f}B"
             elif abs(value) >= 1_000_000:
-                return f"{value/1_000_000:.1f}M"
+                return f"{value / 1_000_000:.1f}M"
             elif abs(value) >= 1_000:
-                return f"{value/1_000:.1f}K"
+                return f"{value / 1_000:.1f}K"
             elif isinstance(value, float):
                 return f"{value:.2f}"
             else:
                 return f"{value:,}"
-        
+
         return str(value)
-    
+
     def refresh(self):
         """Refresh panel"""
         self._on_selection_changed()
         self._on_group_changed()
-    
+
     def clear(self):
         """Clear all cards"""
         for card in self.cards.values():

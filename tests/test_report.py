@@ -5,7 +5,6 @@ Tests for Report Generation Module
 
 import pytest
 from datetime import datetime
-from pathlib import Path
 import json
 
 import polars as pl
@@ -14,7 +13,6 @@ from data_graph_studio.core.report import (
     ReportFormat,
     ReportTheme,
     PageSize,
-    PageOrientation,
     ReportMetadata,
     ReportOptions,
     ReportData,
@@ -23,14 +21,11 @@ from data_graph_studio.core.report import (
     DatasetSummary,
     StatisticalSummary,
     ComparisonResult,
-    DifferenceAnalysis,
     ChartData,
     TableData,
     ChartStatistics,
     ChartStatisticsConfig,
     StatisticType,
-    ChartType,
-    DEFAULT_CHART_STATISTICS,
     get_default_statistics_for_chart,
     collect_statistics_from_dataframe,
     create_comparison_table,
@@ -45,9 +40,7 @@ class TestReportMetadata:
     def test_create_metadata(self):
         """메타데이터 생성 테스트"""
         meta = ReportMetadata(
-            title="Test Report",
-            subtitle="Test Subtitle",
-            author="Test Author"
+            title="Test Report", subtitle="Test Subtitle", author="Test Author"
         )
 
         assert meta.title == "Test Report"
@@ -72,19 +65,19 @@ class TestDatasetSummary:
     @pytest.fixture
     def sample_df(self):
         """샘플 DataFrame"""
-        return pl.DataFrame({
-            "name": ["Alice", "Bob", "Charlie", None],
-            "age": [25, 30, 35, 40],
-            "salary": [50000.0, 60000.0, 70000.0, 80000.0],
-            "date": ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04"]
-        })
+        return pl.DataFrame(
+            {
+                "name": ["Alice", "Bob", "Charlie", None],
+                "age": [25, 30, 35, 40],
+                "salary": [50000.0, 60000.0, 70000.0, 80000.0],
+                "date": ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04"],
+            }
+        )
 
     def test_from_dataframe(self, sample_df):
         """DataFrame에서 생성 테스트"""
         summary = DatasetSummary.from_dataframe(
-            sample_df,
-            id="test_id",
-            name="Test Dataset"
+            sample_df, id="test_id", name="Test Dataset"
         )
 
         assert summary.id == "test_id"
@@ -96,12 +89,7 @@ class TestDatasetSummary:
 
     def test_to_dict(self):
         """딕셔너리 변환 테스트"""
-        summary = DatasetSummary(
-            id="test",
-            name="Test",
-            row_count=100,
-            column_count=10
-        )
+        summary = DatasetSummary(id="test", name="Test", row_count=100, column_count=10)
 
         d = summary.to_dict()
         assert d["id"] == "test"
@@ -141,42 +129,50 @@ class TestComparisonResult:
     def test_significance_levels(self):
         """유의수준 기호 테스트"""
         comp_high = ComparisonResult(
-            dataset_a_id="a", dataset_a_name="A",
-            dataset_b_id="b", dataset_b_name="B",
+            dataset_a_id="a",
+            dataset_a_name="A",
+            dataset_b_id="b",
+            dataset_b_name="B",
             column="value",
             test_type="t-test",
             test_statistic=3.5,
-            p_value=0.0005
+            p_value=0.0005,
         )
         assert comp_high.get_significance_symbol() == "***"
 
         comp_medium = ComparisonResult(
-            dataset_a_id="a", dataset_a_name="A",
-            dataset_b_id="b", dataset_b_name="B",
+            dataset_a_id="a",
+            dataset_a_name="A",
+            dataset_b_id="b",
+            dataset_b_name="B",
             column="value",
             test_type="t-test",
             test_statistic=2.5,
-            p_value=0.005
+            p_value=0.005,
         )
         assert comp_medium.get_significance_symbol() == "**"
 
         comp_low = ComparisonResult(
-            dataset_a_id="a", dataset_a_name="A",
-            dataset_b_id="b", dataset_b_name="B",
+            dataset_a_id="a",
+            dataset_a_name="A",
+            dataset_b_id="b",
+            dataset_b_name="B",
             column="value",
             test_type="t-test",
             test_statistic=2.0,
-            p_value=0.03
+            p_value=0.03,
         )
         assert comp_low.get_significance_symbol() == "*"
 
         comp_none = ComparisonResult(
-            dataset_a_id="a", dataset_a_name="A",
-            dataset_b_id="b", dataset_b_name="B",
+            dataset_a_id="a",
+            dataset_a_name="A",
+            dataset_b_id="b",
+            dataset_b_name="B",
             column="value",
             test_type="t-test",
             test_statistic=1.0,
-            p_value=0.1
+            p_value=0.1,
         )
         assert comp_none.get_significance_symbol() == ""
 
@@ -186,10 +182,7 @@ class TestTableData:
 
     def test_from_dataframe(self):
         """DataFrame에서 생성 테스트"""
-        df = pl.DataFrame({
-            "col1": [1, 2, 3],
-            "col2": ["a", "b", "c"]
-        })
+        df = pl.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"]})
 
         table = TableData.from_dataframe(df, "test", "Test Table")
 
@@ -220,9 +213,13 @@ class TestReportData:
         return ReportData(
             metadata=ReportMetadata(title="Test Report"),
             datasets=[
-                DatasetSummary(id="d1", name="Dataset 1", row_count=100, column_count=10),
-                DatasetSummary(id="d2", name="Dataset 2", row_count=200, column_count=10),
-            ]
+                DatasetSummary(
+                    id="d1", name="Dataset 1", row_count=100, column_count=10
+                ),
+                DatasetSummary(
+                    id="d2", name="Dataset 2", row_count=200, column_count=10
+                ),
+            ],
         )
 
     def test_total_rows(self, sample_report_data):
@@ -235,7 +232,11 @@ class TestReportData:
 
         single = ReportData(
             metadata=ReportMetadata(title="Test"),
-            datasets=[DatasetSummary(id="d1", name="Dataset 1", row_count=100, column_count=10)]
+            datasets=[
+                DatasetSummary(
+                    id="d1", name="Dataset 1", row_count=100, column_count=10
+                )
+            ],
         )
         assert single.is_multi_dataset() is False
 
@@ -264,10 +265,7 @@ class TestReportOptions:
 
     def test_to_dict(self):
         """딕셔너리 변환 테스트"""
-        options = ReportOptions(
-            format=ReportFormat.PDF,
-            language="ko"
-        )
+        options = ReportOptions(format=ReportFormat.PDF, language="ko")
 
         d = options.to_dict()
         assert d["format"] == "pdf"
@@ -280,9 +278,7 @@ class TestReportTemplate:
     def test_create_template(self):
         """템플릿 생성 테스트"""
         template = ReportTemplate(
-            id="custom",
-            name="Custom Template",
-            primary_color="#ff0000"
+            id="custom", name="Custom Template", primary_color="#ff0000"
         )
 
         assert template.id == "custom"
@@ -334,9 +330,7 @@ class TestHTMLReportGenerator:
         """샘플 레포트 데이터"""
         return ReportData(
             metadata=ReportMetadata(
-                title="Test Report",
-                subtitle="Test Subtitle",
-                author="Test Author"
+                title="Test Report", subtitle="Test Subtitle", author="Test Author"
             ),
             datasets=[
                 DatasetSummary(
@@ -346,7 +340,7 @@ class TestHTMLReportGenerator:
                     column_count=10,
                     columns=["col1", "col2", "col3"],
                     column_types={"col1": "Int64", "col2": "Float64", "col3": "String"},
-                    color="#1f77b4"
+                    color="#1f77b4",
                 )
             ],
             statistics={
@@ -360,12 +354,12 @@ class TestHTMLReportGenerator:
                         median=48.0,
                         std=15.0,
                         min=0.0,
-                        max=100.0
+                        max=100.0,
                     )
                 ]
             },
             key_findings=["Finding 1", "Finding 2"],
-            recommendations=["Recommendation 1"]
+            recommendations=["Recommendation 1"],
         )
 
     def test_generate_html(self, sample_report_data):
@@ -376,7 +370,7 @@ class TestHTMLReportGenerator:
         html_bytes = generator.generate(sample_report_data, options)
 
         assert isinstance(html_bytes, bytes)
-        html_content = html_bytes.decode('utf-8')
+        html_content = html_bytes.decode("utf-8")
 
         # 기본 구조 확인
         assert "<!DOCTYPE html>" in html_content
@@ -390,20 +384,17 @@ class TestHTMLReportGenerator:
         options = ReportOptions(format=ReportFormat.HTML, language="ko")
 
         html_bytes = generator.generate(sample_report_data, options)
-        html_content = html_bytes.decode('utf-8')
+        html_content = html_bytes.decode("utf-8")
 
         assert "목차" in html_content
 
     def test_generate_html_dark_theme(self, sample_report_data):
         """다크 테마 HTML 생성 테스트"""
         generator = HTMLReportGenerator()
-        options = ReportOptions(
-            format=ReportFormat.HTML,
-            theme=ReportTheme.DARK
-        )
+        options = ReportOptions(format=ReportFormat.HTML, theme=ReportTheme.DARK)
 
         html_bytes = generator.generate(sample_report_data, options)
-        html_content = html_bytes.decode('utf-8')
+        html_content = html_bytes.decode("utf-8")
 
         assert "theme-dark" in html_content
 
@@ -416,7 +407,7 @@ class TestHTMLReportGenerator:
                 chart_type="line",
                 title="Test Chart",
                 image_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                image_format="png"
+                image_format="png",
             )
         )
 
@@ -424,7 +415,7 @@ class TestHTMLReportGenerator:
         options = ReportOptions(format=ReportFormat.HTML)
 
         html_bytes = generator.generate(sample_report_data, options)
-        html_content = html_bytes.decode('utf-8')
+        html_content = html_bytes.decode("utf-8")
 
         assert "Test Chart" in html_content
         assert "data:image/png;base64" in html_content
@@ -439,7 +430,7 @@ class TestHTMLReportGenerator:
                 row_count=1500,
                 column_count=10,
                 columns=["col1", "col2", "col3"],
-                color="#ff7f0e"
+                color="#ff7f0e",
             )
         )
 
@@ -456,7 +447,7 @@ class TestHTMLReportGenerator:
                 p_value=0.015,
                 effect_size=0.45,
                 effect_size_interpretation="Small-Medium",
-                significant=True
+                significant=True,
             )
         )
 
@@ -464,7 +455,7 @@ class TestHTMLReportGenerator:
         options = ReportOptions(format=ReportFormat.HTML)
 
         html_bytes = generator.generate(sample_report_data, options)
-        html_content = html_bytes.decode('utf-8')
+        html_content = html_bytes.decode("utf-8")
 
         assert "Dataset 1 vs Dataset 2" in html_content
         assert "t-test" in html_content
@@ -480,7 +471,7 @@ class TestHTMLReportGenerator:
                 columns=["A", "B", "C"],
                 rows=[[1, 2, 3], [4, 5, 6]],
                 total_rows=2,
-                shown_rows=2
+                shown_rows=2,
             )
         )
 
@@ -488,7 +479,7 @@ class TestHTMLReportGenerator:
         options = ReportOptions(format=ReportFormat.HTML)
 
         html_bytes = generator.generate(sample_report_data, options)
-        html_content = html_bytes.decode('utf-8')
+        html_content = html_bytes.decode("utf-8")
 
         assert "Test Table" in html_content
 
@@ -504,7 +495,7 @@ class TestHTMLReportGenerator:
         assert result_path.suffix == ".html"
 
         # 파일 내용 확인
-        content = result_path.read_text(encoding='utf-8')
+        content = result_path.read_text(encoding="utf-8")
         assert "Test Report" in content
 
 
@@ -513,10 +504,9 @@ class TestUtilityFunctions:
 
     def test_collect_statistics_from_dataframe(self):
         """DataFrame 통계 수집 테스트"""
-        df = pl.DataFrame({
-            "numeric_col": [1, 2, 3, 4, 5],
-            "string_col": ["a", "b", "c", "d", "e"]
-        })
+        df = pl.DataFrame(
+            {"numeric_col": [1, 2, 3, 4, 5], "string_col": ["a", "b", "c", "d", "e"]}
+        )
 
         stats = collect_statistics_from_dataframe(df, "test_id", "Test")
 
@@ -536,7 +526,7 @@ class TestUtilityFunctions:
             "d2": [
                 StatisticalSummary(column="col1", mean=15.0),
                 StatisticalSummary(column="col2", mean=25.0),
-            ]
+            ],
         }
 
         table = create_comparison_table(statistics, "mean")
@@ -592,10 +582,10 @@ class TestChartStatistics:
                 "mean": 50.0,
                 "max": 100,
                 "min": 10,
-                "count": 20
-            }
+                "count": 20,
+            },
         )
-        
+
         assert stats.chart_type == "bar"
         assert stats.get("total") == 1000
         assert stats.get("mean") == 50.0
@@ -605,10 +595,9 @@ class TestChartStatistics:
     def test_chart_statistics_to_dict(self):
         """차트 통계 딕셔너리 변환 테스트"""
         stats = ChartStatistics(
-            chart_type="line",
-            statistics={"start_value": 10, "end_value": 100}
+            chart_type="line", statistics={"start_value": 10, "end_value": 100}
         )
-        
+
         d = stats.to_dict()
         assert d["chart_type"] == "line"
         assert d["statistics"]["start_value"] == 10
@@ -618,7 +607,7 @@ class TestChartStatistics:
         stats = ChartStatistics(chart_type="pie")
         stats.set("total", 500)
         stats.set("count", 10)
-        
+
         assert stats.get("total") == 500
         assert stats.get("count") == 10
 
@@ -629,11 +618,15 @@ class TestChartStatisticsConfig:
     def test_create_config(self):
         """설정 생성 테스트"""
         config = ChartStatisticsConfig(
-            enabled_statistics=[StatisticType.MEAN, StatisticType.MAX, StatisticType.MIN],
+            enabled_statistics=[
+                StatisticType.MEAN,
+                StatisticType.MAX,
+                StatisticType.MIN,
+            ],
             show_in_report=True,
-            decimal_places=3
+            decimal_places=3,
         )
-        
+
         assert len(config.enabled_statistics) == 3
         assert StatisticType.MEAN in config.enabled_statistics
         assert config.show_in_report is True
@@ -644,7 +637,7 @@ class TestChartStatisticsConfig:
         config = ChartStatisticsConfig(
             enabled_statistics=[StatisticType.COUNT, StatisticType.TOTAL]
         )
-        
+
         d = config.to_dict()
         assert "count" in d["enabled_statistics"]
         assert "total" in d["enabled_statistics"]
@@ -654,11 +647,11 @@ class TestChartStatisticsConfig:
         data = {
             "enabled_statistics": ["mean", "median", "std"],
             "show_in_report": False,
-            "decimal_places": 4
+            "decimal_places": 4,
         }
-        
+
         config = ChartStatisticsConfig.from_dict(data)
-        
+
         assert len(config.enabled_statistics) == 3
         assert StatisticType.MEAN in config.enabled_statistics
         assert config.show_in_report is False
@@ -671,7 +664,7 @@ class TestDefaultChartStatistics:
     def test_bar_chart_defaults(self):
         """Bar chart 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("bar")
-        
+
         assert StatisticType.TOTAL in stats
         assert StatisticType.MEAN in stats
         assert StatisticType.MAX in stats
@@ -681,7 +674,7 @@ class TestDefaultChartStatistics:
     def test_pie_chart_defaults(self):
         """Pie chart 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("pie")
-        
+
         assert StatisticType.PERCENTAGE in stats
         assert StatisticType.TOTAL in stats
         assert StatisticType.COUNT in stats
@@ -689,7 +682,7 @@ class TestDefaultChartStatistics:
     def test_line_chart_defaults(self):
         """Line chart 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("line")
-        
+
         assert StatisticType.START_VALUE in stats
         assert StatisticType.END_VALUE in stats
         assert StatisticType.CHANGE_PERCENT in stats
@@ -698,7 +691,7 @@ class TestDefaultChartStatistics:
     def test_scatter_chart_defaults(self):
         """Scatter plot 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("scatter")
-        
+
         assert StatisticType.CORRELATION in stats
         assert StatisticType.R_SQUARED in stats
         assert StatisticType.X_RANGE in stats
@@ -707,7 +700,7 @@ class TestDefaultChartStatistics:
     def test_heatmap_defaults(self):
         """Heatmap 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("heatmap")
-        
+
         assert StatisticType.MAX in stats
         assert StatisticType.MIN in stats
         assert StatisticType.MEAN in stats
@@ -716,7 +709,7 @@ class TestDefaultChartStatistics:
     def test_box_chart_defaults(self):
         """Box plot 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("box")
-        
+
         assert StatisticType.MEDIAN in stats
         assert StatisticType.Q1 in stats
         assert StatisticType.Q3 in stats
@@ -726,7 +719,7 @@ class TestDefaultChartStatistics:
     def test_histogram_defaults(self):
         """Histogram 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("histogram")
-        
+
         assert StatisticType.MEAN in stats
         assert StatisticType.MEDIAN in stats
         assert StatisticType.STD in stats
@@ -737,7 +730,7 @@ class TestDefaultChartStatistics:
     def test_unknown_chart_type(self):
         """알 수 없는 차트 타입 기본 통계 테스트"""
         stats = get_default_statistics_for_chart("unknown_type")
-        
+
         # 기본값 반환
         assert StatisticType.COUNT in stats
         assert StatisticType.MEAN in stats
@@ -755,35 +748,27 @@ class TestChartDataWithStatistics:
                 "mean": 50.0,
                 "max": 100,
                 "min": 10,
-                "count": 20
-            }
+                "count": 20,
+            },
         )
-        
+
         chart = ChartData(
-            id="chart1",
-            chart_type="bar",
-            title="Test Chart",
-            statistics=stats
+            id="chart1", chart_type="bar", title="Test Chart", statistics=stats
         )
-        
+
         assert chart.statistics is not None
         assert chart.statistics.get("total") == 1000
 
     def test_chart_data_set_statistics(self):
         """ChartData 통계 설정 테스트"""
-        chart = ChartData(
-            id="chart1",
-            chart_type="line",
-            title="Test Chart"
-        )
-        
+        chart = ChartData(id="chart1", chart_type="line", title="Test Chart")
+
         stats = ChartStatistics(
-            chart_type="line",
-            statistics={"start_value": 10, "end_value": 100}
+            chart_type="line", statistics={"start_value": 10, "end_value": 100}
         )
-        
+
         chart.set_statistics(stats)
-        
+
         assert chart.statistics is not None
         assert chart.statistics.get("start_value") == 10
 
@@ -797,19 +782,16 @@ class TestChartDataWithStatistics:
                 "max": 100,
                 "min": 10,
                 "count": 20,
-                "extra": "should_not_appear"  # not in default
-            }
+                "extra": "should_not_appear",  # not in default
+            },
         )
-        
+
         chart = ChartData(
-            id="chart1",
-            chart_type="bar",
-            title="Test Chart",
-            statistics=stats
+            id="chart1", chart_type="bar", title="Test Chart", statistics=stats
         )
-        
+
         display_stats = chart.get_statistics_for_display()
-        
+
         assert "total" in display_stats
         assert "mean" in display_stats
         assert display_stats["total"] == 1000
@@ -823,24 +805,24 @@ class TestChartDataWithStatistics:
                 "mean": 50.0,
                 "max": 100,
                 "min": 10,
-                "count": 20
-            }
+                "count": 20,
+            },
         )
-        
+
         config = ChartStatisticsConfig(
             enabled_statistics=[StatisticType.TOTAL, StatisticType.COUNT]
         )
-        
+
         chart = ChartData(
             id="chart1",
             chart_type="bar",
             title="Test Chart",
             statistics=stats,
-            statistics_config=config
+            statistics_config=config,
         )
-        
+
         display_stats = chart.get_statistics_for_display()
-        
+
         assert "total" in display_stats
         assert "count" in display_stats
         assert "mean" not in display_stats  # not in config
@@ -859,19 +841,14 @@ class TestHTMLGeneratorWithChartStatistics:
                 "mean": 250.0,
                 "max": 500,
                 "min": 100,
-                "count": 20
-            }
+                "count": 20,
+            },
         )
-        
+
         return ReportData(
             metadata=ReportMetadata(title="Chart Stats Test"),
             datasets=[
-                DatasetSummary(
-                    id="d1",
-                    name="Dataset 1",
-                    row_count=100,
-                    column_count=5
-                )
+                DatasetSummary(id="d1", name="Dataset 1", row_count=100, column_count=5)
             ],
             charts=[
                 ChartData(
@@ -879,36 +856,34 @@ class TestHTMLGeneratorWithChartStatistics:
                     chart_type="bar",
                     title="Bar Chart with Statistics",
                     image_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                    statistics=stats
+                    statistics=stats,
                 )
-            ]
+            ],
         )
 
     def test_html_includes_chart_statistics(self, sample_report_with_chart_stats):
         """HTML에 차트 통계가 포함되는지 테스트"""
         generator = HTMLReportGenerator()
-        options = ReportOptions(
-            format=ReportFormat.HTML,
-            include_chart_statistics=True
-        )
-        
+        options = ReportOptions(format=ReportFormat.HTML, include_chart_statistics=True)
+
         html_bytes = generator.generate(sample_report_with_chart_stats, options)
-        html_content = html_bytes.decode('utf-8')
-        
+        html_content = html_bytes.decode("utf-8")
+
         assert "chart-statistics" in html_content
         assert "stats-table" in html_content
 
-    def test_html_excludes_chart_statistics_when_disabled(self, sample_report_with_chart_stats):
+    def test_html_excludes_chart_statistics_when_disabled(
+        self, sample_report_with_chart_stats
+    ):
         """차트 통계 비활성화 테스트"""
         generator = HTMLReportGenerator()
         options = ReportOptions(
-            format=ReportFormat.HTML,
-            include_chart_statistics=False
+            format=ReportFormat.HTML, include_chart_statistics=False
         )
-        
+
         html_bytes = generator.generate(sample_report_with_chart_stats, options)
-        html_content = html_bytes.decode('utf-8')
-        
+        html_content = html_bytes.decode("utf-8")
+
         # CSS에는 chart-statistics가 있지만, 실제 div.chart-statistics는 없어야 함
         assert '<div class="chart-statistics">' not in html_content
 
@@ -918,15 +893,15 @@ class TestHTMLGeneratorWithChartStatistics:
             metadata=ReportMetadata(title="Test"),
             datasets=[DatasetSummary(id="d1", name="D1", row_count=10, column_count=5)],
             key_findings=["Finding 1", "Finding 2"],  # Should be excluded
-            recommendations=["Recommendation 1"]  # Should be excluded
+            recommendations=["Recommendation 1"],  # Should be excluded
         )
-        
+
         generator = HTMLReportGenerator()
         options = ReportOptions(format=ReportFormat.HTML)
-        
+
         html_bytes = generator.generate(report_data, options)
-        html_content = html_bytes.decode('utf-8')
-        
+        html_content = html_bytes.decode("utf-8")
+
         # key_findings와 recommendations가 렌더링되지 않아야 함
         assert "Finding 1" not in html_content
         assert "Recommendation 1" not in html_content
@@ -944,17 +919,17 @@ class TestHTMLGeneratorWithChartStatistics:
                     chart_type="bar",
                     title="Test Chart",
                     description="This description should not appear",  # Should be excluded
-                    image_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                    image_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
                 )
-            ]
+            ],
         )
-        
+
         generator = HTMLReportGenerator()
         options = ReportOptions(format=ReportFormat.HTML)
-        
+
         html_bytes = generator.generate(report_data, options)
-        html_content = html_bytes.decode('utf-8')
-        
+        html_content = html_bytes.decode("utf-8")
+
         # description 텍스트가 HTML에 나타나지 않아야 함
         assert "This description should not appear" not in html_content
         # CSS에는 chart-description이 있지만, 실제 p.chart-description은 없어야 함

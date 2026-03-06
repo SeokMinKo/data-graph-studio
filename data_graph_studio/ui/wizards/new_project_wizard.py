@@ -17,6 +17,7 @@ except ImportError as e:  # pragma: no cover - placeholder until implemented
             super().__init__(parent)
             self.file_path = file_path
 
+
 try:
     from .wpr_convert_step import WprConvertStep, is_wpr_file
 except ImportError as e:  # pragma: no cover
@@ -85,33 +86,33 @@ class NewProjectWizard(QWizard):
         self.current_file_path = file_path
         if hasattr(self, "_parsing_step"):
             self._parsing_step.update_file_path(file_path)
-    
+
     def accept(self) -> None:
         """마법사 완료 (Finish 버튼)"""
         # 각 단계에서 설정 수집
         parsing_page = self._parsing_step
         finish_page = self._finish_step
-        
+
         parsing_settings = None
         preview_df = None
         project_name = None
-        
+
         if parsing_page and hasattr(parsing_page, "get_parsing_settings"):
             parsing_settings = parsing_page.get_parsing_settings()
-        
+
         if parsing_page and hasattr(parsing_page, "get_preview_df"):
             preview_df = parsing_page.get_preview_df()
-        
+
         if finish_page and hasattr(finish_page, "get_project_name"):
             project_name = finish_page.get_project_name()
-        
+
         # 시그널 발생
         result = {
-            'parsing_settings': parsing_settings,
-            'graph_setting': None,
-            'preview_df': preview_df,
-            'project_name': project_name,
+            "parsing_settings": parsing_settings,
+            "graph_setting": None,
+            "preview_df": preview_df,
+            "project_name": project_name,
         }
         self.project_created.emit(result)
-        
+
         super().accept()

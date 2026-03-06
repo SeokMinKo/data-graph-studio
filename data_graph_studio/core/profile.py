@@ -6,7 +6,7 @@ import os
 import json
 import time
 import uuid
-from typing import Dict, List, Optional, Any, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -23,6 +23,7 @@ class GraphSetting:
 
     일상적인 프로파일 CRUD는 ProfileStore + GraphSetting으로 처리.
     """
+
     id: str
     name: str
     dataset_id: str
@@ -65,7 +66,9 @@ class GraphSetting:
             object.__setattr__(self, "chart_settings", dict(self.chart_settings))
 
     @classmethod
-    def create_new(cls, name: str, icon: str = "📊", dataset_id: str = "") -> 'GraphSetting':
+    def create_new(
+        cls, name: str, icon: str = "📊", dataset_id: str = ""
+    ) -> "GraphSetting":
         """새 GraphSetting 생성"""
         return cls(
             id=str(uuid.uuid4()),
@@ -95,10 +98,10 @@ class GraphSetting:
             result.update(dict(self.chart_settings))
         return result
 
-    def with_name(self, name: str) -> 'GraphSetting':
+    def with_name(self, name: str) -> "GraphSetting":
         return dataclasses.replace(self, name=name, modified_at=time.time())
 
-    def update_modified(self) -> 'GraphSetting':
+    def update_modified(self) -> "GraphSetting":
         """수정 시간 업데이트한 새 인스턴스 반환 (frozen이므로 replace 사용)"""
         return dataclasses.replace(self, modified_at=time.time())
 
@@ -127,7 +130,7 @@ class GraphSetting:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'GraphSetting':
+    def from_dict(cls, data: Dict) -> "GraphSetting":
         """Deserialize from dict with version migration support."""
         data = cls._migrate(dict(data))
         return cls(
@@ -174,6 +177,7 @@ class GraphSetting:
 @dataclass
 class Profile:
     """그래프 프로파일"""
+
     id: str
     name: str
     description: str = ""
@@ -197,13 +201,13 @@ class Profile:
     _path: Optional[str] = None
 
     @classmethod
-    def create_new(cls, name: str) -> 'Profile':
+    def create_new(cls, name: str) -> "Profile":
         """새 프로파일 생성"""
         return cls(
             id=str(uuid.uuid4()),
             name=name,
             created_at=time.time(),
-            modified_at=time.time()
+            modified_at=time.time(),
         )
 
     def add_setting(self, setting: GraphSetting):
@@ -249,69 +253,66 @@ class Profile:
     def to_dict(self) -> Dict:
         """딕셔너리로 변환"""
         return {
-            'id': self.id,
-            'name': self.name,
-            'description': self.description,
-            'created_at': self.created_at,
-            'modified_at': self.modified_at,
-            'data_schema': self.data_schema,
-            'settings': [s.to_dict() for s in self.settings],
-            'default_setting_id': self.default_setting_id,
-            'tags': self.tags,
-            'author': self.author,
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "created_at": self.created_at,
+            "modified_at": self.modified_at,
+            "data_schema": self.data_schema,
+            "settings": [s.to_dict() for s in self.settings],
+            "default_setting_id": self.default_setting_id,
+            "tags": self.tags,
+            "author": self.author,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'Profile':
+    def from_dict(cls, data: Dict) -> "Profile":
         """딕셔너리에서 복원"""
         profile = cls(
-            id=data.get('id', str(uuid.uuid4())),
-            name=data.get('name', 'Untitled Profile'),
-            description=data.get('description', ''),
-            created_at=data.get('created_at', time.time()),
-            modified_at=data.get('modified_at', time.time()),
-            data_schema=data.get('data_schema', {}),
-            default_setting_id=data.get('default_setting_id'),
-            tags=data.get('tags', []),
-            author=data.get('author', ''),
+            id=data.get("id", str(uuid.uuid4())),
+            name=data.get("name", "Untitled Profile"),
+            description=data.get("description", ""),
+            created_at=data.get("created_at", time.time()),
+            modified_at=data.get("modified_at", time.time()),
+            data_schema=data.get("data_schema", {}),
+            default_setting_id=data.get("default_setting_id"),
+            tags=data.get("tags", []),
+            author=data.get("author", ""),
         )
 
         # 설정 복원
-        settings_data = data.get('settings', [])
+        settings_data = data.get("settings", [])
         profile.settings = [GraphSetting.from_dict(s) for s in settings_data]
 
         return profile
 
     def to_json(self, indent: int = 2) -> str:
         """JSON 문자열로 변환"""
-        file_data = {
-            'format_version': '1.0',
-            'profile': self.to_dict()
-        }
+        file_data = {"format_version": "1.0", "profile": self.to_dict()}
         return json.dumps(file_data, indent=indent, ensure_ascii=False)
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'Profile':
+    def from_json(cls, json_str: str) -> "Profile":
         """JSON에서 복원"""
         file_data = json.loads(json_str)
-        profile_data = file_data.get('profile', file_data)
+        profile_data = file_data.get("profile", file_data)
         return cls.from_dict(profile_data)
 
     def save(self, path: str):
         """파일로 저장"""
-        if not path.endswith('.dgp'):
-            path = path + '.dgp'
+        if not path.endswith(".dgp"):
+            path = path + ".dgp"
 
         self.modified_at = time.time()
         self._path = path
 
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(self.to_json())
 
     @classmethod
-    def load(cls, path: str) -> 'Profile':
+    def load(cls, path: str) -> "Profile":
         """파일에서 로드"""
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
 
         profile = cls.from_json(content)
@@ -327,8 +328,8 @@ class Profile:
             Dict with 'missing' and 'available' column lists
         """
         result = {
-            'missing': [],
-            'available': [],
+            "missing": [],
+            "available": [],
         }
 
         # 프로파일에서 사용하는 모든 컬럼 수집
@@ -338,13 +339,13 @@ class Profile:
                 used_columns.add(setting.x_column)
             for gc in setting.group_columns:
                 # Issue #15 — isinstance check instead of assuming dict
-                if isinstance(gc, dict) and 'name' in gc:
-                    used_columns.add(gc['name'])
+                if isinstance(gc, dict) and "name" in gc:
+                    used_columns.add(gc["name"])
                 elif isinstance(gc, str):
                     used_columns.add(gc)
             for vc in setting.value_columns:
-                if isinstance(vc, dict) and 'name' in vc:
-                    used_columns.add(vc['name'])
+                if isinstance(vc, dict) and "name" in vc:
+                    used_columns.add(vc["name"])
                 elif isinstance(vc, str):
                     used_columns.add(vc)
             for hc in setting.hover_columns:
@@ -354,9 +355,9 @@ class Profile:
         column_set = set(columns)
         for col in used_columns:
             if col in column_set:
-                result['available'].append(col)
+                result["available"].append(col)
             else:
-                result['missing'].append(col)
+                result["missing"].append(col)
 
         return result
 
@@ -383,8 +384,10 @@ class ProfileManager:
 
     def _setup_profiles_dir(self):
         """프로파일 디렉토리 설정"""
-        home = os.path.expanduser('~')
-        self._profiles_dir = Path(home) / '.data-graph-studio' / self.DEFAULT_PROFILES_DIR
+        home = os.path.expanduser("~")
+        self._profiles_dir = (
+            Path(home) / ".data-graph-studio" / self.DEFAULT_PROFILES_DIR
+        )
         self._profiles_dir.mkdir(parents=True, exist_ok=True)
 
         # 최근 프로파일 목록 로드
@@ -392,19 +395,19 @@ class ProfileManager:
 
     def _load_recent_profiles(self):
         """최근 프로파일 목록 로드"""
-        recent_file = self._profiles_dir.parent / 'recent_profiles.json'
+        recent_file = self._profiles_dir.parent / "recent_profiles.json"
         if recent_file.exists():
             try:
-                with open(recent_file, 'r', encoding='utf-8') as f:
+                with open(recent_file, "r", encoding="utf-8") as f:
                     self._recent_profiles = json.load(f)
             except Exception:
                 self._recent_profiles = []
 
     def _save_recent_profiles(self):
         """최근 프로파일 목록 저장"""
-        recent_file = self._profiles_dir.parent / 'recent_profiles.json'
+        recent_file = self._profiles_dir.parent / "recent_profiles.json"
         try:
-            with open(recent_file, 'w', encoding='utf-8') as f:
+            with open(recent_file, "w", encoding="utf-8") as f:
                 json.dump(self._recent_profiles, f)
         except Exception:
             pass
@@ -444,7 +447,9 @@ class ProfileManager:
 
         if path is None:
             # 기본 경로 사용
-            safe_name = "".join(c for c in self._current.name if c.isalnum() or c in "._- ")
+            safe_name = "".join(
+                c for c in self._current.name if c.isalnum() or c in "._- "
+            )
             path = str(self._profiles_dir / f"{safe_name}.dgp")
 
         self._current.save(path)
@@ -465,7 +470,7 @@ class ProfileManager:
             self._recent_profiles.remove(path)
 
         self._recent_profiles.insert(0, path)
-        self._recent_profiles = self._recent_profiles[:self.MAX_RECENT_PROFILES]
+        self._recent_profiles = self._recent_profiles[: self.MAX_RECENT_PROFILES]
 
         self._save_recent_profiles()
 
@@ -485,9 +490,11 @@ class ProfileManager:
             if os.path.exists(path):
                 try:
                     from send2trash import send2trash  # type: ignore
+
                     send2trash(path)
                 except ImportError:
                     import logging
+
                     logging.getLogger(__name__).info(
                         "send2trash not installed, using os.remove for %s", path
                     )

@@ -18,7 +18,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import polars as pl
@@ -201,15 +201,24 @@ def select_preset(
             if p.name == preset_name and p.columns_present(df):
                 logger.info("[GraphPreset] selected preset: %s (explicit)", p.name)
                 return p
-        logger.warning("[GraphPreset] preset '%s' not found or columns missing", preset_name)
+        logger.warning(
+            "[GraphPreset] preset '%s' not found or columns missing", preset_name
+        )
         return None
 
     # Auto-select: first preset whose columns are present
     for p in presets:
         if p.columns_present(df):
-            logger.info("[GraphPreset] auto-selected preset: %s for converter=%s", p.name, converter)
+            logger.info(
+                "[GraphPreset] auto-selected preset: %s for converter=%s",
+                p.name,
+                converter,
+            )
             return p
 
-    logger.warning("[GraphPreset] no preset matched columns=%s for converter=%s",
-                   df.columns, converter)
+    logger.warning(
+        "[GraphPreset] no preset matched columns=%s for converter=%s",
+        df.columns,
+        converter,
+    )
     return None

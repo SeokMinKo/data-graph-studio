@@ -211,11 +211,14 @@ class MinimapWidget(pg.PlotWidget):
 
         cmap = pg.ColorMap(
             pos=np.array([0.0, 0.2, 1.0]),
-            color=np.array([
-                [15, 23, 42, 10],
-                [71, 85, 105, 120],
-                [148, 163, 184, 230],
-            ], dtype=np.ubyte),
+            color=np.array(
+                [
+                    [15, 23, 42, 10],
+                    [71, 85, 105, 120],
+                    [148, 163, 184, 230],
+                ],
+                dtype=np.ubyte,
+            ),
         )
         self._image_item.setLookupTable(cmap.getLookupTable(0.0, 1.0, 256))
 
@@ -236,7 +239,13 @@ class MinimapWidget(pg.PlotWidget):
 
     # --------------------------- region sync API ---------------------------
 
-    def set_region(self, x_min: float, x_max: float, y_min: Optional[float] = None, y_max: Optional[float] = None) -> None:
+    def set_region(
+        self,
+        x_min: float,
+        x_max: float,
+        y_min: Optional[float] = None,
+        y_max: Optional[float] = None,
+    ) -> None:
         """Set viewport rectangle from main graph view range."""
         if self._data_bounds is None:
             return

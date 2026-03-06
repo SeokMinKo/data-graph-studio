@@ -14,7 +14,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List
 
 from PySide6.QtWidgets import (
-    QFileDialog, QMessageBox, QProgressDialog, QApplication, QDialog, QWidget,
+    QFileDialog,
+    QMessageBox,
+    QProgressDialog,
+    QApplication,
+    QDialog,
+    QWidget,
     QVBoxLayout,
 )
 from PySide6.QtCore import Qt
@@ -38,6 +43,7 @@ class _PendingLoad:
     Issue #7 — replaces scattered ``w._pending_*`` attributes on MainWindow.
     Issue #3 — owned by DatasetController instead of MainWindow.
     """
+
     dataset_id: str
     name: str
     file_path: Optional[str]
@@ -51,7 +57,7 @@ class DatasetController:
 
     def __init__(
         self,
-        window: 'MainWindow',
+        window: "MainWindow",
         *,
         engine=None,
         state=None,
@@ -93,7 +99,7 @@ class DatasetController:
             "Excel (*.xlsx *.xls);;"
             "Parquet (*.parquet);;"
             "JSON (*.json);;"
-            "All Files (*.*)"
+            "All Files (*.*)",
         )
 
         if not file_paths:
@@ -139,11 +145,12 @@ class DatasetController:
 
         ext = Path(file_path).suffix.lower()
 
-        if ext in ['.parquet', '.xlsx', '.xls', '.json']:
+        if ext in [".parquet", ".xlsx", ".xls", ".json"]:
             self._load_dataset(file_path)
             return
 
         from ..dialogs.parsing_preview_dialog import ParsingPreviewDialog
+
         dialog = ParsingPreviewDialog(file_path, w)
         if dialog.exec() == QDialog.Accepted:
             settings = dialog.get_settings()
@@ -152,56 +159,58 @@ class DatasetController:
     def _load_dataset(self, file_path: str, settings: Optional[ParsingSettings] = None):
         """데이터셋 로드 (새 데이터셋으로 추가)"""
         import uuid
+
         w = self._w
 
         dataset_id = str(uuid.uuid4())[:8]
         name = Path(file_path).name
 
-        w._progress_dialog = QProgressDialog(
-            f"Loading {name}...",
-            "Cancel",
-            0, 100,
-            w
-        )
+        w._progress_dialog = QProgressDialog(f"Loading {name}...", "Cancel", 0, 100, w)
         w._progress_dialog.setWindowModality(Qt.WindowModal)
         w._progress_dialog.setMinimumDuration(500)
         w._progress_dialog.canceled.connect(w._file_controller._cancel_loading)
         w._progress_dialog.show()
 
-        self._pending = _PendingLoad(dataset_id=dataset_id, name=name, file_path=file_path)
+        self._pending = _PendingLoad(
+            dataset_id=dataset_id, name=name, file_path=file_path
+        )
 
         w._file_controller._cleanup_loader_thread()
         from .file_loading_controller import DataLoaderThread
+
         w._loader_thread = DataLoaderThread(w.engine, file_path)
-        w._loader_thread.progress_updated.connect(w._file_controller._on_loading_progress)
+        w._loader_thread.progress_updated.connect(
+            w._file_controller._on_loading_progress
+        )
         w._loader_thread.finished_loading.connect(self._on_dataset_loading_finished)
         w._loader_thread.start()
 
     def _load_dataset_with_settings(self, file_path: str, settings: ParsingSettings):
         """설정을 적용하여 데이터셋 로드"""
         import uuid
+
         w = self._w
 
         dataset_id = str(uuid.uuid4())[:8]
         name = Path(file_path).name
 
-        w._progress_dialog = QProgressDialog(
-            f"Loading {name}...",
-            "Cancel",
-            0, 100,
-            w
-        )
+        w._progress_dialog = QProgressDialog(f"Loading {name}...", "Cancel", 0, 100, w)
         w._progress_dialog.setWindowModality(Qt.WindowModal)
         w._progress_dialog.setMinimumDuration(500)
         w._progress_dialog.canceled.connect(w._file_controller._cancel_loading)
         w._progress_dialog.show()
 
-        self._pending = _PendingLoad(dataset_id=dataset_id, name=name, file_path=file_path)
+        self._pending = _PendingLoad(
+            dataset_id=dataset_id, name=name, file_path=file_path
+        )
 
         w._file_controller._cleanup_loader_thread()
         from .file_loading_controller import DataLoaderThreadWithSettings
+
         w._loader_thread = DataLoaderThreadWithSettings(w.engine, file_path, settings)
-        w._loader_thread.progress_updated.connect(w._file_controller._on_loading_progress)
+        w._loader_thread.progress_updated.connect(
+            w._file_controller._on_loading_progress
+        )
         w._loader_thread.finished_loading.connect(self._on_dataset_loading_finished)
         w._loader_thread.start()
 
@@ -214,30 +223,33 @@ class DatasetController:
         if success:
             pending = self._pending
             dataset_id = pending.dataset_id if pending else None
-            name = pending.name if pending else 'Dataset'
+            name = pending.name if pending else "Dataset"
             file_path = pending.file_path if pending else None
 
             if dataset_id:
                 from ...core.data_engine import DatasetInfo
+
                 dataset_info = DatasetInfo(
                     id=dataset_id,
                     name=name,
                     df=w.engine.df,
                     lazy_df=w.engine._lazy_df,
                     source=w.engine._source,
-                    profile=w.engine.profile
+                    profile=w.engine.profile,
                 )
                 w.engine._datasets[dataset_id] = dataset_info
                 w.engine._active_dataset_id = dataset_id
 
-                memory_bytes = w.engine.df.estimated_size() if w.engine.df is not None else 0
+                memory_bytes = (
+                    w.engine.df.estimated_size() if w.engine.df is not None else 0
+                )
                 w.state.add_dataset(
                     dataset_id=dataset_id,
                     name=name,
                     file_path=file_path,
                     row_count=w.engine.row_count,
                     column_count=w.engine.column_count,
-                    memory_bytes=memory_bytes
+                    memory_bytes=memory_bytes,
                 )
 
                 w.state.set_data_loaded(True, w.engine.row_count)
@@ -249,17 +261,15 @@ class DatasetController:
                 w.profile_model.refresh()
 
                 gc.collect()
-                logger.info(f"Dataset added: {dataset_id} ({name}), {w.engine.row_count:,} rows")
+                logger.info(
+                    f"Dataset added: {dataset_id} ({name}), {w.engine.row_count:,} rows"
+                )
 
             self._pending = None
         else:
             error_msg = w.engine.progress.error_message or "Unknown error"
             logger.error(f"Failed to load dataset: {error_msg}")
-            QMessageBox.critical(
-                w,
-                "Error",
-                f"Failed to load dataset:\n{error_msg}"
-            )
+            QMessageBox.critical(w, "Error", f"Failed to load dataset:\n{error_msg}")
 
     def _on_dataset_activated(self, dataset_id: str):
         """데이터셋 활성화 요청"""
@@ -282,7 +292,7 @@ class DatasetController:
                 w.table_panel.set_data(w.engine.df)
                 w.graph_panel.set_columns(w.engine.columns)
 
-                if hasattr(w.graph_panel.options_panel, 'data_tab'):
+                if hasattr(w.graph_panel.options_panel, "data_tab"):
                     w.graph_panel.options_panel.data_tab.set_columns(
                         w.engine.columns, w.engine
                     )
@@ -299,7 +309,7 @@ class DatasetController:
                 if metadata:
                     w.statusbar.showMessage(
                         f"Activated: {metadata.name} ({w.engine.row_count:,} rows)",
-                        3000
+                        3000,
                     )
 
         if prev_id == dataset_id:
@@ -319,6 +329,7 @@ class DatasetController:
     def _capture_dataset_snapshot(self, dataset_id: str):
         """Capture dataset info + state for undo.  Issue #16 — helper extracted."""
         import copy
+
         w = self._w
         metadata = w.state.get_dataset_metadata(dataset_id)
 
@@ -329,7 +340,11 @@ class DatasetController:
 
         LARGE_UNDO_BYTES = 300 * 1024 * 1024
         can_reload = bool(getattr(metadata, "file_path", None))
-        is_large = bool(metadata and getattr(metadata, "memory_bytes", 0) and metadata.memory_bytes > LARGE_UNDO_BYTES)
+        is_large = bool(
+            metadata
+            and getattr(metadata, "memory_bytes", 0)
+            and metadata.memory_bytes > LARGE_UNDO_BYTES
+        )
         if is_large and can_reload:
             dataset_info = None
 
@@ -346,7 +361,15 @@ class DatasetController:
 
         return dataset_info, state_snapshot, meta_snapshot
 
-    def _restore_dataset(self, dataset_id: str, name: str, dataset_info, state_snapshot, meta_snapshot, prev_active: str):
+    def _restore_dataset(
+        self,
+        dataset_id: str,
+        name: str,
+        dataset_info,
+        state_snapshot,
+        meta_snapshot,
+        prev_active: str,
+    ):
         """Restore a removed dataset.  Issue #16 — helper extracted."""
         w = self._w
         if meta_snapshot is None:
@@ -362,7 +385,11 @@ class DatasetController:
             if not file_path:
                 return
             try:
-                w.engine.load_dataset(file_path, name=getattr(meta_snapshot, "name", name), dataset_id=dataset_id)
+                w.engine.load_dataset(
+                    file_path,
+                    name=getattr(meta_snapshot, "name", name),
+                    dataset_id=dataset_id,
+                )
             except Exception:
                 return
 
@@ -388,7 +415,9 @@ class DatasetController:
         metadata = w.state.get_dataset_metadata(dataset_id)
         name = metadata.name if metadata else dataset_id
 
-        dataset_info, state_snapshot, meta_snapshot = self._capture_dataset_snapshot(dataset_id)
+        dataset_info, state_snapshot, meta_snapshot = self._capture_dataset_snapshot(
+            dataset_id
+        )
         prev_active = w.engine.active_dataset_id
 
         def _remove():
@@ -404,7 +433,14 @@ class DatasetController:
                 w.statusbar.showMessage(f"Removed: {name}", 3000)
 
         def _restore():
-            self._restore_dataset(dataset_id, name, dataset_info, state_snapshot, meta_snapshot, prev_active)
+            self._restore_dataset(
+                dataset_id,
+                name,
+                dataset_info,
+                state_snapshot,
+                meta_snapshot,
+                prev_active,
+            )
 
         w._undo_stack.push(
             UndoCommand(
@@ -443,7 +479,7 @@ class DatasetController:
     def _update_comparison_mode_actions(self, mode: ComparisonMode):
         """비교 모드 메뉴 액션 상태 업데이트"""
         w = self._w
-        if not hasattr(w, '_comparison_mode_actions'):
+        if not hasattr(w, "_comparison_mode_actions"):
             return
 
         for action_mode, action in w._comparison_mode_actions.items():
@@ -482,9 +518,7 @@ class DatasetController:
 
         if len(dataset_ids) < 2:
             QMessageBox.warning(
-                w,
-                "Comparison",
-                "Please select at least 2 datasets for comparison."
+                w, "Comparison", "Please select at least 2 datasets for comparison."
             )
             return
 
@@ -515,8 +549,7 @@ class DatasetController:
         """오버레이 비교 시작"""
         w = self._w
         w.statusbar.showMessage(
-            f"Overlay comparison: {len(dataset_ids)} datasets",
-            3000
+            f"Overlay comparison: {len(dataset_ids)} datasets", 3000
         )
         w.graph_panel.refresh()
         self._show_overlay_stats_widget()
@@ -525,15 +558,20 @@ class DatasetController:
         """오버레이 통계 위젯 표시"""
         w = self._w
         from ..panels.overlay_stats_widget import OverlayStatsWidget
+
         if w._overlay_stats_widget is None:
             w._overlay_stats_widget = OverlayStatsWidget(
                 w.engine, w.state, w.graph_panel
             )
-            w._overlay_stats_widget.close_requested.connect(self._hide_overlay_stats_widget)
-            w._overlay_stats_widget.expand_requested.connect(self._show_comparison_stats_panel)
+            w._overlay_stats_widget.close_requested.connect(
+                self._hide_overlay_stats_widget
+            )
+            w._overlay_stats_widget.expand_requested.connect(
+                self._show_comparison_stats_panel
+            )
 
         is_light = is_light_theme(w)
-        if hasattr(w._overlay_stats_widget, 'apply_theme'):
+        if hasattr(w._overlay_stats_widget, "apply_theme"):
             w._overlay_stats_widget.apply_theme(is_light)
 
         w._overlay_stats_widget.set_position("top-right")
@@ -551,12 +589,10 @@ class DatasetController:
         from ..panels.comparison_stats_panel import ComparisonStatsPanel
 
         if w._comparison_stats_panel is None:
-            w._comparison_stats_panel = ComparisonStatsPanel(
-                w.engine, w.state
-            )
+            w._comparison_stats_panel = ComparisonStatsPanel(w.engine, w.state)
 
         is_light = is_light_theme(w)
-        if hasattr(w._comparison_stats_panel, 'apply_theme'):
+        if hasattr(w._comparison_stats_panel, "apply_theme"):
             w._comparison_stats_panel.apply_theme(is_light)
 
         dialog = QDialog(w)
@@ -578,7 +614,7 @@ class DatasetController:
             QMessageBox.information(
                 w,
                 "Export Report",
-                "Please select at least 2 datasets for comparison first."
+                "Please select at least 2 datasets for comparison first.",
             )
             return
 
@@ -586,53 +622,51 @@ class DatasetController:
             w,
             "Export Comparison Report",
             "comparison_report",
-            "HTML Report (*.html);;JSON Report (*.json);;CSV Report (*.csv)"
+            "HTML Report (*.html);;JSON Report (*.json);;CSV Report (*.csv)",
         )
 
         if not file_path:
             return
 
-        if selected_filter.startswith("HTML") and not file_path.endswith('.html'):
-            file_path += '.html'
-        elif selected_filter.startswith("JSON") and not file_path.endswith('.json'):
-            file_path += '.json'
-        elif selected_filter.startswith("CSV") and not file_path.endswith('.csv'):
-            file_path += '.csv'
+        if selected_filter.startswith("HTML") and not file_path.endswith(".html"):
+            file_path += ".html"
+        elif selected_filter.startswith("JSON") and not file_path.endswith(".json"):
+            file_path += ".json"
+        elif selected_filter.startswith("CSV") and not file_path.endswith(".csv"):
+            file_path += ".csv"
 
         report_gen = ComparisonReport(w.engine, w.state)
 
         success = False
-        if file_path.endswith('.html'):
+        if file_path.endswith(".html"):
             success = report_gen.export_html(file_path, dataset_ids)
-        elif file_path.endswith('.json'):
+        elif file_path.endswith(".json"):
             success = report_gen.export_json(file_path, dataset_ids)
-        elif file_path.endswith('.csv'):
+        elif file_path.endswith(".csv"):
             success = report_gen.export_csv(file_path, dataset_ids)
 
         if success:
             QMessageBox.information(
-                w,
-                "Export Report",
-                f"Report exported successfully:\n{file_path}"
+                w, "Export Report", f"Report exported successfully:\n{file_path}"
             )
         else:
             QMessageBox.warning(
                 w,
                 "Export Report",
-                "Failed to export report. Please check the file path and try again."
+                "Failed to export report. Please check the file path and try again.",
             )
 
     def _start_side_by_side_comparison(self, dataset_ids: List[str]):
         """병렬 비교 시작"""
         w = self._w
         w.statusbar.showMessage(
-            f"Side-by-side comparison: {len(dataset_ids)} datasets",
-            3000
+            f"Side-by-side comparison: {len(dataset_ids)} datasets", 3000
         )
 
         self._remove_comparison_view()
 
         from ..panels.side_by_side_layout import SideBySideLayout
+
         if w._side_by_side_layout is None:
             w._side_by_side_layout = SideBySideLayout(w.engine, w.state)
             w._side_by_side_layout.dataset_activated.connect(self._on_dataset_activated)
@@ -647,18 +681,16 @@ class DatasetController:
             QMessageBox.warning(
                 w,
                 "Difference Analysis",
-                "Please select exactly 2 datasets for difference analysis."
+                "Please select exactly 2 datasets for difference analysis.",
             )
             return
 
-        w.statusbar.showMessage(
-            f"Difference analysis: comparing 2 datasets",
-            3000
-        )
+        w.statusbar.showMessage("Difference analysis: comparing 2 datasets", 3000)
 
         self._remove_comparison_view()
 
         from ..panels.comparison_stats_panel import ComparisonStatsPanel
+
         if w._comparison_stats_panel is None:
             w._comparison_stats_panel = ComparisonStatsPanel(w.engine, w.state)
 
@@ -738,11 +770,16 @@ class DatasetController:
 
         if mode == ComparisonMode.SIDE_BY_SIDE:
             view = ProfileSideBySideLayout(
-                dataset_id, w.engine, w.state, w.profile_store,
+                dataset_id,
+                w.engine,
+                w.state,
+                w.profile_store,
             )
             view.exit_requested.connect(w.profile_comparison_controller.stop_comparison)
             view.set_profiles(profile_ids)
-            w.profile_comparison_controller.panel_removed.connect(view.on_profile_deleted)
+            w.profile_comparison_controller.panel_removed.connect(
+                view.on_profile_deleted
+            )
             w.profile_controller.profile_renamed.connect(view.on_profile_renamed)
 
             w._compare_toolbar.grid_layout_changed.connect(view.set_grid_layout)
@@ -752,13 +789,16 @@ class DatasetController:
             )
             w._compare_toolbar.reset_to_defaults()
             is_light = is_light_theme(w)
-            if hasattr(w._compare_toolbar, 'apply_theme'):
+            if hasattr(w._compare_toolbar, "apply_theme"):
                 w._compare_toolbar.apply_theme(is_light)
             w._compare_toolbar.show()
 
         elif mode == ComparisonMode.OVERLAY:
             view = ProfileOverlayRenderer(
-                dataset_id, w.engine, w.state, w.profile_store,
+                dataset_id,
+                w.engine,
+                w.state,
+                w.profile_store,
             )
             view.exit_requested.connect(w.profile_comparison_controller.stop_comparison)
             view.set_profiles(profile_ids)
@@ -767,7 +807,10 @@ class DatasetController:
             if len(profile_ids) != 2:
                 return
             view = ProfileDifferenceRenderer(
-                dataset_id, w.engine, w.state, w.profile_store,
+                dataset_id,
+                w.engine,
+                w.state,
+                w.profile_store,
             )
             view.exit_requested.connect(w.profile_comparison_controller.stop_comparison)
             view.set_profiles(profile_ids[0], profile_ids[1])
@@ -776,13 +819,14 @@ class DatasetController:
             return
 
         is_light = is_light_theme(w)
-        if hasattr(view, 'apply_theme'):
+        if hasattr(view, "apply_theme"):
             view.apply_theme(is_light)
 
         w._profile_comparison_view = view
         self._show_comparison_view(view)
         w.statusbar.showMessage(
-            f"Profile comparison ({mode_value}): {len(profile_ids)} profiles", 3000,
+            f"Profile comparison ({mode_value}): {len(profile_ids)} profiles",
+            3000,
         )
 
     def _on_profile_comparison_ended(self):

@@ -4,13 +4,14 @@ Tooltip Configuration - Spotfire 스타일 툴팁 설정
 시각화 툴팁의 내용과 형식을 설정합니다.
 """
 
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
 
 @dataclass
 class TooltipItem:
     """툴팁 항목"""
+
     column: str
     display_name: Optional[str] = None
     format_string: Optional[str] = None
@@ -42,6 +43,7 @@ class TooltipConfig:
 
     툴팁에 표시할 항목과 형식을 정의합니다.
     """
+
     enabled: bool = True
     items: List[TooltipItem] = field(default_factory=list)
 
@@ -209,14 +211,14 @@ class TooltipBuilder:
         self,
         column: str,
         display_name: Optional[str] = None,
-        format_string: Optional[str] = None
-    ) -> 'TooltipBuilder':
+        format_string: Optional[str] = None,
+    ) -> "TooltipBuilder":
         """컬럼 추가"""
         item = TooltipItem(
             column=column,
             display_name=display_name,
             format_string=format_string,
-            order=self._order
+            order=self._order,
         )
         self._config.add_item(item)
         self._order += 1
@@ -227,8 +229,8 @@ class TooltipBuilder:
         background_color: Optional[str] = None,
         text_color: Optional[str] = None,
         border_color: Optional[str] = None,
-        font_size: Optional[int] = None
-    ) -> 'TooltipBuilder':
+        font_size: Optional[int] = None,
+    ) -> "TooltipBuilder":
         """스타일 설정"""
         if background_color:
             self._config.background_color = background_color
@@ -240,12 +242,12 @@ class TooltipBuilder:
             self._config.font_size = font_size
         return self
 
-    def set_template(self, template: str) -> 'TooltipBuilder':
+    def set_template(self, template: str) -> "TooltipBuilder":
         """커스텀 템플릿 설정"""
         self._config.template = template
         return self
 
-    def hide_column_names(self) -> 'TooltipBuilder':
+    def hide_column_names(self) -> "TooltipBuilder":
         """컬럼 이름 숨기기"""
         self._config.show_column_names = False
         return self

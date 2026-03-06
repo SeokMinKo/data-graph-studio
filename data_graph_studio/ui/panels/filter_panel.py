@@ -12,17 +12,34 @@ import polars as pl
 try:
     from PySide6.QtCore import Qt, Signal, QObject
     from PySide6.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-        QFrame, QPushButton, QLineEdit, QCheckBox, QSlider,
-        QListWidget, QListWidgetItem, QComboBox, QGroupBox,
-        QToolButton, QSizePolicy, QSpinBox, QDoubleSpinBox
+        QWidget,
+        QVBoxLayout,
+        QHBoxLayout,
+        QLabel,
+        QScrollArea,
+        QFrame,
+        QPushButton,
+        QLineEdit,
+        QCheckBox,
+        QSlider,
+        QListWidget,
+        QListWidgetItem,
+        QComboBox,
+        QGroupBox,
+        QToolButton,
+        QSizePolicy,
+        QSpinBox,
+        QDoubleSpinBox,
     )
+
     HAS_QT = True
 except ImportError:
     HAS_QT = False
+
     # Mock classes for testing without Qt
     class QObject:
         pass
+
     class Signal:
         def __init__(self, *args):
             pass
@@ -30,16 +47,18 @@ except ImportError:
 
 class FilterType(Enum):
     """필터 타입"""
-    RANGE = "range"           # 범위 슬라이더
-    CHECKBOX = "checkbox"     # 체크박스 목록
-    TEXT_SEARCH = "text"      # 텍스트 검색
-    BOOLEAN = "boolean"       # 불리언 (True/False)
-    DATE_RANGE = "date_range" # 날짜 범위
+
+    RANGE = "range"  # 범위 슬라이더
+    CHECKBOX = "checkbox"  # 체크박스 목록
+    TEXT_SEARCH = "text"  # 텍스트 검색
+    BOOLEAN = "boolean"  # 불리언 (True/False)
+    DATE_RANGE = "date_range"  # 날짜 범위
 
 
 @dataclass
 class FilterState:
     """필터 상태"""
+
     column: str
     filter_type: FilterType
     enabled: bool = True
@@ -97,9 +116,18 @@ class FilterPanelModel:
             # 필터 타입 결정
             if dtype in (pl.Boolean,):
                 info["filter_type"] = FilterType.BOOLEAN
-            elif dtype in (pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                          pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
-                          pl.Float32, pl.Float64):
+            elif dtype in (
+                pl.Int8,
+                pl.Int16,
+                pl.Int32,
+                pl.Int64,
+                pl.UInt8,
+                pl.UInt16,
+                pl.UInt32,
+                pl.UInt64,
+                pl.Float32,
+                pl.Float64,
+            ):
                 if info["unique_count"] <= 20:
                     info["filter_type"] = FilterType.CHECKBOX
                 else:
@@ -186,18 +214,20 @@ class FilterPanelModel:
             elif state.filter_type == FilterType.TEXT_SEARCH:
                 if state.search_text:
                     if state.case_sensitive:
-                        mask = mask & self._data[col].cast(pl.Utf8).str.contains(state.search_text)
-                    else:
-                        mask = mask & self._data[col].cast(pl.Utf8).str.to_lowercase().str.contains(
-                            state.search_text.lower()
+                        mask = mask & self._data[col].cast(pl.Utf8).str.contains(
+                            state.search_text
                         )
+                    else:
+                        mask = mask & self._data[col].cast(
+                            pl.Utf8
+                        ).str.to_lowercase().str.contains(state.search_text.lower())
 
             elif state.filter_type == FilterType.BOOLEAN:
                 conditions = []
                 if state.show_true:
-                    conditions.append(self._data[col] == True)
+                    conditions.append(self._data[col])
                 if state.show_false:
-                    conditions.append(self._data[col] == False)
+                    conditions.append(not self._data[col])
                 if state.show_null:
                     conditions.append(self._data[col].is_null())
 
@@ -217,12 +247,7 @@ class RangeSliderWidget:
     최소/최대 값을 선택하는 더블 슬라이더입니다.
     """
 
-    def __init__(
-        self,
-        min_val: float = 0,
-        max_val: float = 100,
-        step: float = 1
-    ):
+    def __init__(self, min_val: float = 0, max_val: float = 100, step: float = 1):
         self.min_value = min_val
         self.max_value = max_val
         self.step = step
@@ -296,10 +321,7 @@ class CheckboxListWidget:
         if not self._search_filter:
             return self._all_values
 
-        return [
-            v for v in self._all_values
-            if self._search_filter in str(v).lower()
-        ]
+        return [v for v in self._all_values if self._search_filter in str(v).lower()]
 
 
 class TextSearchWidget:
@@ -339,7 +361,7 @@ class FilterWidget:
         column: str,
         filter_type: FilterType,
         values: Optional[List[Any]] = None,
-        value_range: Optional[Tuple[float, float]] = None
+        value_range: Optional[Tuple[float, float]] = None,
     ):
         self.column = column
         self.filter_type = filter_type
@@ -358,9 +380,7 @@ class FilterWidget:
     def get_filter_state(self) -> FilterState:
         """필터 상태 반환"""
         state = FilterState(
-            column=self.column,
-            filter_type=self.filter_type,
-            enabled=self.enabled
+            column=self.column, filter_type=self.filter_type, enabled=self.enabled
         )
 
         if isinstance(self._widget, RangeSliderWidget):
@@ -379,7 +399,7 @@ class FilterWidget:
 
     def reset(self) -> None:
         """리셋"""
-        if hasattr(self._widget, 'reset'):
+        if hasattr(self._widget, "reset"):
             self._widget.reset()
         elif isinstance(self._widget, CheckboxListWidget):
             self._widget.select_all()
@@ -388,6 +408,7 @@ class FilterWidget:
 
 
 if HAS_QT:
+
     class FilterPanelWidget(QWidget):
         """
         필터 패널 위젯

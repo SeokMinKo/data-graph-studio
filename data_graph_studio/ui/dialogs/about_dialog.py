@@ -7,12 +7,22 @@ import sys
 import platform
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QWidget, QGridLayout, QFrame,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QWidget,
+    QGridLayout,
+    QFrame,
 )
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import (
-    QPainter, QColor, QLinearGradient, QPixmap, QFont, QDesktopServices,
+    QPainter,
+    QColor,
+    QLinearGradient,
+    QPixmap,
+    QFont,
 )
 
 from data_graph_studio import __version__, __author__
@@ -30,8 +40,12 @@ class _GradientHeader(QWidget):
     def _load_logo(self):
         base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
         candidates = [
-            os.path.join(base_dir, "..", "..", "..", "resources", "icons", "dgs-512.png"),
-            os.path.join(base_dir, "..", "..", "..", "resources", "icons", "dgs-tech-1024.png"),
+            os.path.join(
+                base_dir, "..", "..", "..", "resources", "icons", "dgs-512.png"
+            ),
+            os.path.join(
+                base_dir, "..", "..", "..", "resources", "icons", "dgs-tech-1024.png"
+            ),
         ]
         for path in candidates:
             resolved = os.path.normpath(path)
@@ -60,7 +74,9 @@ class _GradientHeader(QWidget):
         # Logo
         center_x = w // 2
         if self._logo and not self._logo.isNull():
-            scaled = self._logo.scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled = self._logo.scaled(
+                56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
             painter.drawPixmap(center_x - 28, 20, scaled)
             text_y = 82
         else:
@@ -76,7 +92,9 @@ class _GradientHeader(QWidget):
         painter.setPen(QColor("#94A3B8"))
         ver_font = QFont("Helvetica Neue", 11)
         painter.setFont(ver_font)
-        painter.drawText(QRect(0, text_y + 28, w, 20), Qt.AlignCenter, f"v{__version__}")
+        painter.drawText(
+            QRect(0, text_y + 28, w, 20), Qt.AlignCenter, f"v{__version__}"
+        )
 
         painter.end()
 
@@ -198,16 +216,19 @@ class AboutDialog(QDialog):
         techs.append(("Python", platform.python_version()))
         try:
             import PySide6
+
             techs.append(("PySide6", PySide6.__version__))
         except Exception:
             techs.append(("PySide6", "?"))
         try:
             import polars
+
             techs.append(("Polars", polars.__version__))
         except Exception:
             pass
         try:
             import pyqtgraph
+
             techs.append(("PyQtGraph", pyqtgraph.__version__))
         except Exception:
             pass

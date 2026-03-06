@@ -8,7 +8,6 @@ UT-5.4: Annotation 텍스트 200자 초과 → 차단
 UT-5.5: Orphaned annotation 감지 (데이터셋 삭제 후)
 """
 
-import copy
 import json
 import uuid
 import pytest
@@ -222,8 +221,8 @@ class TestAnnotationCoordinateTransform:
         screen_size = {"width": 800, "height": 600}
 
         sx, sy = ctrl.data_to_screen(ann.x, ann.y, view_rect, screen_size)
-        assert sx == pytest.approx(0.0)    # (100-100)/(300-100) * 800
-        assert sy == pytest.approx(0.0)    # (50-50)/(150-50) * 600
+        assert sx == pytest.approx(0.0)  # (100-100)/(300-100) * 800
+        assert sy == pytest.approx(0.0)  # (50-50)/(150-50) * 600
 
     def test_range_annotation_screen_coords(self):
         """구간 주석의 화면 좌표 변환"""
@@ -240,7 +239,7 @@ class TestAnnotationCoordinateTransform:
         sx_end, _ = ctrl.data_to_screen(ann.x_end, 0, view_rect, screen_size)
 
         assert sx_start == pytest.approx(200.0)  # 50/200 * 800
-        assert sx_end == pytest.approx(600.0)     # 150/200 * 800
+        assert sx_end == pytest.approx(600.0)  # 150/200 * 800
 
 
 # ── UT-5.3: Annotation 편집/삭제 ────────────────────────────────

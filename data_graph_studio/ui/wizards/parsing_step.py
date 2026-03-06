@@ -85,9 +85,11 @@ class ParsingStep(QWizardPage):
         selected = total - len(self._excluded_columns)
         if total > 0 and selected == 0:
             from PySide6.QtWidgets import QMessageBox
+
             QMessageBox.warning(
-                self, "No Columns Selected",
-                "At least one column must be selected to proceed."
+                self,
+                "No Columns Selected",
+                "At least one column must be selected to proceed.",
             )
             return False
         return True
@@ -106,27 +108,27 @@ class ParsingStep(QWizardPage):
         if delimiter_type == DelimiterType.AUTO:
             delimiter = self._detect_delimiter_auto()
             type_map = {
-                ',': DelimiterType.COMMA,
-                '\t': DelimiterType.TAB,
-                ';': DelimiterType.SEMICOLON,
-                '|': DelimiterType.PIPE,
-                ' ': DelimiterType.SPACE,
+                ",": DelimiterType.COMMA,
+                "\t": DelimiterType.TAB,
+                ";": DelimiterType.SEMICOLON,
+                "|": DelimiterType.PIPE,
+                " ": DelimiterType.SPACE,
             }
             delimiter_type = type_map.get(delimiter, DelimiterType.COMMA)
 
         # Detect file type
         ext = Path(self.file_path).suffix.lower()
         type_map = {
-            '.csv': FileType.CSV,
-            '.tsv': FileType.TSV,
-            '.txt': FileType.TXT,
-            '.log': FileType.TXT,
-            '.dat': FileType.TXT,
-            '.etl': FileType.ETL,
-            '.xlsx': FileType.EXCEL,
-            '.xls': FileType.EXCEL,
-            '.parquet': FileType.PARQUET,
-            '.json': FileType.JSON,
+            ".csv": FileType.CSV,
+            ".tsv": FileType.TSV,
+            ".txt": FileType.TXT,
+            ".log": FileType.TXT,
+            ".dat": FileType.TXT,
+            ".etl": FileType.ETL,
+            ".xlsx": FileType.EXCEL,
+            ".xls": FileType.EXCEL,
+            ".parquet": FileType.PARQUET,
+            ".json": FileType.JSON,
         }
         file_type = type_map.get(ext, FileType.TXT)
 
@@ -143,7 +145,9 @@ class ParsingStep(QWizardPage):
             encoding=self.encoding_combo.currentText(),
             delimiter=delimiter,
             delimiter_type=delimiter_type,
-            regex_pattern=self.regex_edit.text() if delimiter_type == DelimiterType.REGEX else "",
+            regex_pattern=self.regex_edit.text()
+            if delimiter_type == DelimiterType.REGEX
+            else "",
             has_header=self.header_checkbox.isChecked(),
             skip_rows=self.skip_rows_spin.value(),
             comment_char=self.comment_edit.text().strip(),
@@ -196,7 +200,7 @@ class ParsingStep(QWizardPage):
             except OSError:
                 size = 0
         size_kb = size / 1024 if size else 0
-        ext = Path(self.file_path).suffix.lower().lstrip('.')
+        ext = Path(self.file_path).suffix.lower().lstrip(".")
         ext = ext.upper() if ext else "UNKNOWN"
         return f"📁 {self.file_name} ({size_kb:.1f} KB, {ext})"
 
@@ -211,15 +215,17 @@ class ParsingStep(QWizardPage):
         encoding_layout = QGridLayout(encoding_group)
         self.encoding_combo = QComboBox()
         self.encoding_combo.setToolTip("Select file text encoding")
-        self.encoding_combo.addItems([
-            "utf8",
-            "utf8-lossy",
-            "cp949",
-            "euc-kr",
-            "latin-1",
-            "utf16",
-            "ascii",
-        ])
+        self.encoding_combo.addItems(
+            [
+                "utf8",
+                "utf8-lossy",
+                "cp949",
+                "euc-kr",
+                "latin-1",
+                "utf16",
+                "ascii",
+            ]
+        )
         self.encoding_combo.currentTextChanged.connect(self._on_encoding_changed)
         encoding_layout.addWidget(self.encoding_combo, 0, 0)
         layout.addWidget(encoding_group)
@@ -230,15 +236,17 @@ class ParsingStep(QWizardPage):
         delimiter_layout.addWidget(QLabel("Type:"), 0, 0)
         self.delimiter_combo = QComboBox()
         self.delimiter_combo.setToolTip("Select column delimiter for parsing")
-        self.delimiter_combo.addItems([
-            "Auto Detect",
-            "Comma (,)",
-            "Tab (\\t)",
-            "Space",
-            "Semicolon (;) ",
-            "Pipe (|)",
-            "Custom Regex",
-        ])
+        self.delimiter_combo.addItems(
+            [
+                "Auto Detect",
+                "Comma (,)",
+                "Tab (\\t)",
+                "Space",
+                "Semicolon (;) ",
+                "Pipe (|)",
+                "Custom Regex",
+            ]
+        )
         self.delimiter_combo.currentIndexChanged.connect(self._on_delimiter_changed)
         delimiter_layout.addWidget(self.delimiter_combo, 0, 1)
 
@@ -321,7 +329,9 @@ class ParsingStep(QWizardPage):
         column_scroll = QScrollArea()
         column_scroll.setWidgetResizable(True)
         column_scroll.setMaximumHeight(100)
-        column_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        column_scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
 
         self.column_checkbox_container = QWidget()
         self.column_checkbox_layout = QHBoxLayout(self.column_checkbox_container)
@@ -350,12 +360,17 @@ class ParsingStep(QWizardPage):
         else:
             try:
                 from ...core.file_loader import detect_encoding
+
                 detected = detect_encoding(self.file_path)
                 # Normalize encoding name
                 enc_map = {
-                    'utf-8': 'utf8', 'ascii': 'ascii', 'cp949': 'cp949',
-                    'euc-kr': 'euc-kr', 'latin-1': 'latin-1', 'iso-8859-1': 'latin-1',
-                    'utf-16': 'utf16',
+                    "utf-8": "utf8",
+                    "ascii": "ascii",
+                    "cp949": "cp949",
+                    "euc-kr": "euc-kr",
+                    "latin-1": "latin-1",
+                    "iso-8859-1": "latin-1",
+                    "utf-16": "utf16",
                 }
                 norm = enc_map.get(detected.lower(), detected.lower())
                 idx = self.encoding_combo.findText(norm)
@@ -367,9 +382,9 @@ class ParsingStep(QWizardPage):
         # Delimiter
         if saved_delimiter >= 0:
             self.delimiter_combo.setCurrentIndex(saved_delimiter)
-        elif ext == '.tsv':
+        elif ext == ".tsv":
             self.delimiter_combo.setCurrentIndex(2)
-        elif ext == '.csv':
+        elif ext == ".csv":
             self.delimiter_combo.setCurrentIndex(1)
         else:
             self.delimiter_combo.setCurrentIndex(0)
@@ -383,7 +398,9 @@ class ParsingStep(QWizardPage):
         ext = Path(self.file_path).suffix.lower()
         settings = QSettings("DataGraphStudio", "ParsingStep")
         settings.setValue(f"parsing/{ext}/encoding", self.encoding_combo.currentText())
-        settings.setValue(f"parsing/{ext}/delimiter_index", self.delimiter_combo.currentIndex())
+        settings.setValue(
+            f"parsing/{ext}/delimiter_index", self.delimiter_combo.currentIndex()
+        )
         settings.setValue(f"parsing/{ext}/skip_rows", self.skip_rows_spin.value())
 
     def _on_delimiter_changed(self, index: int):
@@ -398,24 +415,28 @@ class ParsingStep(QWizardPage):
         self._update_timer.start()
 
     def _load_raw_preview(self):
-        encoding = self.encoding_combo.currentText() if hasattr(self, 'encoding_combo') else "utf8"
+        encoding = (
+            self.encoding_combo.currentText()
+            if hasattr(self, "encoding_combo")
+            else "utf8"
+        )
         self._raw_load_error = False
         self._is_binary_etl = False
 
         # ETL 확장자이고 바이너리인 경우 특별 처리
         ext = Path(self.file_path).suffix.lower()
-        if ext == '.etl' and DataEngine.is_binary_etl(self.file_path):
+        if ext == ".etl" and DataEngine.is_binary_etl(self.file_path):
             self._is_binary_etl = True
             self._raw_lines = self._load_binary_etl_preview()
             return
 
         try:
             self._raw_lines = []
-            with open(self.file_path, 'r', encoding=encoding, errors='replace') as f:
+            with open(self.file_path, "r", encoding=encoding, errors="replace") as f:
                 for i, line in enumerate(f):
                     if i >= self.PREVIEW_ROWS:
                         break
-                    self._raw_lines.append(line.rstrip('\n\r'))
+                    self._raw_lines.append(line.rstrip("\n\r"))
         except Exception as e:
             self._raw_lines = [f"Error reading file: {e}"]
             self._raw_load_error = True
@@ -433,11 +454,10 @@ class ParsingStep(QWizardPage):
                 "# 설치: pip install etl-parser",
                 "#",
                 "# 또는 Windows에서 CSV로 변환 후 열기:",
-                f"#   tracerpt \"{self.file_name}\" -o output.csv -of CSV",
+                f'#   tracerpt "{self.file_name}" -o output.csv -of CSV',
             ]
 
         try:
-            import polars as pl
             df = DataEngine.parse_etl_binary(self.file_path)
 
             if df is None or len(df) == 0:
@@ -464,7 +484,7 @@ class ParsingStep(QWizardPage):
                     else:
                         # CSV 안전하게: 쉼표나 따옴표가 포함된 값은 따옴표로 감싸기
                         s = str(val)
-                        if ',' in s or '"' in s or '\n' in s:
+                        if "," in s or '"' in s or "\n" in s:
                             s = '"' + s.replace('"', '""') + '"'
                         row_values.append(s)
                 csv_lines.append(",".join(row_values))
@@ -477,13 +497,13 @@ class ParsingStep(QWizardPage):
                 f"# 파싱 오류: {e}",
                 "#",
                 "# 대안: Windows에서 CSV로 변환 후 열기:",
-                f"#   tracerpt \"{self.file_name}\" -o output.csv -of CSV",
+                f'#   tracerpt "{self.file_name}" -o output.csv -of CSV',
             ]
 
     def _detect_delimiter_auto(self) -> str:
         if not self._raw_lines:
             return ","
-        delimiters = [',', '\t', ';', '|']
+        delimiters = [",", "\t", ";", "|"]
         counts = {d: 0 for d in delimiters}
         for line in self._raw_lines[:10]:
             for d in delimiters:
@@ -543,7 +563,7 @@ class ParsingStep(QWizardPage):
             else:
                 # Use csv.reader to properly handle quoted fields
                 try:
-                    reader = csv.reader(io.StringIO(line), delimiter=delimiter or ',')
+                    reader = csv.reader(io.StringIO(line), delimiter=delimiter or ",")
                     fields = next(reader)
                 except (csv.Error, StopIteration):
                     fields = line.split(delimiter)
@@ -609,13 +629,13 @@ class ParsingStep(QWizardPage):
             data = parsed[1:]
         else:
             max_cols = max(len(row) for row in parsed)
-            headers = [f"Column {i+1}" for i in range(max_cols)]
+            headers = [f"Column {i + 1}" for i in range(max_cols)]
             data = parsed
 
         max_cols = len(headers)
         for i, row in enumerate(data):
             if len(row) < max_cols:
-                data[i] = row + [''] * (max_cols - len(row))
+                data[i] = row + [""] * (max_cols - len(row))
             elif len(row) > max_cols:
                 data[i] = row[:max_cols]
 
@@ -629,7 +649,11 @@ class ParsingStep(QWizardPage):
         # Infer data types for header display
         typed_headers = []
         for col_idx, header in enumerate(headers):
-            col_values = [row[col_idx] for row in data[:min(20, len(data))] if col_idx < len(row) and row[col_idx].strip()]
+            col_values = [
+                row[col_idx]
+                for row in data[: min(20, len(data))]
+                if col_idx < len(row) and row[col_idx].strip()
+            ]
             dtype = self._infer_column_type(col_values)
             typed_headers.append(f"{header}\n[{dtype}]")
 
@@ -641,7 +665,7 @@ class ParsingStep(QWizardPage):
 
             excluded_bg = QColor("#E5E7EB")
             excluded_fg = QColor("#6B7280")
-            for i, row in enumerate(data[:self.PREVIEW_ROWS]):
+            for i, row in enumerate(data[: self.PREVIEW_ROWS]):
                 for j, val in enumerate(row[:max_cols]):
                     item = QTableWidgetItem(val)
                     if j in self._excluded_columns:
@@ -653,7 +677,9 @@ class ParsingStep(QWizardPage):
             self.preview_table.setUpdatesEnabled(True)
 
         # 컬럼 너비를 내용 기준으로 한 번만 조정 후 Interactive 모드 유지
-        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.preview_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Interactive
+        )
         self.preview_table.resizeColumnsToContents()
 
         try:
@@ -692,7 +718,8 @@ class ParsingStep(QWizardPage):
             return "float"
         # Check for date patterns
         import re as _re
-        date_pattern = _re.compile(r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}')
+
+        date_pattern = _re.compile(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}")
         if all(date_pattern.match(v) for v in values):
             return "date"
         return "str"
@@ -710,7 +737,9 @@ class ParsingStep(QWizardPage):
             cb = QCheckBox(label)
             cb.setToolTip(header)
             cb.setChecked(i not in self._excluded_columns)
-            cb.stateChanged.connect(lambda state, idx=i: self._on_column_toggled(idx, state == Qt.Checked))
+            cb.stateChanged.connect(
+                lambda state, idx=i: self._on_column_toggled(idx, state == Qt.Checked)
+            )
             self.column_checkbox_layout.addWidget(cb)
             self._column_checkboxes.append(cb)
 

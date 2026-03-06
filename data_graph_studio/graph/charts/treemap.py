@@ -2,7 +2,7 @@
 TreeMap Chart - 트리맵 차트
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dataclasses import dataclass
 import polars as pl
 
@@ -10,6 +10,7 @@ import polars as pl
 @dataclass
 class TreeMapData:
     """트리맵 데이터"""
+
     rectangles: List[Dict[str, Any]]
     total_value: float
 
@@ -23,8 +24,16 @@ class TreeMapCalculator:
     """
 
     DEFAULT_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     def calculate(
@@ -35,7 +44,7 @@ class TreeMapCalculator:
         width: float = 100,
         height: float = 100,
         padding: float = 1,
-        min_area: float = 1
+        min_area: float = 1,
     ) -> Dict[str, Any]:
         """
         트리맵 사각형 계산
@@ -60,8 +69,7 @@ class TreeMapCalculator:
 
         # 집계
         grouped = (
-            data
-            .group_by(first_level)
+            data.group_by(first_level)
             .agg(pl.col(value_column).sum().alias("_value_"))
             .sort("_value_", descending=True)
         )
@@ -79,9 +87,7 @@ class TreeMapCalculator:
         ]
 
         # Squarified 알고리즘으로 사각형 계산
-        rectangles = self._squarify(
-            items, 0, 0, width, height, total, padding
-        )
+        rectangles = self._squarify(items, 0, 0, width, height, total, padding)
 
         # 색상 할당
         for i, rect in enumerate(rectangles):
@@ -89,13 +95,12 @@ class TreeMapCalculator:
             rect["percentage"] = (rect["value"] / total) * 100
 
         # 면적이 너무 작은 것 필터링
-        rectangles = [r for r in rectangles
-                      if r["width"] * r["height"] >= min_area]
+        rectangles = [r for r in rectangles if r["width"] * r["height"] >= min_area]
 
         return {
             "rectangles": rectangles,
             "total_value": total,
-            "hierarchy": hierarchy_columns
+            "hierarchy": hierarchy_columns,
         }
 
     def _squarify(
@@ -106,7 +111,7 @@ class TreeMapCalculator:
         width: float,
         height: float,
         total: float,
-        padding: float
+        padding: float,
     ) -> List[Dict[str, Any]]:
         """
         Squarified TreeMap 알고리즘
@@ -136,7 +141,7 @@ class TreeMapCalculator:
             row_total = 0
 
             # 가장 좋은 aspect ratio를 찾음
-            best_ratio = float('inf')
+            best_ratio = float("inf")
 
             for i, item in enumerate(remaining_items):
                 test_items = row_items + [item]
@@ -146,9 +151,9 @@ class TreeMapCalculator:
                 row_area = test_total * scale
 
                 if is_horizontal:
-                    row_length = row_area / current_height if current_height > 0 else 0
+                    row_area / current_height if current_height > 0 else 0
                 else:
-                    row_length = row_area / current_width if current_width > 0 else 0
+                    row_area / current_width if current_width > 0 else 0
 
                 # Aspect ratio 계산
                 worst_ratio = 0
@@ -161,7 +166,9 @@ class TreeMapCalculator:
                         item_width = current_width
                         item_height = item_area / item_width if item_width > 0 else 0
 
-                    ratio = max(item_width, item_height) / max(min(item_width, item_height), 0.001)
+                    ratio = max(item_width, item_height) / max(
+                        min(item_width, item_height), 0.001
+                    )
                     worst_ratio = max(worst_ratio, ratio)
 
                 if worst_ratio <= best_ratio:
@@ -181,14 +188,16 @@ class TreeMapCalculator:
                     item_area = item["value"] * scale
                     item_height = item_area / row_width if row_width > 0 else 0
 
-                    rectangles.append({
-                        "x": current_x + padding / 2,
-                        "y": item_y + padding / 2,
-                        "width": max(0, row_width - padding),
-                        "height": max(0, item_height - padding),
-                        "label": item["label"],
-                        "value": item["value"]
-                    })
+                    rectangles.append(
+                        {
+                            "x": current_x + padding / 2,
+                            "y": item_y + padding / 2,
+                            "width": max(0, row_width - padding),
+                            "height": max(0, item_height - padding),
+                            "label": item["label"],
+                            "value": item["value"],
+                        }
+                    )
                     item_y += item_height
 
                 current_x += row_width
@@ -200,21 +209,23 @@ class TreeMapCalculator:
                     item_area = item["value"] * scale
                     item_width = item_area / row_height if row_height > 0 else 0
 
-                    rectangles.append({
-                        "x": item_x + padding / 2,
-                        "y": current_y + padding / 2,
-                        "width": max(0, item_width - padding),
-                        "height": max(0, row_height - padding),
-                        "label": item["label"],
-                        "value": item["value"]
-                    })
+                    rectangles.append(
+                        {
+                            "x": item_x + padding / 2,
+                            "y": current_y + padding / 2,
+                            "width": max(0, item_width - padding),
+                            "height": max(0, row_height - padding),
+                            "label": item["label"],
+                            "value": item["value"],
+                        }
+                    )
                     item_x += item_width
 
                 current_y += row_height
                 current_height -= row_height
 
             # 처리된 항목 제거
-            remaining_items = remaining_items[len(row_items):]
+            remaining_items = remaining_items[len(row_items) :]
 
         return rectangles
 
@@ -222,7 +233,7 @@ class TreeMapCalculator:
         self,
         values: List[float],
         color_min: str = "#f7fbff",
-        color_max: str = "#08306b"
+        color_max: str = "#08306b",
     ) -> List[str]:
         """
         값에 따른 색상 스케일 계산
@@ -243,11 +254,11 @@ class TreeMapCalculator:
 
         # 색상 파싱
         def hex_to_rgb(hex_color):
-            hex_color = hex_color.lstrip('#')
-            return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            hex_color = hex_color.lstrip("#")
+            return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
         def rgb_to_hex(rgb):
-            return '#{:02x}{:02x}{:02x}'.format(*rgb)
+            return "#{:02x}{:02x}{:02x}".format(*rgb)
 
         min_rgb = hex_to_rgb(color_min)
         max_rgb = hex_to_rgb(color_max)
@@ -259,7 +270,9 @@ class TreeMapCalculator:
             else:
                 t = (v - min_val) / (max_val - min_val)
 
-            rgb = tuple(int(min_rgb[i] + t * (max_rgb[i] - min_rgb[i])) for i in range(3))
+            rgb = tuple(
+                int(min_rgb[i] + t * (max_rgb[i] - min_rgb[i])) for i in range(3)
+            )
             colors.append(rgb_to_hex(rgb))
 
         return colors

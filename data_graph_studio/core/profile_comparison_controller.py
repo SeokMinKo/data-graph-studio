@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
@@ -21,10 +21,10 @@ class ProfileComparisonController(QObject):
     profile changes (delete / rename) during an active comparison.
     """
 
-    comparison_started = Signal(str, list)   # mode_value, profile_ids
+    comparison_started = Signal(str, list)  # mode_value, profile_ids
     comparison_ended = Signal()
-    comparison_mode_changed = Signal(str)    # mode value
-    panel_removed = Signal(str)              # profile_id
+    comparison_mode_changed = Signal(str)  # mode value
+    panel_removed = Signal(str)  # profile_id
     error_occurred = Signal(str)
 
     def __init__(
@@ -86,7 +86,6 @@ class ProfileComparisonController(QObject):
 
         # Mode-specific validation
         if mode in (ComparisonMode.OVERLAY, ComparisonMode.DIFFERENCE):
-            from .profile import GraphSetting as _GS  # noqa: F811
             from ..ui.panels.profile_overlay import ProfileOverlayRenderer
 
             if not ProfileOverlayRenderer.can_overlay(settings):

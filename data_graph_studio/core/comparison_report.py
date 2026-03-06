@@ -6,11 +6,10 @@ Comparison Report Generator - 비교 리포트 생성기
 
 import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+from typing import List, Dict, Any
 
 from .data_engine import DataEngine
-from .state import AppState, ComparisonMode
+from .state import AppState
 
 
 class ComparisonReport:
@@ -44,7 +43,7 @@ class ComparisonReport:
             "common_columns": [],
             "statistics": {},
             "statistical_tests": [],
-            "correlations": []
+            "correlations": [],
         }
 
         # Dataset information
@@ -59,7 +58,7 @@ class ComparisonReport:
                     "file_path": metadata.file_path,
                     "row_count": metadata.row_count,
                     "column_count": metadata.column_count,
-                    "color": metadata.color
+                    "color": metadata.color,
                 }
             elif dataset:
                 ds_info = {
@@ -67,7 +66,7 @@ class ComparisonReport:
                     "name": dataset.name,
                     "row_count": dataset.row_count,
                     "column_count": dataset.column_count,
-                    "color": dataset.color
+                    "color": dataset.color,
                 }
             else:
                 ds_info = {"id": did, "name": did}
@@ -84,7 +83,7 @@ class ComparisonReport:
             ds = self.engine.get_dataset(dataset_ids[0])
             if ds and ds.df is not None and col in ds.df.columns:
                 dtype = str(ds.df[col].dtype)
-                if dtype.startswith(('Int', 'Float', 'UInt')):
+                if dtype.startswith(("Int", "Float", "UInt")):
                     numeric_cols.append(col)
 
         # Statistics for each numeric column
@@ -141,10 +140,10 @@ class ComparisonReport:
         html = self._generate_html_report(data)
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(html)
             return True
-        except Exception as e:
+        except Exception:
             return False
 
     def _generate_html_report(self, data: Dict[str, Any]) -> str:
@@ -154,7 +153,7 @@ class ComparisonReport:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{data['title']}</title>
+    <title>{data["title"]}</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -229,10 +228,10 @@ class ComparisonReport:
 </head>
 <body>
     <div class="report-container">
-        <h1>{data['title']}</h1>
+        <h1>{data["title"]}</h1>
         <p class="meta-info">
-            Generated: {data['generated_at']}<br>
-            Comparison Mode: {data['comparison_mode'].replace('_', ' ').title()}
+            Generated: {data["generated_at"]}<br>
+            Comparison Mode: {data["comparison_mode"].replace("_", " ").title()}
         </p>
 
         <h2>Datasets</h2>
@@ -247,13 +246,13 @@ class ComparisonReport:
             <tbody>
 """
 
-        for ds in data['datasets']:
-            color = ds.get('color', '#1f77b4')
+        for ds in data["datasets"]:
+            color = ds.get("color", "#1f77b4")
             html += f"""
                 <tr>
-                    <td><span class="dataset-badge" style="background-color: {color}">{ds.get('name', ds['id'])}</span></td>
-                    <td>{ds.get('row_count', 'N/A'):,}</td>
-                    <td>{ds.get('column_count', 'N/A')}</td>
+                    <td><span class="dataset-badge" style="background-color: {color}">{ds.get("name", ds["id"])}</span></td>
+                    <td>{ds.get("row_count", "N/A"):,}</td>
+                    <td>{ds.get("column_count", "N/A")}</td>
                 </tr>
 """
 
@@ -264,7 +263,7 @@ class ComparisonReport:
         <h2>Descriptive Statistics</h2>
 """
 
-        for col, stats in data.get('statistics', {}).items():
+        for col, stats in data.get("statistics", {}).items():
             html += f"""
         <div class="stat-card">
             <h3 style="margin-top: 0;">{col}</h3>
@@ -283,16 +282,16 @@ class ComparisonReport:
 """
             for did, ds_stats in stats.items():
                 ds_name = did
-                for ds in data['datasets']:
-                    if ds['id'] == did:
-                        ds_name = ds.get('name', did)
+                for ds in data["datasets"]:
+                    if ds["id"] == did:
+                        ds_name = ds.get("name", did)
                         break
 
-                mean = ds_stats.get('mean', 'N/A')
-                std = ds_stats.get('std', 'N/A')
-                min_val = ds_stats.get('min', 'N/A')
-                max_val = ds_stats.get('max', 'N/A')
-                count = ds_stats.get('count', 'N/A')
+                mean = ds_stats.get("mean", "N/A")
+                std = ds_stats.get("std", "N/A")
+                min_val = ds_stats.get("min", "N/A")
+                max_val = ds_stats.get("max", "N/A")
+                count = ds_stats.get("count", "N/A")
 
                 html += f"""
                     <tr>
@@ -312,7 +311,7 @@ class ComparisonReport:
 """
 
         # Statistical tests
-        if data.get('statistical_tests'):
+        if data.get("statistical_tests"):
             html += """
         <h2>Statistical Tests</h2>
         <table>
@@ -329,39 +328,39 @@ class ComparisonReport:
             </thead>
             <tbody>
 """
-            for test in data['statistical_tests']:
-                p_val = test.get('p_value', 0)
+            for test in data["statistical_tests"]:
+                p_val = test.get("p_value", 0)
                 if p_val < 0.001:
-                    sig_class = 'sig-high'
-                    sig_text = '*** p < 0.001'
+                    sig_class = "sig-high"
+                    sig_text = "*** p < 0.001"
                 elif p_val < 0.01:
-                    sig_class = 'sig-medium'
-                    sig_text = '** p < 0.01'
+                    sig_class = "sig-medium"
+                    sig_text = "** p < 0.01"
                 elif p_val < 0.05:
-                    sig_class = 'sig-low'
-                    sig_text = '* p < 0.05'
+                    sig_class = "sig-low"
+                    sig_text = "* p < 0.05"
                 else:
-                    sig_class = 'sig-none'
-                    sig_text = 'NS'
+                    sig_class = "sig-none"
+                    sig_text = "NS"
 
                 # Get names
-                ds_a_name = test['dataset_a']
-                ds_b_name = test['dataset_b']
-                for ds in data['datasets']:
-                    if ds['id'] == test['dataset_a']:
-                        ds_a_name = ds.get('name', test['dataset_a'])
-                    if ds['id'] == test['dataset_b']:
-                        ds_b_name = ds.get('name', test['dataset_b'])
+                ds_a_name = test["dataset_a"]
+                ds_b_name = test["dataset_b"]
+                for ds in data["datasets"]:
+                    if ds["id"] == test["dataset_a"]:
+                        ds_a_name = ds.get("name", test["dataset_a"])
+                    if ds["id"] == test["dataset_b"]:
+                        ds_b_name = ds.get("name", test["dataset_b"])
 
                 html += f"""
                 <tr>
-                    <td>{test.get('column', 'N/A')}</td>
+                    <td>{test.get("column", "N/A")}</td>
                     <td>{ds_a_name} vs {ds_b_name}</td>
-                    <td>{test.get('test_name', 'N/A')}</td>
-                    <td>{test.get('statistic', 'N/A'):.4f if test.get('statistic') else 'N/A'}</td>
-                    <td>{test.get('p_value', 'N/A'):.6f if test.get('p_value') else 'N/A'}</td>
+                    <td>{test.get("test_name", "N/A")}</td>
+                    <td>{test.get("statistic", "N/A"):.4f if test.get('statistic') else 'N/A'}</td>
+                    <td>{test.get("p_value", "N/A"):.6f if test.get('p_value') else 'N/A'}</td>
                     <td class="significance {sig_class}">{sig_text}</td>
-                    <td>{test.get('effect_size', 'N/A'):.3f if test.get('effect_size') else 'N/A'}</td>
+                    <td>{test.get("effect_size", "N/A"):.3f if test.get('effect_size') else 'N/A'}</td>
                 </tr>
 """
 
@@ -371,7 +370,7 @@ class ComparisonReport:
 """
 
         # Correlations
-        if data.get('correlations'):
+        if data.get("correlations"):
             html += """
         <h2>Correlations</h2>
         <table>
@@ -386,26 +385,26 @@ class ComparisonReport:
             </thead>
             <tbody>
 """
-            for corr in data['correlations']:
-                r = corr.get('correlation', 0)
-                color_class = 'positive' if r > 0 else 'negative'
+            for corr in data["correlations"]:
+                r = corr.get("correlation", 0)
+                color_class = "positive" if r > 0 else "negative"
 
                 # Get names
-                ds_a_name = corr['dataset_a']
-                ds_b_name = corr['dataset_b']
-                for ds in data['datasets']:
-                    if ds['id'] == corr['dataset_a']:
-                        ds_a_name = ds.get('name', corr['dataset_a'])
-                    if ds['id'] == corr['dataset_b']:
-                        ds_b_name = ds.get('name', corr['dataset_b'])
+                ds_a_name = corr["dataset_a"]
+                ds_b_name = corr["dataset_b"]
+                for ds in data["datasets"]:
+                    if ds["id"] == corr["dataset_a"]:
+                        ds_a_name = ds.get("name", corr["dataset_a"])
+                    if ds["id"] == corr["dataset_b"]:
+                        ds_b_name = ds.get("name", corr["dataset_b"])
 
                 html += f"""
                 <tr>
-                    <td>{corr.get('column', 'N/A')}</td>
+                    <td>{corr.get("column", "N/A")}</td>
                     <td>{ds_a_name} vs {ds_b_name}</td>
                     <td class="{color_class}">{r:.4f if r else 'N/A'}</td>
-                    <td>{corr.get('p_value', 'N/A'):.6f if corr.get('p_value') else 'N/A'}</td>
-                    <td>{corr.get('strength', 'N/A').title() if corr.get('strength') else 'N/A'}</td>
+                    <td>{corr.get("p_value", "N/A"):.6f if corr.get('p_value') else 'N/A'}</td>
+                    <td>{corr.get("strength", "N/A").title() if corr.get("strength") else "N/A"}</td>
                 </tr>
 """
 
@@ -433,7 +432,7 @@ class ComparisonReport:
             return False
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
             return True
         except Exception:
@@ -449,61 +448,78 @@ class ComparisonReport:
         try:
             import csv
 
-            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+            with open(file_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
 
                 # Header
-                writer.writerow(['Data Comparison Report'])
-                writer.writerow(['Generated', data['generated_at']])
+                writer.writerow(["Data Comparison Report"])
+                writer.writerow(["Generated", data["generated_at"]])
                 writer.writerow([])
 
                 # Datasets
-                writer.writerow(['Datasets'])
-                writer.writerow(['Name', 'Rows', 'Columns'])
-                for ds in data['datasets']:
-                    writer.writerow([
-                        ds.get('name', ds['id']),
-                        ds.get('row_count', 'N/A'),
-                        ds.get('column_count', 'N/A')
-                    ])
+                writer.writerow(["Datasets"])
+                writer.writerow(["Name", "Rows", "Columns"])
+                for ds in data["datasets"]:
+                    writer.writerow(
+                        [
+                            ds.get("name", ds["id"]),
+                            ds.get("row_count", "N/A"),
+                            ds.get("column_count", "N/A"),
+                        ]
+                    )
                 writer.writerow([])
 
                 # Statistics
-                writer.writerow(['Statistics'])
-                for col, stats in data.get('statistics', {}).items():
-                    writer.writerow([f'Column: {col}'])
-                    writer.writerow(['Dataset', 'Mean', 'Std', 'Min', 'Max', 'Count'])
+                writer.writerow(["Statistics"])
+                for col, stats in data.get("statistics", {}).items():
+                    writer.writerow([f"Column: {col}"])
+                    writer.writerow(["Dataset", "Mean", "Std", "Min", "Max", "Count"])
                     for did, ds_stats in stats.items():
                         ds_name = did
-                        for ds in data['datasets']:
-                            if ds['id'] == did:
-                                ds_name = ds.get('name', did)
+                        for ds in data["datasets"]:
+                            if ds["id"] == did:
+                                ds_name = ds.get("name", did)
                                 break
-                        writer.writerow([
-                            ds_name,
-                            ds_stats.get('mean', ''),
-                            ds_stats.get('std', ''),
-                            ds_stats.get('min', ''),
-                            ds_stats.get('max', ''),
-                            ds_stats.get('count', '')
-                        ])
+                        writer.writerow(
+                            [
+                                ds_name,
+                                ds_stats.get("mean", ""),
+                                ds_stats.get("std", ""),
+                                ds_stats.get("min", ""),
+                                ds_stats.get("max", ""),
+                                ds_stats.get("count", ""),
+                            ]
+                        )
                     writer.writerow([])
 
                 # Statistical tests
-                if data.get('statistical_tests'):
-                    writer.writerow(['Statistical Tests'])
-                    writer.writerow(['Column', 'Dataset A', 'Dataset B', 'Test', 'Statistic', 'p-value', 'Significant', 'Effect Size'])
-                    for test in data['statistical_tests']:
-                        writer.writerow([
-                            test.get('column', ''),
-                            test.get('dataset_a', ''),
-                            test.get('dataset_b', ''),
-                            test.get('test_name', ''),
-                            test.get('statistic', ''),
-                            test.get('p_value', ''),
-                            test.get('is_significant', ''),
-                            test.get('effect_size', '')
-                        ])
+                if data.get("statistical_tests"):
+                    writer.writerow(["Statistical Tests"])
+                    writer.writerow(
+                        [
+                            "Column",
+                            "Dataset A",
+                            "Dataset B",
+                            "Test",
+                            "Statistic",
+                            "p-value",
+                            "Significant",
+                            "Effect Size",
+                        ]
+                    )
+                    for test in data["statistical_tests"]:
+                        writer.writerow(
+                            [
+                                test.get("column", ""),
+                                test.get("dataset_a", ""),
+                                test.get("dataset_b", ""),
+                                test.get("test_name", ""),
+                                test.get("statistic", ""),
+                                test.get("p_value", ""),
+                                test.get("is_significant", ""),
+                                test.get("effect_size", ""),
+                            ]
+                        )
 
             return True
         except Exception:

@@ -56,4 +56,6 @@ def test_accessible_name_patterns_present_in_key_files():
     ]
     for f in files:
         text = f.read_text(encoding="utf-8")
-        assert "setAccessibleName(" in text, f"No accessible name assignment found in {f}"
+        assert "setAccessibleName(" in text, (
+            f"No accessible name assignment found in {f}"
+        )

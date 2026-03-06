@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 
@@ -21,6 +20,7 @@ def _ensure_qapp():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class FakeDatasetInfo:
     def __init__(self, row_count=100, columns=None):
         self.row_count = row_count
@@ -29,6 +29,7 @@ class FakeDatasetInfo:
     @property
     def df(self):
         import numpy as np
+
         mock_df = MagicMock()
         mock_df.columns = self._columns
         mock_df.__len__ = lambda s: self.row_count
@@ -36,16 +37,26 @@ class FakeDatasetInfo:
         class FakeSeries:
             def __init__(self, n):
                 self._data = np.random.randn(n)
-            def mean(self): return float(self._data.mean())
-            def min(self): return float(self._data.min())
-            def max(self): return float(self._data.max())
-            def to_numpy(self): return self._data
+
+            def mean(self):
+                return float(self._data.mean())
+
+            def min(self):
+                return float(self._data.min())
+
+            def max(self):
+                return float(self._data.max())
+
+            def to_numpy(self):
+                return self._data
 
         cache = {}
+
         def getitem(key):
             if key not in cache:
                 cache[key] = FakeSeries(self.row_count)
             return cache[key]
+
         mock_df.__getitem__ = getitem
         mock_df.__contains__ = lambda s, k: k in self._columns
         return mock_df
@@ -69,8 +80,11 @@ class FakeEngine:
 @pytest.fixture()
 def state():
     from data_graph_studio.core.state import AppState
+
     s = AppState()
-    s.add_dataset(dataset_id="ds-1", name="Test", row_count=100, column_count=2, memory_bytes=500)
+    s.add_dataset(
+        dataset_id="ds-1", name="Test", row_count=100, column_count=2, memory_bytes=500
+    )
     s.set_x_column("time")
     s.add_value_column("voltage")
     return s
@@ -94,6 +108,7 @@ class TestMiniGraphWidgetSelection:
     def test_has_selection_region(self, state, engine, qtbot):
         """MiniGraphWidget creates a LinearRegionItem."""
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
+
         w = MiniGraphWidget("ds-1", engine, state)
         qtbot.addWidget(w)
         assert w._selection_region is not None
@@ -101,6 +116,7 @@ class TestMiniGraphWidgetSelection:
     def test_selection_region_hidden_by_default(self, state, engine, qtbot):
         """Selection region is hidden initially."""
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
+
         w = MiniGraphWidget("ds-1", engine, state)
         qtbot.addWidget(w)
         assert not w._selection_region.isVisible()
@@ -108,6 +124,7 @@ class TestMiniGraphWidgetSelection:
     def test_set_selection_shows_region(self, state, engine, qtbot):
         """set_selection with [x_min, x_max] shows the region."""
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
+
         w = MiniGraphWidget("ds-1", engine, state)
         qtbot.addWidget(w)
 
@@ -121,6 +138,7 @@ class TestMiniGraphWidgetSelection:
     def test_set_selection_empty_hides_region(self, state, engine, qtbot):
         """set_selection with empty list hides the region."""
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
+
         w = MiniGraphWidget("ds-1", engine, state)
         qtbot.addWidget(w)
 
@@ -135,6 +153,7 @@ class TestMiniGraphWidgetSelection:
     def test_selection_changed_signal_exists(self, state, engine, qtbot):
         """MiniGraphWidget has a selection_changed signal."""
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
+
         w = MiniGraphWidget("ds-1", engine, state)
         qtbot.addWidget(w)
         assert hasattr(w, "selection_changed")
@@ -148,7 +167,13 @@ class TestSelectionSyncViaViewSyncManager:
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
         from data_graph_studio.core.view_sync import ViewSyncManager
 
-        state.add_dataset(dataset_id="ds-2", name="Test2", row_count=50, column_count=2, memory_bytes=300)
+        state.add_dataset(
+            dataset_id="ds-2",
+            name="Test2",
+            row_count=50,
+            column_count=2,
+            memory_bytes=300,
+        )
         engine.add_dataset("ds-2", row_count=50, columns=["time", "voltage"])
 
         mgr = ViewSyncManager()
@@ -176,7 +201,13 @@ class TestSelectionSyncViaViewSyncManager:
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
         from data_graph_studio.core.view_sync import ViewSyncManager
 
-        state.add_dataset(dataset_id="ds-2", name="Test2", row_count=50, column_count=2, memory_bytes=300)
+        state.add_dataset(
+            dataset_id="ds-2",
+            name="Test2",
+            row_count=50,
+            column_count=2,
+            memory_bytes=300,
+        )
         engine.add_dataset("ds-2", row_count=50, columns=["time", "voltage"])
 
         mgr = ViewSyncManager()
@@ -220,6 +251,6 @@ class TestCompareToolbarCheckboxes:
         qtbot.addWidget(tb)
 
         # Should find the container widget
-        container = tb.findChild(type(tb), "")  # any child
-        children = tb.findChildren(type(None))  # just check the toolbar has widgets
+        tb.findChild(type(tb), "")  # any child
+        tb.findChildren(type(None))  # just check the toolbar has widgets
         assert tb.widgetForAction(tb.actions()[0]) is not None

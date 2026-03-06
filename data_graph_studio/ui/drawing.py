@@ -5,28 +5,40 @@ Line, Circle, Rectangle, Text 드로잉 지원
 """
 
 from typing import Optional, List, Dict, Any, Tuple
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 import math
 
 from PySide6.QtWidgets import (
-    QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox,
-    QColorDialog, QPushButton, QDialogButtonBox, QFontComboBox,
-    QTextEdit, QGroupBox, QCheckBox
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QLabel,
+    QSpinBox,
+    QDoubleSpinBox,
+    QComboBox,
+    QColorDialog,
+    QPushButton,
+    QDialogButtonBox,
+    QFontComboBox,
+    QTextEdit,
+    QGroupBox,
+    QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF
 from PySide6.QtGui import QColor, QFont, QPen, QBrush, QPainterPath
 
 import pyqtgraph as pg
-import numpy as np
 
 
 # ==================== Drawing Object Types ====================
 
+
 class DrawingType(Enum):
     """드로잉 객체 타입"""
+
     LINE = "line"
     ARROW = "arrow"
     CIRCLE = "circle"
@@ -36,6 +48,7 @@ class DrawingType(Enum):
 
 class LineStyle(Enum):
     """선 스타일"""
+
     SOLID = "solid"
     DASHED = "dashed"
     DOTTED = "dotted"
@@ -53,9 +66,11 @@ class LineStyle(Enum):
 
 # ==================== Drawing Object Dataclasses ====================
 
+
 @dataclass
 class DrawingStyle:
     """공통 드로잉 스타일"""
+
     stroke_color: str = "#000000"
     stroke_width: float = 1.0
     line_style: LineStyle = LineStyle.SOLID
@@ -66,6 +81,7 @@ class DrawingStyle:
 @dataclass
 class DrawingObjectBase:
     """드로잉 객체 기본 클래스"""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     type: DrawingType = DrawingType.LINE
     style: DrawingStyle = field(default_factory=DrawingStyle)
@@ -76,44 +92,45 @@ class DrawingObjectBase:
     def to_dict(self) -> Dict[str, Any]:
         """직렬화"""
         data = {
-            'id': self.id,
-            'type': self.type.value,
-            'visible': self.visible,
-            'locked': self.locked,
-            'z_order': self.z_order,
-            'style': {
-                'stroke_color': self.style.stroke_color,
-                'stroke_width': self.style.stroke_width,
-                'line_style': self.style.line_style.value,
-                'fill_color': self.style.fill_color,
-                'fill_opacity': self.style.fill_opacity,
-            }
+            "id": self.id,
+            "type": self.type.value,
+            "visible": self.visible,
+            "locked": self.locked,
+            "z_order": self.z_order,
+            "style": {
+                "stroke_color": self.style.stroke_color,
+                "stroke_width": self.style.stroke_width,
+                "line_style": self.style.line_style.value,
+                "fill_color": self.style.fill_color,
+                "fill_opacity": self.style.fill_opacity,
+            },
         }
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'DrawingObjectBase':
+    def from_dict(cls, data: Dict[str, Any]) -> "DrawingObjectBase":
         """역직렬화"""
         style = DrawingStyle(
-            stroke_color=data['style'].get('stroke_color', '#000000'),
-            stroke_width=data['style'].get('stroke_width', 2.0),
-            line_style=LineStyle(data['style'].get('line_style', 'solid')),
-            fill_color=data['style'].get('fill_color'),
-            fill_opacity=data['style'].get('fill_opacity', 0.3),
+            stroke_color=data["style"].get("stroke_color", "#000000"),
+            stroke_width=data["style"].get("stroke_width", 2.0),
+            line_style=LineStyle(data["style"].get("line_style", "solid")),
+            fill_color=data["style"].get("fill_color"),
+            fill_opacity=data["style"].get("fill_opacity", 0.3),
         )
         return cls(
-            id=data['id'],
-            type=DrawingType(data['type']),
+            id=data["id"],
+            type=DrawingType(data["type"]),
             style=style,
-            visible=data.get('visible', True),
-            locked=data.get('locked', False),
-            z_order=data.get('z_order', 0),
+            visible=data.get("visible", True),
+            locked=data.get("locked", False),
+            z_order=data.get("z_order", 0),
         )
 
 
 @dataclass
 class LineDrawing(DrawingObjectBase):
     """직선 드로잉"""
+
     type: DrawingType = DrawingType.LINE
     x1: float = 0.0
     y1: float = 0.0
@@ -122,25 +139,40 @@ class LineDrawing(DrawingObjectBase):
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
-        data.update({
-            'x1': self.x1, 'y1': self.y1,
-            'x2': self.x2, 'y2': self.y2,
-        })
+        data.update(
+            {
+                "x1": self.x1,
+                "y1": self.y1,
+                "x2": self.x2,
+                "y2": self.y2,
+            }
+        )
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'LineDrawing':
+    def from_dict(cls, data: Dict[str, Any]) -> "LineDrawing":
         base = DrawingObjectBase.from_dict(data)
         return cls(
-            id=base.id, type=DrawingType.LINE, style=base.style,
-            visible=base.visible, locked=base.locked, z_order=base.z_order,
-            x1=data['x1'], y1=data['y1'], x2=data['x2'], y2=data['y2'],
+            id=base.id,
+            type=DrawingType.LINE,
+            style=base.style,
+            visible=base.visible,
+            locked=base.locked,
+            z_order=base.z_order,
+            x1=data["x1"],
+            y1=data["y1"],
+            x2=data["x2"],
+            y2=data["y2"],
         )
 
     def get_bounds(self) -> Tuple[float, float, float, float]:
         """Get bounding box (x1, y1, x2, y2)"""
-        return (min(self.x1, self.x2), min(self.y1, self.y2),
-                max(self.x1, self.x2), max(self.y1, self.y2))
+        return (
+            min(self.x1, self.x2),
+            min(self.y1, self.y2),
+            max(self.x1, self.x2),
+            max(self.y1, self.y2),
+        )
 
     def move(self, dx: float, dy: float) -> None:
         """Translate the line by (dx, dy)."""
@@ -153,6 +185,7 @@ class LineDrawing(DrawingObjectBase):
 @dataclass
 class ArrowDrawing(DrawingObjectBase):
     """Arrow drawing (straight line with arrow head at end)"""
+
     type: DrawingType = DrawingType.ARROW
     x1: float = 0.0
     y1: float = 0.0
@@ -161,24 +194,39 @@ class ArrowDrawing(DrawingObjectBase):
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
-        data.update({
-            'x1': self.x1, 'y1': self.y1,
-            'x2': self.x2, 'y2': self.y2,
-        })
+        data.update(
+            {
+                "x1": self.x1,
+                "y1": self.y1,
+                "x2": self.x2,
+                "y2": self.y2,
+            }
+        )
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ArrowDrawing':
+    def from_dict(cls, data: Dict[str, Any]) -> "ArrowDrawing":
         base = DrawingObjectBase.from_dict(data)
         return cls(
-            id=base.id, type=DrawingType.ARROW, style=base.style,
-            visible=base.visible, locked=base.locked, z_order=base.z_order,
-            x1=data['x1'], y1=data['y1'], x2=data['x2'], y2=data['y2'],
+            id=base.id,
+            type=DrawingType.ARROW,
+            style=base.style,
+            visible=base.visible,
+            locked=base.locked,
+            z_order=base.z_order,
+            x1=data["x1"],
+            y1=data["y1"],
+            x2=data["x2"],
+            y2=data["y2"],
         )
 
     def get_bounds(self) -> Tuple[float, float, float, float]:
-        return (min(self.x1, self.x2), min(self.y1, self.y2),
-                max(self.x1, self.x2), max(self.y1, self.y2))
+        return (
+            min(self.x1, self.x2),
+            min(self.y1, self.y2),
+            max(self.x1, self.x2),
+            max(self.y1, self.y2),
+        )
 
     def move(self, dx: float, dy: float) -> None:
         self.x1 += dx
@@ -190,6 +238,7 @@ class ArrowDrawing(DrawingObjectBase):
 @dataclass
 class CircleDrawing(DrawingObjectBase):
     """원/타원 드로잉"""
+
     type: DrawingType = DrawingType.CIRCLE
     cx: float = 0.0  # 중심 X
     cy: float = 0.0  # 중심 Y
@@ -198,24 +247,39 @@ class CircleDrawing(DrawingObjectBase):
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
-        data.update({
-            'cx': self.cx, 'cy': self.cy,
-            'rx': self.rx, 'ry': self.ry,
-        })
+        data.update(
+            {
+                "cx": self.cx,
+                "cy": self.cy,
+                "rx": self.rx,
+                "ry": self.ry,
+            }
+        )
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'CircleDrawing':
+    def from_dict(cls, data: Dict[str, Any]) -> "CircleDrawing":
         base = DrawingObjectBase.from_dict(data)
         return cls(
-            id=base.id, type=DrawingType.CIRCLE, style=base.style,
-            visible=base.visible, locked=base.locked, z_order=base.z_order,
-            cx=data['cx'], cy=data['cy'], rx=data['rx'], ry=data['ry'],
+            id=base.id,
+            type=DrawingType.CIRCLE,
+            style=base.style,
+            visible=base.visible,
+            locked=base.locked,
+            z_order=base.z_order,
+            cx=data["cx"],
+            cy=data["cy"],
+            rx=data["rx"],
+            ry=data["ry"],
         )
 
     def get_bounds(self) -> Tuple[float, float, float, float]:
-        return (self.cx - self.rx, self.cy - self.ry,
-                self.cx + self.rx, self.cy + self.ry)
+        return (
+            self.cx - self.rx,
+            self.cy - self.ry,
+            self.cx + self.rx,
+            self.cy + self.ry,
+        )
 
     def move(self, dx: float, dy: float) -> None:
         """Translate the circle/ellipse by (dx, dy)."""
@@ -226,6 +290,7 @@ class CircleDrawing(DrawingObjectBase):
 @dataclass
 class RectDrawing(DrawingObjectBase):
     """사각형 드로잉"""
+
     type: DrawingType = DrawingType.RECT
     x: float = 0.0
     y: float = 0.0
@@ -235,22 +300,32 @@ class RectDrawing(DrawingObjectBase):
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
-        data.update({
-            'x': self.x, 'y': self.y,
-            'width': self.width, 'height': self.height,
-            'corner_radius': self.corner_radius,
-        })
+        data.update(
+            {
+                "x": self.x,
+                "y": self.y,
+                "width": self.width,
+                "height": self.height,
+                "corner_radius": self.corner_radius,
+            }
+        )
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'RectDrawing':
+    def from_dict(cls, data: Dict[str, Any]) -> "RectDrawing":
         base = DrawingObjectBase.from_dict(data)
         return cls(
-            id=base.id, type=DrawingType.RECT, style=base.style,
-            visible=base.visible, locked=base.locked, z_order=base.z_order,
-            x=data['x'], y=data['y'],
-            width=data['width'], height=data['height'],
-            corner_radius=data.get('corner_radius', 0.0),
+            id=base.id,
+            type=DrawingType.RECT,
+            style=base.style,
+            visible=base.visible,
+            locked=base.locked,
+            z_order=base.z_order,
+            x=data["x"],
+            y=data["y"],
+            width=data["width"],
+            height=data["height"],
+            corner_radius=data.get("corner_radius", 0.0),
         )
 
     def get_bounds(self) -> Tuple[float, float, float, float]:
@@ -265,6 +340,7 @@ class RectDrawing(DrawingObjectBase):
 @dataclass
 class TextDrawing(DrawingObjectBase):
     """텍스트 드로잉"""
+
     type: DrawingType = DrawingType.TEXT
     x: float = 0.0
     y: float = 0.0
@@ -278,32 +354,40 @@ class TextDrawing(DrawingObjectBase):
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
-        data.update({
-            'x': self.x, 'y': self.y,
-            'text': self.text,
-            'font_family': self.font_family,
-            'font_size': self.font_size,
-            'text_color': self.text_color,
-            'alignment': self.alignment,
-            'bold': self.bold,
-            'italic': self.italic,
-        })
+        data.update(
+            {
+                "x": self.x,
+                "y": self.y,
+                "text": self.text,
+                "font_family": self.font_family,
+                "font_size": self.font_size,
+                "text_color": self.text_color,
+                "alignment": self.alignment,
+                "bold": self.bold,
+                "italic": self.italic,
+            }
+        )
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TextDrawing':
+    def from_dict(cls, data: Dict[str, Any]) -> "TextDrawing":
         base = DrawingObjectBase.from_dict(data)
         return cls(
-            id=base.id, type=DrawingType.TEXT, style=base.style,
-            visible=base.visible, locked=base.locked, z_order=base.z_order,
-            x=data['x'], y=data['y'],
-            text=data.get('text', ''),
-            font_family=data.get('font_family', 'Arial'),
-            font_size=data.get('font_size', 12),
-            text_color=data.get('text_color', '#000000'),
-            alignment=data.get('alignment', 'left'),
-            bold=data.get('bold', False),
-            italic=data.get('italic', False),
+            id=base.id,
+            type=DrawingType.TEXT,
+            style=base.style,
+            visible=base.visible,
+            locked=base.locked,
+            z_order=base.z_order,
+            x=data["x"],
+            y=data["y"],
+            text=data.get("text", ""),
+            font_family=data.get("font_family", "Arial"),
+            font_size=data.get("font_size", 12),
+            text_color=data.get("text_color", "#000000"),
+            alignment=data.get("alignment", "left"),
+            bold=data.get("bold", False),
+            italic=data.get("italic", False),
         )
 
     def get_bounds(self) -> Tuple[float, float, float, float]:
@@ -320,7 +404,10 @@ class TextDrawing(DrawingObjectBase):
 
 # ==================== Helper Functions ====================
 
-def snap_to_angle(x1: float, y1: float, x2: float, y2: float, snap_angle: float = 45.0) -> Tuple[float, float]:
+
+def snap_to_angle(
+    x1: float, y1: float, x2: float, y2: float, snap_angle: float = 45.0
+) -> Tuple[float, float]:
     """
     Snap line endpoint to nearest angle (0, 45, 90, etc.)
 
@@ -349,6 +436,7 @@ def snap_to_angle(x1: float, y1: float, x2: float, y2: float, snap_angle: float 
 
 # ==================== Drawing Graphics Items ====================
 
+
 class LineGraphicsItem(pg.GraphicsObject):
     """PyQtGraph line graphics item"""
 
@@ -361,8 +449,9 @@ class LineGraphicsItem(pg.GraphicsObject):
     def boundingRect(self) -> QRectF:
         x1, y1, x2, y2 = self.drawing.get_bounds()
         margin = self.drawing.style.stroke_width
-        return QRectF(x1 - margin, y1 - margin,
-                     (x2 - x1) + 2 * margin, (y2 - y1) + 2 * margin)
+        return QRectF(
+            x1 - margin, y1 - margin, (x2 - x1) + 2 * margin, (y2 - y1) + 2 * margin
+        )
 
     def paint(self, painter, option, widget):
         if not self.drawing.visible:
@@ -378,7 +467,7 @@ class LineGraphicsItem(pg.GraphicsObject):
         # Draw line
         painter.drawLine(
             QPointF(self.drawing.x1, self.drawing.y1),
-            QPointF(self.drawing.x2, self.drawing.y2)
+            QPointF(self.drawing.x2, self.drawing.y2),
         )
 
         # Draw selection handles
@@ -392,12 +481,15 @@ class LineGraphicsItem(pg.GraphicsObject):
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#323D4A")))
 
-        for x, y in [(self.drawing.x1, self.drawing.y1),
-                     (self.drawing.x2, self.drawing.y2)]:
-            painter.drawRect(QRectF(
-                x - handle_size / 2, y - handle_size / 2,
-                handle_size, handle_size
-            ))
+        for x, y in [
+            (self.drawing.x1, self.drawing.y1),
+            (self.drawing.x2, self.drawing.y2),
+        ]:
+            painter.drawRect(
+                QRectF(
+                    x - handle_size / 2, y - handle_size / 2, handle_size, handle_size
+                )
+            )
 
     def set_selected(self, selected: bool):
         self._selected = selected
@@ -416,8 +508,9 @@ class ArrowGraphicsItem(pg.GraphicsObject):
     def boundingRect(self) -> QRectF:
         x1, y1, x2, y2 = self.drawing.get_bounds()
         margin = max(6.0, self.drawing.style.stroke_width * 3)
-        return QRectF(x1 - margin, y1 - margin,
-                     (x2 - x1) + 2 * margin, (y2 - y1) + 2 * margin)
+        return QRectF(
+            x1 - margin, y1 - margin, (x2 - x1) + 2 * margin, (y2 - y1) + 2 * margin
+        )
 
     def paint(self, painter, option, widget):
         if not self.drawing.visible:
@@ -431,7 +524,12 @@ class ArrowGraphicsItem(pg.GraphicsObject):
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
 
-        x1, y1, x2, y2 = self.drawing.x1, self.drawing.y1, self.drawing.x2, self.drawing.y2
+        x1, y1, x2, y2 = (
+            self.drawing.x1,
+            self.drawing.y1,
+            self.drawing.x2,
+            self.drawing.y2,
+        )
 
         # Draw shaft
         painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
@@ -475,11 +573,15 @@ class ArrowGraphicsItem(pg.GraphicsObject):
         painter.setPen(pen)
         painter.setBrush(QBrush(QColor("#323D4A")))
 
-        for x, y in [(self.drawing.x1, self.drawing.y1), (self.drawing.x2, self.drawing.y2)]:
-            painter.drawRect(QRectF(
-                x - handle_size / 2, y - handle_size / 2,
-                handle_size, handle_size
-            ))
+        for x, y in [
+            (self.drawing.x1, self.drawing.y1),
+            (self.drawing.x2, self.drawing.y2),
+        ]:
+            painter.drawRect(
+                QRectF(
+                    x - handle_size / 2, y - handle_size / 2, handle_size, handle_size
+                )
+            )
 
     def set_selected(self, selected: bool):
         self._selected = selected
@@ -498,8 +600,9 @@ class CircleGraphicsItem(pg.GraphicsObject):
     def boundingRect(self) -> QRectF:
         x1, y1, x2, y2 = self.drawing.get_bounds()
         margin = self.drawing.style.stroke_width
-        return QRectF(x1 - margin, y1 - margin,
-                     (x2 - x1) + 2 * margin, (y2 - y1) + 2 * margin)
+        return QRectF(
+            x1 - margin, y1 - margin, (x2 - x1) + 2 * margin, (y2 - y1) + 2 * margin
+        )
 
     def paint(self, painter, option, widget):
         if not self.drawing.visible:
@@ -521,12 +624,14 @@ class CircleGraphicsItem(pg.GraphicsObject):
             painter.setBrush(Qt.NoBrush)
 
         # Draw ellipse
-        painter.drawEllipse(QRectF(
-            self.drawing.cx - self.drawing.rx,
-            self.drawing.cy - self.drawing.ry,
-            self.drawing.rx * 2,
-            self.drawing.ry * 2
-        ))
+        painter.drawEllipse(
+            QRectF(
+                self.drawing.cx - self.drawing.rx,
+                self.drawing.cy - self.drawing.ry,
+                self.drawing.rx * 2,
+                self.drawing.ry * 2,
+            )
+        )
 
         if self._selected:
             self._draw_handles(painter)
@@ -541,10 +646,11 @@ class CircleGraphicsItem(pg.GraphicsObject):
         # Corner handles
         x1, y1, x2, y2 = self.drawing.get_bounds()
         for x, y in [(x1, y1), (x2, y1), (x1, y2), (x2, y2)]:
-            painter.drawRect(QRectF(
-                x - handle_size / 2, y - handle_size / 2,
-                handle_size, handle_size
-            ))
+            painter.drawRect(
+                QRectF(
+                    x - handle_size / 2, y - handle_size / 2, handle_size, handle_size
+                )
+            )
 
     def set_selected(self, selected: bool):
         self._selected = selected
@@ -566,7 +672,7 @@ class RectGraphicsItem(pg.GraphicsObject):
             self.drawing.x - margin,
             self.drawing.y - margin,
             self.drawing.width + 2 * margin,
-            self.drawing.height + 2 * margin
+            self.drawing.height + 2 * margin,
         )
 
     def paint(self, painter, option, widget):
@@ -588,12 +694,14 @@ class RectGraphicsItem(pg.GraphicsObject):
         else:
             painter.setBrush(Qt.NoBrush)
 
-        rect = QRectF(self.drawing.x, self.drawing.y,
-                      self.drawing.width, self.drawing.height)
+        rect = QRectF(
+            self.drawing.x, self.drawing.y, self.drawing.width, self.drawing.height
+        )
 
         if self.drawing.corner_radius > 0:
-            painter.drawRoundedRect(rect, self.drawing.corner_radius,
-                                    self.drawing.corner_radius)
+            painter.drawRoundedRect(
+                rect, self.drawing.corner_radius, self.drawing.corner_radius
+            )
         else:
             painter.drawRect(rect)
 
@@ -610,13 +718,21 @@ class RectGraphicsItem(pg.GraphicsObject):
         x, y = self.drawing.x, self.drawing.y
         w, h = self.drawing.width, self.drawing.height
 
-        for hx, hy in [(x, y), (x + w, y), (x, y + h), (x + w, y + h),
-                       (x + w/2, y), (x + w/2, y + h),
-                       (x, y + h/2), (x + w, y + h/2)]:
-            painter.drawRect(QRectF(
-                hx - handle_size / 2, hy - handle_size / 2,
-                handle_size, handle_size
-            ))
+        for hx, hy in [
+            (x, y),
+            (x + w, y),
+            (x, y + h),
+            (x + w, y + h),
+            (x + w / 2, y),
+            (x + w / 2, y + h),
+            (x, y + h / 2),
+            (x + w, y + h / 2),
+        ]:
+            painter.drawRect(
+                QRectF(
+                    hx - handle_size / 2, hy - handle_size / 2, handle_size, handle_size
+                )
+            )
 
     def set_selected(self, selected: bool):
         self._selected = selected
@@ -636,16 +752,14 @@ class TextGraphicsItem(pg.TextItem):
 
         # Anchor based on alignment
         anchor_map = {
-            'left': (0, 1),
-            'center': (0.5, 1),
-            'right': (1, 1),
+            "left": (0, 1),
+            "center": (0.5, 1),
+            "right": (1, 1),
         }
         anchor = anchor_map.get(drawing.alignment, (0, 1))
 
         super().__init__(
-            text=drawing.text,
-            color=QColor(drawing.text_color),
-            anchor=anchor
+            text=drawing.text, color=QColor(drawing.text_color), anchor=anchor
         )
         self.setFont(font)
         self.setPos(drawing.x, drawing.y)
@@ -662,8 +776,10 @@ class TextGraphicsItem(pg.TextItem):
 
 # ==================== Dialogs ====================
 
+
 class ColorButton(QPushButton):
     """Color picker button"""
+
     color_changed = Signal(QColor)
 
     def __init__(self, color: QColor = QColor("#000000"), parent=None):
@@ -766,16 +882,16 @@ class DrawingStyleDialog(QDialog):
         self.fill_opacity_spin.setRange(0.0, 1.0)
         self.fill_opacity_spin.setValue(0.3)
         self.fill_opacity_spin.setSingleStep(0.1)
-        self.fill_opacity_spin.setToolTip("Set fill opacity (0 = transparent, 1 = opaque)")
+        self.fill_opacity_spin.setToolTip(
+            "Set fill opacity (0 = transparent, 1 = opaque)"
+        )
         fill_layout.addWidget(self.fill_opacity_spin, 2, 1)
 
         layout.addWidget(fill_group)
         self.fill_group = fill_group
 
         # Buttons
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -798,13 +914,19 @@ class DrawingStyleDialog(QDialog):
 
     def get_style(self) -> DrawingStyle:
         """Get the configured drawing style"""
-        line_styles = [LineStyle.SOLID, LineStyle.DASHED,
-                       LineStyle.DOTTED, LineStyle.DASH_DOT]
+        line_styles = [
+            LineStyle.SOLID,
+            LineStyle.DASHED,
+            LineStyle.DOTTED,
+            LineStyle.DASH_DOT,
+        ]
         return DrawingStyle(
             stroke_color=self.stroke_color_btn.color().name(),
             stroke_width=self.stroke_width_spin.value(),
             line_style=line_styles[self.line_style_combo.currentIndex()],
-            fill_color=self.fill_color_btn.color().name() if self.fill_enabled_check.isChecked() else None,
+            fill_color=self.fill_color_btn.color().name()
+            if self.fill_enabled_check.isChecked()
+            else None,
             fill_opacity=self.fill_opacity_spin.value(),
         )
 
@@ -814,8 +936,10 @@ class DrawingStyleDialog(QDialog):
         self.stroke_width_spin.setValue(style.stroke_width)
 
         style_index = {
-            LineStyle.SOLID: 0, LineStyle.DASHED: 1,
-            LineStyle.DOTTED: 2, LineStyle.DASH_DOT: 3,
+            LineStyle.SOLID: 0,
+            LineStyle.DASHED: 1,
+            LineStyle.DOTTED: 2,
+            LineStyle.DASH_DOT: 3,
         }.get(style.line_style, 0)
         self.line_style_combo.setCurrentIndex(style_index)
 
@@ -919,9 +1043,7 @@ class TextInputDialog(QDialog):
         layout.addWidget(font_group)
 
         # Buttons
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -943,6 +1065,7 @@ class TextInputDialog(QDialog):
 
 
 # ==================== Drawing Manager ====================
+
 
 class DrawingManager:
     """
@@ -1020,7 +1143,7 @@ class DrawingManager:
         # Deselect previous
         if self._selected_id and self._selected_id in self._graphics_items:
             item = self._graphics_items[self._selected_id]
-            if hasattr(item, 'set_selected'):
+            if hasattr(item, "set_selected"):
                 item.set_selected(False)
 
         self._selected_id = drawing_id
@@ -1028,7 +1151,7 @@ class DrawingManager:
         # Select new
         if drawing_id and drawing_id in self._graphics_items:
             item = self._graphics_items[drawing_id]
-            if hasattr(item, 'set_selected'):
+            if hasattr(item, "set_selected"):
                 item.set_selected(True)
 
     def get_selected_id(self) -> Optional[str]:
@@ -1139,17 +1262,17 @@ class DrawingManager:
     def to_dict(self) -> Dict[str, Any]:
         """Serialize all drawings to dict"""
         return {
-            'drawings': [d.to_dict() for d in self._drawings],
-            'z_counter': self._z_counter,
+            "drawings": [d.to_dict() for d in self._drawings],
+            "z_counter": self._z_counter,
         }
 
     def from_dict(self, data: Dict[str, Any]):
         """Deserialize drawings from dict"""
         self.clear()
 
-        self._z_counter = data.get('z_counter', 100)
+        self._z_counter = data.get("z_counter", 100)
 
-        for d_data in data.get('drawings', []):
+        for d_data in data.get("drawings", []):
             drawing = self._deserialize_drawing(d_data)
             if drawing:
                 self._drawings.append(drawing)
@@ -1157,18 +1280,18 @@ class DrawingManager:
 
     def _deserialize_drawing(self, data: Dict) -> Optional[DrawingObjectBase]:
         """Deserialize a single drawing"""
-        drawing_type = data.get('type')
+        drawing_type = data.get("type")
 
         try:
-            if drawing_type == 'line':
+            if drawing_type == "line":
                 return LineDrawing.from_dict(data)
-            elif drawing_type == 'arrow':
+            elif drawing_type == "arrow":
                 return ArrowDrawing.from_dict(data)
-            elif drawing_type == 'circle':
+            elif drawing_type == "circle":
                 return CircleDrawing.from_dict(data)
-            elif drawing_type == 'rect':
+            elif drawing_type == "rect":
                 return RectDrawing.from_dict(data)
-            elif drawing_type == 'text':
+            elif drawing_type == "text":
                 return TextDrawing.from_dict(data)
         except Exception as e:
             print(f"Error deserializing drawing: {e}")
@@ -1186,7 +1309,9 @@ class DrawingManager:
 
     # ==================== Hit Testing ====================
 
-    def find_drawing_at(self, x: float, y: float, tolerance: float = 5.0) -> Optional[str]:
+    def find_drawing_at(
+        self, x: float, y: float, tolerance: float = 5.0
+    ) -> Optional[str]:
         """Find a drawing at the given position"""
         # Check in reverse order (top to bottom)
         for drawing in reversed(self._drawings):
@@ -1197,8 +1322,10 @@ class DrawingManager:
             x1, y1, x2, y2 = bounds
 
             # Expand bounds by tolerance
-            if (x1 - tolerance <= x <= x2 + tolerance and
-                y1 - tolerance <= y <= y2 + tolerance):
+            if (
+                x1 - tolerance <= x <= x2 + tolerance
+                and y1 - tolerance <= y <= y2 + tolerance
+            ):
                 return drawing.id
 
         return None

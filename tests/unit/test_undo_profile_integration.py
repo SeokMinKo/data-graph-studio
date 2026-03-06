@@ -105,4 +105,6 @@ class TestNoSeparateStack:
         """ProfileController should not have its own _undo_stack list anymore."""
         _, _, _, ctrl = _make_env()
         # The old implementation had _undo_stack as a list; now it should not exist
-        assert not hasattr(ctrl, '_undo_stack') or not isinstance(getattr(ctrl, '_undo_stack', None), list)
+        assert not hasattr(ctrl, "_undo_stack") or not isinstance(
+            getattr(ctrl, "_undo_stack", None), list
+        )

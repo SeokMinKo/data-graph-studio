@@ -16,7 +16,9 @@ def test_cli_main_without_command_returns_zero(monkeypatch):
 def test_cli_main_unknown_command_returns_one(monkeypatch):
     parser = cli.create_parser()
 
-    monkeypatch.setattr(parser, "parse_args", lambda: argparse.Namespace(command="unknown"))
+    monkeypatch.setattr(
+        parser, "parse_args", lambda: argparse.Namespace(command="unknown")
+    )
     monkeypatch.setattr(cli, "create_parser", lambda: parser)
 
     assert cli.main() == 1

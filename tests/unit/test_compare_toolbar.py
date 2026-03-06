@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock
-
-from PySide6.QtCore import Qt
 
 
 @pytest.fixture
 def toolbar(qtbot):
     from data_graph_studio.ui.toolbars.compare_toolbar import CompareToolbar
+
     tb = CompareToolbar()
     qtbot.addWidget(tb)
     return tb
@@ -59,10 +57,11 @@ class TestCompareToolbarSignals:
     def test_exit_requested_emits(self, toolbar, qtbot):
         """Exit button emits exit_requested."""
         from PySide6.QtWidgets import QPushButton
+
         with qtbot.waitSignal(toolbar.exit_requested, timeout=1000):
             # The exit button is nested inside the two-row container
             for child in toolbar.findChildren(QPushButton):
-                if 'Exit' in child.text():
+                if "Exit" in child.text():
                     child.click()
                     break
 

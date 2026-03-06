@@ -4,13 +4,14 @@ Legend Panel - Spotfire 스타일 범례 설정
 시각화 범례의 위치, 스타일, 내용을 설정합니다.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
 
 class LegendPosition(Enum):
     """범례 위치"""
+
     TOP = "top"
     BOTTOM = "bottom"
     LEFT = "left"
@@ -25,6 +26,7 @@ class LegendPosition(Enum):
 
 class LegendStyle(Enum):
     """범례 스타일"""
+
     VERTICAL = "vertical"
     HORIZONTAL = "horizontal"
     GRID = "grid"
@@ -33,6 +35,7 @@ class LegendStyle(Enum):
 @dataclass
 class LegendItem:
     """범례 항목"""
+
     label: str
     color: str
     visible: bool = True
@@ -47,6 +50,7 @@ class LegendConfig:
 
     시각화 범례의 외관과 동작을 정의합니다.
     """
+
     visible: bool = True
     position: LegendPosition = LegendPosition.RIGHT
     style: LegendStyle = LegendStyle.VERTICAL
@@ -142,11 +146,7 @@ class LegendRenderer:
         self.config = config
 
     def get_position_offset(
-        self,
-        chart_width: int,
-        chart_height: int,
-        legend_width: int,
-        legend_height: int
+        self, chart_width: int, chart_height: int, legend_width: int, legend_height: int
     ) -> tuple:
         """
         범례 위치 오프셋 계산
@@ -167,13 +167,19 @@ class LegendRenderer:
             return ((chart_width - legend_width) // 2, padding)
 
         elif pos == LegendPosition.BOTTOM:
-            return ((chart_width - legend_width) // 2, chart_height - legend_height - padding)
+            return (
+                (chart_width - legend_width) // 2,
+                chart_height - legend_height - padding,
+            )
 
         elif pos == LegendPosition.LEFT:
             return (padding, (chart_height - legend_height) // 2)
 
         elif pos == LegendPosition.RIGHT:
-            return (chart_width - legend_width - padding, (chart_height - legend_height) // 2)
+            return (
+                chart_width - legend_width - padding,
+                (chart_height - legend_height) // 2,
+            )
 
         elif pos == LegendPosition.TOP_LEFT:
             return (padding, padding)
@@ -185,7 +191,10 @@ class LegendRenderer:
             return (padding, chart_height - legend_height - padding)
 
         elif pos == LegendPosition.BOTTOM_RIGHT:
-            return (chart_width - legend_width - padding, chart_height - legend_height - padding)
+            return (
+                chart_width - legend_width - padding,
+                chart_height - legend_height - padding,
+            )
 
         elif pos == LegendPosition.FLOATING:
             return (self.config.floating_x, self.config.floating_y)
@@ -219,9 +228,14 @@ class LegendRenderer:
         elif self.config.style == LegendStyle.HORIZONTAL:
             # 가로 배치
             width = min(
-                sum(len(i.label) * 8 + self.config.symbol_size + self.config.symbol_spacing
-                    for i in visible_items) + 2 * self.config.padding,
-                self.config.max_width
+                sum(
+                    len(i.label) * 8
+                    + self.config.symbol_size
+                    + self.config.symbol_spacing
+                    for i in visible_items
+                )
+                + 2 * self.config.padding,
+                self.config.max_width,
             )
             height = item_height + 2 * self.config.padding
             if self.config.show_title and self.config.title:
@@ -233,10 +247,7 @@ class LegendRenderer:
             width = self.config.max_width
             height = rows * item_height + 2 * self.config.padding
 
-        return (
-            min(width, self.config.max_width),
-            min(height, self.config.max_height)
-        )
+        return (min(width, self.config.max_width), min(height, self.config.max_height))
 
     def render_to_html(self) -> str:
         """
@@ -277,7 +288,7 @@ class LegendRenderer:
             item_html = self._render_item_html(item)
             html += item_html
 
-        html += '</div>'
+        html += "</div>"
 
         return html
 
@@ -309,7 +320,7 @@ class LegendRenderer:
 
     def _hex_to_rgb(self, hex_color: str) -> str:
         """HEX를 RGB로 변환"""
-        hex_color = hex_color.lstrip('#')
+        hex_color = hex_color.lstrip("#")
         r = int(hex_color[0:2], 16)
         g = int(hex_color[2:4], 16)
         b = int(hex_color[4:6], 16)
@@ -326,42 +337,35 @@ class LegendBuilder:
     def __init__(self):
         self._config = LegendConfig()
 
-    def set_position(self, position: LegendPosition) -> 'LegendBuilder':
+    def set_position(self, position: LegendPosition) -> "LegendBuilder":
         """위치 설정"""
         self._config.position = position
         return self
 
-    def set_style(self, style: LegendStyle) -> 'LegendBuilder':
+    def set_style(self, style: LegendStyle) -> "LegendBuilder":
         """스타일 설정"""
         self._config.style = style
         return self
 
-    def set_title(self, title: str) -> 'LegendBuilder':
+    def set_title(self, title: str) -> "LegendBuilder":
         """제목 설정"""
         self._config.title = title
         self._config.show_title = True
         return self
 
     def add_item(
-        self,
-        label: str,
-        color: str,
-        symbol: str = "square"
-    ) -> 'LegendBuilder':
+        self, label: str, color: str, symbol: str = "square"
+    ) -> "LegendBuilder":
         """항목 추가"""
-        self._config.add_item(LegendItem(
-            label=label,
-            color=color,
-            symbol=symbol
-        ))
+        self._config.add_item(LegendItem(label=label, color=color, symbol=symbol))
         return self
 
-    def set_interactive(self, interactive: bool) -> 'LegendBuilder':
+    def set_interactive(self, interactive: bool) -> "LegendBuilder":
         """인터랙티브 설정"""
         self._config.interactive = interactive
         return self
 
-    def hide(self) -> 'LegendBuilder':
+    def hide(self) -> "LegendBuilder":
         """숨기기"""
         self._config.visible = False
         return self

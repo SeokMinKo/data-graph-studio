@@ -27,10 +27,12 @@ def _build_model():
     setting_two = GraphSetting.create_new("Revenue")
     setting_two = dataclasses.replace(setting_two, icon="📊", chart_type="bar")
 
-    store = FakeProfileStore({
-        "ds1": [setting_one, setting_two],
-        "ds2": [],
-    })
+    store = FakeProfileStore(
+        {
+            "ds1": [setting_one, setting_two],
+            "ds2": [],
+        }
+    )
 
     model = ProfileModel(store, state)
     return model, setting_one, setting_two

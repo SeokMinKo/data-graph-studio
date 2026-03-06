@@ -9,7 +9,7 @@ No UI-specific panel classes are imported.
 from __future__ import annotations
 
 import weakref
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QWidget
@@ -29,8 +29,8 @@ class ViewSyncManager(QObject):
     """
 
     # Signals emitted after a sync is dispatched
-    view_range_synced = Signal(str, list, list)   # source_id, x_range, y_range
-    selection_synced = Signal(str, list)           # source_id, selected_indices
+    view_range_synced = Signal(str, list, list)  # source_id, x_range, y_range
+    selection_synced = Signal(str, list)  # source_id, selected_indices
 
     # Throttle interval in milliseconds
     THROTTLE_MS = 50
@@ -159,9 +159,7 @@ class ViewSyncManager(QObject):
             self._range_throttle_timer.start()
             self._dispatch_range(source_id, x_range, y_range)
 
-    def _dispatch_range(
-        self, source_id: str, x_range: list, y_range: list
-    ) -> None:
+    def _dispatch_range(self, source_id: str, x_range: list, y_range: list) -> None:
         """Push range to all panels except the source."""
         self._is_syncing = True
         try:
@@ -170,7 +168,8 @@ class ViewSyncManager(QObject):
                     continue
                 try:
                     panel.set_view_range(
-                        x_range, y_range,
+                        x_range,
+                        y_range,
                         sync_x=self._sync_x,
                         sync_y=self._sync_y,
                     )

@@ -19,6 +19,7 @@ import polars as pl
 
 class FileType(Enum):
     """지원 파일 형식."""
+
     CSV = "csv"
     EXCEL = "excel"
     PARQUET = "parquet"
@@ -31,6 +32,7 @@ class FileType(Enum):
 
 class DelimiterType(Enum):
     """구분자 타입."""
+
     COMMA = ","
     TAB = "\t"
     SPACE = " "
@@ -42,6 +44,7 @@ class DelimiterType(Enum):
 
 class PrecisionMode(Enum):
     """부동소수점 정밀도 모드."""
+
     AUTO = "auto"
     HIGH = "high"
     SCIENTIFIC = "scientific"
@@ -50,6 +53,7 @@ class PrecisionMode(Enum):
 @dataclass
 class LoadingProgress:
     """로딩 진행 상태."""
+
     total_bytes: int = 0
     loaded_bytes: int = 0
     total_rows: int = 0
@@ -80,6 +84,7 @@ class LoadingProgress:
 @dataclass
 class ColumnInfo:
     """컬럼 정보."""
+
     name: str
     dtype: str
     null_count: int = 0
@@ -96,6 +101,7 @@ class ColumnInfo:
 @dataclass
 class DataProfile:
     """데이터 프로파일."""
+
     total_rows: int
     total_columns: int
     memory_bytes: int
@@ -106,6 +112,7 @@ class DataProfile:
 @dataclass
 class DatasetInfo:
     """개별 데이터셋 정보."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     name: str = ""
     df: Optional[pl.DataFrame] = None
@@ -144,6 +151,7 @@ class DatasetInfo:
 @dataclass
 class DataSource:
     """데이터 소스 정보."""
+
     path: Optional[str] = None
     file_type: Optional[FileType] = None
     encoding: str = "utf-8"

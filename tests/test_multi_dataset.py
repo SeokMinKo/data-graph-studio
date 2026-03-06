@@ -10,7 +10,11 @@ import os
 import polars as pl
 
 from data_graph_studio.core.state import (
-    AppState, ComparisonMode, DatasetMetadata, DatasetState, ComparisonSettings
+    AppState,
+    ComparisonMode,
+    DatasetMetadata,
+    DatasetState,
+    ComparisonSettings,
 )
 from data_graph_studio.core.data_engine import DataEngine, DatasetInfo
 
@@ -50,7 +54,7 @@ class TestDatasetMetadata:
             column_count=5,
             memory_bytes=102400,
             is_active=True,
-            compare_enabled=False
+            compare_enabled=False,
         )
 
         assert metadata.id == "test_001"
@@ -117,7 +121,7 @@ class TestAppStateMultiDataset:
                 file_path="/path/to/file.csv",
                 row_count=1000,
                 column_count=5,
-                memory_bytes=102400
+                memory_bytes=102400,
             )
 
         assert "ds_001" in state.dataset_metadata
@@ -130,14 +134,14 @@ class TestAppStateMultiDataset:
             name="Dataset 1",
             row_count=1000,
             column_count=5,
-            memory_bytes=102400
+            memory_bytes=102400,
         )
         state.add_dataset(
             dataset_id="ds_002",
             name="Dataset 2",
             row_count=2000,
             column_count=3,
-            memory_bytes=204800
+            memory_bytes=204800,
         )
 
         assert len(state.dataset_metadata) == 2
@@ -151,14 +155,14 @@ class TestAppStateMultiDataset:
             name="Dataset 1",
             row_count=1000,
             column_count=5,
-            memory_bytes=102400
+            memory_bytes=102400,
         )
         state.add_dataset(
             dataset_id="ds_002",
             name="Dataset 2",
             row_count=2000,
             column_count=3,
-            memory_bytes=204800
+            memory_bytes=204800,
         )
 
         with qtbot.waitSignal(state.dataset_removed):
@@ -176,14 +180,14 @@ class TestAppStateMultiDataset:
             name="Dataset 1",
             row_count=1000,
             column_count=5,
-            memory_bytes=102400
+            memory_bytes=102400,
         )
         state.add_dataset(
             dataset_id="ds_002",
             name="Dataset 2",
             row_count=2000,
             column_count=3,
-            memory_bytes=204800
+            memory_bytes=204800,
         )
 
         with qtbot.waitSignal(state.dataset_activated):
@@ -193,8 +197,20 @@ class TestAppStateMultiDataset:
 
     def test_set_comparison_datasets(self, state, qtbot):
         """비교 대상 데이터셋 설정 테스트"""
-        state.add_dataset(dataset_id="ds_001", name="Dataset 1", row_count=1000, column_count=5, memory_bytes=102400)
-        state.add_dataset(dataset_id="ds_002", name="Dataset 2", row_count=2000, column_count=3, memory_bytes=204800)
+        state.add_dataset(
+            dataset_id="ds_001",
+            name="Dataset 1",
+            row_count=1000,
+            column_count=5,
+            memory_bytes=102400,
+        )
+        state.add_dataset(
+            dataset_id="ds_002",
+            name="Dataset 2",
+            row_count=2000,
+            column_count=3,
+            memory_bytes=204800,
+        )
 
         with qtbot.waitSignal(state.comparison_settings_changed):
             state.set_comparison_datasets(["ds_001", "ds_002"])
@@ -203,13 +219,19 @@ class TestAppStateMultiDataset:
 
     def test_toggle_compare_enabled(self, state):
         """비교 활성화 토글 테스트"""
-        state.add_dataset(dataset_id="ds_001", name="Dataset 1", row_count=1000, column_count=5, memory_bytes=102400)
+        state.add_dataset(
+            dataset_id="ds_001",
+            name="Dataset 1",
+            row_count=1000,
+            column_count=5,
+            memory_bytes=102400,
+        )
 
         metadata = state.get_dataset_metadata("ds_001")
         initial_state = metadata.compare_enabled
 
         # toggle_compare_enabled 메서드가 있으면 테스트, 없으면 skip
-        if hasattr(state, 'toggle_compare_enabled'):
+        if hasattr(state, "toggle_compare_enabled"):
             state.toggle_compare_enabled("ds_001")
             metadata = state.get_dataset_metadata("ds_001")
             assert metadata.compare_enabled is not initial_state
@@ -219,8 +241,20 @@ class TestAppStateMultiDataset:
 
     def test_get_comparison_colors(self, state):
         """비교 색상 가져오기 테스트"""
-        state.add_dataset(dataset_id="ds_001", name="Dataset 1", row_count=1000, column_count=5, memory_bytes=102400)
-        state.add_dataset(dataset_id="ds_002", name="Dataset 2", row_count=2000, column_count=3, memory_bytes=204800)
+        state.add_dataset(
+            dataset_id="ds_001",
+            name="Dataset 1",
+            row_count=1000,
+            column_count=5,
+            memory_bytes=102400,
+        )
+        state.add_dataset(
+            dataset_id="ds_002",
+            name="Dataset 2",
+            row_count=2000,
+            column_count=3,
+            memory_bytes=204800,
+        )
 
         # 메서드 시그니처 변경됨 - 인자 없이 호출
         colors = state.get_comparison_colors()
@@ -236,7 +270,7 @@ class TestAppStateMultiDataset:
             file_path="/path/to/file.csv",
             row_count=1000,
             column_count=5,
-            memory_bytes=102400
+            memory_bytes=102400,
         )
 
         metadata = state.get_dataset_metadata("ds_001")
@@ -260,7 +294,7 @@ class TestDataEngineMultiDataset:
     @pytest.fixture
     def sample_csv_1(self):
         """샘플 CSV 파일 1 생성"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("id,name,value\n")
             for i in range(100):
                 f.write(f"{i},item_{i},{i * 10}\n")
@@ -269,7 +303,7 @@ class TestDataEngineMultiDataset:
     @pytest.fixture
     def sample_csv_2(self):
         """샘플 CSV 파일 2 생성"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("id,name,value\n")
             for i in range(100):
                 f.write(f"{i},item_{i},{i * 20}\n")  # 다른 값
@@ -282,7 +316,9 @@ class TestDataEngineMultiDataset:
 
     def test_load_dataset(self, engine, sample_csv_1):
         """데이터셋 로드 테스트"""
-        dataset_id = engine.load_dataset(sample_csv_1, name="Dataset 1", dataset_id="ds_001")
+        dataset_id = engine.load_dataset(
+            sample_csv_1, name="Dataset 1", dataset_id="ds_001"
+        )
 
         assert dataset_id == "ds_001"
         assert engine.dataset_count == 1
@@ -400,14 +436,14 @@ class TestDataEngineComparison:
     def comparison_data(self, engine):
         """비교용 데이터 생성"""
         # Dataset 1
-        csv1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv1 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv1.write("id,name,value\n")
         for i in range(10):
             csv1.write(f"{i},item_{i},{i * 100}\n")
         csv1.close()
 
         # Dataset 2 (value가 다름)
-        csv2 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv2 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv2.write("id,name,value\n")
         for i in range(10):
             csv2.write(f"{i},item_{i},{i * 150}\n")  # 50% 더 큰 값
@@ -426,9 +462,7 @@ class TestDataEngineComparison:
         engine = comparison_data
 
         diff_df = engine.calculate_difference(
-            "ds_001", "ds_002",
-            value_column="value",
-            key_column="id"
+            "ds_001", "ds_002", value_column="value", key_column="id"
         )
 
         assert diff_df is not None
@@ -448,8 +482,7 @@ class TestDataEngineComparison:
         engine = comparison_data
 
         stats = engine.get_comparison_statistics(
-            ["ds_001", "ds_002"],
-            value_column="value"
+            ["ds_001", "ds_002"], value_column="value"
         )
 
         assert len(stats) == 2
@@ -469,10 +502,7 @@ class TestDataEngineComparison:
         """데이터셋 정렬 테스트"""
         engine = comparison_data
 
-        aligned = engine.align_datasets(
-            ["ds_001", "ds_002"],
-            key_column="id"
-        )
+        aligned = engine.align_datasets(["ds_001", "ds_002"], key_column="id")
 
         assert len(aligned) == 2
         assert "ds_001" in aligned
@@ -486,9 +516,7 @@ class TestDataEngineComparison:
         engine = comparison_data
 
         merged = engine.merge_datasets(
-            ["ds_001", "ds_002"],
-            key_column="id",
-            how="inner"
+            ["ds_001", "ds_002"], key_column="id", how="inner"
         )
 
         assert merged is not None
@@ -525,18 +553,10 @@ class TestDatasetInfo:
 
     def test_create_dataset_info(self):
         """DatasetInfo 생성 테스트"""
-        from datetime import datetime
 
-        df = pl.DataFrame({
-            "id": [1, 2, 3],
-            "value": [10, 20, 30]
-        })
+        df = pl.DataFrame({"id": [1, 2, 3], "value": [10, 20, 30]})
 
-        info = DatasetInfo(
-            id="ds_001",
-            name="Test Dataset",
-            df=df
-        )
+        info = DatasetInfo(id="ds_001", name="Test Dataset", df=df)
 
         assert info.id == "ds_001"
         assert info.name == "Test Dataset"
@@ -545,10 +565,7 @@ class TestDatasetInfo:
 
     def test_dataset_info_defaults(self):
         """DatasetInfo 기본값 테스트"""
-        info = DatasetInfo(
-            id="ds_001",
-            name="Test Dataset"
-        )
+        info = DatasetInfo(id="ds_001", name="Test Dataset")
 
         assert info.df is None
         assert info.lazy_df is None
@@ -571,11 +588,11 @@ class TestComparisonIntegration:
     def test_full_comparison_workflow(self, state, engine, qtbot):
         """전체 비교 워크플로우 테스트"""
         # 1. 데이터셋 생성
-        csv1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv1 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv1.write("date,sales\n2024-01-01,100\n2024-01-02,150\n2024-01-03,200\n")
         csv1.close()
 
-        csv2 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv2 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv2.write("date,sales\n2024-01-01,120\n2024-01-02,180\n2024-01-03,240\n")
         csv2.close()
 
@@ -590,14 +607,14 @@ class TestComparisonIntegration:
                 name="2023 Sales",
                 row_count=3,
                 column_count=2,
-                memory_bytes=1024
+                memory_bytes=1024,
             )
             state.add_dataset(
                 dataset_id="ds_2024",
                 name="2024 Sales",
                 row_count=3,
                 column_count=2,
-                memory_bytes=1024
+                memory_bytes=1024,
             )
 
             # 4. 비교 모드 설정
@@ -610,17 +627,14 @@ class TestComparisonIntegration:
 
             # 6. 비교 통계 가져오기
             stats = engine.get_comparison_statistics(
-                ["ds_2023", "ds_2024"],
-                value_column="sales"
+                ["ds_2023", "ds_2024"], value_column="sales"
             )
             assert "ds_2023" in stats
             assert "ds_2024" in stats
 
             # 7. 차이 계산
             diff = engine.calculate_difference(
-                "ds_2023", "ds_2024",
-                value_column="sales",
-                key_column="date"
+                "ds_2023", "ds_2024", value_column="sales", key_column="date"
             )
             assert diff is not None
             # 2024 값이 더 크므로 차이는 음수
@@ -642,10 +656,11 @@ class TestStatisticalTesting:
     def statistical_data(self, engine):
         """통계 검정용 데이터 생성 (서로 다른 평균을 가진 두 데이터셋)"""
         import numpy as np
+
         np.random.seed(42)
 
         # Dataset 1: 평균 100, 표준편차 10
-        csv1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv1 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv1.write("id,value\n")
         values1 = np.random.normal(100, 10, 50)
         for i, v in enumerate(values1):
@@ -653,7 +668,7 @@ class TestStatisticalTesting:
         csv1.close()
 
         # Dataset 2: 평균 120, 표준편차 10 (유의미한 차이)
-        csv2 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv2 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv2.write("id,value\n")
         values2 = np.random.normal(120, 10, 50)
         for i, v in enumerate(values2):
@@ -672,15 +687,16 @@ class TestStatisticalTesting:
     def correlated_data(self, engine):
         """상관관계 테스트용 데이터 (강한 양의 상관)"""
         import numpy as np
+
         np.random.seed(42)
 
-        csv1 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv1 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv1.write("id,value\n")
         for i in range(50):
             csv1.write(f"{i},{i * 2 + np.random.normal(0, 1):.2f}\n")
         csv1.close()
 
-        csv2 = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        csv2 = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
         csv2.write("id,value\n")
         for i in range(50):
             csv2.write(f"{i},{i * 2.5 + np.random.normal(0, 1):.2f}\n")  # 같은 트렌드
@@ -714,7 +730,7 @@ class TestStatisticalTesting:
         assert result.get("interpretation") is not None
 
         # 유의미한 차이가 있어야 함 (평균 100 vs 120)
-        assert result.get("is_significant") == True
+        assert result.get("is_significant")
         assert result.get("p_value") < 0.05
 
     def test_perform_statistical_test_auto(self, statistical_data):
@@ -728,7 +744,11 @@ class TestStatisticalTesting:
         assert result is not None
         assert "error" not in result or result.get("statistic") is not None
         # 자동으로 적절한 검정 방법이 선택되어야 함
-        assert result.get("test_name") in ["Welch's t-test", "Mann-Whitney U test", "Kolmogorov-Smirnov test"]
+        assert result.get("test_name") in [
+            "Welch's t-test",
+            "Mann-Whitney U test",
+            "Kolmogorov-Smirnov test",
+        ]
 
     def test_perform_statistical_test_mannwhitney(self, statistical_data):
         """Mann-Whitney U 검정 테스트"""
@@ -768,7 +788,7 @@ class TestStatisticalTesting:
         # 강한 양의 상관
         assert result.get("correlation") is not None
         assert result.get("correlation") > 0.9  # 거의 완벽한 상관
-        assert result.get("is_significant") == True
+        assert result.get("is_significant")
         assert result.get("strength") in ["strong", "very strong"]
 
     def test_calculate_correlation_spearman(self, correlated_data):
@@ -796,15 +816,13 @@ class TestStatisticalTesting:
         # 정규분포로 생성된 데이터이므로 정규성 검정 통과해야 함
         assert result.get("test_name") is not None
         assert result.get("p_value") is not None
-        assert result.get("is_normal") == True  # np.random.normal로 생성
+        assert result.get("is_normal")  # np.random.normal로 생성
 
     def test_descriptive_comparison(self, statistical_data):
         """기술통계 비교 테스트"""
         engine = statistical_data
 
-        result = engine.calculate_descriptive_comparison(
-            ["ds_001", "ds_002"], "value"
-        )
+        result = engine.calculate_descriptive_comparison(["ds_001", "ds_002"], "value")
 
         assert len(result) == 2
         assert "ds_001" in result

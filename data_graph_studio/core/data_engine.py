@@ -18,14 +18,21 @@ import polars as pl
 
 # Re-export types for backward compatibility
 from .types import (  # noqa: F401
-    FileType, DelimiterType, LoadingProgress, ColumnInfo, DataProfile,
-    DatasetInfo, DataSource, PrecisionMode,
+    FileType,
+    DelimiterType,
+    LoadingProgress,
+    ColumnInfo,
+    DataProfile,
+    DatasetInfo,
+    DataSource,
+    PrecisionMode,
 )
 
 # Re-export optional dependency flags
 try:
     from scipy import stats as scipy_stats  # noqa: F401
     from scipy.stats import pearsonr, spearmanr, ttest_ind, mannwhitneyu, ks_2samp  # noqa: F401
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -33,6 +40,7 @@ except ImportError:
 try:
     from etl.etl import IEtlFileObserver, build_from_stream  # noqa: F401
     from etl.system import System  # noqa: F401
+
     HAS_ETL_PARSER = True
 except ImportError:
     HAS_ETL_PARSER = False
@@ -47,6 +55,7 @@ def _import_submodules():
     from .data_exporter import DataExporter
     from .dataset_manager import DatasetManager
     from .comparison_engine import ComparisonEngine
+
     return FileLoader, DataQuery, DataExporter, DatasetManager, ComparisonEngine
 
 
@@ -102,6 +111,7 @@ class DataEngine:
     def _set_cache(self, key: str, value: Any) -> None:
         """캐시에 값을 저장한다 (메모리 기반 eviction 포함)."""
         import sys
+
         # Remove old entry size if updating
         if key in self._cache_sizes:
             self._cache_total_bytes -= self._cache_sizes[key]
@@ -137,7 +147,9 @@ class DataEngine:
 
     def _cache_key(self, operation: str, *args) -> str:
         """dataset별 캐시 키 생성 (F5)."""
-        dataset_id = self._datasets_mgr.active_dataset_id if self._datasets_mgr else "default"
+        dataset_id = (
+            self._datasets_mgr.active_dataset_id if self._datasets_mgr else "default"
+        )
         return f"{dataset_id}:{operation}:{repr(args)}"
 
     # -- Properties: FileLoader -----------------------------------------------
@@ -145,7 +157,9 @@ class DataEngine:
     @property
     def df(self) -> Optional[pl.DataFrame]:
         if self._datasets_mgr.active_dataset_id:
-            return self._datasets_mgr.get_dataset_df(self._datasets_mgr.active_dataset_id)
+            return self._datasets_mgr.get_dataset_df(
+                self._datasets_mgr.active_dataset_id
+            )
         return self._loader._df
 
     @property
@@ -173,12 +187,15 @@ class DataEngine:
         self.update_dataframe(new_df)
         # transform chain 기록
         from .transform_chain import TransformStep
-        self._transform_chain.add(TransformStep(
-            name=f"Drop column '{col_name}'",
-            operation='drop',
-            params={'column': col_name},
-            timestamp=time.time(),
-        ))
+
+        self._transform_chain.add(
+            TransformStep(
+                name=f"Drop column '{col_name}'",
+                operation="drop",
+                params={"column": col_name},
+                timestamp=time.time(),
+            )
+        )
         # virtual columns 추적 제거
         self._virtual_columns.discard(col_name)
 
@@ -253,7 +270,9 @@ class DataEngine:
     @property
     def dtypes(self) -> Dict[str, str]:
         df = self.df
-        return {c: str(d) for c, d in zip(df.columns, df.dtypes)} if df is not None else {}
+        return (
+            {c: str(d) for c, d in zip(df.columns, df.dtypes)} if df is not None else {}
+        )
 
     @property
     def is_windowed(self) -> bool:
@@ -282,6 +301,7 @@ class DataEngine:
     @staticmethod
     def _normalize_encoding(encoding: str) -> str:
         from .file_loader import FileLoader as FL
+
         return FL._normalize_encoding(encoding)
 
     def load_file(self, path: str, **kwargs) -> bool:
@@ -332,30 +352,78 @@ class DataEngine:
     @staticmethod
     def is_binary_etl(path: str) -> bool:
         from .file_loader import FileLoader as FL
+
         return FL.is_binary_etl(path)
 
     @staticmethod
     def parse_etl_binary(path: str) -> pl.DataFrame:
         from .file_loader import FileLoader as FL
+
         return FL.parse_etl_binary(path)
 
     # -- DataQuery delegation -------------------------------------------------
     # DataQuery methods inject self.df as the first arg — kept explicit.
 
-    def filter(self, column, operator, value): return self._query.filter(self.df, column, operator, value)
-    def sort(self, columns, descending=False): return self._query.sort(self.df, columns, descending)
-    def group_aggregate(self, group_columns, value_columns, agg_funcs): return self._query.group_aggregate(self.df, group_columns, value_columns, agg_funcs)
-    def get_statistics(self, column): return self._query.get_statistics(self.df, column, self._loader._lazy_df, self._loader.is_windowed, self._cache)
-    def get_all_statistics(self, value_columns=None): return self._query.get_all_statistics(self.df, value_columns, self._loader._lazy_df, self._loader.is_windowed, self._cache)
-    def get_full_profile_summary(self): return self._query.get_full_profile_summary(self.df, self._loader.profile, self._loader._lazy_df, self._loader.is_windowed)
-    def is_column_categorical(self, col, max_unique_ratio=0.05, max_unique_count=100): return self._query.is_column_categorical(self.df, col, max_unique_ratio, max_unique_count)
-    def get_unique_values(self, col, limit=1000): return self._query.get_unique_values(self.df, col, limit)
-    def sample(self, n=10000, seed=42): return self._query.sample(self.df, n, seed)
-    def get_slice(self, start, end): return self._query.get_slice(self.df, start, end)
-    def search(self, query, columns=None, case_sensitive=False, max_columns=20): return self._query.search(self.df, query, columns, case_sensitive, max_columns)
+    def filter(self, column, operator, value):
+        return self._query.filter(self.df, column, operator, value)
+
+    def sort(self, columns, descending=False):
+        return self._query.sort(self.df, columns, descending)
+
+    def group_aggregate(self, group_columns, value_columns, agg_funcs):
+        return self._query.group_aggregate(
+            self.df, group_columns, value_columns, agg_funcs
+        )
+
+    def get_statistics(self, column):
+        return self._query.get_statistics(
+            self.df,
+            column,
+            self._loader._lazy_df,
+            self._loader.is_windowed,
+            self._cache,
+        )
+
+    def get_all_statistics(self, value_columns=None):
+        return self._query.get_all_statistics(
+            self.df,
+            value_columns,
+            self._loader._lazy_df,
+            self._loader.is_windowed,
+            self._cache,
+        )
+
+    def get_full_profile_summary(self):
+        return self._query.get_full_profile_summary(
+            self.df,
+            self._loader.profile,
+            self._loader._lazy_df,
+            self._loader.is_windowed,
+        )
+
+    def is_column_categorical(self, col, max_unique_ratio=0.05, max_unique_count=100):
+        return self._query.is_column_categorical(
+            self.df, col, max_unique_ratio, max_unique_count
+        )
+
+    def get_unique_values(self, col, limit=1000):
+        return self._query.get_unique_values(self.df, col, limit)
+
+    def sample(self, n=10000, seed=42):
+        return self._query.sample(self.df, n, seed)
+
+    def get_slice(self, start, end):
+        return self._query.get_slice(self.df, start, end)
+
+    def search(self, query, columns=None, case_sensitive=False, max_columns=20):
+        return self._query.search(self.df, query, columns, case_sensitive, max_columns)
 
     def create_index(self, column):
-        warnings.warn("create_index is deprecated. Use Polars native filtering.", DeprecationWarning, stacklevel=2)
+        warnings.warn(
+            "create_index is deprecated. Use Polars native filtering.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if self.df is None or column not in self.df.columns:
             return
         self._indexes[column] = self._query.create_index(self.df, column)
@@ -363,50 +431,64 @@ class DataEngine:
     # -- DataExporter delegation (df-guard wrappers) --------------------------
 
     def export_csv(self, path, selected_rows=None):
-        if self.df is not None: self._exporter.export_csv(self.df, path, selected_rows)
+        if self.df is not None:
+            self._exporter.export_csv(self.df, path, selected_rows)
 
     def export_excel(self, path, selected_rows=None):
-        if self.df is not None: self._exporter.export_excel(self.df, path, selected_rows)
+        if self.df is not None:
+            self._exporter.export_excel(self.df, path, selected_rows)
 
     def export_parquet(self, path, selected_rows=None):
-        if self.df is not None: self._exporter.export_parquet(self.df, path, selected_rows)
+        if self.df is not None:
+            self._exporter.export_parquet(self.df, path, selected_rows)
 
     # -- DatasetManager delegation --------------------------------------------
     # Properties must be explicit (Python descriptors don't work with __getattr__).
     # Simple methods are auto-delegated via __getattr__.
 
     @property
-    def datasets(self): return self._datasets_mgr.datasets
+    def datasets(self):
+        return self._datasets_mgr.datasets
 
     @property
-    def _datasets(self): return self._datasets_mgr.datasets
+    def _datasets(self):
+        return self._datasets_mgr.datasets
 
     @property
-    def dataset_count(self): return self._datasets_mgr.dataset_count
+    def dataset_count(self):
+        return self._datasets_mgr.dataset_count
 
     @property
-    def active_dataset_id(self): return self._datasets_mgr.active_dataset_id
+    def active_dataset_id(self):
+        return self._datasets_mgr.active_dataset_id
 
     @property
-    def _active_dataset_id(self): return self._datasets_mgr._active_dataset_id
+    def _active_dataset_id(self):
+        return self._datasets_mgr._active_dataset_id
 
     @_active_dataset_id.setter
-    def _active_dataset_id(self, value): self._datasets_mgr._active_dataset_id = value
+    def _active_dataset_id(self, value):
+        self._datasets_mgr._active_dataset_id = value
 
     @property
-    def active_dataset(self): return self._datasets_mgr.active_dataset
+    def active_dataset(self):
+        return self._datasets_mgr.active_dataset
 
     @property
-    def _color_index(self): return self._datasets_mgr._color_index
+    def _color_index(self):
+        return self._datasets_mgr._color_index
 
     @_color_index.setter
-    def _color_index(self, value): self._datasets_mgr._color_index = value
+    def _color_index(self, value):
+        self._datasets_mgr._color_index = value
 
     def load_dataset(self, path, name=None, dataset_id=None, **kw):
         self._clear_cache()
         return self._datasets_mgr.load_dataset(path, name, dataset_id, **kw)
 
-    def load_dataset_from_dataframe(self, df, name="Untitled", dataset_id=None, source_path=None):
+    def load_dataset_from_dataframe(
+        self, df, name="Untitled", dataset_id=None, source_path=None
+    ):
         """DataFrame을 직접 데이터셋으로 로드한다."""
         self._clear_cache()
         result = self._datasets_mgr.load_dataset_from_dataframe(
@@ -515,7 +597,9 @@ class DataEngine:
         elif x_is_cat:
             recommendations.append((ChartType.BAR, "카테고리 데이터 → 바 차트"))
             if has_groups:
-                recommendations.append((ChartType.STACKED_BAR, "그룹 카테고리 → 누적 바"))
+                recommendations.append(
+                    (ChartType.STACKED_BAR, "그룹 카테고리 → 누적 바")
+                )
         elif n_rows > 1000:
             recommendations.append((ChartType.SCATTER, "대량 데이터 → 산점도"))
 
@@ -556,12 +640,15 @@ class DataEngine:
             new_df = self.df.with_columns(pl.col(col_name).cast(target_dtype))
             self.update_dataframe(new_df)
             from .transform_chain import TransformStep
-            self._transform_chain.add(TransformStep(
-                name=f"Cast '{col_name}' to {target_dtype}",
-                operation='cast',
-                params={'column': col_name, 'dtype': str(target_dtype)},
-                timestamp=time.time(),
-            ))
+
+            self._transform_chain.add(
+                TransformStep(
+                    name=f"Cast '{col_name}' to {target_dtype}",
+                    operation="cast",
+                    params={"column": col_name, "dtype": str(target_dtype)},
+                    timestamp=time.time(),
+                )
+            )
             return True
         except Exception as e:
             logger.debug("Column cast failed for '%s': %s", col_name, e)
@@ -577,12 +664,14 @@ class DataEngine:
         row_count = len(df)
         null_counts = {col: df[col].null_count() for col in df.columns}
         return {
-            'row_count': row_count,
-            'col_count': len(df.columns),
-            'null_counts': null_counts,
-            'null_pct': {col: cnt / max(row_count, 1) * 100 for col, cnt in null_counts.items()},
-            'duplicate_rows': row_count - df.n_unique(),
-            'dtypes': dict(zip(df.columns, [str(d) for d in df.dtypes])),
+            "row_count": row_count,
+            "col_count": len(df.columns),
+            "null_counts": null_counts,
+            "null_pct": {
+                col: cnt / max(row_count, 1) * 100 for col, cnt in null_counts.items()
+            },
+            "duplicate_rows": row_count - df.n_unique(),
+            "dtypes": dict(zip(df.columns, [str(d) for d in df.dtypes])),
         }
 
     # -- Virtual columns (F6) -------------------------------------------------
@@ -647,10 +736,10 @@ class DataEngine:
 
     def __getattr__(self, name: str):
         # Avoid infinite recursion during __init__ (sub-modules not yet set)
-        if name.startswith('__') and name.endswith('__'):
+        if name.startswith("__") and name.endswith("__"):
             raise AttributeError(name)
 
-        for delegate in ('_loader', '_datasets_mgr', '_comparison'):
+        for delegate in ("_loader", "_datasets_mgr", "_comparison"):
             try:
                 obj = object.__getattribute__(self, delegate)
             except AttributeError:

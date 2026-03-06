@@ -100,7 +100,9 @@ class SplitColumnDialog(QDialog):
 
         groups = self._resolved_groups(compiled)
         if not groups:
-            self._error_label.setText("Pattern must include at least one capture group.")
+            self._error_label.setText(
+                "Pattern must include at least one capture group."
+            )
             return
 
         for idx, group_name in groups:
@@ -120,7 +122,9 @@ class SplitColumnDialog(QDialog):
             row_layout.addWidget(edit)
 
             self._mapping_layout.addRow(label + ":", row)
-            self._mapping_rows.append((f"g{idx}" if not group_name else group_name, edit))
+            self._mapping_rows.append(
+                (f"g{idx}" if not group_name else group_name, edit)
+            )
 
         preview_lines: List[str] = []
         for raw in self._sample_values:
@@ -174,7 +178,9 @@ class SplitColumnDialog(QDialog):
         used = set()
 
         if len(self._mapping_rows) != len(groups):
-            raise ValueError("Group mapping is out of sync. Please re-check the pattern.")
+            raise ValueError(
+                "Group mapping is out of sync. Please re-check the pattern."
+            )
 
         for (idx, _group_name), (_key, edit) in zip(groups, self._mapping_rows):
             new_name = edit.text().strip()

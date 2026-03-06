@@ -5,21 +5,26 @@ Comparison Statistics Panel - 비교 통계 패널
 통계 검정 (t-test, correlation, p-value) 포함
 """
 
-from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-    QComboBox, QPushButton, QSizePolicy, QScrollArea,
-    QTabWidget, QTextEdit, QProgressBar, QFileDialog
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QGroupBox,
+    QComboBox,
+    QPushButton,
+    QTabWidget,
+    QTextEdit,
+    QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from ...core.data_engine import DataEngine
-from ...core.state import (
-    AppState, ComparisonMode,
-    DIFF_POSITIVE_COLOR, DIFF_NEGATIVE_COLOR, DIFF_NEUTRAL_COLOR
-)
+from ...core.state import AppState, DIFF_POSITIVE_COLOR, DIFF_NEGATIVE_COLOR
 
 
 class ComparisonStatsPanel(QWidget):
@@ -309,14 +314,14 @@ class ComparisonStatsPanel(QWidget):
 
         guide_bg = "#f8f9fa" if is_light else "#334155"
         guide_fg = "#111827" if is_light else "#E2E8F0"
-        if hasattr(self, '_guide_text'):
+        if hasattr(self, "_guide_text"):
             self._guide_text.setStyleSheet(
                 f"padding: 4px; background: {guide_bg}; border-radius: 4px; color: {guide_fg};"
             )
 
         summary_bg = "#f8f9fa" if is_light else "#334155"
         summary_fg = "#111827" if is_light else "#E2E8F0"
-        if hasattr(self, 'diff_summary'):
+        if hasattr(self, "diff_summary"):
             self.diff_summary.setStyleSheet(
                 f"padding: 8px; background: {summary_bg}; border-radius: 4px; color: {summary_fg};"
             )
@@ -324,7 +329,7 @@ class ComparisonStatsPanel(QWidget):
         # QTextEdit for test results
         te_bg = "#FFFFFF" if is_light else "#1E293B"
         te_fg = "#111827" if is_light else "#E2E8F0"
-        if hasattr(self, 'test_results'):
+        if hasattr(self, "test_results"):
             self.test_results.setStyleSheet(
                 f"background-color: {te_bg}; color: {te_fg};"
             )
@@ -351,7 +356,7 @@ class ComparisonStatsPanel(QWidget):
             ds = self.engine.get_dataset(dataset_ids[0])
             if ds and ds.df is not None and col in ds.df.columns:
                 dtype = str(ds.df[col].dtype)
-                if dtype.startswith(('Int', 'Float', 'UInt')):
+                if dtype.startswith(("Int", "Float", "UInt")):
                     numeric_cols.append(col)
 
         # Stats 탭 컬럼 콤보
@@ -426,7 +431,9 @@ class ComparisonStatsPanel(QWidget):
         self.stats_table.setRowCount(len(stat_names))
 
         # 헤더
-        headers = ["Statistic"] + [stats[did]["name"] for did in dataset_ids if did in stats]
+        headers = ["Statistic"] + [
+            stats[did]["name"] for did in dataset_ids if did in stats
+        ]
         self.stats_table.setHorizontalHeaderLabels(headers)
 
         # 데이터
@@ -505,6 +512,7 @@ class ComparisonStatsPanel(QWidget):
         zero_count = (diff_values == 0).sum()
 
         import numpy as np
+
         mean_diff = np.nanmean(diff_values) if n_diff > 0 else 0.0
         total_diff = np.nansum(diff_values) if n_diff > 0 else 0.0
 
@@ -537,7 +545,6 @@ class ComparisonStatsPanel(QWidget):
         self.diff_table.setHorizontalHeaderLabels(columns)
 
         # 크기순 정렬
-        import polars as pl
         sorted_df = diff_df.sort("diff", descending=True)
 
         # 상위 20개만 표시
@@ -552,7 +559,9 @@ class ComparisonStatsPanel(QWidget):
                     if col_name == "diff_pct":
                         text = f"{value:+.1f}%"
                     else:
-                        text = f"{value:+,.2f}" if col_name == "diff" else f"{value:,.2f}"
+                        text = (
+                            f"{value:+,.2f}" if col_name == "diff" else f"{value:,.2f}"
+                        )
                 else:
                     text = str(value)
 
@@ -577,11 +586,15 @@ class ComparisonStatsPanel(QWidget):
         test_type = self.test_type_combo.currentData()
 
         if not dataset_a_id or not dataset_b_id or not value_column:
-            self.test_results.setHtml("<span style='color: red;'>Please select datasets and column.</span>")
+            self.test_results.setHtml(
+                "<span style='color: red;'>Please select datasets and column.</span>"
+            )
             return
 
         if dataset_a_id == dataset_b_id:
-            self.test_results.setHtml("<span style='color: red;'>Please select different datasets.</span>")
+            self.test_results.setHtml(
+                "<span style='color: red;'>Please select different datasets.</span>"
+            )
             return
 
         # 통계 검정 수행
@@ -590,11 +603,15 @@ class ComparisonStatsPanel(QWidget):
         )
 
         if not result:
-            self.test_results.setHtml("<span style='color: red;'>Failed to perform statistical test.</span>")
+            self.test_results.setHtml(
+                "<span style='color: red;'>Failed to perform statistical test.</span>"
+            )
             return
 
         if "error" in result and result.get("statistic") is None:
-            self.test_results.setHtml(f"<span style='color: red;'>Error: {result['error']}</span>")
+            self.test_results.setHtml(
+                f"<span style='color: red;'>Error: {result['error']}</span>"
+            )
             return
 
         # 데이터셋 이름 가져오기
@@ -635,13 +652,13 @@ class ComparisonStatsPanel(QWidget):
         <table style='width: 100%; font-size: 11pt; color: {_fg};'>
             <tr><td><b>Comparison:</b></td><td>{name_a} vs {name_b}</td></tr>
             <tr><td><b>Column:</b></td><td>{value_column}</td></tr>
-            <tr><td><b>Test:</b></td><td>{result.get('test_name', 'N/A')}</td></tr>
+            <tr><td><b>Test:</b></td><td>{result.get("test_name", "N/A")}</td></tr>
         </table>
         <br>
         <table style='width: 100%; font-size: 11pt; background: {_tbl_bg}; padding: 8px; color: {_fg};'>
             <tr>
                 <td><b>Statistic:</b></td>
-                <td style='text-align: right;'>{result.get('statistic', 'N/A'):.4f if result.get('statistic') else 'N/A'}</td>
+                <td style='text-align: right;'>{result.get("statistic", "N/A"):.4f if result.get('statistic') else 'N/A'}</td>
             </tr>
             <tr>
                 <td><b>p-value:</b></td>
@@ -651,19 +668,19 @@ class ComparisonStatsPanel(QWidget):
             </tr>
             <tr>
                 <td><b>Effect Size (d):</b></td>
-                <td style='text-align: right;'>{result.get('effect_size', 'N/A'):.4f if result.get('effect_size') else 'N/A'}</td>
+                <td style='text-align: right;'>{result.get("effect_size", "N/A"):.4f if result.get('effect_size') else 'N/A'}</td>
             </tr>
             <tr>
                 <td><b>Significant:</b></td>
                 <td style='text-align: right;'>
-                    {'<span style="color: green;">Yes</span>' if result.get('is_significant') else '<span style="color: gray;">No</span>'}
+                    {'<span style="color: green;">Yes</span>' if result.get("is_significant") else '<span style="color: gray;">No</span>'}
                 </td>
             </tr>
         </table>
         <br>
         <div style='background: {_interp_bg}; padding: 8px; border-radius: 4px; color: {_fg};'>
             <b>Interpretation:</b><br>
-            {result.get('interpretation', '')}
+            {result.get("interpretation", "")}
         </div>
         """
 
@@ -677,7 +694,9 @@ class ComparisonStatsPanel(QWidget):
         method = self.corr_method_combo.currentData()
 
         if not dataset_a_id or not dataset_b_id or not value_column:
-            self.test_results.setHtml("<span style='color: red;'>Please select datasets and column.</span>")
+            self.test_results.setHtml(
+                "<span style='color: red;'>Please select datasets and column.</span>"
+            )
             return
 
         # 상관관계 계산
@@ -686,11 +705,15 @@ class ComparisonStatsPanel(QWidget):
         )
 
         if not result:
-            self.test_results.setHtml("<span style='color: red;'>Failed to calculate correlation.</span>")
+            self.test_results.setHtml(
+                "<span style='color: red;'>Failed to calculate correlation.</span>"
+            )
             return
 
         if "error" in result and result.get("correlation") is None:
-            self.test_results.setHtml(f"<span style='color: red;'>Error: {result['error']}</span>")
+            self.test_results.setHtml(
+                f"<span style='color: red;'>Error: {result['error']}</span>"
+            )
             return
 
         # 데이터셋 이름
@@ -720,7 +743,7 @@ class ComparisonStatsPanel(QWidget):
         <table style='width: 100%; font-size: 11pt;'>
             <tr><td><b>Comparison:</b></td><td>{name_a} vs {name_b}</td></tr>
             <tr><td><b>Column:</b></td><td>{value_column}</td></tr>
-            <tr><td><b>Method:</b></td><td>{result.get('method', method.title())}</td></tr>
+            <tr><td><b>Method:</b></td><td>{result.get("method", method.title())}</td></tr>
         </table>
         <br>
         <table style='width: 100%; font-size: 11pt; background: #f5f5f5; padding: 8px;'>
@@ -732,23 +755,23 @@ class ComparisonStatsPanel(QWidget):
             </tr>
             <tr>
                 <td><b>p-value:</b></td>
-                <td style='text-align: right;'>{result.get('p_value', 'N/A'):.6f if result.get('p_value') else 'N/A'}</td>
+                <td style='text-align: right;'>{result.get("p_value", "N/A"):.6f if result.get('p_value') else 'N/A'}</td>
             </tr>
             <tr>
                 <td><b>Strength:</b></td>
-                <td style='text-align: right;'>{result.get('strength', 'N/A').title() if result.get('strength') else 'N/A'}</td>
+                <td style='text-align: right;'>{result.get("strength", "N/A").title() if result.get("strength") else "N/A"}</td>
             </tr>
             <tr>
                 <td><b>Significant:</b></td>
                 <td style='text-align: right;'>
-                    {'<span style="color: green;">Yes</span>' if result.get('is_significant') else '<span style="color: gray;">No</span>'}
+                    {'<span style="color: green;">Yes</span>' if result.get("is_significant") else '<span style="color: gray;">No</span>'}
                 </td>
             </tr>
         </table>
         <br>
         <div style='background: #e3f2fd; padding: 8px; border-radius: 4px;'>
             <b>Interpretation:</b><br>
-            {result.get('interpretation', '')}
+            {result.get("interpretation", "")}
         </div>
         """
 
@@ -790,7 +813,7 @@ class ComparisonStatsPanel(QWidget):
                 ds = self.engine.get_dataset(dataset_ids[0])
                 if ds and ds.df is not None and col in ds.df.columns:
                     dtype = str(ds.df[col].dtype)
-                    if dtype.startswith(('Int', 'Float', 'UInt')):
+                    if dtype.startswith(("Int", "Float", "UInt")):
                         numeric_cols.append(col)
 
             current_col = self.test_column_combo.currentText()
@@ -803,7 +826,9 @@ class ComparisonStatsPanel(QWidget):
     # CSV Export
     # ------------------------------------------------------------------
 
-    def _export_table_to_csv(self, table: QTableWidget, default_name: str = "export.csv") -> None:
+    def _export_table_to_csv(
+        self, table: QTableWidget, default_name: str = "export.csv"
+    ) -> None:
         """Export a QTableWidget to CSV via file dialog."""
         import csv
 
@@ -834,6 +859,7 @@ class ComparisonStatsPanel(QWidget):
                     writer.writerow(row_data)
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
+
             QMessageBox.warning(self, "Export Error", f"Failed to export CSV:\n{e}")
 
     def _export_stats_csv(self) -> None:
@@ -848,8 +874,10 @@ class ComparisonStatsPanel(QWidget):
             import csv
 
             path, _ = QFileDialog.getSaveFileName(
-                self, "Export CSV", "comparison_difference.csv",
-                "CSV Files (*.csv);;All Files (*)"
+                self,
+                "Export CSV",
+                "comparison_difference.csv",
+                "CSV Files (*.csv);;All Files (*)",
             )
             if not path:
                 return
@@ -863,6 +891,7 @@ class ComparisonStatsPanel(QWidget):
                         writer.writerow(row)
             except Exception as e:
                 from PySide6.QtWidgets import QMessageBox
+
                 QMessageBox.warning(self, "Export Error", f"Failed to export CSV:\n{e}")
         elif self.diff_table.rowCount() > 0:
             self._export_table_to_csv(self.diff_table, "comparison_difference.csv")

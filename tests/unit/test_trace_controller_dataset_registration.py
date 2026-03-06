@@ -5,7 +5,9 @@ import polars as pl
 
 
 @pytest.mark.qt
-def test_trace_dataset_registration_binds_profiles_to_project_node(qtbot, monkeypatch) -> None:
+def test_trace_dataset_registration_binds_profiles_to_project_node(
+    qtbot, monkeypatch
+) -> None:
     from PySide6.QtWidgets import QMessageBox
 
     from data_graph_studio.ui.main_window import MainWindow
@@ -34,7 +36,9 @@ def test_trace_dataset_registration_binds_profiles_to_project_node(qtbot, monkey
         }
     )
 
-    dataset_id = w.engine.load_dataset_from_dataframe(df, name="raw-trace", source_path="/tmp/raw-trace.csv")
+    dataset_id = w.engine.load_dataset_from_dataframe(
+        df, name="raw-trace", source_path="/tmp/raw-trace.csv"
+    )
     assert dataset_id is not None
 
     # Before registration, state has no metadata for this dataset id.

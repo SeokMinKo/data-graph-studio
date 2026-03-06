@@ -19,7 +19,9 @@ import pytest
 
 
 @pytest.mark.qt
-def test_apply_pending_wizard_result_profile_cycle(qtbot, monkeypatch, sample_csv_path) -> None:
+def test_apply_pending_wizard_result_profile_cycle(
+    qtbot, monkeypatch, sample_csv_path
+) -> None:
     from PySide6.QtWidgets import QMessageBox
 
     # Avoid modal dialogs blocking CI.
@@ -35,7 +37,9 @@ def test_apply_pending_wizard_result_profile_cycle(qtbot, monkeypatch, sample_cs
 
     # Disable update checks + autosave writing.
     w._auto_check_updates = lambda: None  # type: ignore[attr-defined]
-    monkeypatch.setattr(w._profile_ui_controller, "_autosave_active_profile", lambda: None)
+    monkeypatch.setattr(
+        w._profile_ui_controller, "_autosave_active_profile", lambda: None
+    )
 
     # Load dataset (ensures active_dataset_id exists)
     dataset_id = w.engine.load_dataset(sample_csv_path, name="sample")
@@ -50,19 +54,32 @@ def test_apply_pending_wizard_result_profile_cycle(qtbot, monkeypatch, sample_cs
     # Include realistic columns so we can verify apply_profile → AppState wiring.
     # (dataset_id will be overridden to active_id inside _apply_pending_wizard_result)
     gs = GraphSetting.create_new(name="Wizard Setting", dataset_id="")
-    gs = GraphSetting.from_dict({
-        **gs.to_dict(),
-        "chart_type": "line",
-        "x_column": "age",
-        "value_columns": [
-            {"name": "score", "aggregation": "mean", "color": "#1f77b4", "use_secondary_axis": False, "order": 0, "formula": ""},
-        ],
-        "group_columns": [
-            {"name": "city", "selected_values": [], "order": 0},
-        ],
-        "hover_columns": ["name"],
-        "chart_settings": {"line_width": 3, "marker_size": 7, "show_data_labels": True},
-    })
+    gs = GraphSetting.from_dict(
+        {
+            **gs.to_dict(),
+            "chart_type": "line",
+            "x_column": "age",
+            "value_columns": [
+                {
+                    "name": "score",
+                    "aggregation": "mean",
+                    "color": "#1f77b4",
+                    "use_secondary_axis": False,
+                    "order": 0,
+                    "formula": "",
+                },
+            ],
+            "group_columns": [
+                {"name": "city", "selected_values": [], "order": 0},
+            ],
+            "hover_columns": ["name"],
+            "chart_settings": {
+                "line_width": 3,
+                "marker_size": 7,
+                "show_data_labels": True,
+            },
+        }
+    )
 
     # Emulate wizard result payload
     w._pending_wizard_result = {

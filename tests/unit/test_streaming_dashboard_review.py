@@ -12,7 +12,6 @@ Covers:
 import os
 import sys
 import tempfile
-import pytest
 from unittest.mock import MagicMock
 
 import polars as pl
@@ -27,6 +26,7 @@ from data_graph_studio.core.undo_manager import UndoStack
 
 
 # ── append_rows incremental ────────────────────────────────
+
 
 class TestAppendRowsIncremental:
     def test_append_rows_skips_existing(self, tmp_path):
@@ -64,6 +64,7 @@ class TestAppendRowsIncremental:
 
 # ── engine.trim() ──────────────────────────────────────────
 
+
 class TestEngineTrim:
     def test_trim_reduces_rows(self):
         engine = DataEngine()
@@ -90,18 +91,24 @@ class TestEngineTrim:
 
 # ── seek tail partial line ──────────────────────────────────
 
+
 class TestSeekTailPartialLine:
     def test_partial_first_line_dropped(self):
         """When seek lands mid-line, the partial line should be dropped."""
-        from data_graph_studio.core.file_watcher import FileWatcher, _WatchEntry
+        from data_graph_studio.core.file_watcher import FileWatcher
 
         class FakeFS:
             def __init__(self):
                 self.data = b""
-            def exists(self, p): return True
+
+            def exists(self, p):
+                return True
+
             def stat(self, p):
-                return type('S', (), {'st_mtime': 2.0, 'st_size': len(self.data)})()
-            def read_file(self, p): return self.data
+                return type("S", (), {"st_mtime": 2.0, "st_size": len(self.data)})()
+
+            def read_file(self, p):
+                return self.data
 
         class FakeTimerFactory:
             def create_timer(self, ms, cb):
@@ -128,7 +135,7 @@ class TestSeekTailPartialLine:
         entry.last_size = len(b"col1,col2\nAAA,111\nBB")  # mid "BBB,222"
 
         # Now the file has the full content
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as f:
             f.write(initial + b"CCC,333\n")
             tmp_path = f.name
 
@@ -152,6 +159,7 @@ class TestSeekTailPartialLine:
 
 # ── cell swap undo ──────────────────────────────────────────
 
+
 class TestCellSwapUndo:
     def test_swap_is_undoable(self):
         undo = UndoStack(max_depth=50)
@@ -170,6 +178,7 @@ class TestCellSwapUndo:
         dst = ctrl.get_cell(0, 1)
         src.profile_id, dst.profile_id = dst.profile_id, src.profile_id
         from data_graph_studio.core.undo_manager import UndoActionType
+
         ctrl._push_undo(UndoActionType.DASHBOARD_CELL_ASSIGN, "swap", before)
 
         assert ctrl.get_cell(0, 0).profile_id == "B"
@@ -183,10 +192,14 @@ class TestCellSwapUndo:
 
 # ── window size parsing ────────────────────────────────────
 
+
 class TestWindowSizeParsing:
     def test_parse_1_5k(self):
         """'1.5k' should parse to 1500."""
-        from data_graph_studio.ui.controllers.streaming_ui_controller import StreamingUIController
+        from data_graph_studio.ui.controllers.streaming_ui_controller import (
+            StreamingUIController,
+        )
+
         ctrl = StreamingUIController.__new__(StreamingUIController)
         ctrl._streaming_window_size = None
         # Call the parsing logic directly

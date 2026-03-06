@@ -3,19 +3,32 @@ Empty State - 데이터 없을 때 표시되는 온보딩 가이드
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGraphicsDropShadowEffect
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QGraphicsDropShadowEffect,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QPointF, Property
 from PySide6.QtGui import (
-    QColor, QFont, QPainter, QPen, QBrush, QLinearGradient, QPainterPath,
+    QColor,
+    QFont,
+    QPainter,
+    QPen,
+    QBrush,
+    QLinearGradient,
+    QPainterPath,
 )
 
 
 class AnimatedGraphIcon(QWidget):
     """Animated line chart icon using QPainter — replaces emoji."""
 
-    def __init__(self, color_primary: str = "#38BDF8", color_accent: str = "#22D3EE", parent=None):
+    def __init__(
+        self, color_primary: str = "#38BDF8", color_accent: str = "#22D3EE", parent=None
+    ):
         super().__init__(parent)
         self.setFixedSize(120, 90)
         self._primary = QColor(color_primary)
@@ -64,7 +77,9 @@ class AnimatedGraphIcon(QWidget):
         # Y-axis
         painter.drawLine(int(margin_x), int(margin_y), int(margin_x), int(h - margin_y))
         # X-axis
-        painter.drawLine(int(margin_x), int(h - margin_y), int(w - margin_x), int(h - margin_y))
+        painter.drawLine(
+            int(margin_x), int(h - margin_y), int(w - margin_x), int(h - margin_y)
+        )
 
         # Build points
         pts = []

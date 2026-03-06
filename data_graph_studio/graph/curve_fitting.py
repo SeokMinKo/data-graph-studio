@@ -4,7 +4,7 @@ Curve Fitting - Spotfire 스타일 Lines & Curves
 추세선, 회귀 분석, 예측 기능을 제공합니다.
 """
 
-from typing import List, Dict, Any, Optional, Tuple, Callable
+from typing import List, Dict, Optional, Tuple, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
@@ -14,18 +14,20 @@ from scipy import stats
 
 class FitType(Enum):
     """피팅 타입"""
-    LINEAR = "linear"               # 선형 회귀 (y = ax + b)
-    POLYNOMIAL = "polynomial"       # 다항식 회귀 (y = a_n*x^n + ... + a_1*x + a_0)
-    EXPONENTIAL = "exponential"     # 지수 회귀 (y = a * e^(bx))
-    POWER = "power"                 # 거듭제곱 회귀 (y = a * x^b)
-    LOGARITHMIC = "logarithmic"     # 로그 회귀 (y = a * ln(x) + b)
-    LOGISTIC = "logistic"           # 로지스틱 회귀 (y = L / (1 + e^(-k(x-x0))))
-    GAUSSIAN = "gaussian"           # 가우시안 피팅
+
+    LINEAR = "linear"  # 선형 회귀 (y = ax + b)
+    POLYNOMIAL = "polynomial"  # 다항식 회귀 (y = a_n*x^n + ... + a_1*x + a_0)
+    EXPONENTIAL = "exponential"  # 지수 회귀 (y = a * e^(bx))
+    POWER = "power"  # 거듭제곱 회귀 (y = a * x^b)
+    LOGARITHMIC = "logarithmic"  # 로그 회귀 (y = a * ln(x) + b)
+    LOGISTIC = "logistic"  # 로지스틱 회귀 (y = L / (1 + e^(-k(x-x0))))
+    GAUSSIAN = "gaussian"  # 가우시안 피팅
 
 
 @dataclass
 class CurveFitSettings:
     """곡선 피팅 설정"""
+
     fit_type: FitType = FitType.LINEAR
     degree: int = 2  # 다항식 차수
     show_equation: bool = True
@@ -40,14 +42,16 @@ class CurveFitSettings:
 @dataclass
 class ForecastSettings:
     """예측 설정"""
-    forward_periods: int = 0   # 미래 예측 기간
+
+    forward_periods: int = 0  # 미래 예측 기간
     backward_periods: int = 0  # 과거 예측 (백캐스팅)
-    period_size: float = 1.0   # 기간 크기
+    period_size: float = 1.0  # 기간 크기
 
 
 @dataclass
 class CurveFitResult:
     """곡선 피팅 결과"""
+
     fit_type: FitType
     coefficients: np.ndarray
     r_squared: float
@@ -105,10 +109,7 @@ class CurveFitResult:
 
     def get_statistics_string(self) -> str:
         """통계 문자열 반환"""
-        lines = [
-            f"R² = {self.r_squared:.4f}",
-            f"Std Error = {self.std_error:.4f}"
-        ]
+        lines = [f"R² = {self.r_squared:.4f}", f"Std Error = {self.std_error:.4f}"]
 
         if self.adjusted_r_squared is not None:
             lines.append(f"Adj R² = {self.adjusted_r_squared:.4f}")
@@ -134,7 +135,7 @@ class CurveFitter:
         x: np.ndarray,
         y: np.ndarray,
         fit_type: FitType,
-        settings: Optional[CurveFitSettings] = None
+        settings: Optional[CurveFitSettings] = None,
     ) -> Optional[CurveFitResult]:
         """
         곡선 피팅 수행
@@ -188,7 +189,7 @@ class CurveFitter:
         slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
 
         coefficients = np.array([slope, intercept])
-        r_squared = r_value ** 2
+        r_squared = r_value**2
 
         # 잔차 계산
         y_pred = slope * x + intercept
@@ -201,7 +202,9 @@ class CurveFitter:
         # Adjusted R²
         n = len(x)
         p = 1  # 독립 변수 수
-        adj_r_squared = 1 - (1 - r_squared) * (n - 1) / (n - p - 1) if n > p + 1 else r_squared
+        adj_r_squared = (
+            1 - (1 - r_squared) * (n - 1) / (n - p - 1) if n > p + 1 else r_squared
+        )
 
         return CurveFitResult(
             fit_type=FitType.LINEAR,
@@ -211,10 +214,12 @@ class CurveFitter:
             p_value=p_value,
             residuals=residuals,
             predict_func=predict_func,
-            adjusted_r_squared=adj_r_squared
+            adjusted_r_squared=adj_r_squared,
         )
 
-    def _fit_polynomial(self, x: np.ndarray, y: np.ndarray, degree: int) -> CurveFitResult:
+    def _fit_polynomial(
+        self, x: np.ndarray, y: np.ndarray, degree: int
+    ) -> CurveFitResult:
         """다항식 회귀"""
         # numpy polyfit 사용
         coefficients = np.polyfit(x, y, degree)
@@ -237,7 +242,9 @@ class CurveFitter:
         std_error = np.sqrt(ss_res / (n - p - 1)) if n > p + 1 else 0
 
         # Adjusted R²
-        adj_r_squared = 1 - (1 - r_squared) * (n - 1) / (n - p - 1) if n > p + 1 else r_squared
+        adj_r_squared = (
+            1 - (1 - r_squared) * (n - 1) / (n - p - 1) if n > p + 1 else r_squared
+        )
 
         return CurveFitResult(
             fit_type=FitType.POLYNOMIAL,
@@ -246,7 +253,7 @@ class CurveFitter:
             std_error=std_error,
             residuals=residuals,
             predict_func=poly,
-            adjusted_r_squared=adj_r_squared
+            adjusted_r_squared=adj_r_squared,
         )
 
     def _fit_exponential(self, x: np.ndarray, y: np.ndarray) -> CurveFitResult:
@@ -262,7 +269,7 @@ class CurveFitter:
                 fit_type=FitType.EXPONENTIAL,
                 coefficients=np.array([1.0, 0.0]),
                 r_squared=0.0,
-                std_error=0.0
+                std_error=0.0,
             )
 
         x_valid = x[mask]
@@ -291,7 +298,7 @@ class CurveFitter:
             coefficients=coefficients,
             r_squared=r_squared,
             std_error=std_err,
-            predict_func=predict_func
+            predict_func=predict_func,
         )
 
     def _fit_power(self, x: np.ndarray, y: np.ndarray) -> CurveFitResult:
@@ -305,7 +312,7 @@ class CurveFitter:
                 fit_type=FitType.POWER,
                 coefficients=np.array([1.0, 1.0]),
                 r_squared=0.0,
-                std_error=0.0
+                std_error=0.0,
             )
 
         x_valid = x[mask]
@@ -333,7 +340,7 @@ class CurveFitter:
             coefficients=coefficients,
             r_squared=r_squared,
             std_error=std_err,
-            predict_func=predict_func
+            predict_func=predict_func,
         )
 
     def _fit_logarithmic(self, x: np.ndarray, y: np.ndarray) -> CurveFitResult:
@@ -344,7 +351,7 @@ class CurveFitter:
                 fit_type=FitType.LOGARITHMIC,
                 coefficients=np.array([1.0, 0.0]),
                 r_squared=0.0,
-                std_error=0.0
+                std_error=0.0,
             )
 
         x_valid = x[mask]
@@ -354,7 +361,7 @@ class CurveFitter:
         slope, intercept, r_value, p_value, std_err = stats.linregress(log_x, y_valid)
 
         coefficients = np.array([slope, intercept])
-        r_squared = r_value ** 2
+        r_squared = r_value**2
 
         def predict_func(x_new):
             return slope * np.log(x_new) + intercept
@@ -367,11 +374,12 @@ class CurveFitter:
             r_squared=r_squared,
             std_error=std_err,
             residuals=residuals,
-            predict_func=predict_func
+            predict_func=predict_func,
         )
 
     def _fit_logistic(self, x: np.ndarray, y: np.ndarray) -> CurveFitResult:
         """로지스틱 회귀 (y = L / (1 + e^(-k(x-x0))))"""
+
         def logistic(x, L, k, x0):
             return L / (1 + np.exp(-k * (x - x0)))
 
@@ -382,9 +390,7 @@ class CurveFitter:
 
         try:
             popt, pcov = optimize.curve_fit(
-                logistic, x, y,
-                p0=[L0, k0, x0_init],
-                maxfev=5000
+                logistic, x, y, p0=[L0, k0, x0_init], maxfev=5000
             )
 
             L, k, x0 = popt
@@ -405,7 +411,7 @@ class CurveFitter:
                 coefficients=coefficients,
                 r_squared=r_squared,
                 std_error=std_error,
-                predict_func=predict_func
+                predict_func=predict_func,
             )
 
         except Exception:
@@ -413,13 +419,14 @@ class CurveFitter:
                 fit_type=FitType.LOGISTIC,
                 coefficients=np.array([1.0, 1.0, 0.0]),
                 r_squared=0.0,
-                std_error=0.0
+                std_error=0.0,
             )
 
     def _fit_gaussian(self, x: np.ndarray, y: np.ndarray) -> CurveFitResult:
         """가우시안 피팅 (y = a * exp(-((x-mu)^2)/(2*sigma^2)))"""
+
         def gaussian(x, a, mu, sigma):
-            return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+            return a * np.exp(-((x - mu) ** 2) / (2 * sigma**2))
 
         # 초기 추정값
         a0 = np.max(y)
@@ -428,9 +435,7 @@ class CurveFitter:
 
         try:
             popt, pcov = optimize.curve_fit(
-                gaussian, x, y,
-                p0=[a0, mu0, sigma0],
-                maxfev=5000
+                gaussian, x, y, p0=[a0, mu0, sigma0], maxfev=5000
             )
 
             a, mu, sigma = popt
@@ -451,7 +456,7 @@ class CurveFitter:
                 coefficients=coefficients,
                 r_squared=r_squared,
                 std_error=std_error,
-                predict_func=predict_func
+                predict_func=predict_func,
             )
 
         except Exception:
@@ -459,14 +464,10 @@ class CurveFitter:
                 fit_type=FitType.GAUSSIAN,
                 coefficients=np.array([1.0, 0.0, 1.0]),
                 r_squared=0.0,
-                std_error=0.0
+                std_error=0.0,
             )
 
-    def predict(
-        self,
-        result: CurveFitResult,
-        x_new: np.ndarray
-    ) -> np.ndarray:
+    def predict(self, result: CurveFitResult, x_new: np.ndarray) -> np.ndarray:
         """
         피팅 결과로 예측
 
@@ -490,10 +491,7 @@ class CurveFitter:
         return result.predict_func(x_new)
 
     def forecast(
-        self,
-        result: CurveFitResult,
-        x: np.ndarray,
-        settings: ForecastSettings
+        self, result: CurveFitResult, x: np.ndarray, settings: ForecastSettings
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         미래/과거 예측
@@ -528,11 +526,7 @@ class CurveFitter:
 
         return forecast_x, forecast_y
 
-    def moving_average(
-        self,
-        y: np.ndarray,
-        window: int = 3
-    ) -> np.ndarray:
+    def moving_average(self, y: np.ndarray, window: int = 3) -> np.ndarray:
         """
         이동 평균 계산
 
@@ -556,9 +550,7 @@ class CurveFitter:
         return result
 
     def exponential_moving_average(
-        self,
-        y: np.ndarray,
-        alpha: float = 0.3
+        self, y: np.ndarray, alpha: float = 0.3
     ) -> np.ndarray:
         """
         지수 이동 평균 (EMA)
@@ -579,10 +571,7 @@ class CurveFitter:
         return result
 
     def confidence_interval(
-        self,
-        result: CurveFitResult,
-        x: np.ndarray,
-        confidence: float = 0.95
+        self, result: CurveFitResult, x: np.ndarray, confidence: float = 0.95
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         신뢰 구간 계산
@@ -614,10 +603,7 @@ class CurveFitter:
         return lower, upper
 
     def prediction_interval(
-        self,
-        result: CurveFitResult,
-        x: np.ndarray,
-        confidence: float = 0.95
+        self, result: CurveFitResult, x: np.ndarray, confidence: float = 0.95
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         예측 구간 계산 (개별 관측치의 범위)
@@ -639,7 +625,7 @@ class CurveFitter:
         se = result.std_error
 
         # 예측 구간은 신뢰 구간보다 넓음
-        margin = t_crit * se * np.sqrt(1 + 1/n)
+        margin = t_crit * se * np.sqrt(1 + 1 / n)
 
         lower = y_pred - margin
         upper = y_pred + margin
@@ -654,6 +640,7 @@ class TrendLine:
 
     시각화에 표시할 추세선을 정의합니다.
     """
+
     name: str
     fit_type: FitType
     color: str = "#FF0000"
@@ -672,10 +659,7 @@ class TrendLine:
     _y_data: Optional[np.ndarray] = None
 
     def calculate(
-        self,
-        x: np.ndarray,
-        y: np.ndarray,
-        settings: Optional[CurveFitSettings] = None
+        self, x: np.ndarray, y: np.ndarray, settings: Optional[CurveFitSettings] = None
     ) -> Optional[CurveFitResult]:
         """
         추세선 계산
@@ -701,7 +685,7 @@ class TrendLine:
         self,
         num_points: int = 100,
         x_min: Optional[float] = None,
-        x_max: Optional[float] = None
+        x_max: Optional[float] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         추세선 렌더링용 포인트 생성
@@ -728,8 +712,7 @@ class TrendLine:
         return x_line, y_line
 
     def get_confidence_band(
-        self,
-        num_points: int = 100
+        self, num_points: int = 100
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         신뢰 구간 밴드 생성
@@ -773,12 +756,7 @@ class TrendLineManager:
     def __init__(self):
         self._trend_lines: Dict[str, TrendLine] = {}
 
-    def add_trend_line(
-        self,
-        name: str,
-        fit_type: FitType,
-        **kwargs
-    ) -> TrendLine:
+    def add_trend_line(self, name: str, fit_type: FitType, **kwargs) -> TrendLine:
         """추세선 추가"""
         trend = TrendLine(name=name, fit_type=fit_type, **kwargs)
         self._trend_lines[name] = trend

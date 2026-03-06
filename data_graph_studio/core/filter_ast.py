@@ -57,7 +57,9 @@ class FilterPresetStore:
         return dict(self._presets)
 
     @classmethod
-    def from_dict(cls, data: Optional[Dict[str, Dict[str, Any]]]) -> "FilterPresetStore":
+    def from_dict(
+        cls, data: Optional[Dict[str, Dict[str, Any]]]
+    ) -> "FilterPresetStore":
         inst = cls()
         if data:
             inst._presets = dict(data)
@@ -102,10 +104,18 @@ def predicate_to_expr(node: PredicateNode) -> pl.Expr:
             value = value.lower()
         return target.str.ends_with(value)
     if op == "in":
-        values = list(node.value) if isinstance(node.value, (list, tuple, set)) else [node.value]
+        values = (
+            list(node.value)
+            if isinstance(node.value, (list, tuple, set))
+            else [node.value]
+        )
         return col.is_in(values)
     if op == "not_in":
-        values = list(node.value) if isinstance(node.value, (list, tuple, set)) else [node.value]
+        values = (
+            list(node.value)
+            if isinstance(node.value, (list, tuple, set))
+            else [node.value]
+        )
         return ~col.is_in(values)
     if op == "isnull":
         return col.is_null()
@@ -181,9 +191,17 @@ def node_from_dict(data: Optional[Dict[str, Any]]) -> Optional[FilterNode]:
             case_sensitive=bool(data.get("case_sensitive", True)),
         )
     if t == "and":
-        return AndNode(children=[node_from_dict(c) for c in data.get("children", []) if c is not None])
+        return AndNode(
+            children=[
+                node_from_dict(c) for c in data.get("children", []) if c is not None
+            ]
+        )
     if t == "or":
-        return OrNode(children=[node_from_dict(c) for c in data.get("children", []) if c is not None])
+        return OrNode(
+            children=[
+                node_from_dict(c) for c in data.get("children", []) if c is not None
+            ]
+        )
     if t == "not":
         child = node_from_dict(data.get("child"))
         if child is None:

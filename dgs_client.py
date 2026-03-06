@@ -12,6 +12,7 @@ Usage:
     python dgs_client.py chart line
     python dgs_client.py load path/to/file.csv
 """
+
 import sys
 import json
 import os
@@ -53,7 +54,7 @@ def _get_socket_path():
     # QLocalServer on Linux uses abstract namespace: '\0' + name
     # For a raw Python socket, we connect to the abstract namespace.
     # On macOS, QLocalServer uses /tmp/<name>
-    if sys.platform == 'darwin':
+    if sys.platform == "darwin":
         return f"/tmp/{_SOCKET_NAME}"
     # Linux: abstract namespace
     return f"\0{_SOCKET_NAME}"
@@ -70,30 +71,33 @@ def send_command(command: str, **args) -> dict:
         sock.connect(socket_path)
         sock.settimeout(5.0)
 
-        data = json.dumps({
-            'command': command,
-            'args': args,
-            'token': token,
-        }, ensure_ascii=False)
-        sock.sendall((data + '\n').encode('utf-8'))
+        data = json.dumps(
+            {
+                "command": command,
+                "args": args,
+                "token": token,
+            },
+            ensure_ascii=False,
+        )
+        sock.sendall((data + "\n").encode("utf-8"))
 
-        response = b''
+        response = b""
         while True:
             chunk = sock.recv(4096)
             if not chunk:
                 break
             response += chunk
-            if b'\n' in response:
+            if b"\n" in response:
                 break
 
         sock.close()
-        return json.loads(response.decode('utf-8').strip())
+        return json.loads(response.decode("utf-8").strip())
     except ConnectionRefusedError:
-        return {'status': 'error', 'error': 'App not running or IPC server not started'}
+        return {"status": "error", "error": "App not running or IPC server not started"}
     except FileNotFoundError:
-        return {'status': 'error', 'error': 'IPC socket not found. Is the app running?'}
+        return {"status": "error", "error": "IPC socket not found. Is the app running?"}
     except Exception as e:
-        return {'status': 'error', 'error': str(e)}
+        return {"status": "error", "error": str(e)}
 
 
 def main():
@@ -103,96 +107,102 @@ def main():
 
     cmd = sys.argv[1].lower()
 
-    if cmd == 'ping':
-        result = send_command('ping')
+    if cmd == "ping":
+        result = send_command("ping")
 
-    elif cmd == 'state':
-        result = send_command('get_state')
+    elif cmd == "state":
+        result = send_command("get_state")
 
-    elif cmd == 'data':
-        result = send_command('get_data_info')
+    elif cmd == "data":
+        result = send_command("get_data_info")
 
-    elif cmd == 'panels':
-        result = send_command('get_panels')
+    elif cmd == "panels":
+        result = send_command("get_panels")
 
-    elif cmd == 'chart':
+    elif cmd == "chart":
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py chart <type>")
             print("Types: LINE, BAR, SCATTER, PIE, AREA, HISTOGRAM")
             return 1
-        result = send_command('set_chart_type', chart_type=sys.argv[2])
+        result = send_command("set_chart_type", chart_type=sys.argv[2])
 
-    elif cmd == 'columns':
+    elif cmd == "columns":
         x = sys.argv[2] if len(sys.argv) > 2 else None
         y = sys.argv[3:] if len(sys.argv) > 3 else None
-        result = send_command('set_columns', x=x, y=y)
+        result = send_command("set_columns", x=x, y=y)
 
-    elif cmd == 'load':
+    elif cmd == "load":
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py load <file_path>")
             return 1
-        result = send_command('load_file', path=sys.argv[2])
+        result = send_command("load_file", path=sys.argv[2])
 
     # ==================== Profile Comparison ====================
 
-    elif cmd == 'list-profiles':
+    elif cmd == "list-profiles":
         kwargs = {}
         if len(sys.argv) > 2:
-            kwargs['dataset_id'] = sys.argv[2]
-        result = send_command('list_profiles', **kwargs)
+            kwargs["dataset_id"] = sys.argv[2]
+        result = send_command("list_profiles", **kwargs)
 
-    elif cmd == 'create-profile':
+    elif cmd == "create-profile":
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py create-profile <name> [dataset_id]")
             return 1
-        kwargs = {'name': sys.argv[2]}
+        kwargs = {"name": sys.argv[2]}
         if len(sys.argv) > 3:
-            kwargs['dataset_id'] = sys.argv[3]
-        result = send_command('create_profile', **kwargs)
+            kwargs["dataset_id"] = sys.argv[3]
+        result = send_command("create_profile", **kwargs)
 
-    elif cmd == 'apply-profile':
+    elif cmd == "apply-profile":
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py apply-profile <profile_id>")
             return 1
-        result = send_command('apply_profile', profile_id=sys.argv[2])
+        result = send_command("apply_profile", profile_id=sys.argv[2])
 
-    elif cmd == 'delete-profile':
+    elif cmd == "delete-profile":
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py delete-profile <profile_id>")
             return 1
-        result = send_command('delete_profile', profile_id=sys.argv[2])
+        result = send_command("delete_profile", profile_id=sys.argv[2])
 
-    elif cmd == 'duplicate-profile':
+    elif cmd == "duplicate-profile":
         if len(sys.argv) < 3:
             print("Usage: python dgs_client.py duplicate-profile <profile_id>")
             return 1
-        result = send_command('duplicate_profile', profile_id=sys.argv[2])
+        result = send_command("duplicate_profile", profile_id=sys.argv[2])
 
-    elif cmd == 'start-comparison':
+    elif cmd == "start-comparison":
         if len(sys.argv) < 4:
-            print("Usage: python dgs_client.py start-comparison <mode> <profile_id1> <profile_id2> [...]")
+            print(
+                "Usage: python dgs_client.py start-comparison <mode> <profile_id1> <profile_id2> [...]"
+            )
             print("Modes: side_by_side, overlay, difference")
             return 1
         mode = sys.argv[2]
         profile_ids = sys.argv[3:]
-        result = send_command('start_profile_comparison', profile_ids=profile_ids, mode=mode)
+        result = send_command(
+            "start_profile_comparison", profile_ids=profile_ids, mode=mode
+        )
 
-    elif cmd == 'stop-comparison':
-        result = send_command('stop_profile_comparison')
+    elif cmd == "stop-comparison":
+        result = send_command("stop_profile_comparison")
 
-    elif cmd == 'comparison-state':
-        result = send_command('get_profile_comparison_state')
+    elif cmd == "comparison-state":
+        result = send_command("get_profile_comparison_state")
 
-    elif cmd == 'set-sync':
+    elif cmd == "set-sync":
         kwargs = {}
         for arg in sys.argv[2:]:
-            key, _, val = arg.partition('=')
-            if key in ('sync_x', 'sync_y', 'sync_selection'):
-                kwargs[key] = val.lower() in ('true', '1', 'yes')
+            key, _, val = arg.partition("=")
+            if key in ("sync_x", "sync_y", "sync_selection"):
+                kwargs[key] = val.lower() in ("true", "1", "yes")
         if not kwargs:
-            print("Usage: python dgs_client.py set-sync sync_x=true sync_y=false sync_selection=true")
+            print(
+                "Usage: python dgs_client.py set-sync sync_x=true sync_y=false sync_selection=true"
+            )
             return 1
-        result = send_command('set_comparison_sync', **kwargs)
+        result = send_command("set_comparison_sync", **kwargs)
 
     else:
         print(f"Unknown command: {cmd}")
@@ -202,8 +212,8 @@ def main():
     # Pretty print result
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
-    return 0 if result.get('status') == 'ok' else 1
+    return 0 if result.get("status") == "ok" else 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

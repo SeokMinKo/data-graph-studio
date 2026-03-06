@@ -4,9 +4,8 @@ Details-on-Demand Panel 테스트
 
 import pytest
 import polars as pl
-from typing import Set
 
-from data_graph_studio.core.marking import MarkingManager, MarkMode
+from data_graph_studio.core.marking import MarkingManager
 from data_graph_studio.ui.panels.details_panel import (
     DetailsOnDemandModel,
     DetailsColumnConfig,
@@ -19,13 +18,15 @@ class TestDetailsOnDemandModel:
     @pytest.fixture
     def sample_data(self):
         """샘플 데이터"""
-        return pl.DataFrame({
-            "id": [1, 2, 3, 4, 5],
-            "name": ["Apple", "Banana", "Cherry", "Date", "Elderberry"],
-            "sales": [100, 200, 150, 300, 50],
-            "region": ["Asia", "Europe", "Asia", "America", "Europe"],
-            "price": [1.5, 2.0, 3.5, 4.0, 2.5]
-        })
+        return pl.DataFrame(
+            {
+                "id": [1, 2, 3, 4, 5],
+                "name": ["Apple", "Banana", "Cherry", "Date", "Elderberry"],
+                "sales": [100, 200, 150, 300, 50],
+                "region": ["Asia", "Europe", "Asia", "America", "Europe"],
+                "price": [1.5, 2.0, 3.5, 4.0, 2.5],
+            }
+        )
 
     @pytest.fixture
     def model(self, qtbot, sample_data):
@@ -100,7 +101,7 @@ class TestDetailsColumnConfig:
             name="sales",
             display_name="Sales Amount",
             visible=True,
-            format_string="${:,.2f}"
+            format_string="${:,.2f}",
         )
 
         assert config.name == "sales"
@@ -110,10 +111,7 @@ class TestDetailsColumnConfig:
 
     def test_format_value(self):
         """값 포맷팅"""
-        config = DetailsColumnConfig(
-            name="sales",
-            format_string="${:,.2f}"
-        )
+        config = DetailsColumnConfig(name="sales", format_string="${:,.2f}")
 
         formatted = config.format_value(1234.5)
 
@@ -141,11 +139,13 @@ class TestDetailsIntegration:
 
     @pytest.fixture
     def sample_data(self):
-        return pl.DataFrame({
-            "id": [1, 2, 3, 4, 5],
-            "name": ["A", "B", "C", "D", "E"],
-            "value": [10, 20, 30, 40, 50]
-        })
+        return pl.DataFrame(
+            {
+                "id": [1, 2, 3, 4, 5],
+                "name": ["A", "B", "C", "D", "E"],
+                "value": [10, 20, 30, 40, 50],
+            }
+        )
 
     @pytest.fixture
     def marking_manager(self, qtbot):
@@ -187,11 +187,9 @@ class TestDetailsExport:
 
     @pytest.fixture
     def sample_data(self):
-        return pl.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["A", "B", "C"],
-            "value": [10, 20, 30]
-        })
+        return pl.DataFrame(
+            {"id": [1, 2, 3], "name": ["A", "B", "C"], "value": [10, 20, 30]}
+        )
 
     @pytest.fixture
     def model(self, qtbot, sample_data):
@@ -213,7 +211,8 @@ class TestDetailsExport:
         model.export_to_csv(str(file_path))
 
         import csv
-        with open(file_path, 'r') as f:
+
+        with open(file_path, "r") as f:
             reader = csv.reader(f)
             rows = list(reader)
 

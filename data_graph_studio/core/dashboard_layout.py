@@ -20,9 +20,11 @@ MIN_CELL_HEIGHT: int = 180
 # DashboardCell
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DashboardCell:
     """Single cell in a dashboard grid."""
+
     row: int
     col: int
     row_span: int = 1
@@ -65,8 +67,14 @@ class DashboardCell:
 
     def overlaps(self, other: DashboardCell) -> bool:
         """Return True if two cells overlap."""
-        r_overlap = self.row < other.row + other.row_span and other.row < self.row + self.row_span
-        c_overlap = self.col < other.col + other.col_span and other.col < self.col + self.col_span
+        r_overlap = (
+            self.row < other.row + other.row_span
+            and other.row < self.row + self.row_span
+        )
+        c_overlap = (
+            self.col < other.col + other.col_span
+            and other.col < self.col + self.col_span
+        )
         return r_overlap and c_overlap
 
 
@@ -74,9 +82,11 @@ class DashboardCell:
 # DashboardLayout
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DashboardLayout:
     """Grid layout definition for dashboard mode (§6.1)."""
+
     name: str
     rows: int
     cols: int
@@ -129,7 +139,7 @@ class DashboardLayout:
 
         # overlap check (pairwise)
         for i, a in enumerate(self.cells):
-            for b in self.cells[i + 1:]:
+            for b in self.cells[i + 1 :]:
                 if a.overlaps(b):
                     return False
         return True
@@ -207,6 +217,7 @@ def default_layout() -> DashboardLayout:
 # ---------------------------------------------------------------------------
 # JSON schema validation (ERR-1.3)
 # ---------------------------------------------------------------------------
+
 
 def validate_layout_json(data: Any) -> DashboardLayout:
     """

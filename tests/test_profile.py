@@ -3,10 +3,8 @@ Tests for Graph Profiles functionality
 """
 
 import pytest
-import json
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from data_graph_studio.core.profile import GraphSetting, Profile, ProfileManager
 from data_graph_studio.core.state import AppState, ChartType, AggregationType
@@ -29,6 +27,7 @@ class TestGraphSetting:
     def test_to_dict(self):
         """딕셔너리 변환 테스트"""
         import dataclasses
+
         setting = GraphSetting.create_new("Test", "📊")
         setting = dataclasses.replace(
             setting,
@@ -166,6 +165,7 @@ class TestProfile:
     def test_to_json_and_from_json(self):
         """JSON 직렬화/역직렬화 테스트"""
         import dataclasses
+
         profile = Profile.create_new("JSON Test")
         profile.description = "Test description"
         setting = GraphSetting.create_new("Test Setting", "📈")
@@ -200,6 +200,7 @@ class TestProfile:
     def test_check_compatibility(self):
         """호환성 검사 테스트"""
         import dataclasses
+
         profile = Profile.create_new("Test")
         setting = GraphSetting.create_new("Setting")
         setting = dataclasses.replace(setting, x_column="date")
@@ -269,7 +270,7 @@ class TestProfileManager:
 
         # 여러 프로파일 저장
         for i in range(3):
-            profile = manager.new_profile(f"Profile {i}")
+            manager.new_profile(f"Profile {i}")
             manager.save(str(tmp_path / f"profile_{i}.dgp"))
 
         recent = manager.get_recent_profiles()
@@ -364,6 +365,7 @@ class TestAppStateProfile:
     def test_apply_graph_setting(self):
         """GraphSetting 적용 테스트"""
         import dataclasses
+
         state = AppState()
 
         setting = GraphSetting.create_new("Test")
@@ -373,7 +375,14 @@ class TestAppStateProfile:
             x_column="time",
             group_columns=({"name": "category", "selected_values": [], "order": 0},),
             value_columns=(
-                {"name": "value", "aggregation": "mean", "color": "#ff0000", "use_secondary_axis": False, "order": 0, "formula": ""},
+                {
+                    "name": "value",
+                    "aggregation": "mean",
+                    "color": "#ff0000",
+                    "use_secondary_axis": False,
+                    "order": 0,
+                    "formula": "",
+                },
             ),
             chart_settings={"line_width": 3, "marker_size": 8},
         )
@@ -404,8 +413,8 @@ class TestAppStateProfile:
 
 
 @pytest.mark.skipif(
-    not hasattr(pytest, 'importorskip'),
-    reason="Signal tests require full Qt environment"
+    not hasattr(pytest, "importorskip"),
+    reason="Signal tests require full Qt environment",
 )
 class TestProfileSignals:
     """Profile 관련 Signal 테스트"""
