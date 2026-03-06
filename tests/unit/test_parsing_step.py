@@ -5,7 +5,6 @@ ParsingStep UI 테스트
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from PySide6.QtWidgets import QApplication
 

@@ -12,26 +12,23 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional
 
 import polars as pl
-from PySide6.QtCore import Qt, Signal, QThread, QTimer
+from PySide6.QtCore import Signal, QThread, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
-    QHBoxLayout,
     QFormLayout,
     QLineEdit,
     QRadioButton,
     QButtonGroup,
     QSpinBox,
-    QDoubleSpinBox,
     QComboBox,
     QTextEdit,
     QLabel,
     QDialogButtonBox,
     QProgressBar,
-    QPushButton,
     QGroupBox,
     QWidget,
 )
@@ -51,9 +48,11 @@ logger = logging.getLogger(__name__)
 # Data structures
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 @dataclass
 class ComputedColumn:
     """PRD §6.3 — definition of a computed column."""
+
     name: str
     kind: str  # "formula" | "moving_avg" | "difference" | "cumsum" | "normalize"
     expression: str  # formula string or source column
@@ -66,12 +65,13 @@ class ComputedColumn:
 # Worker thread for heavy computation (NFR-3.2, §10.5)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 class ComputeWorker(QThread):
     """Run computed column evaluation in a background thread."""
 
-    finished = Signal(object)   # pl.Series or None
-    error = Signal(str)         # error message
-    progress = Signal(int)      # 0-100
+    finished = Signal(object)  # pl.Series or None
+    error = Signal(str)  # error message
+    progress = Signal(int)  # 0-100
 
     def __init__(
         self,
@@ -98,24 +98,20 @@ class ComputeWorker(QThread):
                 self.finished.emit(None)
                 return
 
-            if defn.kind == 'formula':
+            if defn.kind == "formula":
                 result = self._parser.evaluate(defn.expression, self._df)
-            elif defn.kind == 'moving_avg':
-                window = defn.params.get('window', 3)
+            elif defn.kind == "moving_avg":
+                window = defn.params.get("window", 3)
                 result = self._parser.evaluate_moving_avg(
                     defn.expression, window, self._df
                 )
-            elif defn.kind == 'difference':
-                order = defn.params.get('order', 1)
-                result = self._parser.evaluate_diff(
-                    defn.expression, order, self._df
-                )
-            elif defn.kind == 'cumsum':
-                result = self._parser.evaluate_cumsum(
-                    defn.expression, self._df
-                )
-            elif defn.kind == 'normalize':
-                method = defn.params.get('method', 'min_max')
+            elif defn.kind == "difference":
+                order = defn.params.get("order", 1)
+                result = self._parser.evaluate_diff(defn.expression, order, self._df)
+            elif defn.kind == "cumsum":
+                result = self._parser.evaluate_cumsum(defn.expression, self._df)
+            elif defn.kind == "normalize":
+                method = defn.params.get("method", "min_max")
                 result = self._parser.evaluate_normalize(
                     defn.expression, method, self._df
                 )
@@ -130,7 +126,12 @@ class ComputeWorker(QThread):
             self.progress.emit(100)
             self.finished.emit(result)
 
-        except (FormulaError, FormulaSecurityError, FormulaColumnError, FormulaTypeError) as e:
+        except (
+            FormulaError,
+            FormulaSecurityError,
+            FormulaColumnError,
+            FormulaTypeError,
+        ) as e:
             self.error.emit(str(e))
         except Exception as e:
             self.error.emit(f"Unexpected error: {e}")
@@ -139,6 +140,7 @@ class ComputeWorker(QThread):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Dialog
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 class ComputedColumnDialog(QDialog):
     """
@@ -185,7 +187,9 @@ class ComputedColumnDialog(QDialog):
         self._type_group = QButtonGroup(self)
 
         self._radio_formula = QRadioButton("Formula")
-        self._radio_formula.setToolTip("Create column using a custom formula expression")
+        self._radio_formula.setToolTip(
+            "Create column using a custom formula expression"
+        )
         self._radio_moving_avg = QRadioButton("Moving Average")
         self._radio_moving_avg.setToolTip("Compute moving average over a window")
         self._radio_diff = QRadioButton("Difference")
@@ -195,10 +199,15 @@ class ComputedColumnDialog(QDialog):
         self._radio_normalize = QRadioButton("Normalize")
         self._radio_normalize.setToolTip("Normalize values using min-max or z-score")
 
-        for i, rb in enumerate([
-            self._radio_formula, self._radio_moving_avg,
-            self._radio_diff, self._radio_cumsum, self._radio_normalize,
-        ]):
+        for i, rb in enumerate(
+            [
+                self._radio_formula,
+                self._radio_moving_avg,
+                self._radio_diff,
+                self._radio_cumsum,
+                self._radio_normalize,
+            ]
+        ):
             self._type_group.addButton(rb, i)
             type_layout.addWidget(rb)
 
@@ -319,21 +328,27 @@ class ComputedColumnDialog(QDialog):
         sample_df = self._df.head(100) if len(self._df) > 100 else self._df
         try:
             worker_defn = defn
-            if worker_defn.kind == 'formula':
+            if worker_defn.kind == "formula":
                 result = self._parser.evaluate(worker_defn.expression, sample_df)
-            elif worker_defn.kind == 'moving_avg':
+            elif worker_defn.kind == "moving_avg":
                 result = self._parser.evaluate_moving_avg(
-                    worker_defn.expression, worker_defn.params.get('window', 3), sample_df
+                    worker_defn.expression,
+                    worker_defn.params.get("window", 3),
+                    sample_df,
                 )
-            elif worker_defn.kind == 'difference':
+            elif worker_defn.kind == "difference":
                 result = self._parser.evaluate_diff(
-                    worker_defn.expression, worker_defn.params.get('order', 1), sample_df
+                    worker_defn.expression,
+                    worker_defn.params.get("order", 1),
+                    sample_df,
                 )
-            elif worker_defn.kind == 'cumsum':
+            elif worker_defn.kind == "cumsum":
                 result = self._parser.evaluate_cumsum(worker_defn.expression, sample_df)
-            elif worker_defn.kind == 'normalize':
+            elif worker_defn.kind == "normalize":
                 result = self._parser.evaluate_normalize(
-                    worker_defn.expression, worker_defn.params.get('method', 'min_max'), sample_df
+                    worker_defn.expression,
+                    worker_defn.params.get("method", "min_max"),
+                    sample_df,
                 )
             else:
                 self._preview_text.setText("Unknown type")
@@ -359,8 +374,10 @@ class ComputedColumnDialog(QDialog):
     def _show_error(self, msg: str):
         """Show inline error with red highlight (FR-B3.4)."""
         self._error_label.setText(f"⚠ {msg}")
-        self._error_label.setStyleSheet("color: #EF4444; font-size: 12px; padding: 4px; "
-                                        "background: rgba(239,68,68,0.1); border-radius: 3px;")
+        self._error_label.setStyleSheet(
+            "color: #EF4444; font-size: 12px; padding: 4px; "
+            "background: rgba(239,68,68,0.1); border-radius: 3px;"
+        )
         self._error_label.show()
 
     def _on_create(self):
@@ -415,7 +432,9 @@ class ComputedColumnDialog(QDialog):
                 return None
             refs = self._parser.extract_column_references(formula)
             return ComputedColumn(
-                name=name, kind='formula', expression=formula,
+                name=name,
+                kind="formula",
+                expression=formula,
                 depends_on=list(refs),
             )
 
@@ -426,25 +445,33 @@ class ComputedColumnDialog(QDialog):
 
         if type_id == 1:  # Moving Average
             return ComputedColumn(
-                name=name, kind='moving_avg', expression=source,
-                params={'window': self._window_spin.value()},
+                name=name,
+                kind="moving_avg",
+                expression=source,
+                params={"window": self._window_spin.value()},
                 depends_on=[source],
             )
         if type_id == 2:  # Difference
             return ComputedColumn(
-                name=name, kind='difference', expression=source,
-                params={'order': self._order_spin.value()},
+                name=name,
+                kind="difference",
+                expression=source,
+                params={"order": self._order_spin.value()},
                 depends_on=[source],
             )
         if type_id == 3:  # Cumsum
             return ComputedColumn(
-                name=name, kind='cumsum', expression=source,
+                name=name,
+                kind="cumsum",
+                expression=source,
                 depends_on=[source],
             )
         if type_id == 4:  # Normalize
             return ComputedColumn(
-                name=name, kind='normalize', expression=source,
-                params={'method': self._norm_combo.currentText()},
+                name=name,
+                kind="normalize",
+                expression=source,
+                params={"method": self._norm_combo.currentText()},
                 depends_on=[source],
             )
 

@@ -2,13 +2,17 @@
 Floatable Section - 섹션을 독립 창으로 분리하는 기능
 """
 
-from typing import Optional, Callable
+from typing import Optional
 from PySide6.QtWidgets import (
-    QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QSizePolicy, QDialog, QApplication
+    QWidget,
+    QFrame,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QDialog,
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, Signal
 
 
 class FloatWindow(QDialog):
@@ -20,7 +24,9 @@ class FloatWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         # Non-modal window with standard window controls
-        self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint)
+        self.setWindowFlags(
+            Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint
+        )
         self.setModal(False)  # Non-modal: main window remains interactive
         self.setMinimumSize(400, 300)
 
@@ -119,7 +125,7 @@ class FloatableSection(QFrame):
     """
 
     floated = Signal()  # 섹션이 float됨
-    docked = Signal()   # 섹션이 다시 dock됨
+    docked = Signal()  # 섹션이 다시 dock됨
 
     def __init__(
         self,
@@ -127,7 +133,7 @@ class FloatableSection(QFrame):
         content_widget: QWidget,
         icon: str = "",
         show_header: bool = True,
-        parent=None
+        parent=None,
     ):
         super().__init__(parent)
         self._title = title
@@ -169,7 +175,9 @@ class FloatableSection(QFrame):
         layout = QVBoxLayout(placeholder)
         layout.setAlignment(Qt.AlignCenter)
 
-        label = QLabel(f"📤 {self._title}\n\nFloating as separate window\n\nClick 'Dock' to return")
+        label = QLabel(
+            f"📤 {self._title}\n\nFloating as separate window\n\nClick 'Dock' to return"
+        )
         label.setObjectName("floatPlaceholderLabel")
         label.setAlignment(Qt.AlignCenter)
         layout.addWidget(label)
@@ -256,7 +264,7 @@ class FloatableSection(QFrame):
 
     def set_header_visible(self, visible: bool):
         """헤더 표시/숨김"""
-        if self._show_header and hasattr(self, '_header'):
+        if self._show_header and hasattr(self, "_header"):
             self._header.setVisible(visible)
 
 

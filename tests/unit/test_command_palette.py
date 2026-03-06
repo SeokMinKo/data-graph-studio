@@ -2,13 +2,12 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from PySide6.QtWidgets import QApplication, QMainWindow, QMenuBar, QMenu
+from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 
 from data_graph_studio.ui.dialogs.command_palette_dialog import (
     CommandPaletteDialog,
-    CommandEntry,
 )
 
 
@@ -163,7 +162,7 @@ class TestCommandPaletteExecution:
         entry.action.trigger = MagicMock()
 
         # Simulate activation (accept() will close, so we mock it)
-        with patch.object(palette, 'accept'):
+        with patch.object(palette, "accept"):
             palette._on_item_activated(item)
 
         entry.action.trigger.assert_called_once()
@@ -177,7 +176,7 @@ class TestCommandPaletteKeyboard:
         from PySide6.QtGui import QKeyEvent
         from PySide6.QtCore import QEvent
 
-        with patch.object(palette, 'reject') as mock_reject:
+        with patch.object(palette, "reject") as mock_reject:
             event = QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier)
             palette.keyPressEvent(event)
             mock_reject.assert_called_once()
@@ -224,7 +223,7 @@ class TestCommandPaletteKeyboard:
         from PySide6.QtGui import QKeyEvent
         from PySide6.QtCore import QEvent
 
-        with patch.object(palette, 'accept'):
+        with patch.object(palette, "accept"):
             event = QKeyEvent(QEvent.KeyPress, Qt.Key_Return, Qt.NoModifier)
             palette.keyPressEvent(event)
 

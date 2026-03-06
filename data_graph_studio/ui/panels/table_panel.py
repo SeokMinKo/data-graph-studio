@@ -12,26 +12,54 @@ import polars as pl
 logger = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
-    QTableView, QHeaderView, QAbstractItemView, QMenu,
-    QLineEdit, QComboBox, QPushButton, QMessageBox,
-    QSplitter, QSizePolicy, QApplication, QListWidget,
-    QListWidgetItem, QGroupBox, QSlider, QDialog,
-    QDialogButtonBox, QFormLayout, QColorDialog, QInputDialog
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QFrame,
+    QTableView,
+    QAbstractItemView,
+    QMenu,
+    QLineEdit,
+    QComboBox,
+    QPushButton,
+    QMessageBox,
+    QApplication,
+    QListWidget,
+    QListWidgetItem,
+    QSlider,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QInputDialog,
 )
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import (
-    Qt, Signal, Slot, QAbstractTableModel, QModelIndex,
-    QMimeData, QByteArray, QItemSelection, QItemSelectionModel, QEvent, QSize
+    Qt,
+    Signal,
+    QAbstractTableModel,
+    QModelIndex,
+    QMimeData,
+    QByteArray,
+    QItemSelection,
+    QItemSelectionModel,
+    QSize,
 )
-from PySide6.QtGui import QBrush, QColor, QDrag, QAction, QDropEvent, QDragEnterEvent, QKeySequence
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QDrag,
+    QAction,
+    QDropEvent,
+    QDragEnterEvent,
+    QKeySequence,
+)
 
-from ...core.state import AppState, AggregationType, GroupColumn, ValueColumn
+from ...core.state import AppState, AggregationType, ValueColumn
 from ...core.data_engine import DataEngine
 from ...core.filter_ast import apply_filter_ast
 from .grouped_table_model import GroupedTableModel
 from ..dialogs.split_column_dialog import SplitColumnDialog
-from ..floatable import FloatButton, FloatWindow
 
 
 class ConditionalFormat:
@@ -41,9 +69,14 @@ class ConditionalFormat:
     THRESHOLD = "threshold"
     DATA_BAR = "data_bar"
 
-    def __init__(self, mode: str = "heatmap", min_color: str = "#2196F3",
-                 max_color: str = "#F44336", threshold: float = 0,
-                 threshold_color: str = "#F44336"):
+    def __init__(
+        self,
+        mode: str = "heatmap",
+        min_color: str = "#2196F3",
+        max_color: str = "#F44336",
+        threshold: float = 0,
+        threshold_color: str = "#F44336",
+    ):
         self.mode = mode
         self.min_color = QColor(min_color)
         self.max_color = QColor(max_color)
@@ -69,15 +102,29 @@ class ConditionalFormat:
             if rng == 0:
                 return None
             t = max(0.0, min(1.0, (v - self._min_val) / rng))
-            r = int(self.min_color.red() + t * (self.max_color.red() - self.min_color.red()))
-            g = int(self.min_color.green() + t * (self.max_color.green() - self.min_color.green()))
-            b = int(self.min_color.blue() + t * (self.max_color.blue() - self.min_color.blue()))
+            r = int(
+                self.min_color.red() + t * (self.max_color.red() - self.min_color.red())
+            )
+            g = int(
+                self.min_color.green()
+                + t * (self.max_color.green() - self.min_color.green())
+            )
+            b = int(
+                self.min_color.blue()
+                + t * (self.max_color.blue() - self.min_color.blue())
+            )
             color = QColor(r, g, b, 60)
             return QBrush(color)
         elif self.mode == self.THRESHOLD:
             if v >= self.threshold:
-                return QBrush(QColor(self.threshold_color.red(), self.threshold_color.green(),
-                                     self.threshold_color.blue(), 60))
+                return QBrush(
+                    QColor(
+                        self.threshold_color.red(),
+                        self.threshold_color.green(),
+                        self.threshold_color.blue(),
+                        60,
+                    )
+                )
             return None
         elif self.mode == self.DATA_BAR:
             # Data bar uses alpha to indicate magnitude
@@ -258,7 +305,9 @@ class PolarsTableModel(QAbstractTableModel):
 
     def _get_original_row(self, display_row: int) -> int:
         """Get original row index from display row."""
-        if self._sort_indices is not None and 0 <= display_row < len(self._sort_indices):
+        if self._sort_indices is not None and 0 <= display_row < len(
+            self._sort_indices
+        ):
             return int(self._sort_indices[display_row])
         return display_row
 
@@ -324,8 +373,16 @@ class PolarsTableModel(QAbstractTableModel):
         # Emit dataChanged for affected rows
         changed = old.symmetric_difference(self._focused_rows)
         if changed and self._row_count > 0:
-            min_row = min(r for r in changed if r < self._row_count) if any(r < self._row_count for r in changed) else 0
-            max_row = max(r for r in changed if r < self._row_count) if any(r < self._row_count for r in changed) else 0
+            min_row = (
+                min(r for r in changed if r < self._row_count)
+                if any(r < self._row_count for r in changed)
+                else 0
+            )
+            max_row = (
+                max(r for r in changed if r < self._row_count)
+                if any(r < self._row_count for r in changed)
+                else 0
+            )
             col_count = len(self._visible_columns)
             if col_count > 0:
                 self.dataChanged.emit(
@@ -370,7 +427,9 @@ class PolarsTableModel(QAbstractTableModel):
         while len(self._column_cache) > MAX_CACHED_COLUMNS:
             self._column_cache.popitem(last=False)
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role=Qt.DisplayRole):
+    def headerData(
+        self, section: int, orientation: Qt.Orientation, role=Qt.DisplayRole
+    ):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
                 if 0 <= section < len(self._visible_columns):
@@ -385,7 +444,7 @@ class PolarsTableModel(QAbstractTableModel):
                     for i, (sc, so) in enumerate(self._sort_columns):
                         if sc == section:
                             arrow = "▲" if so == Qt.AscendingOrder else "▼"
-                            return f"{col_name} {arrow}{i+1}"
+                            return f"{col_name} {arrow}{i + 1}"
                     return col_name
             else:
                 return str(section + 1)
@@ -442,7 +501,9 @@ class PolarsTableModel(QAbstractTableModel):
                         self._cond_fmt_ranges[col_name] = (min_val, max_val)
                         fmt.set_range(min_val, max_val)
                 except Exception as e:
-                    logger.debug("Conditional format range failed for %s: %s", col_name, e)
+                    logger.debug(
+                        "Conditional format range failed for %s: %s", col_name, e
+                    )
 
     def _precompute_column_stats(self):
         """Pre-compute header tooltip stats at set_dataframe time (#12)."""
@@ -482,11 +543,9 @@ class PolarsTableModel(QAbstractTableModel):
             df_with_idx = self._original_df.with_row_index("__original_idx__")
 
             # 정렬 수행
-            descending = (order == Qt.DescendingOrder)
+            descending = order == Qt.DescendingOrder
             sorted_df = df_with_idx.sort(
-                col_name,
-                descending=descending,
-                nulls_last=True
+                col_name, descending=descending, nulls_last=True
             )
 
             # 원본 인덱스 저장 (Int32로 메모리 효율화)
@@ -494,7 +553,9 @@ class PolarsTableModel(QAbstractTableModel):
 
             # Bug 3: Build reverse map for O(1) lookup
             indices_list = self._sort_indices.to_list()
-            self._reverse_sort_map = {orig: sorted_idx for sorted_idx, orig in enumerate(indices_list)}
+            self._reverse_sort_map = {
+                orig: sorted_idx for sorted_idx, orig in enumerate(indices_list)
+            }
 
             # 정렬된 DataFrame 저장 (인덱스 컬럼 제거)
             self._df = sorted_df.drop("__original_idx__")
@@ -508,7 +569,11 @@ class PolarsTableModel(QAbstractTableModel):
 
             # Virtual scroll reset
             self._total_rows = min(len(self._df), self.MAX_DISPLAY_ROWS)
-            self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
+            self._loaded_rows = (
+                min(self.FETCH_SIZE, self._total_rows)
+                if self._virtual_scroll_enabled
+                else self._total_rows
+            )
             self._row_count = self._loaded_rows
 
         except Exception as e:
@@ -541,7 +606,9 @@ class PolarsTableModel(QAbstractTableModel):
         self.beginResetModel()
         try:
             df_with_idx = self._original_df.with_row_index("__original_idx__")
-            sorted_df = df_with_idx.sort(col_names, descending=descending, nulls_last=True)
+            sorted_df = df_with_idx.sort(
+                col_names, descending=descending, nulls_last=True
+            )
             self._sort_indices = sorted_df["__original_idx__"].cast(pl.Int32)
             indices_list = self._sort_indices.to_list()
             self._reverse_sort_map = {orig: si for si, orig in enumerate(indices_list)}
@@ -550,7 +617,11 @@ class PolarsTableModel(QAbstractTableModel):
             self._sort_column = columns[0][0] if len(columns) == 1 else None
             self._sort_order = columns[0][1] if len(columns) == 1 else None
             self._total_rows = min(len(self._df), self.MAX_DISPLAY_ROWS)
-            self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
+            self._loaded_rows = (
+                min(self.FETCH_SIZE, self._total_rows)
+                if self._virtual_scroll_enabled
+                else self._total_rows
+            )
             self._row_count = self._loaded_rows
         except Exception as e:
             logger.warning("Multi-sort error: %s", e)
@@ -571,8 +642,14 @@ class PolarsTableModel(QAbstractTableModel):
         self._sort_indices = None
         self._reverse_sort_map = {}
         self._sort_columns = []
-        self._total_rows = min(len(self._df), self.MAX_DISPLAY_ROWS) if self._df is not None else 0
-        self._loaded_rows = min(self.FETCH_SIZE, self._total_rows) if self._virtual_scroll_enabled else self._total_rows
+        self._total_rows = (
+            min(len(self._df), self.MAX_DISPLAY_ROWS) if self._df is not None else 0
+        )
+        self._loaded_rows = (
+            min(self.FETCH_SIZE, self._total_rows)
+            if self._virtual_scroll_enabled
+            else self._total_rows
+        )
         self._row_count = self._loaded_rows
         self.endResetModel()
 
@@ -620,7 +697,9 @@ def _parse_drag_payload(mime_data: QMimeData) -> Dict[str, Any]:
     return payload
 
 
-def _build_drag_payload(zone: str, name: str, index: Optional[int] = None) -> QByteArray:
+def _build_drag_payload(
+    zone: str, name: str, index: Optional[int] = None
+) -> QByteArray:
     data: Dict[str, Any] = {"zone": zone, "name": name}
     if index is not None:
         data["index"] = index
@@ -664,11 +743,16 @@ class DragHandleLabel(QLabel):
 
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton and self._start_pos is not None:
-            if (event.pos() - self._start_pos).manhattanLength() >= QApplication.startDragDistance():
+            if (
+                event.pos() - self._start_pos
+            ).manhattanLength() >= QApplication.startDragDistance():
                 drag = QDrag(self)
                 mime = QMimeData()
                 mime.setText(self.name)
-                mime.setData("application/x-dgs-zone", _build_drag_payload(self.zone_id, self.name, self.index))
+                mime.setData(
+                    "application/x-dgs-zone",
+                    _build_drag_payload(self.zone_id, self.name, self.index),
+                )
                 drag.setMimeData(mime)
                 drag.exec(Qt.MoveAction)
         super().mouseMoveEvent(event)
@@ -677,7 +761,14 @@ class DragHandleLabel(QLabel):
 class ChipWidget(QFrame):
     remove_clicked = Signal()
 
-    def __init__(self, text: str, accent: str, text_color: str = "#1E293B", zone_id: Optional[str] = None, index: Optional[int] = None):
+    def __init__(
+        self,
+        text: str,
+        accent: str,
+        text_color: str = "#1E293B",
+        zone_id: Optional[str] = None,
+        index: Optional[int] = None,
+    ):
         super().__init__()
         self._zone_id = zone_id
         self._name = text
@@ -710,12 +801,21 @@ class ChipWidget(QFrame):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if event.buttons() & Qt.LeftButton and self._start_pos is not None and self._zone_id:
-            if (event.pos() - self._start_pos).manhattanLength() >= QApplication.startDragDistance():
+        if (
+            event.buttons() & Qt.LeftButton
+            and self._start_pos is not None
+            and self._zone_id
+        ):
+            if (
+                event.pos() - self._start_pos
+            ).manhattanLength() >= QApplication.startDragDistance():
                 drag = QDrag(self)
                 mime = QMimeData()
                 mime.setText(self._name)
-                mime.setData("application/x-dgs-zone", _build_drag_payload(self._zone_id, self._name, self._index))
+                mime.setData(
+                    "application/x-dgs-zone",
+                    _build_drag_payload(self._zone_id, self._name, self._index),
+                )
                 drag.setMimeData(mime)
                 drag.exec(Qt.MoveAction)
         super().mouseMoveEvent(event)
@@ -724,13 +824,14 @@ class ChipWidget(QFrame):
 class ValueChipWidget(QFrame):
     remove_clicked = Signal()
 
-    def __init__(self, value_col: ValueColumn, index: int, on_agg_changed, on_formula_changed):
+    def __init__(
+        self, value_col: ValueColumn, index: int, on_agg_changed, on_formula_changed
+    ):
         super().__init__()
         self._zone_id = "value"
         self._name = value_col.name
         self._index = index
         self._start_pos = None
-        accent = value_col.color
         self.setObjectName("valueChipWidget")
         self.setMinimumHeight(28)
 
@@ -777,8 +878,7 @@ class ValueChipWidget(QFrame):
         formula_edit.setText(value_col.formula or "")
         formula_edit.setFixedHeight(20)
         formula_edit.setToolTip(
-            "Y값에 적용할 수식을 입력하세요.\n"
-            "예시: y*2, y+100, LOG(y), SQRT(y), ABS(y)"
+            "Y값에 적용할 수식을 입력하세요.\n예시: y*2, y+100, LOG(y), SQRT(y), ABS(y)"
         )
         formula_edit.editingFinished.connect(
             lambda edit=formula_edit: on_formula_changed(index, edit.text())
@@ -793,11 +893,16 @@ class ValueChipWidget(QFrame):
 
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton and self._start_pos is not None:
-            if (event.pos() - self._start_pos).manhattanLength() >= QApplication.startDragDistance():
+            if (
+                event.pos() - self._start_pos
+            ).manhattanLength() >= QApplication.startDragDistance():
                 drag = QDrag(self)
                 mime = QMimeData()
                 mime.setText(self._name)
-                mime.setData("application/x-dgs-zone", _build_drag_payload(self._zone_id, self._name, self._index))
+                mime.setData(
+                    "application/x-dgs-zone",
+                    _build_drag_payload(self._zone_id, self._name, self._index),
+                )
                 drag.setMimeData(mime)
                 drag.exec(Qt.MoveAction)
         super().mouseMoveEvent(event)
@@ -809,7 +914,13 @@ class ChipListWidget(QListWidget):
     item_dropped = Signal(str, dict)
     order_changed = Signal(list)
 
-    def __init__(self, zone_id: str, accept_drop: bool = True, single_item: bool = False, allow_reorder: bool = False):
+    def __init__(
+        self,
+        zone_id: str,
+        accept_drop: bool = True,
+        single_item: bool = False,
+        allow_reorder: bool = False,
+    ):
         super().__init__()
         self.zone_id = zone_id
         self.single_item = single_item
@@ -818,12 +929,16 @@ class ChipListWidget(QListWidget):
         self.setAcceptDrops(accept_drop)
         self.setDropIndicatorShown(True)
         self.setSpacing(2)
-        self.setDragDropMode(QAbstractItemView.DragDrop if accept_drop else QAbstractItemView.DragOnly)
+        self.setDragDropMode(
+            QAbstractItemView.DragDrop if accept_drop else QAbstractItemView.DragOnly
+        )
         self.setDefaultDropAction(Qt.MoveAction if allow_reorder else Qt.CopyAction)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
+        if event.mimeData().hasText() or event.mimeData().hasFormat(
+            "application/x-dgs-zone"
+        ):
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
@@ -851,7 +966,12 @@ class ChipListWidget(QListWidget):
         if payload.get("zone") == self.zone_id:
             if self.allow_reorder:
                 super().dropEvent(event)
-                self.order_changed.emit([self.item(i).data(Qt.UserRole) or self.item(i).text() for i in range(self.count())])
+                self.order_changed.emit(
+                    [
+                        self.item(i).data(Qt.UserRole) or self.item(i).text()
+                        for i in range(self.count())
+                    ]
+                )
             event.acceptProposedAction()
             return
 
@@ -874,6 +994,7 @@ class ChipListWidget(QListWidget):
 
 # ==================== X-Axis Zone ====================
 
+
 class XAxisZone(QFrame):
     """X-Axis Zone - X축 컬럼 선택"""
 
@@ -884,7 +1005,9 @@ class XAxisZone(QFrame):
         self.state = state
         self.setObjectName("XAxisZone")
         self.setAccessibleName("X Axis Column Selector")
-        self.setAccessibleDescription("Drop a column here to set as X axis, or press Enter to select")
+        self.setAccessibleDescription(
+            "Drop a column here to set as X axis, or press Enter to select"
+        )
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(140)
         self.setMaximumWidth(180)
@@ -939,7 +1062,9 @@ class XAxisZone(QFrame):
         self.placeholder_label.setObjectName("placeholder")
         x_layout.addWidget(self.placeholder_label)
 
-        self.list_widget = ChipListWidget(zone_id="x", accept_drop=True, single_item=True)
+        self.list_widget = ChipListWidget(
+            zone_id="x", accept_drop=True, single_item=True
+        )
         self.list_widget.setObjectName("chipList")
         self.list_widget.item_dropped.connect(self._on_chip_dropped)
         x_layout.addWidget(self.list_widget)
@@ -978,7 +1103,9 @@ class XAxisZone(QFrame):
         """Update the display"""
         self.list_widget.clear_chips()
         if column_name:
-            chip = ChipWidget(column_name, accent="#10B981", text_color="#047857", zone_id="x")
+            chip = ChipWidget(
+                column_name, accent="#10B981", text_color="#047857", zone_id="x"
+            )
             chip.remove_clicked.connect(self._clear_x_column)
             self.list_widget.add_chip(column_name, chip)
             self.placeholder_label.hide()
@@ -997,7 +1124,9 @@ class XAxisZone(QFrame):
         self._update_display(self.state.x_column)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
+        if event.mimeData().hasText() or event.mimeData().hasFormat(
+            "application/x-dgs-zone"
+        ):
             event.acceptProposedAction()
             self.x_column_frame.setProperty("state", "dragover")
             self.x_column_frame.style().unpolish(self.x_column_frame)
@@ -1022,8 +1151,13 @@ class XAxisZone(QFrame):
     def _show_column_selector(self):
         """Show column selection menu as keyboard alternative to drag-and-drop"""
         from PySide6.QtWidgets import QMenu
-        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
-        if not columns and hasattr(self.state, '_data_columns'):
+
+        columns = (
+            self.state.available_columns
+            if hasattr(self.state, "available_columns")
+            else []
+        )
+        if not columns and hasattr(self.state, "_data_columns"):
             columns = self.state._data_columns
         if not columns:
             return
@@ -1041,6 +1175,7 @@ class XAxisZone(QFrame):
 
 # ==================== Group Zone ====================
 
+
 class GroupZone(QFrame):
     """Group Zone - Minimal drag & drop zone"""
 
@@ -1051,7 +1186,9 @@ class GroupZone(QFrame):
         self.state = state
         self.setObjectName("GroupZone")
         self.setAccessibleName("Group By Column Selector")
-        self.setAccessibleDescription("Drop columns here to group data, or press Enter to select")
+        self.setAccessibleDescription(
+            "Drop columns here to group data, or press Enter to select"
+        )
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(130)
         self.setMaximumWidth(170)
@@ -1094,7 +1231,9 @@ class GroupZone(QFrame):
         layout.addWidget(help_label)
 
         # List widget
-        self.list_widget = ChipListWidget(zone_id="group", accept_drop=True, allow_reorder=True)
+        self.list_widget = ChipListWidget(
+            zone_id="group", accept_drop=True, allow_reorder=True
+        )
         self.list_widget.setMaximumHeight(130)
         self.list_widget.setObjectName("chipList")
         self.list_widget.item_dropped.connect(self._on_column_dropped)
@@ -1121,12 +1260,24 @@ class GroupZone(QFrame):
     def _sync_from_state(self):
         self.list_widget.clear_chips()
         for idx, group_col in enumerate(self.state.group_columns):
-            chip = ChipWidget(group_col.name, accent="#CBD5F5", text_color="#1E293B", zone_id="group", index=idx)
-            chip.remove_clicked.connect(lambda checked=False, name=group_col.name: self.state.remove_group_column(name))
+            chip = ChipWidget(
+                group_col.name,
+                accent="#CBD5F5",
+                text_color="#1E293B",
+                zone_id="group",
+                index=idx,
+            )
+            chip.remove_clicked.connect(
+                lambda checked=False, name=group_col.name: (
+                    self.state.remove_group_column(name)
+                )
+            )
             self.list_widget.add_chip(group_col.name, chip)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
+        if event.mimeData().hasText() or event.mimeData().hasFormat(
+            "application/x-dgs-zone"
+        ):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent):
@@ -1144,8 +1295,13 @@ class GroupZone(QFrame):
 
     def _show_column_selector(self):
         from PySide6.QtWidgets import QMenu
-        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
-        if not columns and hasattr(self.state, '_data_columns'):
+
+        columns = (
+            self.state.available_columns
+            if hasattr(self.state, "available_columns")
+            else []
+        )
+        if not columns and hasattr(self.state, "_data_columns"):
             columns = self.state._data_columns
         if not columns:
             return
@@ -1153,11 +1309,14 @@ class GroupZone(QFrame):
         menu.setAccessibleName("Group Column Selection Menu")
         for col in columns:
             action = menu.addAction(col)
-            action.triggered.connect(lambda checked, c=col: self.state.add_group_column(c))
+            action.triggered.connect(
+                lambda checked, c=col: self.state.add_group_column(c)
+            )
         menu.exec(self.mapToGlobal(self.rect().center()))
 
 
 # ==================== Value Zone ====================
+
 
 class ValueZone(QFrame):
     """Value Zone - Y-axis values"""
@@ -1169,7 +1328,9 @@ class ValueZone(QFrame):
         self.state = state
         self.setObjectName("ValueZone")
         self.setAccessibleName("Y Axis Value Column Selector")
-        self.setAccessibleDescription("Drop numeric columns here for Y axis values, or press Enter to select")
+        self.setAccessibleDescription(
+            "Drop numeric columns here for Y axis values, or press Enter to select"
+        )
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(160)
         self.setAcceptDrops(True)
@@ -1225,9 +1386,11 @@ class ValueZone(QFrame):
             value_col,
             index,
             on_agg_changed=self._on_agg_changed,
-            on_formula_changed=self._on_formula_changed
+            on_formula_changed=self._on_formula_changed,
         )
-        chip.remove_clicked.connect(lambda checked=False, i=index: self._remove_value(i))
+        chip.remove_clicked.connect(
+            lambda checked=False, i=index: self._remove_value(i)
+        )
         self.list_widget.add_chip(value_col.name, chip)
 
     def _on_agg_changed(self, index: int, agg: AggregationType):
@@ -1250,7 +1413,9 @@ class ValueZone(QFrame):
             self._add_value_chip(value_col, i)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
+        if event.mimeData().hasText() or event.mimeData().hasFormat(
+            "application/x-dgs-zone"
+        ):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent):
@@ -1268,8 +1433,13 @@ class ValueZone(QFrame):
 
     def _show_column_selector(self):
         from PySide6.QtWidgets import QMenu
-        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
-        if not columns and hasattr(self.state, '_data_columns'):
+
+        columns = (
+            self.state.available_columns
+            if hasattr(self.state, "available_columns")
+            else []
+        )
+        if not columns and hasattr(self.state, "_data_columns"):
             columns = self.state._data_columns
         if not columns:
             return
@@ -1277,11 +1447,14 @@ class ValueZone(QFrame):
         menu.setAccessibleName("Value Column Selection Menu")
         for col in columns:
             action = menu.addAction(col)
-            action.triggered.connect(lambda checked, c=col: self.state.add_value_column(c))
+            action.triggered.connect(
+                lambda checked, c=col: self.state.add_value_column(c)
+            )
         menu.exec(self.mapToGlobal(self.rect().center()))
 
 
 # ==================== Hover Zone ====================
+
 
 class HoverZone(QFrame):
     """Hover Zone - Columns to display on data hover"""
@@ -1293,7 +1466,9 @@ class HoverZone(QFrame):
         self.state = state
         self.setObjectName("HoverZone")
         self.setAccessibleName("Hover Tooltip Column Selector")
-        self.setAccessibleDescription("Drop columns here to show in hover tooltip, or press Enter to select")
+        self.setAccessibleDescription(
+            "Drop columns here to show in hover tooltip, or press Enter to select"
+        )
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumWidth(150)
         self.setAcceptDrops(True)
@@ -1361,12 +1536,18 @@ class HoverZone(QFrame):
     def _sync_from_state(self):
         self.list_widget.clear_chips()
         for idx, col in enumerate(self.state.hover_columns):
-            chip = ChipWidget(col, accent="#FACC15", text_color="#713F12", zone_id="hover", index=idx)
-            chip.remove_clicked.connect(lambda checked=False, name=col: self.state.remove_hover_column(name))
+            chip = ChipWidget(
+                col, accent="#FACC15", text_color="#713F12", zone_id="hover", index=idx
+            )
+            chip.remove_clicked.connect(
+                lambda checked=False, name=col: self.state.remove_hover_column(name)
+            )
             self.list_widget.add_chip(col, chip)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText() or event.mimeData().hasFormat("application/x-dgs-zone"):
+        if event.mimeData().hasText() or event.mimeData().hasFormat(
+            "application/x-dgs-zone"
+        ):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent):
@@ -1384,8 +1565,13 @@ class HoverZone(QFrame):
 
     def _show_column_selector(self):
         from PySide6.QtWidgets import QMenu
-        columns = self.state.available_columns if hasattr(self.state, 'available_columns') else []
-        if not columns and hasattr(self.state, '_data_columns'):
+
+        columns = (
+            self.state.available_columns
+            if hasattr(self.state, "available_columns")
+            else []
+        )
+        if not columns and hasattr(self.state, "_data_columns"):
             columns = self.state._data_columns
         if not columns:
             return
@@ -1393,11 +1579,14 @@ class HoverZone(QFrame):
         menu.setAccessibleName("Hover Column Selection Menu")
         for col in columns:
             action = menu.addAction(col)
-            action.triggered.connect(lambda checked, c=col: self.state.add_hover_column(c))
+            action.triggered.connect(
+                lambda checked, c=col: self.state.add_hover_column(c)
+            )
         menu.exec(self.mapToGlobal(self.rect().center()))
 
 
 # ==================== Data Table View ====================
+
 
 class DataTableView(QTableView):
     """데이터 테이블 뷰 - Minimal Design"""
@@ -1436,9 +1625,13 @@ class DataTableView(QTableView):
         self.horizontalHeader().setStretchLastSection(True)
         self.horizontalHeader().setSectionsMovable(True)
         self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
-        self.horizontalHeader().customContextMenuRequested.connect(self._show_header_menu)
+        self.horizontalHeader().customContextMenuRequested.connect(
+            self._show_header_menu
+        )
         self.horizontalHeader().sectionPressed.connect(self._on_header_pressed)
-        self.horizontalHeader().sectionDoubleClicked.connect(self._on_header_double_clicked)
+        self.horizontalHeader().sectionDoubleClicked.connect(
+            self._on_header_double_clicked
+        )
         self.horizontalHeader().sectionMoved.connect(self._on_header_moved)
         self.horizontalHeader().installEventFilter(self)
 
@@ -1502,7 +1695,9 @@ class DataTableView(QTableView):
         if column_name:
             self.rename_column_requested.emit(column_name)
 
-    def _on_header_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int):
+    def _on_header_moved(
+        self, logical_index: int, old_visual_index: int, new_visual_index: int
+    ):
         model = self.model()
         header = self.horizontalHeader()
         if not model or not header:
@@ -1557,11 +1752,15 @@ class DataTableView(QTableView):
         menu.addSeparator()
 
         sort_asc = QAction("↑ Sort Ascending", self)
-        sort_asc.triggered.connect(lambda: self.sortByColumn(logical_index, Qt.AscendingOrder))
+        sort_asc.triggered.connect(
+            lambda: self.sortByColumn(logical_index, Qt.AscendingOrder)
+        )
         menu.addAction(sort_asc)
 
         sort_desc = QAction("↓ Sort Descending", self)
-        sort_desc.triggered.connect(lambda: self.sortByColumn(logical_index, Qt.DescendingOrder))
+        sort_desc.triggered.connect(
+            lambda: self.sortByColumn(logical_index, Qt.DescendingOrder)
+        )
         menu.addAction(sort_desc)
 
         menu.addSeparator()
@@ -1576,16 +1775,24 @@ class DataTableView(QTableView):
         type_menu = menu.addMenu("🔄 Convert Type")
         for dtype_name in ["Int64", "Float64", "String", "Date", "Boolean"]:
             act = QAction(dtype_name, self)
-            act.triggered.connect(lambda checked=False, t=dtype_name: self.column_type_convert.emit(column_name, t))
+            act.triggered.connect(
+                lambda checked=False, t=dtype_name: self.column_type_convert.emit(
+                    column_name, t
+                )
+            )
             type_menu.addAction(act)
 
         # F3: Conditional Formatting
         cond_fmt = QAction("🎨 Conditional Formatting...", self)
-        cond_fmt.triggered.connect(lambda: self.conditional_format_requested.emit(column_name))
+        cond_fmt.triggered.connect(
+            lambda: self.conditional_format_requested.emit(column_name)
+        )
         menu.addAction(cond_fmt)
 
         split_col = QAction("✂️ Split Column (Regex Groups)...", self)
-        split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
+        split_col.triggered.connect(
+            lambda: self.split_column_requested.emit(column_name)
+        )
         menu.addAction(split_col)
 
         # F7: Freeze/Unfreeze Column
@@ -1619,31 +1826,46 @@ class DataTableView(QTableView):
 
         # Filter options
         if cell_value:
-            display_val = str(cell_value)[:20] + "..." if len(str(cell_value)) > 20 else str(cell_value)
+            display_val = (
+                str(cell_value)[:20] + "..."
+                if len(str(cell_value)) > 20
+                else str(cell_value)
+            )
 
-            filter_eq = QAction(f"🔍 Filter: {column_name} = \"{display_val}\"", self)
-            filter_eq.triggered.connect(lambda: self.exclude_value.emit(column_name, ("eq", cell_value)))
+            filter_eq = QAction(f'🔍 Filter: {column_name} = "{display_val}"', self)
+            filter_eq.triggered.connect(
+                lambda: self.exclude_value.emit(column_name, ("eq", cell_value))
+            )
             menu.addAction(filter_eq)
 
-            filter_ne = QAction(f"🚫 Exclude: {column_name} ≠ \"{display_val}\"", self)
-            filter_ne.triggered.connect(lambda: self.exclude_value.emit(column_name, ("ne", cell_value)))
+            filter_ne = QAction(f'🚫 Exclude: {column_name} ≠ "{display_val}"', self)
+            filter_ne.triggered.connect(
+                lambda: self.exclude_value.emit(column_name, ("ne", cell_value))
+            )
             menu.addAction(filter_ne)
 
             menu.addSeparator()
 
         # Copy
         copy_action = QAction("📋 Copy", self)
-        copy_action.triggered.connect(lambda: QApplication.clipboard().setText(str(cell_value) if cell_value else ""))
+        copy_action.triggered.connect(
+            lambda: QApplication.clipboard().setText(
+                str(cell_value) if cell_value else ""
+            )
+        )
         menu.addAction(copy_action)
 
         split_col = QAction("✂️ Split Column (Regex Groups)...", self)
-        split_col.triggered.connect(lambda: self.split_column_requested.emit(column_name))
+        split_col.triggered.connect(
+            lambda: self.split_column_requested.emit(column_name)
+        )
         menu.addAction(split_col)
 
         menu.exec(self.viewport().mapToGlobal(pos))
 
 
 # ==================== Filter Bar ====================
+
 
 class FilterBar(QFrame):
     """활성 필터 표시 바"""
@@ -1718,8 +1940,13 @@ class FilterBar(QFrame):
 
         # Operator display
         op_map = {
-            'eq': '=', 'ne': '≠', 'gt': '>', 'lt': '<',
-            'ge': '≥', 'le': '≤', 'contains': '∋'
+            "eq": "=",
+            "ne": "≠",
+            "gt": ">",
+            "lt": "<",
+            "ge": "≥",
+            "le": "≤",
+            "contains": "∋",
         }
         op = op_map.get(filter_cond.operator, filter_cond.operator)
 
@@ -1728,7 +1955,7 @@ class FilterBar(QFrame):
         if len(val_str) > 15:
             val_str = val_str[:15] + "..."
 
-        label = QLabel(f"{filter_cond.column} {op} \"{val_str}\"")
+        label = QLabel(f'{filter_cond.column} {op} "{val_str}"')
         label.setObjectName("chipLabel")
         layout.addWidget(label)
 
@@ -1744,6 +1971,7 @@ class FilterBar(QFrame):
 
 
 # ==================== Hidden Columns Bar ====================
+
 
 class HiddenColumnsBar(QFrame):
     """숨겨진 컬럼 표시 바"""
@@ -1835,6 +2063,7 @@ class HiddenColumnsBar(QFrame):
 
 
 # ==================== Table Panel ====================
+
 
 class TablePanel(QWidget):
     """
@@ -1966,7 +2195,9 @@ class TablePanel(QWidget):
             "- Rows (pre-group): show row-level data before grouping\n"
             "- Source Raw: show the dataset as-loaded (ignore table filters/marking)"
         )
-        self.table_view_mode_combo.currentIndexChanged.connect(self._on_table_view_mode_changed)
+        self.table_view_mode_combo.currentIndexChanged.connect(
+            self._on_table_view_mode_changed
+        )
         toolbar.addWidget(self.table_view_mode_combo)
 
         # Limit to Marking toggle button
@@ -2037,6 +2268,7 @@ class TablePanel(QWidget):
         self.agg_combo.setMaximumWidth(120)
         self.agg_combo.setToolTip("Aggregation function")
         from ...core.state import AggregationType
+
         for agg in AggregationType:
             self.agg_combo.addItem(agg.value.capitalize(), agg.value)
         self.agg_combo.setCurrentText("Sum")
@@ -2130,9 +2362,13 @@ class TablePanel(QWidget):
         self.table_view.column_dragged.connect(self._on_column_action)
         self.table_view.column_order_changed.connect(self._on_column_order_changed)
         self.table_view.column_type_convert.connect(self._on_column_type_convert)
-        self.table_view.conditional_format_requested.connect(self._on_conditional_format_requested)
+        self.table_view.conditional_format_requested.connect(
+            self._on_conditional_format_requested
+        )
         self.table_view.split_column_requested.connect(self._on_split_column_requested)
-        self.table_view.rename_column_requested.connect(self._on_rename_column_requested)
+        self.table_view.rename_column_requested.connect(
+            self._on_rename_column_requested
+        )
         self.table_view.column_freeze.connect(self._on_freeze_column)
         self.table_view.column_unfreeze.connect(self._on_unfreeze_column)
         self.state.selection_changed.connect(self._on_state_selection_changed)
@@ -2205,7 +2441,11 @@ class TablePanel(QWidget):
         if view_mode == "source_raw":
             df = self.engine.df if self.engine.is_loaded else df
 
-        show_grouped = bool(self.state.group_columns) and view_mode != "pre_group" and view_mode != "source_raw"
+        show_grouped = (
+            bool(self.state.group_columns)
+            and view_mode != "pre_group"
+            and view_mode != "source_raw"
+        )
 
         if show_grouped:
             if self.grouped_model is None:
@@ -2219,7 +2459,7 @@ class TablePanel(QWidget):
                 df,
                 group_columns=group_cols,
                 value_columns=value_cols,
-                aggregations=agg_map
+                aggregations=agg_map,
             )
 
             self.table_view.setModel(self.grouped_model)
@@ -2252,7 +2492,9 @@ class TablePanel(QWidget):
             actual_rows = self.table_model.get_actual_row_count()
             displayed_rows = self.table_model.rowCount()
             if actual_rows > displayed_rows:
-                self.group_info_label.setText(f"Showing {displayed_rows:,} of {actual_rows:,} rows")
+                self.group_info_label.setText(
+                    f"Showing {displayed_rows:,} of {actual_rows:,} rows"
+                )
                 self.group_info_label.setProperty("state", "warning")
                 self.group_info_label.style().unpolish(self.group_info_label)
                 self.group_info_label.style().polish(self.group_info_label)
@@ -2335,8 +2577,7 @@ class TablePanel(QWidget):
             actual_rows = []
             for row in rows:
                 data = self.grouped_model.data(
-                    self.grouped_model.index(row, 0),
-                    Qt.UserRole
+                    self.grouped_model.index(row, 0), Qt.UserRole
                 )
                 if data:
                     node, row_idx = data
@@ -2464,6 +2705,7 @@ class TablePanel(QWidget):
     def _on_agg_combo_changed(self):
         """Aggregation 변경 시 현재 value_columns의 aggregation 업데이트"""
         from ...core.state import AggregationType
+
         agg_text = self.agg_combo.currentData()
         if not agg_text:
             return
@@ -2513,9 +2755,11 @@ class TablePanel(QWidget):
             return
         # Confirm destructive action
         reply = QMessageBox.question(
-            self, "Exclude Column",
+            self,
+            "Exclude Column",
             f"Remove column '{column}' from the active dataset?\n\nThis cannot be undone (reload to restore).",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
@@ -2537,13 +2781,17 @@ class TablePanel(QWidget):
             # Hidden/column order cleanup
             self.state.unhide_column(column)
             if column in self.state.get_column_order():
-                self.state.set_column_order([c for c in self.state.get_column_order() if c != column])
+                self.state.set_column_order(
+                    [c for c in self.state.get_column_order() if c != column]
+                )
 
             # Refresh UI
             self._update_table_model(self.engine.df)
-            self.graph_panel.refresh() if hasattr(self, 'graph_panel') else None
+            self.graph_panel.refresh() if hasattr(self, "graph_panel") else None
         except Exception as e:
-            QMessageBox.warning(self, "Exclude Column", f"Failed to exclude column: {e}")
+            QMessageBox.warning(
+                self, "Exclude Column", f"Failed to exclude column: {e}"
+            )
 
     def _build_split_dataframe(
         self,
@@ -2558,7 +2806,9 @@ class TablePanel(QWidget):
             raise ValueError("Pattern must include at least one capture group.")
 
         compiled = re.compile(pattern)
-        source_values = df.select(pl.col(column_name).cast(pl.Utf8)).to_series(0).to_list()
+        source_values = (
+            df.select(pl.col(column_name).cast(pl.Utf8)).to_series(0).to_list()
+        )
 
         new_columns: List[pl.Series] = []
         for group_index, new_name in mapping.items():
@@ -2587,10 +2837,14 @@ class TablePanel(QWidget):
 
         df = self.engine.df
         if df is None or column_name not in df.columns:
-            QMessageBox.warning(self, "Split Column", f"Column '{column_name}' was not found.")
+            QMessageBox.warning(
+                self, "Split Column", f"Column '{column_name}' was not found."
+            )
             return
 
-        sample_values = df.select(pl.col(column_name).cast(pl.Utf8)).to_series(0).head(30).to_list()
+        sample_values = (
+            df.select(pl.col(column_name).cast(pl.Utf8)).to_series(0).head(30).to_list()
+        )
         dialog = SplitColumnDialog(
             source_column=column_name,
             sample_values=sample_values,
@@ -2624,7 +2878,7 @@ class TablePanel(QWidget):
 
             target_names = list(mapping.values())
             main_window = self.window()
-            if main_window and hasattr(main_window, 'statusBar'):
+            if main_window and hasattr(main_window, "statusBar"):
                 main_window.statusBar().showMessage(
                     f"Split '{column_name}' into {', '.join(target_names)}", 3000
                 )
@@ -2638,10 +2892,14 @@ class TablePanel(QWidget):
 
         df = self.engine.df
         if df is None or old_name not in df.columns:
-            QMessageBox.warning(self, "Rename Column", f"Column '{old_name}' was not found.")
+            QMessageBox.warning(
+                self, "Rename Column", f"Column '{old_name}' was not found."
+            )
             return
 
-        new_name, ok = QInputDialog.getText(self, "Rename Column", "New column name:", text=old_name)
+        new_name, ok = QInputDialog.getText(
+            self, "Rename Column", "New column name:", text=old_name
+        )
         if not ok:
             return
 
@@ -2654,7 +2912,9 @@ class TablePanel(QWidget):
             return
 
         if new_name in df.columns:
-            QMessageBox.warning(self, "Rename Column", f"Column '{new_name}' already exists.")
+            QMessageBox.warning(
+                self, "Rename Column", f"Column '{new_name}' already exists."
+            )
             return
 
         try:
@@ -2694,7 +2954,9 @@ class TablePanel(QWidget):
 
             order = self.state.get_column_order()
             if old_name in order:
-                self.state.set_column_order([new_name if c == old_name else c for c in order])
+                self.state.set_column_order(
+                    [new_name if c == old_name else c for c in order]
+                )
 
             self._populate_group_combos()
             self._sync_group_combos_from_state()
@@ -2711,7 +2973,7 @@ class TablePanel(QWidget):
                     logger.debug("Failed to refresh graph panel after rename: %s", e)
 
             main_window = self.window()
-            if main_window and hasattr(main_window, 'statusBar'):
+            if main_window and hasattr(main_window, "statusBar"):
                 main_window.statusBar().showMessage(
                     f"Renamed column '{old_name}' to '{new_name}'", 3000
                 )
@@ -2741,7 +3003,7 @@ class TablePanel(QWidget):
         # Show statusbar feedback
         if feedback:
             main_window = self.window()
-            if main_window and hasattr(main_window, 'statusBar'):
+            if main_window and hasattr(main_window, "statusBar"):
                 main_window.statusBar().showMessage(feedback, 3000)
 
     def _on_filter_removed(self, index: int):
@@ -2764,11 +3026,16 @@ class TablePanel(QWidget):
             return
 
         # Check filter cache
-        filter_hash = hash(tuple(
-            (f.column, f.operator, str(f.value), f.enabled)
-            for f in self.state.filters
-        ))
-        if self._cached_filter_hash == filter_hash and self._cached_filter_df is not None:
+        filter_hash = hash(
+            tuple(
+                (f.column, f.operator, str(f.value), f.enabled)
+                for f in self.state.filters
+            )
+        )
+        if (
+            self._cached_filter_hash == filter_hash
+            and self._cached_filter_df is not None
+        ):
             self.state.set_visible_rows(len(self._cached_filter_df))
             self._update_table_model(self._cached_filter_df)
             return
@@ -2777,10 +3044,12 @@ class TablePanel(QWidget):
         filtered_df = df
         if self.state.advanced_filter_ast is not None:
             try:
-                filtered_df = apply_filter_ast(filtered_df, self.state.advanced_filter_ast)
+                filtered_df = apply_filter_ast(
+                    filtered_df, self.state.advanced_filter_ast
+                )
             except Exception as e:
                 main_window = self.window()
-                if main_window and hasattr(main_window, 'statusBar'):
+                if main_window and hasattr(main_window, "statusBar"):
                     main_window.statusBar().showMessage(
                         f"Advanced filter error: {e}", 5000
                     )
@@ -2792,24 +3061,24 @@ class TablePanel(QWidget):
             try:
                 col = pl.col(f.column)
 
-                if f.operator == 'eq':
+                if f.operator == "eq":
                     filtered_df = filtered_df.filter(col == f.value)
-                elif f.operator == 'ne':
+                elif f.operator == "ne":
                     filtered_df = filtered_df.filter(col != f.value)
-                elif f.operator == 'gt':
+                elif f.operator == "gt":
                     filtered_df = filtered_df.filter(col > f.value)
-                elif f.operator == 'lt':
+                elif f.operator == "lt":
                     filtered_df = filtered_df.filter(col < f.value)
-                elif f.operator == 'ge':
+                elif f.operator == "ge":
                     filtered_df = filtered_df.filter(col >= f.value)
-                elif f.operator == 'le':
+                elif f.operator == "le":
                     filtered_df = filtered_df.filter(col <= f.value)
-                elif f.operator == 'contains':
+                elif f.operator == "contains":
                     filtered_df = filtered_df.filter(col.str.contains(str(f.value)))
             except Exception as e:
                 # UX 10: Show filter error to user instead of print
                 main_window = self.window()
-                if main_window and hasattr(main_window, 'statusBar'):
+                if main_window and hasattr(main_window, "statusBar"):
                     main_window.statusBar().showMessage(
                         f"Filter error on '{f.column}': {e}", 5000
                     )
@@ -2917,7 +3186,9 @@ class TablePanel(QWidget):
                 filtered_df = df.filter(mask)
 
                 # UX 9: Use setProperty instead of inline style
-                self.group_info_label.setText(f"Showing {len(valid_indices)} marked rows")
+                self.group_info_label.setText(
+                    f"Showing {len(valid_indices)} marked rows"
+                )
                 self.group_info_label.setProperty("state", "marking")
                 self.group_info_label.style().unpolish(self.group_info_label)
                 self.group_info_label.style().polish(self.group_info_label)
@@ -3034,8 +3305,11 @@ class TablePanel(QWidget):
         self.window_slider.setValue(min(self.engine.window_start, max_start))
         self.window_slider.blockSignals(False)
 
-        size_label = f"{int(window_size/1000)}k"
-        if size_label in [self.window_size_combo.itemText(i) for i in range(self.window_size_combo.count())]:
+        size_label = f"{int(window_size / 1000)}k"
+        if size_label in [
+            self.window_size_combo.itemText(i)
+            for i in range(self.window_size_combo.count())
+        ]:
             self.window_size_combo.blockSignals(True)
             self.window_size_combo.setCurrentText(size_label)
             self.window_size_combo.blockSignals(False)
@@ -3118,12 +3392,16 @@ class TablePanel(QWidget):
             if success:
                 self._update_table_model(self.engine.df)
                 main_window = self.window()
-                if main_window and hasattr(main_window, 'statusBar'):
+                if main_window and hasattr(main_window, "statusBar"):
                     main_window.statusBar().showMessage(
                         f"Converted '{column_name}' to {target_type}", 3000
                     )
             else:
-                QMessageBox.warning(self, "Type Conversion", f"Failed to convert '{column_name}' to {target_type}")
+                QMessageBox.warning(
+                    self,
+                    "Type Conversion",
+                    f"Failed to convert '{column_name}' to {target_type}",
+                )
         except Exception as e:
             QMessageBox.warning(self, "Type Conversion", f"Error: {e}")
 
@@ -3171,6 +3449,7 @@ class TablePanel(QWidget):
 
 # ==================== F3: Conditional Format Dialog ====================
 
+
 class ConditionalFormatDialog(QDialog):
     """Dialog for configuring conditional formatting on a column."""
 
@@ -3213,6 +3492,7 @@ class ConditionalFormatDialog(QDialog):
 
 
 # ==================== F9: Pivot Table Dialog ====================
+
 
 class PivotTableDialog(QDialog):
     """Dialog for creating pivot tables from data."""
@@ -3276,8 +3556,7 @@ class PivotTableDialog(QDialog):
             agg = self.agg_combo.currentText()
 
             self._result_df = self._df.pivot(
-                values=vals, index=idx, on=cols,
-                aggregate_function=agg
+                values=vals, index=idx, on=cols, aggregate_function=agg
             )
             self.result_model.set_dataframe(self._result_df)
         except Exception as e:

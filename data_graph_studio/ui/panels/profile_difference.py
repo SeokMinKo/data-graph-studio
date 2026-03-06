@@ -7,13 +7,16 @@ Requires exactly 2 profiles with the same X column.
 
 from __future__ import annotations
 
-import math
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
     QPushButton,
 )
 from PySide6.QtCore import Qt, Signal
@@ -109,7 +112,7 @@ class ProfileDifferenceRenderer(QWidget):
         abs_diff = np.abs(diff)
         mean_diff = float(np.nanmean(abs_diff))
         max_diff = float(np.nanmax(abs_diff))
-        rmse = float(np.sqrt(np.nanmean(diff ** 2)))
+        rmse = float(np.sqrt(np.nanmean(diff**2)))
 
         return {
             "diff_series": diff,
@@ -142,7 +145,7 @@ class ProfileDifferenceRenderer(QWidget):
         abs_pct = np.abs(pct)
         mean_diff = float(np.nanmean(abs_pct))
         max_diff = float(np.nanmax(abs_pct)) if not np.all(np.isnan(abs_pct)) else 0.0
-        rmse = float(np.sqrt(np.nanmean(pct ** 2))) if not np.all(np.isnan(pct)) else 0.0
+        rmse = float(np.sqrt(np.nanmean(pct**2))) if not np.all(np.isnan(pct)) else 0.0
 
         return {
             "diff_series": pct,
@@ -256,13 +259,17 @@ class ProfileDifferenceRenderer(QWidget):
         header_fg_subtle = "rgba(0,0,0,0.5)" if is_light else "rgba(255,255,255,0.7)"
 
         if self._header:
-            self._header.setStyleSheet(f"background-color: {header_bg}; border-radius: 4px;")
+            self._header.setStyleSheet(
+                f"background-color: {header_bg}; border-radius: 4px;"
+            )
         if self._header_title:
             self._header_title.setStyleSheet(f"color: {header_fg}; font-weight: bold;")
         if self._x_col_label:
             self._x_col_label.setStyleSheet(f"color: {header_fg_muted};")
         if self._subtitle_label:
-            self._subtitle_label.setStyleSheet(f"color: {header_fg_subtle}; font-size: 11px;")
+            self._subtitle_label.setStyleSheet(
+                f"color: {header_fg_subtle}; font-size: 11px;"
+            )
 
         # Plot background
         plot_bg = "#FFFFFF" if is_light else "#1E293B"
@@ -365,7 +372,11 @@ class ProfileDifferenceRenderer(QWidget):
             if not vc:
                 return ""
             first = vc[0]
-            return first.get("name", "") if isinstance(first, dict) else getattr(first, "name", "")
+            return (
+                first.get("name", "")
+                if isinstance(first, dict)
+                else getattr(first, "name", "")
+            )
 
         y_col_baseline = _y_col(gs_baseline)
 
@@ -386,18 +397,27 @@ class ProfileDifferenceRenderer(QWidget):
         try:
             if x_col and hasattr(df, "__contains__") and x_col in df:
                 x_series = df[x_col]
-                x_data = x_series.to_numpy() if hasattr(x_series, "to_numpy") else np.arange(len(df))
+                x_data = (
+                    x_series.to_numpy()
+                    if hasattr(x_series, "to_numpy")
+                    else np.arange(len(df))
+                )
             else:
                 x_data = np.arange(len(df))
         except Exception:
             x_data = np.arange(len(df))
 
         from .profile_overlay import ProfileOverlayRenderer
+
         x_data = ProfileOverlayRenderer._coerce_x_to_numeric(x_data, len(df))
 
         # Baseline Y data
         try:
-            y_baseline = df[y_col_baseline].to_numpy() if y_col_baseline and y_col_baseline in df else None
+            y_baseline = (
+                df[y_col_baseline].to_numpy()
+                if y_col_baseline and y_col_baseline in df
+                else None
+            )
         except Exception:
             y_baseline = None
 
@@ -415,7 +435,11 @@ class ProfileDifferenceRenderer(QWidget):
             vc = list(gs.value_columns)
             if vc:
                 first = vc[0]
-                vc_color = first.get("color", None) if isinstance(first, dict) else getattr(first, "color", None)
+                vc_color = (
+                    first.get("color", None)
+                    if isinstance(first, dict)
+                    else getattr(first, "color", None)
+                )
                 if vc_color:
                     color = vc_color
             return color, int(width)
@@ -437,7 +461,8 @@ class ProfileDifferenceRenderer(QWidget):
             y_base_plot = y_base_plot[::step]
 
         self._plot_widget.plot(
-            x_plot, y_base_plot,
+            x_plot,
+            y_base_plot,
             pen=pg.mkPen(color_base, width=width_base),
             name=f"Baseline: {y_col_baseline}",
         )
@@ -448,7 +473,11 @@ class ProfileDifferenceRenderer(QWidget):
         for pair_idx, (pid, gs_other) in enumerate(profiles[1:], start=1):
             y_col_other = _y_col(gs_other)
             try:
-                y_other = df[y_col_other].to_numpy() if y_col_other and y_col_other in df else None
+                y_other = (
+                    df[y_col_other].to_numpy()
+                    if y_col_other and y_col_other in df
+                    else None
+                )
             except Exception:
                 y_other = None
 
@@ -478,7 +507,8 @@ class ProfileDifferenceRenderer(QWidget):
 
             # Plot other series
             self._plot_widget.plot(
-                x_d, y_o,
+                x_d,
+                y_o,
                 pen=pg.mkPen(color_other, width=width_other),
                 name=f"{gs_other.name}: {y_col_other}",
             )
@@ -490,7 +520,12 @@ class ProfileDifferenceRenderer(QWidget):
             fill = pg.FillBetweenItem(
                 pg.PlotCurveItem(x_d, d, pen=pg.mkPen(diff_pen_color, width=1)),
                 pg.PlotCurveItem(x_d, zeros, pen=pg.mkPen(None)),
-                brush=pg.mkBrush(diff_pen_color.red(), diff_pen_color.green(), diff_pen_color.blue(), 40),
+                brush=pg.mkBrush(
+                    diff_pen_color.red(),
+                    diff_pen_color.green(),
+                    diff_pen_color.blue(),
+                    40,
+                ),
             )
             self._plot_widget.addItem(fill)
 

@@ -1,8 +1,8 @@
 """MenuSetupController - extracted from MainWindow."""
+
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
@@ -16,10 +16,11 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..main_window import MainWindow
 
+
 class MenuSetupController:
     """Controller extracted from MainWindow."""
 
-    def __init__(self, main_window: 'MainWindow'):
+    def __init__(self, main_window: "MainWindow"):
         self.w = main_window
 
     def _setup_menubar(self):
@@ -43,7 +44,9 @@ class MenuSetupController:
 
         open_no_wizard_action = QAction("Data Without &Wizard...", self.w)
         open_no_wizard_action.setShortcut("Ctrl+Shift+O")
-        open_no_wizard_action.setStatusTip("Open data file without wizard - quick mode (Ctrl+Shift+O)")
+        open_no_wizard_action.setStatusTip(
+            "Open data file without wizard - quick mode (Ctrl+Shift+O)"
+        )
         open_no_wizard_action.triggered.connect(self.w._on_open_file_without_wizard)
         open_menu.addAction(open_no_wizard_action)
 
@@ -116,12 +119,16 @@ class MenuSetupController:
         # Export Image (PNG/SVG)
         self.w._export_image_png_action = QAction("Image (PNG)...", self.w)
         self.w._export_image_png_action.setStatusTip("Export chart as PNG image")
-        self.w._export_image_png_action.triggered.connect(lambda: self.w._on_export_image(ExportFormat.PNG))
+        self.w._export_image_png_action.triggered.connect(
+            lambda: self.w._on_export_image(ExportFormat.PNG)
+        )
         export_menu.addAction(self.w._export_image_png_action)
 
         self.w._export_image_svg_action = QAction("Image (SVG)...", self.w)
         self.w._export_image_svg_action.setStatusTip("Export chart as SVG image")
-        self.w._export_image_svg_action.triggered.connect(lambda: self.w._on_export_image(ExportFormat.SVG))
+        self.w._export_image_svg_action.triggered.connect(
+            lambda: self.w._on_export_image(ExportFormat.SVG)
+        )
         export_menu.addAction(self.w._export_image_svg_action)
 
         export_menu.addSeparator()
@@ -129,17 +136,23 @@ class MenuSetupController:
         # Export Data
         self.w._export_data_csv_action = QAction("Data (CSV)...", self.w)
         self.w._export_data_csv_action.setStatusTip("Export data as CSV")
-        self.w._export_data_csv_action.triggered.connect(lambda: self.w._on_export_data(ExportFormat.CSV))
+        self.w._export_data_csv_action.triggered.connect(
+            lambda: self.w._on_export_data(ExportFormat.CSV)
+        )
         export_menu.addAction(self.w._export_data_csv_action)
 
         self.w._export_data_excel_action = QAction("Data (Excel)...", self.w)
         self.w._export_data_excel_action.setStatusTip("Export data as Excel")
-        self.w._export_data_excel_action.triggered.connect(lambda: self.w._on_export_data(ExportFormat.EXCEL))
+        self.w._export_data_excel_action.triggered.connect(
+            lambda: self.w._on_export_data(ExportFormat.EXCEL)
+        )
         export_menu.addAction(self.w._export_data_excel_action)
 
         self.w._export_data_parquet_action = QAction("Data (Parquet)...", self.w)
         self.w._export_data_parquet_action.setStatusTip("Export data as Parquet")
-        self.w._export_data_parquet_action.triggered.connect(lambda: self.w._on_export_data(ExportFormat.PARQUET))
+        self.w._export_data_parquet_action.triggered.connect(
+            lambda: self.w._on_export_data(ExportFormat.PARQUET)
+        )
         export_menu.addAction(self.w._export_data_parquet_action)
 
         export_menu.addSeparator()
@@ -147,7 +160,9 @@ class MenuSetupController:
         # Chart PDF export
         self.w._export_image_pdf_action = QAction("Chart (PDF)...", self.w)
         self.w._export_image_pdf_action.setStatusTip("Export chart as PDF")
-        self.w._export_image_pdf_action.triggered.connect(lambda: self.w._on_export_image(ExportFormat.PDF))
+        self.w._export_image_pdf_action.triggered.connect(
+            lambda: self.w._on_export_image(ExportFormat.PDF)
+        )
         export_menu.addAction(self.w._export_image_pdf_action)
 
         export_menu.addSeparator()
@@ -156,31 +171,36 @@ class MenuSetupController:
         self.w._export_report_html_action = QAction("Report (HTML)...", self.w)
         self.w._export_report_html_action.setStatusTip("Export report as HTML")
         self.w._export_report_html_action.triggered.connect(
-            lambda: self.w._export_ui_ctrl._on_export_report_format("html"))
+            lambda: self.w._export_ui_ctrl._on_export_report_format("html")
+        )
         export_menu.addAction(self.w._export_report_html_action)
 
         self.w._export_report_pptx_action = QAction("Report (PPTX)...", self.w)
         self.w._export_report_pptx_action.setStatusTip("Export report as PowerPoint")
         self.w._export_report_pptx_action.triggered.connect(
-            lambda: self.w._export_ui_ctrl._on_export_report_format("pptx"))
+            lambda: self.w._export_ui_ctrl._on_export_report_format("pptx")
+        )
         export_menu.addAction(self.w._export_report_pptx_action)
 
         self.w._export_report_docx_action = QAction("Report (DOCX)...", self.w)
         self.w._export_report_docx_action.setStatusTip("Export report as Word document")
         self.w._export_report_docx_action.triggered.connect(
-            lambda: self.w._export_ui_ctrl._on_export_report_format("docx"))
+            lambda: self.w._export_ui_ctrl._on_export_report_format("docx")
+        )
         export_menu.addAction(self.w._export_report_docx_action)
 
         self.w._export_report_md_action = QAction("Report (Markdown)...", self.w)
         self.w._export_report_md_action.setStatusTip("Export report as Markdown")
         self.w._export_report_md_action.triggered.connect(
-            lambda: self.w._export_ui_ctrl._on_export_report_format("markdown"))
+            lambda: self.w._export_ui_ctrl._on_export_report_format("markdown")
+        )
         export_menu.addAction(self.w._export_report_md_action)
 
         self.w._export_report_pdf_action = QAction("Report (PDF)...", self.w)
         self.w._export_report_pdf_action.setStatusTip("Export report as PDF")
         self.w._export_report_pdf_action.triggered.connect(
-            lambda: self.w._export_ui_ctrl._on_export_report_format("pdf"))
+            lambda: self.w._export_ui_ctrl._on_export_report_format("pdf")
+        )
         export_menu.addAction(self.w._export_report_pdf_action)
 
         export_menu.addSeparator()
@@ -188,15 +208,21 @@ class MenuSetupController:
         # Clipboard copy
         self.w._copy_chart_clipboard_action = QAction("Copy Chart to Clipboard", self.w)
         self.w._copy_chart_clipboard_action.setShortcut("Ctrl+Shift+C")
-        self.w._copy_chart_clipboard_action.setStatusTip("Copy chart image to clipboard")
+        self.w._copy_chart_clipboard_action.setStatusTip(
+            "Copy chart image to clipboard"
+        )
         self.w._copy_chart_clipboard_action.triggered.connect(
-            self.w._export_ui_ctrl._copy_chart_to_clipboard)
+            self.w._export_ui_ctrl._copy_chart_to_clipboard
+        )
         export_menu.addAction(self.w._copy_chart_clipboard_action)
 
         self.w._copy_data_clipboard_action = QAction("Copy Data to Clipboard", self.w)
-        self.w._copy_data_clipboard_action.setStatusTip("Copy all data to clipboard as TSV")
+        self.w._copy_data_clipboard_action.setStatusTip(
+            "Copy all data to clipboard as TSV"
+        )
         self.w._copy_data_clipboard_action.triggered.connect(
-            self.w._export_ui_ctrl._copy_data_to_clipboard)
+            self.w._export_ui_ctrl._copy_data_to_clipboard
+        )
         export_menu.addAction(self.w._copy_data_clipboard_action)
 
         export_menu.addSeparator()
@@ -205,16 +231,20 @@ class MenuSetupController:
         self.w._batch_export_action = QAction("Batch Export All Datasets...", self.w)
         self.w._batch_export_action.setStatusTip("Export all datasets to a directory")
         self.w._batch_export_action.triggered.connect(
-            self.w._export_ui_ctrl._on_batch_export)
+            self.w._export_ui_ctrl._on_batch_export
+        )
         export_menu.addAction(self.w._batch_export_action)
 
         # Auto-export
         self.w._auto_export_action = QAction("Auto-Export on File Change", self.w)
         self.w._auto_export_action.setCheckable(True)
         self.w._auto_export_action.setChecked(False)
-        self.w._auto_export_action.setStatusTip("Automatically re-export when source file changes")
+        self.w._auto_export_action.setStatusTip(
+            "Automatically re-export when source file changes"
+        )
         self.w._auto_export_action.triggered.connect(
-            self.w._export_ui_ctrl._on_toggle_auto_export)
+            self.w._export_ui_ctrl._on_toggle_auto_export
+        )
         export_menu.addAction(self.w._auto_export_action)
 
         export_menu.addSeparator()
@@ -248,8 +278,12 @@ class MenuSetupController:
         self.w._watch_file_action = QAction("Watch for Changes", self.w)
         self.w._watch_file_action.setCheckable(True)
         self.w._watch_file_action.setChecked(False)
-        self.w._watch_file_action.setStatusTip("Auto-reload when the source file changes on disk")
-        self.w._watch_file_action.triggered.connect(self.w._file_controller._toggle_file_watch)
+        self.w._watch_file_action.setStatusTip(
+            "Auto-reload when the source file changes on disk"
+        )
+        self.w._watch_file_action.triggered.connect(
+            self.w._file_controller._toggle_file_watch
+        )
         file_menu.addAction(self.w._watch_file_action)
 
         file_menu.addSeparator()
@@ -289,6 +323,7 @@ class MenuSetupController:
 
         # #9: macOS Cmd+Shift+Z for Redo
         from PySide6.QtGui import QShortcut
+
         redo_shortcut2 = QShortcut(QKeySequence("Ctrl+Shift+Z"), self.w)
         redo_shortcut2.activated.connect(self.w._on_redo)
 
@@ -336,15 +371,15 @@ class MenuSetupController:
 
         # Graph Elements submenu
         graph_elements_menu = view_menu.addMenu("&Graph Elements")
-        
+
         self.w._graph_element_actions = {}
-        
+
         float_graph_action = QAction("Float Graph Panel", self.w)
         float_graph_action.setStatusTip("Float the graph panel into a separate window")
         float_graph_action.triggered.connect(lambda: self.w._float_main_panel("graph"))
         graph_elements_menu.addAction(float_graph_action)
         graph_elements_menu.addSeparator()
-        
+
         legend_action = QAction("Legend", self.w)
         legend_action.setToolTip("Toggle chart legend visibility")
         legend_action.setCheckable(True)
@@ -353,7 +388,7 @@ class MenuSetupController:
         graph_elements_menu.addAction(legend_action)
         self.w._graph_element_actions["legend"] = legend_action
         self.w._show_legend_action = legend_action
-        
+
         grid_action = QAction("Grid", self.w)
         grid_action.setToolTip("Toggle chart grid lines")
         grid_action.setCheckable(True)
@@ -362,15 +397,17 @@ class MenuSetupController:
         graph_elements_menu.addAction(grid_action)
         self.w._graph_element_actions["grid"] = grid_action
         self.w._show_grid_action = grid_action
-        
+
         statistics_overlay_action = QAction("Statistics Overlay", self.w)
         statistics_overlay_action.setToolTip("Show statistics overlay on chart")
         statistics_overlay_action.setCheckable(True)
         statistics_overlay_action.setChecked(False)
-        statistics_overlay_action.triggered.connect(self.w._on_toggle_statistics_overlay)
+        statistics_overlay_action.triggered.connect(
+            self.w._on_toggle_statistics_overlay
+        )
         graph_elements_menu.addAction(statistics_overlay_action)
         self.w._graph_element_actions["statistics_overlay"] = statistics_overlay_action
-        
+
         axis_labels_action = QAction("Axis Labels", self.w)
         axis_labels_action.setToolTip("Toggle axis labels on chart")
         axis_labels_action.setCheckable(True)
@@ -386,7 +423,9 @@ class MenuSetupController:
         graph_elements_menu.addAction(drawing_style_action)
 
         delete_drawing_action = QAction("Delete Selected Drawing", self.w)
-        delete_drawing_action.setToolTip("Delete the currently selected drawing (Delete)")
+        delete_drawing_action.setToolTip(
+            "Delete the currently selected drawing (Delete)"
+        )
         # Shortcut handled in keyPressEvent to avoid text input conflicts
         delete_drawing_action.triggered.connect(self.w._on_delete_drawing)
         graph_elements_menu.addAction(delete_drawing_action)
@@ -399,15 +438,15 @@ class MenuSetupController:
 
         # Table Elements submenu
         table_elements_menu = view_menu.addMenu("&Table Elements")
-        
+
         self.w._table_element_actions = {}
-        
+
         float_table_action = QAction("Float Table Panel", self.w)
         float_table_action.setStatusTip("Float the table panel into a separate window")
         float_table_action.triggered.connect(lambda: self.w._float_main_panel("table"))
         table_elements_menu.addAction(float_table_action)
         table_elements_menu.addSeparator()
-        
+
         row_numbers_action = QAction("Row Numbers", self.w)
         row_numbers_action.setToolTip("Show or hide row numbers in table")
         row_numbers_action.setCheckable(True)
@@ -415,7 +454,7 @@ class MenuSetupController:
         row_numbers_action.triggered.connect(self.w._on_toggle_row_numbers)
         table_elements_menu.addAction(row_numbers_action)
         self.w._table_element_actions["row_numbers"] = row_numbers_action
-        
+
         column_headers_action = QAction("Column Headers", self.w)
         column_headers_action.setToolTip("Show or hide column headers in table")
         column_headers_action.setCheckable(True)
@@ -423,7 +462,7 @@ class MenuSetupController:
         column_headers_action.triggered.connect(self.w._on_toggle_column_headers)
         table_elements_menu.addAction(column_headers_action)
         self.w._table_element_actions["column_headers"] = column_headers_action
-        
+
         filter_bar_action = QAction("Filter Bar", self.w)
         filter_bar_action.setToolTip("Show or hide table filter bar")
         filter_bar_action.setCheckable(True)
@@ -448,30 +487,40 @@ class MenuSetupController:
         # Feature 1: Dashboard Mode
         self.w._dashboard_mode_action = QAction("&Dashboard Mode", self.w)
         self.w._dashboard_mode_action.setShortcut("Ctrl+D")
-        self.w._dashboard_mode_action.setStatusTip("Toggle dashboard mode with multiple chart cells (Ctrl+D)")
+        self.w._dashboard_mode_action.setStatusTip(
+            "Toggle dashboard mode with multiple chart cells (Ctrl+D)"
+        )
         self.w._dashboard_mode_action.setCheckable(True)
-        self.w._dashboard_mode_action.triggered.connect(self.w._on_toggle_dashboard_mode)
+        self.w._dashboard_mode_action.triggered.connect(
+            self.w._on_toggle_dashboard_mode
+        )
         view_menu.addAction(self.w._dashboard_mode_action)
 
         # Feature 5: Annotation Panel
         self.w._annotation_panel_action = QAction("&Annotations Panel", self.w)
         self.w._annotation_panel_action.setShortcut("Ctrl+Shift+A")
-        self.w._annotation_panel_action.setStatusTip("Toggle annotations side panel (Ctrl+Shift+A)")
+        self.w._annotation_panel_action.setStatusTip(
+            "Toggle annotations side panel (Ctrl+Shift+A)"
+        )
         self.w._annotation_panel_action.setCheckable(True)
-        self.w._annotation_panel_action.triggered.connect(self.w._on_toggle_annotation_panel)
+        self.w._annotation_panel_action.triggered.connect(
+            self.w._on_toggle_annotation_panel
+        )
         view_menu.addAction(self.w._annotation_panel_action)
 
         # Add Annotation
         self.w._add_annotation_action = QAction("Add A&nnotation", self.w)
         self.w._add_annotation_action.setShortcut("Ctrl+Shift+N")
-        self.w._add_annotation_action.setStatusTip("Add a new annotation to the chart (Ctrl+Shift+N)")
+        self.w._add_annotation_action.setStatusTip(
+            "Add a new annotation to the chart (Ctrl+Shift+N)"
+        )
         self.w._add_annotation_action.triggered.connect(self.w._on_add_annotation)
         view_menu.addAction(self.w._add_annotation_action)
 
         view_menu.addSeparator()
 
         # Toolbars submenu (via ToolbarManager)
-        if hasattr(self.w, '_toolbar_manager'):
+        if hasattr(self.w, "_toolbar_manager"):
             self.w._toolbar_manager.populate_view_menu(view_menu)
 
         view_menu.addSeparator()
@@ -503,7 +552,9 @@ class MenuSetupController:
         midnight_theme_action.setToolTip("Switch to midnight theme")
         midnight_theme_action.setCheckable(True)
         midnight_theme_action.setChecked(True)
-        midnight_theme_action.triggered.connect(lambda: self.w._on_theme_changed("midnight"))
+        midnight_theme_action.triggered.connect(
+            lambda: self.w._on_theme_changed("midnight")
+        )
         self.w._theme_action_group.addAction(midnight_theme_action)
         theme_menu.addAction(midnight_theme_action)
         self.w._theme_actions["midnight"] = midnight_theme_action
@@ -521,8 +572,12 @@ class MenuSetupController:
 
         # Streaming menu items
         self.w._start_streaming_action = QAction("Start &Streaming...", self.w)
-        self.w._start_streaming_action.setStatusTip("Open streaming configuration dialog")
-        self.w._start_streaming_action.triggered.connect(self.w._on_start_streaming_dialog)
+        self.w._start_streaming_action.setStatusTip(
+            "Open streaming configuration dialog"
+        )
+        self.w._start_streaming_action.triggered.connect(
+            self.w._on_start_streaming_dialog
+        )
         view_menu.addAction(self.w._start_streaming_action)
 
         self.w._stop_streaming_action = QAction("Sto&p Streaming", self.w)
@@ -539,7 +594,9 @@ class MenuSetupController:
         # Add Calculated Field
         self.w._add_calc_field_action = QAction("&Add Calculated Field...", self.w)
         self.w._add_calc_field_action.setShortcut("Ctrl+Alt+F")
-        self.w._add_calc_field_action.setStatusTip("Add a new calculated column based on expression")
+        self.w._add_calc_field_action.setStatusTip(
+            "Add a new calculated column based on expression"
+        )
         self.w._add_calc_field_action.triggered.connect(self.w._on_add_calculated_field)
         data_menu.addAction(self.w._add_calc_field_action)
 
@@ -583,7 +640,9 @@ class MenuSetupController:
         logger_menu = menubar.addMenu("&Logger")
 
         start_trace_action = QAction("&Start Trace...", self.w)
-        start_trace_action.setStatusTip("Start block layer tracing (uses saved config or opens Configure)")
+        start_trace_action.setStatusTip(
+            "Start block layer tracing (uses saved config or opens Configure)"
+        )
         start_trace_action.triggered.connect(self.w._on_start_trace)
         logger_menu.addAction(start_trace_action)
 
@@ -622,13 +681,19 @@ class MenuSetupController:
 
         # Loading profiles
         save_loading_profile_action = QAction("Save Loading Profile...", self.w)
-        save_loading_profile_action.setStatusTip("Save current parsing settings as a reusable profile")
-        save_loading_profile_action.triggered.connect(self.w._file_controller._save_loading_profile)
+        save_loading_profile_action.setStatusTip(
+            "Save current parsing settings as a reusable profile"
+        )
+        save_loading_profile_action.triggered.connect(
+            self.w._file_controller._save_loading_profile
+        )
         parser_menu.addAction(save_loading_profile_action)
 
         load_loading_profile_action = QAction("Load Profile...", self.w)
         load_loading_profile_action.setStatusTip("Load saved parsing settings profile")
-        load_loading_profile_action.triggered.connect(self.w._file_controller._load_loading_profile)
+        load_loading_profile_action.triggered.connect(
+            self.w._file_controller._load_loading_profile
+        )
         parser_menu.addAction(load_loading_profile_action)
 
         # ============================================================
@@ -653,7 +718,9 @@ class MenuSetupController:
         self.w._chart_type_action_group = QActionGroup(self.w)
         self.w._chart_type_action_group.setExclusive(True)
         _chart_shortcuts = {
-            ChartType.LINE: "1", ChartType.BAR: "2", ChartType.SCATTER: "3",
+            ChartType.LINE: "1",
+            ChartType.BAR: "2",
+            ChartType.SCATTER: "3",
             ChartType.AREA: "5",
         }
         for chart_type in ChartType:
@@ -665,7 +732,9 @@ class MenuSetupController:
             action.setCheckable(True)
             if chart_type == ChartType.LINE:
                 action.setChecked(True)
-            action.triggered.connect(lambda checked, ct=chart_type: self.w.state.set_chart_type(ct))
+            action.triggered.connect(
+                lambda checked, ct=chart_type: self.w.state.set_chart_type(ct)
+            )
             self.w._chart_type_action_group.addAction(action)
             chart_type_menu.addAction(action)
             self.w._chart_type_actions[chart_type] = action
@@ -674,7 +743,9 @@ class MenuSetupController:
 
         # Axis settings
         axis_settings_action = QAction("&Axis Settings... (Coming Soon)", self.w)
-        axis_settings_action.setStatusTip("Configure axis range, labels, and scale (coming soon)")
+        axis_settings_action.setStatusTip(
+            "Configure axis range, labels, and scale (coming soon)"
+        )
         axis_settings_action.triggered.connect(self.w._on_axis_settings)
         options_menu.addAction(axis_settings_action)
 
@@ -697,7 +768,9 @@ class MenuSetupController:
 
         search_features_action = QAction("&Search Features...", self.w)
         search_features_action.setShortcut("Ctrl+Shift+P")
-        search_features_action.setStatusTip("Open Command Palette to search and execute features (Ctrl+Shift+P)")
+        search_features_action.setStatusTip(
+            "Open Command Palette to search and execute features (Ctrl+Shift+P)"
+        )
         search_features_action.triggered.connect(self.w._on_open_command_palette)
         help_menu.addAction(search_features_action)
 
@@ -724,7 +797,9 @@ class MenuSetupController:
 
         check_updates_action = QAction("Check for &Updates...", self.w)
         check_updates_action.setStatusTip("Check GitHub Releases and update (Windows)")
-        check_updates_action.triggered.connect(lambda: self.w._auto_check_updates(force_ui=True))
+        check_updates_action.triggered.connect(
+            lambda: self.w._auto_check_updates(force_ui=True)
+        )
         help_menu.addAction(check_updates_action)
 
         about_action = QAction("&About", self.w)
@@ -732,11 +807,9 @@ class MenuSetupController:
         about_action.triggered.connect(self.w._show_about)
         help_menu.addAction(about_action)
 
-
     def _update_recent_files_menu(self):
         """최근 파일 메뉴 업데이트 — delegates to FileLoadingController"""
         self.w._file_controller._update_recent_files_menu()
-
 
     def _update_menu_state(self):
         """Enable/disable Data and Graph menu items based on data state."""
@@ -754,49 +827,63 @@ class MenuSetupController:
             action.setEnabled(has_data)
 
         # Graph menu items
-        if hasattr(self.w, '_trend_line_action'):
+        if hasattr(self.w, "_trend_line_action"):
             self.w._trend_line_action.setEnabled(has_data)
 
         # View menu items that require data
-        if hasattr(self.w, '_dashboard_mode_action'):
+        if hasattr(self.w, "_dashboard_mode_action"):
             self.w._dashboard_mode_action.setEnabled(has_data)
-        if hasattr(self.w, '_add_annotation_action'):
+        if hasattr(self.w, "_add_annotation_action"):
             self.w._add_annotation_action.setEnabled(has_data)
-        if hasattr(self.w, '_start_streaming_action'):
+        if hasattr(self.w, "_start_streaming_action"):
             self.w._start_streaming_action.setEnabled(has_data)
 
         # Sync chart type checkmarks with current state (menu + toolbar)
         # NOTE: AppState no longer exposes `chart_type` directly; use chart_settings.
-        current_ct = getattr(getattr(self.w.state, 'chart_settings', None), 'chart_type', None)
+        current_ct = getattr(
+            getattr(self.w.state, "chart_settings", None), "chart_type", None
+        )
         if current_ct is None:
             return
 
-        if hasattr(self.w, '_chart_type_actions'):
+        if hasattr(self.w, "_chart_type_actions"):
             for ct, action in self.w._chart_type_actions.items():
                 action.setChecked(ct == current_ct)
-        if hasattr(self.w, '_chart_toolbar_actions'):
+        if hasattr(self.w, "_chart_toolbar_actions"):
             for ct, action in self.w._chart_toolbar_actions.items():
                 action.setChecked(ct == current_ct)
 
     def _update_export_menu_state(self):
         """Enable/disable export menu items based on data/graph state"""
         has_data = self.w.state.is_data_loaded
-        has_graph = has_data and (bool(self.w.state.value_columns) or bool(self.w.state.x_column))
+        has_graph = has_data and (
+            bool(self.w.state.value_columns) or bool(self.w.state.x_column)
+        )
 
         # Image export requires a graph
-        for action in (self.w._export_image_png_action, self.w._export_image_svg_action,
-                       self.w._export_image_pdf_action):
+        for action in (
+            self.w._export_image_png_action,
+            self.w._export_image_svg_action,
+            self.w._export_image_pdf_action,
+        ):
             action.setEnabled(has_graph)
 
         # Data export requires data
-        for action in (self.w._export_data_csv_action, self.w._export_data_excel_action,
-                       self.w._export_data_parquet_action):
+        for action in (
+            self.w._export_data_csv_action,
+            self.w._export_data_excel_action,
+            self.w._export_data_parquet_action,
+        ):
             action.setEnabled(has_data)
 
         # Report export requires data
-        for action in (self.w._export_report_html_action, self.w._export_report_pptx_action,
-                       self.w._export_report_docx_action, self.w._export_report_md_action,
-                       self.w._export_report_pdf_action):
+        for action in (
+            self.w._export_report_html_action,
+            self.w._export_report_pptx_action,
+            self.w._export_report_docx_action,
+            self.w._export_report_md_action,
+            self.w._export_report_pdf_action,
+        ):
             action.setEnabled(has_data)
 
         # Clipboard
@@ -808,5 +895,3 @@ class MenuSetupController:
 
         # Quick export
         self.w._export_quick_action.setEnabled(has_data)
-
-

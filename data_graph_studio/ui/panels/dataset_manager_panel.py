@@ -4,23 +4,33 @@ Dataset Manager Panel - 멀티 데이터셋 관리 패널
 데이터셋 추가, 제거, 전환, 비교 설정 UI
 """
 
-from typing import Optional, List, Dict, Any
+from typing import List, Dict
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QFrame, QComboBox,
-    QCheckBox, QMenu, QColorDialog, QInputDialog,
-    QMessageBox, QSizePolicy, QScrollArea, QGroupBox,
-    QSplitter, QToolButton, QFileDialog, QTreeWidget, QTreeWidgetItem
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QComboBox,
+    QCheckBox,
+    QMenu,
+    QColorDialog,
+    QInputDialog,
+    QMessageBox,
+    QSizePolicy,
+    QGroupBox,
+    QToolButton,
+    QFileDialog,
+    QTreeWidget,
+    QTreeWidgetItem,
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QBrush, QAction
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPixmap, QAction
 
 from ...core.data_engine import DataEngine, DatasetInfo
-from ...core.state import (
-    AppState, ComparisonMode, DatasetMetadata,
-    DEFAULT_DATASET_COLORS
-)
-from ...core.profile import Profile, GraphSetting
+from ...core.state import AppState, ComparisonMode, DatasetMetadata
+from ...core.profile import Profile
 
 
 class DatasetItemWidget(QFrame):
@@ -36,7 +46,7 @@ class DatasetItemWidget(QFrame):
         dataset_id: str,
         metadata: DatasetMetadata,
         dataset_info: DatasetInfo,
-        parent=None
+        parent=None,
     ):
         super().__init__(parent)
         self.dataset_id = dataset_id
@@ -165,9 +175,7 @@ class DatasetItemWidget(QFrame):
     def _on_color_click(self):
         """색상 선택"""
         color = QColorDialog.getColor(
-            QColor(self.metadata.color),
-            self,
-            "데이터셋 색상 선택"
+            QColor(self.metadata.color), self, "데이터셋 색상 선택"
         )
         if color.isValid():
             self.color_changed.emit(self.dataset_id, color.name())
@@ -193,8 +201,7 @@ class DatasetItemWidget(QFrame):
         """더블클릭 시 이름 변경"""
         if event.button() == Qt.LeftButton:
             new_name, ok = QInputDialog.getText(
-                self, "데이터셋 이름 변경",
-                "새 이름:", text=self.metadata.name
+                self, "데이터셋 이름 변경", "새 이름:", text=self.metadata.name
             )
             if ok and new_name:
                 self.name_label.setText(new_name)
@@ -376,7 +383,9 @@ class DatasetManagerPanel(QWidget):
         self.state.dataset_removed.connect(self._on_dataset_removed)
         self.state.dataset_activated.connect(self._on_dataset_activated)
         self.state.dataset_updated.connect(self._on_dataset_updated)
-        self.state.comparison_settings_changed.connect(self._on_comparison_settings_changed)
+        self.state.comparison_settings_changed.connect(
+            self._on_comparison_settings_changed
+        )
 
     def _on_add_click(self):
         """데이터셋 추가 버튼 클릭"""
@@ -405,7 +414,7 @@ class DatasetManagerPanel(QWidget):
             sync_zoom=self.sync_zoom_cb.isChecked(),
             sync_pan_x=self.sync_pan_x_cb.isChecked(),
             sync_pan_y=self.sync_pan_y_cb.isChecked(),
-            sync_selection=self.sync_select_cb.isChecked()
+            sync_selection=self.sync_select_cb.isChecked(),
         )
 
     def _on_compare_click(self):
@@ -449,9 +458,7 @@ class DatasetManagerPanel(QWidget):
     def _on_comparison_settings_changed(self):
         """비교 설정 변경됨"""
         settings = self.state.comparison_settings
-        self.mode_combo.setCurrentIndex(
-            self.mode_combo.findData(settings.mode.value)
-        )
+        self.mode_combo.setCurrentIndex(self.mode_combo.findData(settings.mode.value))
         self.sync_scroll_cb.setChecked(settings.sync_scroll)
         self.sync_zoom_cb.setChecked(settings.sync_zoom)
         self.sync_pan_x_cb.setChecked(settings.sync_pan_x)
@@ -524,7 +531,14 @@ class DatasetManagerPanel(QWidget):
         elif kind == "profile":
             dataset_id, setting_id = data[1], data[2]
             # Apply profile
-            setting = next((s for s in self.state.get_dataset_profiles(dataset_id) if s.id == setting_id), None)
+            setting = next(
+                (
+                    s
+                    for s in self.state.get_dataset_profiles(dataset_id)
+                    if s.id == setting_id
+                ),
+                None,
+            )
             if setting:
                 self.state.apply_graph_setting(setting)
 
@@ -540,15 +554,21 @@ class DatasetManagerPanel(QWidget):
         if kind == "dataset":
             dataset_id = data[1]
             save_act = QAction("💾 Save Profile", self)
-            save_act.triggered.connect(lambda: self._save_profile_for_dataset(dataset_id))
+            save_act.triggered.connect(
+                lambda: self._save_profile_for_dataset(dataset_id)
+            )
             menu.addAction(save_act)
         elif kind == "profile":
             dataset_id, setting_id = data[1], data[2]
             rename_act = QAction("✏️ Rename", self)
-            rename_act.triggered.connect(lambda: self._rename_profile(dataset_id, setting_id))
+            rename_act.triggered.connect(
+                lambda: self._rename_profile(dataset_id, setting_id)
+            )
             menu.addAction(rename_act)
             del_act = QAction("🗑️ Delete", self)
-            del_act.triggered.connect(lambda: self._delete_profile(dataset_id, setting_id))
+            del_act.triggered.connect(
+                lambda: self._delete_profile(dataset_id, setting_id)
+            )
             menu.addAction(del_act)
         menu.exec(self.tree.mapToGlobal(pos))
 
@@ -556,21 +576,37 @@ class DatasetManagerPanel(QWidget):
         name, ok = QInputDialog.getText(self, "Save Profile", "Profile name:")
         if not ok or not name.strip():
             return
-        setting = self.state.build_graph_setting_from_state(name.strip(), dataset_id=dataset_id)
+        setting = self.state.build_graph_setting_from_state(
+            name.strip(), dataset_id=dataset_id
+        )
         self.state.add_graph_setting_to_dataset(dataset_id, setting)
         self._update_tree()
 
     def _rename_profile(self, dataset_id: str, setting_id: str):
-        setting = next((s for s in self.state.get_dataset_profiles(dataset_id) if s.id == setting_id), None)
+        setting = next(
+            (
+                s
+                for s in self.state.get_dataset_profiles(dataset_id)
+                if s.id == setting_id
+            ),
+            None,
+        )
         if not setting:
             return
-        name, ok = QInputDialog.getText(self, "Rename Profile", "New name:", text=setting.name)
+        name, ok = QInputDialog.getText(
+            self, "Rename Profile", "New name:", text=setting.name
+        )
         if ok and name.strip():
             self.state.rename_graph_setting(dataset_id, setting_id, name.strip())
             self._update_tree()
 
     def _delete_profile(self, dataset_id: str, setting_id: str):
-        reply = QMessageBox.question(self, "Delete Profile", "Delete this profile?", QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "Delete Profile",
+            "Delete this profile?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
         if reply == QMessageBox.Yes:
             self.state.remove_graph_setting(dataset_id, setting_id)
             self._update_tree()
@@ -581,13 +617,17 @@ class DatasetManagerPanel(QWidget):
         self._save_profile_for_dataset(self.state.active_dataset_id)
 
     def _on_load_profile(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Load Profile", "", "Data Graph Profile (*.dgp)")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Profile", "", "Data Graph Profile (*.dgp)"
+        )
         if not path or not self.state.active_dataset_id:
             return
         try:
             profile = Profile.load(path)
             for setting in profile.settings:
-                self.state.add_graph_setting_to_dataset(self.state.active_dataset_id, setting)
+                self.state.add_graph_setting_to_dataset(
+                    self.state.active_dataset_id, setting
+                )
             self._update_tree()
         except Exception as e:
             QMessageBox.warning(self, "Load Profile", f"Failed to load profile: {e}")
@@ -595,9 +635,10 @@ class DatasetManagerPanel(QWidget):
     def _on_widget_removed(self, dataset_id: str):
         """위젯 제거 요청"""
         reply = QMessageBox.question(
-            self, "데이터셋 제거",
-            f"데이터셋을 제거하시겠습니까?",
-            QMessageBox.Yes | QMessageBox.No
+            self,
+            "데이터셋 제거",
+            "데이터셋을 제거하시겠습니까?",
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             self.dataset_removed.emit(dataset_id)
@@ -650,7 +691,8 @@ class DatasetManagerPanel(QWidget):
     def _get_comparison_dataset_ids(self) -> List[str]:
         """비교 활성화된 데이터셋 ID 목록"""
         return [
-            did for did, widget in self._dataset_widgets.items()
+            did
+            for did, widget in self._dataset_widgets.items()
             if widget.compare_cb.isChecked()
         ]
 

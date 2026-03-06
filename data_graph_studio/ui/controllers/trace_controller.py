@@ -1,4 +1,5 @@
 """TraceController - extracted from MainWindow."""
+
 from __future__ import annotations
 
 import logging
@@ -30,7 +31,7 @@ class TraceContext:
 class TraceController:
     """Controller extracted from MainWindow."""
 
-    def __init__(self, main_window: 'MainWindow'):
+    def __init__(self, main_window: "MainWindow"):
         self.w = main_window
 
     @staticmethod
@@ -113,7 +114,9 @@ class TraceController:
         return f"{dev} {rwbs} () {sector} + {nr_sectors}"
 
     @classmethod
-    def _normalize_perfetto_csv_for_ftrace_converter(cls, df: "pl.DataFrame") -> "pl.DataFrame":
+    def _normalize_perfetto_csv_for_ftrace_converter(
+        cls, df: "pl.DataFrame"
+    ) -> "pl.DataFrame":
         """Normalize Perfetto CSV rows into FtraceParser raw schema.
 
         Output columns are aligned to parse_raw schema:
@@ -144,11 +147,17 @@ class TraceController:
             else:
                 work = work.with_columns(pl.lit(0.0).alias("timestamp"))
 
-        event_source = "event" if "event" in work.columns else ("name" if "name" in work.columns else None)
+        event_source = (
+            "event"
+            if "event" in work.columns
+            else ("name" if "name" in work.columns else None)
+        )
         if event_source is None:
             work = work.with_columns(pl.lit("").alias("__event_raw"))
         else:
-            work = work.with_columns(pl.col(event_source).cast(pl.Utf8).alias("__event_raw"))
+            work = work.with_columns(
+                pl.col(event_source).cast(pl.Utf8).alias("__event_raw")
+            )
 
         if "details" not in work.columns:
             work = work.with_columns(pl.lit("").alias("details"))
@@ -159,31 +168,37 @@ class TraceController:
         if "pid" not in work.columns:
             work = work.with_columns(pl.lit(-1).alias("pid"))
 
-        work = work.with_columns([
-            pl.col("__event_raw")
-            .map_elements(cls._normalize_event_name, return_dtype=pl.Utf8)
-            .alias("event"),
-            pl.struct(["__event_raw", "details"])
-            .map_elements(
-                lambda row: cls._coerce_perfetto_details_for_blocklayer(
-                    row["__event_raw"], row["details"]
-                ),
-                return_dtype=pl.Utf8,
-            )
-            .alias("details_norm"),
-        ])
+        work = work.with_columns(
+            [
+                pl.col("__event_raw")
+                .map_elements(cls._normalize_event_name, return_dtype=pl.Utf8)
+                .alias("event"),
+                pl.struct(["__event_raw", "details"])
+                .map_elements(
+                    lambda row: cls._coerce_perfetto_details_for_blocklayer(
+                        row["__event_raw"], row["details"]
+                    ),
+                    return_dtype=pl.Utf8,
+                )
+                .alias("details_norm"),
+            ]
+        )
 
-        return work.select([
-            pl.col("timestamp").cast(pl.Float64).fill_null(0.0).alias("timestamp"),
-            pl.col("cpu").cast(pl.Int32, strict=False).fill_null(0).alias("cpu"),
-            pl.col("task").cast(pl.Utf8).fill_null("").alias("task"),
-            pl.col("pid").cast(pl.Int32, strict=False).fill_null(-1).alias("pid"),
-            pl.lit("....").alias("flags"),
-            pl.col("event").cast(pl.Utf8).fill_null("").alias("event"),
-            pl.col("details_norm").cast(pl.Utf8).fill_null("").alias("details"),
-        ])
+        return work.select(
+            [
+                pl.col("timestamp").cast(pl.Float64).fill_null(0.0).alias("timestamp"),
+                pl.col("cpu").cast(pl.Int32, strict=False).fill_null(0).alias("cpu"),
+                pl.col("task").cast(pl.Utf8).fill_null("").alias("task"),
+                pl.col("pid").cast(pl.Int32, strict=False).fill_null(-1).alias("pid"),
+                pl.lit("....").alias("flags"),
+                pl.col("event").cast(pl.Utf8).fill_null("").alias("event"),
+                pl.col("details_norm").cast(pl.Utf8).fill_null("").alias("details"),
+            ]
+        )
 
-    def _register_loaded_dataset(self, dataset_id: str, name: str, source_path: str, df: "pl.DataFrame") -> None:
+    def _register_loaded_dataset(
+        self, dataset_id: str, name: str, source_path: str, df: "pl.DataFrame"
+    ) -> None:
         """Register engine dataset into AppState and activate as current project.
 
         This keeps Project Explorer(dataset tree) and profile ownership aligned
@@ -227,8 +242,11 @@ class TraceController:
         logger.debug("[Logger] opening TraceConfigDialog")
         dialog = TraceConfigDialog(self.w)
         result = dialog.exec()
-        logger.debug("[Logger] TraceConfigDialog result=%s, start_requested=%s",
-                     result, dialog.start_requested)
+        logger.debug(
+            "[Logger] TraceConfigDialog result=%s, start_requested=%s",
+            result,
+            dialog.start_requested,
+        )
 
         if result == QDialog.DialogCode.Accepted and dialog.start_requested:
             self.w._run_trace(dialog.get_config())
@@ -237,14 +255,12 @@ class TraceController:
     # Logger — ADB + Perfetto block layer tracing
     # ================================================================
 
-
     def _on_start_trace(self) -> None:
         """Start trace using saved config, or open Configure if none."""
         import shutil
 
         from data_graph_studio.ui.dialogs.trace_config_dialog import (
             load_logger_config,
-            TraceConfigDialog,
         )
 
         logger_cfg = load_logger_config()
@@ -254,8 +270,13 @@ class TraceController:
         has_events = bool(logger_cfg.get("events"))
         has_adb = bool(shutil.which("adb"))
         has_save_path = bool(logger_cfg.get("save_path"))
-        logger.debug("[Logger] start_trace check: adb=%s, device=%s, events=%s, save=%s",
-                     has_adb, has_device, has_events, has_save_path)
+        logger.debug(
+            "[Logger] start_trace check: adb=%s, device=%s, events=%s, save=%s",
+            has_adb,
+            has_device,
+            has_events,
+            has_save_path,
+        )
 
         if has_device and has_events and has_adb and has_save_path:
             # Bug fix: verify capture mode prerequisites before starting
@@ -269,7 +290,6 @@ class TraceController:
             self.w._on_configure_trace()
 
     @staticmethod
-
     def _verify_capture_mode(serial: str, capture_mode: str) -> bool:
         """Check if device supports the capture mode (perfetto/root).
 
@@ -281,7 +301,9 @@ class TraceController:
             if capture_mode == "perfetto":
                 result = subprocess.run(
                     ["adb", "-s", serial, "shell", "which", "perfetto"],
-                    capture_output=True, text=True, timeout=5,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
                 )
                 return result.returncode == 0 and bool(result.stdout.strip())
             else:
@@ -289,14 +311,15 @@ class TraceController:
                 for cmd in [["su", "-c", "id"], ["su", "0", "id"]]:
                     result = subprocess.run(
                         ["adb", "-s", serial, "shell", *cmd],
-                        capture_output=True, text=True, timeout=5,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
                     )
                     if result.returncode == 0 and "uid=0" in result.stdout:
                         return True
                 return False
         except (subprocess.TimeoutExpired, OSError):
             return True  # Inconclusive — let it proceed
-
 
     def _run_trace(self, logger_cfg: dict) -> None:
         """Execute trace with given config (Perfetto/Raw Ftrace)."""
@@ -309,14 +332,17 @@ class TraceController:
             TraceProgressDialog,
         )
 
-        logger.info("[Logger] _run_trace: mode=%s, device=%s, events=%d",
-                     logger_cfg.get("capture_mode", "?"),
-                     logger_cfg.get("device_serial", "?"),
-                     len(logger_cfg.get("events", [])))
+        logger.info(
+            "[Logger] _run_trace: mode=%s, device=%s, events=%d",
+            logger_cfg.get("capture_mode", "?"),
+            logger_cfg.get("device_serial", "?"),
+            len(logger_cfg.get("events", [])),
+        )
 
         if not shutil.which("adb"):
             QMessageBox.warning(
-                self, "Logger",
+                self,
+                "Logger",
                 "adb not found in PATH.\n\n"
                 "Install Android SDK Platform Tools and ensure 'adb' is in your PATH.\n"
                 "Or use Logger → Configure... to set up.",
@@ -326,7 +352,8 @@ class TraceController:
         serial = logger_cfg.get("device_serial", "")
         if not serial:
             QMessageBox.warning(
-                self, "Logger",
+                self,
+                "Logger",
                 "No device configured.\n\n"
                 "Use Logger → Configure... to select a device.",
             )
@@ -346,7 +373,10 @@ class TraceController:
                 default_name = f"ftrace_{ts}.txt"
                 file_filter = "Ftrace Text (*.txt);;All Files (*)"
             save_path, _ = QFileDialog.getSaveFileName(
-                self, "Save Trace File", default_name, file_filter,
+                self,
+                "Save Trace File",
+                default_name,
+                file_filter,
             )
             if not save_path:
                 return
@@ -385,15 +415,14 @@ class TraceController:
                 self.w._load_csv_async(csv_path)
             else:
                 reply = QMessageBox.question(
-                    self, "Logger",
-                    f"Trace saved to:\n{save_path}\n\n"
-                    "Open with Ftrace Parser now?",
+                    self,
+                    "Logger",
+                    f"Trace saved to:\n{save_path}\n\nOpen with Ftrace Parser now?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.Yes,
                 )
                 if reply == QMessageBox.StandardButton.Yes:
                     self.w._parse_ftrace_async(save_path)
-
 
     def _load_csv_async(self, csv_path: str) -> None:
         """Load a CSV file (from trace_processor_shell) in a background thread.
@@ -414,7 +443,11 @@ class TraceController:
             def run(self_w):
                 try:
                     perfetto_df = pl.read_csv(csv_path)
-                    raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+                    raw_df = (
+                        TraceController._normalize_perfetto_csv_for_ftrace_converter(
+                            perfetto_df
+                        )
+                    )
 
                     from data_graph_studio.parsers import FtraceParser
 
@@ -434,32 +467,47 @@ class TraceController:
         def on_finished(raw_df, df, settings):
             logger.info(
                 "[Logger] Perfetto converted: raw=%d rows, converted=%d rows, columns=%s",
-                len(raw_df), len(df), list(df.columns)[:10],
+                len(raw_df),
+                len(df),
+                list(df.columns)[:10],
             )
             name = Path(csv_path).stem
             did = self.w.engine.load_dataset_from_dataframe(
                 df, name=name, source_path=csv_path
             )
             if did:
-                logger.info("trace_controller.dataset.created", extra={"id": did, "dataset_name": name})
-                self._register_loaded_dataset(did, name=name, source_path=csv_path, df=df)
+                logger.info(
+                    "trace_controller.dataset.created",
+                    extra={"id": did, "dataset_name": name},
+                )
+                self._register_loaded_dataset(
+                    did, name=name, source_path=csv_path, df=df
+                )
                 # Store TraceContext for re-conversion (same as ftrace path)
                 self.w._trace_context = TraceContext(raw_df, settings, did)
                 self.w._on_data_loaded()
                 self.w._apply_graph_presets(df, converter="blocklayer")
-                if hasattr(self.w, '_converter_options_panel'):
+                if hasattr(self.w, "_converter_options_panel"):
                     self.w._converter_options_panel.set_converter("blocklayer")
                 self.w.statusBar().showMessage(
-                    f"Perfetto trace: converted {len(raw_df)} events → {len(df)} rows", 5000,
+                    f"Perfetto trace: converted {len(raw_df)} events → {len(df)} rows",
+                    5000,
                 )
             else:
-                logger.error("[Logger] load_dataset_from_dataframe returned None for %s", csv_path)
-                QMessageBox.warning(self.w, "Logger", "Failed to load converted trace data.")
+                logger.error(
+                    "[Logger] load_dataset_from_dataframe returned None for %s",
+                    csv_path,
+                )
+                QMessageBox.warning(
+                    self.w, "Logger", "Failed to load converted trace data."
+                )
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
             """Handle CSV load failure by showing an error dialog."""
-            logger.error("trace_controller.csv.load_failed", extra={"error_message": msg})
+            logger.error(
+                "trace_controller.csv.load_failed", extra={"error_message": msg}
+            )
             QMessageBox.critical(self.w, "Logger", f"CSV load failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
@@ -468,10 +516,9 @@ class TraceController:
         self.w._csv_worker = worker
         worker.start()
 
-
     def reconvert(self, converter_options: dict) -> None:
         """Re-run converter with new options, replace dataset, refresh graph."""
-        ctx: Optional[TraceContext] = getattr(self.w, '_trace_context', None)
+        ctx: Optional[TraceContext] = getattr(self.w, "_trace_context", None)
         if ctx is None:
             return
 
@@ -486,10 +533,13 @@ class TraceController:
         # Refresh all panels
         self.w.graph_panel.refresh()
         self.w.statusBar().showMessage(
-            f"Re-converted with new options ({len(new_df)} rows)", 3000,
+            f"Re-converted with new options ({len(new_df)} rows)",
+            3000,
         )
 
-    def _parse_ftrace_async(self, file_path: str, converter: str = "blocklayer") -> None:
+    def _parse_ftrace_async(
+        self, file_path: str, converter: str = "blocklayer"
+    ) -> None:
         """Parse an ftrace text file in a background thread.
 
         Avoids blocking the UI during large file parsing.
@@ -520,39 +570,53 @@ class TraceController:
                 except Exception as e:
                     self_w.error.emit(str(e))
 
-        logger.debug("[Logger] _parse_ftrace_async: %s, converter=%s", file_path, converter)
+        logger.debug(
+            "[Logger] _parse_ftrace_async: %s, converter=%s", file_path, converter
+        )
         self.w.statusBar().showMessage("Parsing ftrace file...", 0)
         worker = _ParseWorker(self.w)
 
         def on_finished(raw_df, df):
-            logger.info("[Logger] ftrace parsed: %d rows, %d cols, columns=%s",
-                        len(df), len(df.columns), list(df.columns)[:10])
+            logger.info(
+                "[Logger] ftrace parsed: %d rows, %d cols, columns=%s",
+                len(df),
+                len(df.columns),
+                list(df.columns)[:10],
+            )
             dataset_name = Path(file_path).stem
             dataset_id = self.w.engine.load_dataset_from_dataframe(
                 df, name=dataset_name, source_path=file_path
             )
             if dataset_id:
                 logger.info("[Logger] ftrace dataset created: id=%s", dataset_id)
-                self._register_loaded_dataset(dataset_id, name=dataset_name, source_path=file_path, df=df)
+                self._register_loaded_dataset(
+                    dataset_id, name=dataset_name, source_path=file_path, df=df
+                )
                 # Store TraceContext for re-conversion
                 self.w._trace_context = TraceContext(raw_df, settings, dataset_id)
                 self.w._on_data_loaded()
                 self.w._apply_graph_presets(df, converter)
                 # Configure converter options panel if present
-                if hasattr(self.w, '_converter_options_panel'):
+                if hasattr(self.w, "_converter_options_panel"):
                     self.w._converter_options_panel.set_converter(converter)
                 self.w.statusBar().showMessage(
                     f"Ftrace: loaded {len(df)} rows from {Path(file_path).name}",
                     5000,
                 )
             else:
-                logger.error("[Logger] ftrace load_dataset_from_dataframe returned None")
-                QMessageBox.warning(self.w, "Ftrace Parser", "Failed to load parsed data.")
+                logger.error(
+                    "[Logger] ftrace load_dataset_from_dataframe returned None"
+                )
+                QMessageBox.warning(
+                    self.w, "Ftrace Parser", "Failed to load parsed data."
+                )
                 self.w.statusBar().clearMessage()
 
         def on_error(msg):
             """Handle ftrace parse failure by showing an error dialog."""
-            logger.error("trace_controller.ftrace.parse_failed", extra={"error_message": msg})
+            logger.error(
+                "trace_controller.ftrace.parse_failed", extra={"error_message": msg}
+            )
             QMessageBox.critical(self.w, "Ftrace Parser", f"Parse failed:\n{msg}")
             self.w.statusBar().clearMessage()
 
@@ -561,7 +625,6 @@ class TraceController:
         # prevent GC
         self.w._parse_worker = worker
         worker.start()
-
 
     def _on_compare_traces(self) -> None:
         """Open the Compare Traces dialog and run comparison."""
@@ -590,6 +653,7 @@ class TraceController:
 
         class _CompareWorker(QThread):
             from PySide6.QtCore import Signal as QtSignal
+
             finished = QtSignal(object, object)  # (df_a, df_b)
             error = QtSignal(str)
             progress = QtSignal(str)
@@ -629,8 +693,13 @@ class TraceController:
         worker.start()
 
     def _finish_compare(
-        self, df_a, df_b, path_a: str, path_b: str,
-        converter: str, compare_mode: ComparisonMode
+        self,
+        df_a,
+        df_b,
+        path_a: str,
+        path_b: str,
+        converter: str,
+        compare_mode: ComparisonMode,
     ) -> None:
         """Load both DataFrames as datasets and activate comparison mode."""
         name_a = Path(path_a).stem + " (Before)"
@@ -644,10 +713,13 @@ class TraceController:
             return
 
         # Register in state
-        memory_a = df_a.estimated_size() if hasattr(df_a, 'estimated_size') else 0
+        memory_a = df_a.estimated_size() if hasattr(df_a, "estimated_size") else 0
         self.w.state.add_dataset(
-            dataset_id=id_a, name=name_a, file_path=path_a,
-            row_count=len(df_a), column_count=len(df_a.columns),
+            dataset_id=id_a,
+            name=name_a,
+            file_path=path_a,
+            row_count=len(df_a),
+            column_count=len(df_a.columns),
             memory_bytes=memory_a,
         )
 
@@ -658,10 +730,13 @@ class TraceController:
             QMessageBox.warning(self.w, "Compare Traces", "Failed to load Trace B.")
             return
 
-        memory_b = df_b.estimated_size() if hasattr(df_b, 'estimated_size') else 0
+        memory_b = df_b.estimated_size() if hasattr(df_b, "estimated_size") else 0
         self.w.state.add_dataset(
-            dataset_id=id_b, name=name_b, file_path=path_b,
-            row_count=len(df_b), column_count=len(df_b.columns),
+            dataset_id=id_b,
+            name=name_b,
+            file_path=path_b,
+            row_count=len(df_b),
+            column_count=len(df_b.columns),
             memory_bytes=memory_b,
         )
 
@@ -681,7 +756,11 @@ class TraceController:
         )
         logger.info(
             "Compare traces: %s (%d rows) vs %s (%d rows), mode=%s",
-            name_a, len(df_a), name_b, len(df_b), compare_mode.value,
+            name_a,
+            len(df_a),
+            name_b,
+            len(df_b),
+            compare_mode.value,
         )
 
     def _apply_graph_presets(self, df, converter: str = "") -> None:
@@ -697,7 +776,6 @@ class TraceController:
         """
         from data_graph_studio.parsers.graph_preset import BUILTIN_PRESETS
         from data_graph_studio.core.profile import GraphSetting
-        from data_graph_studio.core.state import ChartType, AggregationType
 
         presets = BUILTIN_PRESETS.get(converter, [])
         if not presets:
@@ -718,10 +796,14 @@ class TraceController:
 
         for preset in presets:
             if not preset.columns_present(df):
-                logger.debug("[Logger] preset '%s' skipped: columns missing", preset.name)
+                logger.debug(
+                    "[Logger] preset '%s' skipped: columns missing", preset.name
+                )
                 continue
             if preset.name in existing_names:
-                logger.debug("[Logger] preset '%s' already exists, skipping", preset.name)
+                logger.debug(
+                    "[Logger] preset '%s' already exists, skipping", preset.name
+                )
                 # Use existing profile as first if none yet
                 if first_profile_id is None:
                     for s in existing:
@@ -733,25 +815,30 @@ class TraceController:
             # Build value_columns as dicts (GraphSettingMapper format)
             value_cols = []
             for col_name in preset.y_columns:
-                value_cols.append({
-                    "name": col_name,
-                    "aggregation": "sum",
-                    "color": "#1f77b4",
-                    "use_secondary_axis": False,
-                    "order": len(value_cols),
-                    "formula": "",
-                })
+                value_cols.append(
+                    {
+                        "name": col_name,
+                        "aggregation": "sum",
+                        "color": "#1f77b4",
+                        "use_secondary_axis": False,
+                        "order": len(value_cols),
+                        "formula": "",
+                    }
+                )
 
             # Build group_columns
             group_cols = []
             if preset.group_column:
-                group_cols.append({
-                    "name": preset.group_column,
-                    "selected_values": [],
-                    "order": 0,
-                })
+                group_cols.append(
+                    {
+                        "name": preset.group_column,
+                        "selected_values": [],
+                        "order": 0,
+                    }
+                )
 
             import uuid
+
             profile_id = str(uuid.uuid4())
             gs = GraphSetting(
                 id=profile_id,
@@ -766,17 +853,24 @@ class TraceController:
             )
             self.w.profile_store.add(gs)
             created_count += 1
-            logger.info("[Logger] created profile '%s' (id=%s, chart=%s, x=%s, y=%s)",
-                        preset.name, profile_id, preset.chart_type,
-                        preset.x_column, preset.y_columns)
+            logger.info(
+                "[Logger] created profile '%s' (id=%s, chart=%s, x=%s, y=%s)",
+                preset.name,
+                profile_id,
+                preset.chart_type,
+                preset.x_column,
+                preset.y_columns,
+            )
 
             if first_profile_id is None:
                 first_profile_id = profile_id
 
         # Refresh project tree to show new profiles
-        if created_count > 0 and hasattr(self.w, 'profile_model'):
+        if created_count > 0 and hasattr(self.w, "profile_model"):
             self.w.profile_model.refresh()
-            logger.info("[Logger] %d profiles created for dataset %s", created_count, dataset_id)
+            logger.info(
+                "[Logger] %d profiles created for dataset %s", created_count, dataset_id
+            )
 
         # Apply the first profile
         if first_profile_id:
@@ -787,8 +881,8 @@ class TraceController:
                     self.w.graph_panel.autofit()
                     logger.info("[Logger] auto-applied profile: %s", first_profile_id)
                 else:
-                    logger.warning("[Logger] failed to apply profile: %s", first_profile_id)
+                    logger.warning(
+                        "[Logger] failed to apply profile: %s", first_profile_id
+                    )
             except Exception as e:
                 logger.warning("[Logger] error applying profile: %s", e, exc_info=True)
-
-

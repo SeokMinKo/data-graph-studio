@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
-from typing import Any, Dict
 
 import polars as pl
 import pytest
@@ -130,8 +128,16 @@ class TestBlocklayerBasic:
         settings = parser.default_settings()
         settings["converter"] = "blocklayer"
         df = parser.parse(path, settings)
-        required = {"send_time", "d2c_ms", "sector", "nr_sectors", "cmd",
-                     "size_kb", "device", "queue_depth"}
+        required = {
+            "send_time",
+            "d2c_ms",
+            "sector",
+            "nr_sectors",
+            "cmd",
+            "size_kb",
+            "device",
+            "queue_depth",
+        }
         assert required.issubset(set(df.columns))
 
     def test_sector_and_size_parsed(self, parser: FtraceParser):
@@ -256,7 +262,9 @@ class TestBlocklayerNewColumns:
         df = parser.parse(path, settings)
         new_cols = {"d2c_ms", "d2d_ms", "c2c_ms", "send_time", "complete_time"}
 
-        assert new_cols.issubset(set(df.columns)), f"Missing: {new_cols - set(df.columns)}"
+        assert new_cols.issubset(set(df.columns)), (
+            f"Missing: {new_cols - set(df.columns)}"
+        )
 
     def test_d2c_latency(self, parser: FtraceParser):
         """D2C = dispatch(issue) → complete."""
@@ -547,7 +555,9 @@ class TestBuiltinPresets:
         valid_types = {"line", "scatter", "bar", "area", "histogram", "heatmap", "box"}
         for converter, presets in BUILTIN_PRESETS.items():
             for p in presets:
-                assert p.chart_type in valid_types, f"{converter}/{p.name}: invalid chart_type={p.chart_type}"
+                assert p.chart_type in valid_types, (
+                    f"{converter}/{p.name}: invalid chart_type={p.chart_type}"
+                )
 
 
 # ══════════════════════════════════════════════════════════════
@@ -561,20 +571,22 @@ class TestSelectPreset:
     """select_preset() picks the right preset for a DataFrame."""
 
     def test_selects_lba_map_for_blocklayer(self):
-        df = pl.DataFrame({
-            "send_time": [1.0, 2.0],
-            "complete_time": [1.0005, 2.001],
-            "lba_mb": [0.024, 0.049],
-            "d2c_ms": [0.5, 1.0],
-            "d2d_ms": [None, 1.0],
-            "c2c_ms": [None, 0.5],
-            "size_kb": [4.0, 8.0],
-            "cmd": ["R", "W"],
-            "queue_depth": [1, 2],
-            "sector": [100, 200],
-            "nr_sectors": [8, 8],
-            "device": ["8,0", "8,0"],
-        })
+        df = pl.DataFrame(
+            {
+                "send_time": [1.0, 2.0],
+                "complete_time": [1.0005, 2.001],
+                "lba_mb": [0.024, 0.049],
+                "d2c_ms": [0.5, 1.0],
+                "d2d_ms": [None, 1.0],
+                "c2c_ms": [None, 0.5],
+                "size_kb": [4.0, 8.0],
+                "cmd": ["R", "W"],
+                "queue_depth": [1, 2],
+                "sector": [100, 200],
+                "nr_sectors": [8, 8],
+                "device": ["8,0", "8,0"],
+            }
+        )
         preset = select_preset(df, converter="blocklayer")
         assert preset is not None
         assert preset.name == "LBA Map"

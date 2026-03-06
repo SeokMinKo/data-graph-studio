@@ -166,8 +166,12 @@ class TestMutualExclusivity:
     def state(self, qtbot):
         s = AppState()
         # Add datasets so dataset comparison methods work
-        s.add_dataset(dataset_id="ds-1", name="D1", row_count=10, column_count=2, memory_bytes=100)
-        s.add_dataset(dataset_id="ds-2", name="D2", row_count=10, column_count=2, memory_bytes=100)
+        s.add_dataset(
+            dataset_id="ds-1", name="D1", row_count=10, column_count=2, memory_bytes=100
+        )
+        s.add_dataset(
+            dataset_id="ds-2", name="D2", row_count=10, column_count=2, memory_bytes=100
+        )
         return s
 
     def test_profile_comparison_clears_dataset_comparison(self, state):
@@ -235,8 +239,12 @@ class TestBackwardCompatibility:
     @pytest.fixture
     def state(self, qtbot):
         s = AppState()
-        s.add_dataset(dataset_id="ds-1", name="D1", row_count=10, column_count=2, memory_bytes=100)
-        s.add_dataset(dataset_id="ds-2", name="D2", row_count=10, column_count=2, memory_bytes=100)
+        s.add_dataset(
+            dataset_id="ds-1", name="D1", row_count=10, column_count=2, memory_bytes=100
+        )
+        s.add_dataset(
+            dataset_id="ds-2", name="D2", row_count=10, column_count=2, memory_bytes=100
+        )
         return s
 
     def test_set_comparison_mode_still_works(self, state, qtbot):

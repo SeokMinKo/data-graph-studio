@@ -10,18 +10,31 @@ Allows user to configure:
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QSpinBox, QComboBox, QPushButton,
-    QDialogButtonBox, QFrame, QGridLayout, QFileDialog,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QSpinBox,
+    QComboBox,
+    QPushButton,
+    QDialogButtonBox,
+    QFrame,
+    QGridLayout,
+    QFileDialog,
 )
-from PySide6.QtCore import Qt
 
 
 class StreamingDialog(QDialog):
     """Streaming configuration dialog."""
 
-    def __init__(self, parent=None, initial_path: str = "", initial_interval_ms: int = 1000,
-                 initial_mode: str = "tail"):
+    def __init__(
+        self,
+        parent=None,
+        initial_path: str = "",
+        initial_interval_ms: int = 1000,
+        initial_mode: str = "tail",
+    ):
         super().__init__(parent)
         self._file_path: Optional[str] = None
         self._interval_ms: int = initial_interval_ms
@@ -109,15 +122,15 @@ class StreamingDialog(QDialog):
             "<b>Reload</b> mode re-reads the entire file on any change."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("QLabel { color: #8B919A; font-size: 12px; padding: 4px 0; }")
+        desc.setStyleSheet(
+            "QLabel { color: #8B919A; font-size: 12px; padding: 4px 0; }"
+        )
         layout.addWidget(desc)
 
         layout.addStretch()
 
         # Buttons
-        btn_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         ok_btn = btn_box.button(QDialogButtonBox.Ok)
         ok_btn.setText("▶ Start Streaming")
         btn_box.accepted.connect(self._on_accept)
@@ -129,7 +142,7 @@ class StreamingDialog(QDialog):
             self,
             "Select File to Stream",
             "",
-            "All Files (*);;CSV Files (*.csv);;TSV Files (*.tsv);;Text Files (*.txt *.log)"
+            "All Files (*);;CSV Files (*.csv);;TSV Files (*.tsv);;Text Files (*.txt *.log)",
         )
         if path:
             self._file_edit.setText(path)

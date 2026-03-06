@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QSplitter, QGridLayout
+from PySide6.QtWidgets import QGridLayout
 
 
 def _make_mock_store(profile_ids):

@@ -71,6 +71,7 @@ ADB_SCAN_TIMEOUT_MS = 5000
 
 # ── Config utilities ──────────────────────────────────────────
 
+
 def migrate_config(config: dict[str, Any]) -> dict[str, Any]:
     """Migrate config from v0 (no version key) to v1.
 
@@ -85,7 +86,9 @@ def migrate_config(config: dict[str, Any]) -> dict[str, Any]:
 
     # Backfill newer perfetto runtime params
     config.setdefault("duration_s", 10)
-    config.setdefault("device_trace_path", "/data/misc/perfetto-traces/blocktrace.pftrace")
+    config.setdefault(
+        "device_trace_path", "/data/misc/perfetto-traces/blocktrace.pftrace"
+    )
     return config
 
 
@@ -114,6 +117,7 @@ def save_logger_config(config: dict[str, Any]) -> None:
 
 # ── Panels ────────────────────────────────────────────────────
 
+
 def _section_header(title: str, description: str = "") -> QVBoxLayout:
     """Create a section header with bold title and optional description."""
     header = QVBoxLayout()
@@ -140,10 +144,12 @@ class ConnectionPanel(QWidget):
         layout.setContentsMargins(16, 12, 16, 12)
 
         # Section header
-        layout.addLayout(_section_header(
-            "Device Connection",
-            "Connect an Android device via USB with USB Debugging enabled.",
-        ))
+        layout.addLayout(
+            _section_header(
+                "Device Connection",
+                "Connect an Android device via USB with USB Debugging enabled.",
+            )
+        )
         layout.addSpacing(8)
 
         # ADB status
@@ -238,8 +244,12 @@ class ConnectionPanel(QWidget):
         if self._scan_process is None:
             return
 
-        stdout = bytes(self._scan_process.readAllStandardOutput()).decode(errors="replace")
-        stderr = bytes(self._scan_process.readAllStandardError()).decode(errors="replace")
+        stdout = bytes(self._scan_process.readAllStandardOutput()).decode(
+            errors="replace"
+        )
+        stderr = bytes(self._scan_process.readAllStandardError()).decode(
+            errors="replace"
+        )
         self._scan_process = None
 
         if exit_code != 0:
@@ -328,10 +338,12 @@ class CaptureModePanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
 
-        layout.addLayout(_section_header(
-            "Capture Mode",
-            "Choose how to capture trace data from the device.",
-        ))
+        layout.addLayout(
+            _section_header(
+                "Capture Mode",
+                "Choose how to capture trace data from the device.",
+            )
+        )
         layout.addSpacing(8)
 
         mode_group = QGroupBox("Mode")
@@ -444,7 +456,9 @@ class CaptureModePanel(QWidget):
         if self._check_process is None:
             return
 
-        stdout = bytes(self._check_process.readAllStandardOutput()).decode(errors="replace")
+        stdout = bytes(self._check_process.readAllStandardOutput()).decode(
+            errors="replace"
+        )
         self._check_process = None
         mode = self.capture_mode()
 
@@ -454,9 +468,7 @@ class CaptureModePanel(QWidget):
                 self._check_label.setText(f"✅ perfetto found: {stdout.strip()}")
             else:
                 self._check_passed = False
-                self._check_label.setText(
-                    "❌ perfetto not found. Requires Android 9+."
-                )
+                self._check_label.setText("❌ perfetto not found. Requires Android 9+.")
         else:
             if exit_code == 0 and "uid=0" in stdout:
                 self._check_passed = True
@@ -519,10 +531,12 @@ class EventsPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
 
-        layout.addLayout(_section_header(
-            "Trace Events",
-            "Select which kernel events to capture during tracing.",
-        ))
+        layout.addLayout(
+            _section_header(
+                "Trace Events",
+                "Select which kernel events to capture during tracing.",
+            )
+        )
         layout.addSpacing(8)
 
         self._event_checks: list[tuple[str, QCheckBox]] = []
@@ -588,10 +602,12 @@ class OutputPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
 
-        layout.addLayout(_section_header(
-            "Output Settings",
-            "Configure buffer size and where to save the trace file.",
-        ))
+        layout.addLayout(
+            _section_header(
+                "Output Settings",
+                "Configure buffer size and where to save the trace file.",
+            )
+        )
         layout.addSpacing(8)
 
         # Buffer size + duration
@@ -620,9 +636,15 @@ class OutputPanel(QWidget):
         dev_path_group = QGroupBox("Device Trace Path")
         dev_path_layout = QHBoxLayout(dev_path_group)
         self._device_trace_path_edit = QLineEdit()
-        self._device_trace_path_edit.setPlaceholderText("/data/misc/perfetto-traces/blocktrace.pftrace")
-        self._device_trace_path_edit.setText("/data/misc/perfetto-traces/blocktrace.pftrace")
-        self._device_trace_path_edit.textChanged.connect(lambda *_: self.output_changed.emit())
+        self._device_trace_path_edit.setPlaceholderText(
+            "/data/misc/perfetto-traces/blocktrace.pftrace"
+        )
+        self._device_trace_path_edit.setText(
+            "/data/misc/perfetto-traces/blocktrace.pftrace"
+        )
+        self._device_trace_path_edit.textChanged.connect(
+            lambda *_: self.output_changed.emit()
+        )
         dev_path_layout.addWidget(self._device_trace_path_edit, stretch=1)
         layout.addWidget(dev_path_group)
 
@@ -691,6 +713,7 @@ _CATEGORIES = [
 
 # ── Main Dialog ───────────────────────────────────────────────
 
+
 class TraceConfigDialog(QDialog):
     """Perfetto-style trace configuration dialog.
 
@@ -719,7 +742,8 @@ class TraceConfigDialog(QDialog):
     def _update_category_status(self) -> None:
         """Update sidebar items with completion indicators."""
         checks = [
-            self.connection_panel.adb_found and bool(self.connection_panel.selected_serial()),
+            self.connection_panel.adb_found
+            and bool(self.connection_panel.selected_serial()),
             True,  # Capture mode always has a default
             self.events_panel.has_events,
             bool(self.output_panel.save_path()),
@@ -811,7 +835,9 @@ class TraceConfigDialog(QDialog):
         self.capture_panel.set_serial_getter(self.connection_panel.selected_serial)
 
         # Auto-run check on mode change
-        self.capture_panel.mode_changed.connect(lambda _: self.capture_panel.run_check())
+        self.capture_panel.mode_changed.connect(
+            lambda _: self.capture_panel.run_check()
+        )
 
         # Dirty tracking + completion status
         self.connection_panel.device_changed.connect(self._mark_dirty)
@@ -879,16 +905,19 @@ class TraceConfigDialog(QDialog):
 
     def _validate(self) -> bool:
         """Validate config. On failure, navigate to problem category."""
-        logger.debug("[TraceConfig] validating: adb=%s, device=%s, events=%d, save=%s",
-                     self.connection_panel.adb_found,
-                     self.connection_panel.selected_serial(),
-                     len(self.events_panel.selected_events()),
-                     self.output_panel.save_path())
+        logger.debug(
+            "[TraceConfig] validating: adb=%s, device=%s, events=%d, save=%s",
+            self.connection_panel.adb_found,
+            self.connection_panel.selected_serial(),
+            len(self.events_panel.selected_events()),
+            self.output_panel.save_path(),
+        )
         # EC-1: ADB not installed
         if not self.connection_panel.adb_found:
             self._category_list.setCurrentRow(CAT_CONNECTION)
             QMessageBox.warning(
-                self, "Validation",
+                self,
+                "Validation",
                 "ADB is not installed. Install it first.",
             )
             return False
@@ -897,7 +926,8 @@ class TraceConfigDialog(QDialog):
         if not self.connection_panel.selected_serial():
             self._category_list.setCurrentRow(CAT_CONNECTION)
             QMessageBox.warning(
-                self, "Validation",
+                self,
+                "Validation",
                 "No device selected. Connect a device and refresh.",
             )
             return False
@@ -907,7 +937,8 @@ class TraceConfigDialog(QDialog):
             self._category_list.setCurrentRow(CAT_EVENTS)
             self.events_panel.show_warning("Select at least one event.")
             QMessageBox.warning(
-                self, "Validation",
+                self,
+                "Validation",
                 "Select at least one ftrace event.",
             )
             return False
@@ -926,7 +957,10 @@ class TraceConfigDialog(QDialog):
                 filt = "Ftrace Text (*.txt);;All Files (*)"
 
             path, _ = QFileDialog.getSaveFileName(
-                self, "Save Trace File", default_name, filt,
+                self,
+                "Save Trace File",
+                default_name,
+                filt,
             )
             if not path:
                 return False
@@ -947,9 +981,13 @@ class TraceConfigDialog(QDialog):
         self._start_requested = True
 
         config = self.get_config()
-        logger.info("[TraceConfig] starting with config: mode=%s, device=%s, events=%d, save=%s",
-                    config.get("capture_mode"), config.get("device_serial"),
-                    len(config.get("events", [])), config.get("save_path"))
+        logger.info(
+            "[TraceConfig] starting with config: mode=%s, device=%s, events=%d, save=%s",
+            config.get("capture_mode"),
+            config.get("device_serial"),
+            len(config.get("events", [])),
+            config.get("save_path"),
+        )
         save_logger_config(config)
         self._saved_config = dict(config)
         self._dirty = False
@@ -961,7 +999,8 @@ class TraceConfigDialog(QDialog):
         self._saved_config = dict(config)
         self._dirty = False
         QMessageBox.information(
-            self, "Config Saved",
+            self,
+            "Config Saved",
             f"Configuration saved to:\n{CONFIG_PATH}",
         )
 

@@ -4,12 +4,10 @@ Curve Fitting 테스트 - Spotfire 스타일 Lines & Curves
 
 import pytest
 import numpy as np
-from typing import List, Tuple
 
 from data_graph_studio.graph.curve_fitting import (
     FitType,
     CurveFitSettings,
-    CurveFitResult,
     CurveFitter,
     TrendLine,
     ForecastSettings,
@@ -35,7 +33,7 @@ class TestCurveFitter:
     def quadratic_data(self):
         """2차 다항식 데이터 (y = x^2 + 2x + 1)"""
         x = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], dtype=float)
-        y = x**2 + 2*x + 1 + np.random.normal(0, 0.5, len(x))
+        y = x**2 + 2 * x + 1 + np.random.normal(0, 0.5, len(x))
         return x, y
 
     @pytest.fixture
@@ -174,11 +172,7 @@ class TestTrendLine:
 
     def test_init(self):
         """초기화"""
-        trend = TrendLine(
-            name="Linear Trend",
-            fit_type=FitType.LINEAR,
-            color="#FF0000"
-        )
+        trend = TrendLine(name="Linear Trend", fit_type=FitType.LINEAR, color="#FF0000")
 
         assert trend.name == "Linear Trend"
         assert trend.fit_type == FitType.LINEAR
@@ -187,10 +181,7 @@ class TestTrendLine:
 
     def test_calculate(self):
         """추세선 계산"""
-        trend = TrendLine(
-            name="Linear",
-            fit_type=FitType.LINEAR
-        )
+        trend = TrendLine(name="Linear", fit_type=FitType.LINEAR)
 
         x = np.array([1, 2, 3, 4, 5], dtype=float)
         y = np.array([2, 4, 6, 8, 10], dtype=float)
@@ -203,10 +194,7 @@ class TestTrendLine:
 
     def test_get_line_points(self):
         """추세선 포인트 생성"""
-        trend = TrendLine(
-            name="Linear",
-            fit_type=FitType.LINEAR
-        )
+        trend = TrendLine(name="Linear", fit_type=FitType.LINEAR)
 
         x = np.array([1, 2, 3, 4, 5], dtype=float)
         y = np.array([2, 4, 6, 8, 10], dtype=float)
@@ -235,10 +223,7 @@ class TestForecast:
 
         result = fitter.fit(x, y, FitType.LINEAR)
 
-        forecast_settings = ForecastSettings(
-            forward_periods=3,
-            backward_periods=0
-        )
+        forecast_settings = ForecastSettings(forward_periods=3, backward_periods=0)
 
         forecast_x, forecast_y = fitter.forecast(result, x, forecast_settings)
 
@@ -252,10 +237,7 @@ class TestForecast:
 
         result = fitter.fit(x, y, FitType.LINEAR)
 
-        forecast_settings = ForecastSettings(
-            forward_periods=0,
-            backward_periods=2
-        )
+        forecast_settings = ForecastSettings(forward_periods=0, backward_periods=2)
 
         forecast_x, forecast_y = fitter.forecast(result, x, forecast_settings)
 
@@ -281,7 +263,7 @@ class TestCurveFitSettings:
             fit_type=FitType.POLYNOMIAL,
             degree=3,
             show_equation=False,
-            confidence_level=0.99
+            confidence_level=0.99,
         )
 
         assert settings.fit_type == FitType.POLYNOMIAL

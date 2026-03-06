@@ -4,12 +4,10 @@ Trellis Visualization 테스트
 
 import pytest
 import polars as pl
-from typing import List, Dict
 
 from data_graph_studio.graph.trellis import (
     TrellisMode,
     TrellisSettings,
-    TrellisLayout,
     TrellisCalculator,
 )
 
@@ -29,9 +27,7 @@ class TestTrellisSettings:
     def test_init_with_columns(self):
         """컬럼과 함께 초기화"""
         settings = TrellisSettings(
-            enabled=True,
-            row_column="region",
-            col_column="category"
+            enabled=True, row_column="region", col_column="category"
         )
 
         assert settings.enabled is True
@@ -45,11 +41,13 @@ class TestTrellisCalculator:
     @pytest.fixture
     def sample_data(self):
         """샘플 데이터"""
-        return pl.DataFrame({
-            "region": ["Asia", "Asia", "Europe", "Europe", "Asia", "Europe"],
-            "category": ["A", "B", "A", "B", "A", "B"],
-            "value": [100, 150, 200, 180, 120, 160]
-        })
+        return pl.DataFrame(
+            {
+                "region": ["Asia", "Asia", "Europe", "Europe", "Asia", "Europe"],
+                "category": ["A", "B", "A", "B", "A", "B"],
+                "value": [100, 150, 200, 180, 120, 160],
+            }
+        )
 
     @pytest.fixture
     def calculator(self):
@@ -61,7 +59,7 @@ class TestTrellisCalculator:
             enabled=True,
             mode=TrellisMode.ROWS_AND_COLUMNS,
             row_column="region",
-            col_column="category"
+            col_column="category",
         )
 
         layout = calculator.calculate(sample_data, settings)
@@ -75,7 +73,7 @@ class TestTrellisCalculator:
             enabled=True,
             mode=TrellisMode.ROWS_AND_COLUMNS,
             row_column="region",
-            col_column="category"
+            col_column="category",
         )
 
         layout = calculator.calculate(sample_data, settings)
@@ -94,7 +92,7 @@ class TestTrellisCalculator:
             enabled=True,
             mode=TrellisMode.ROWS_AND_COLUMNS,
             row_column="region",
-            col_column=None
+            col_column=None,
         )
 
         layout = calculator.calculate(sample_data, settings)
@@ -108,7 +106,7 @@ class TestTrellisCalculator:
             enabled=True,
             mode=TrellisMode.ROWS_AND_COLUMNS,
             row_column=None,
-            col_column="category"
+            col_column="category",
         )
 
         layout = calculator.calculate(sample_data, settings)
@@ -119,16 +117,10 @@ class TestTrellisCalculator:
     def test_max_panels(self, calculator):
         """최대 패널 수 제한"""
         # 많은 고유값
-        data = pl.DataFrame({
-            "x": list(range(100)),
-            "value": list(range(100))
-        })
+        data = pl.DataFrame({"x": list(range(100)), "value": list(range(100))})
 
         settings = TrellisSettings(
-            enabled=True,
-            mode=TrellisMode.ROWS_AND_COLUMNS,
-            row_column="x",
-            max_rows=5
+            enabled=True, mode=TrellisMode.ROWS_AND_COLUMNS, row_column="x", max_rows=5
         )
 
         layout = calculator.calculate(data, settings)
@@ -138,14 +130,11 @@ class TestTrellisCalculator:
     def test_panel_coordinates(self, calculator, sample_data):
         """패널 좌표 계산"""
         settings = TrellisSettings(
-            enabled=True,
-            row_column="region",
-            col_column="category"
+            enabled=True, row_column="region", col_column="category"
         )
 
         layout = calculator.calculate(
-            sample_data, settings,
-            total_width=100, total_height=100
+            sample_data, settings, total_width=100, total_height=100
         )
 
         # 각 패널의 좌표 확인
@@ -160,10 +149,7 @@ class TestTrellisCalculator:
     def test_sync_axes(self, calculator, sample_data):
         """축 동기화"""
         settings = TrellisSettings(
-            enabled=True,
-            row_column="region",
-            col_column="category",
-            sync_axes=True
+            enabled=True, row_column="region", col_column="category", sync_axes=True
         )
 
         layout = calculator.calculate(sample_data, settings)
@@ -194,16 +180,18 @@ class TestTrellisMode:
 
     def test_panels_mode(self, calculator):
         """패널 모드 (페이지네이션)"""
-        data = pl.DataFrame({
-            "group": ["A", "A", "B", "B", "C", "C", "D", "D"],
-            "value": [1, 2, 3, 4, 5, 6, 7, 8]
-        })
+        data = pl.DataFrame(
+            {
+                "group": ["A", "A", "B", "B", "C", "C", "D", "D"],
+                "value": [1, 2, 3, 4, 5, 6, 7, 8],
+            }
+        )
 
         settings = TrellisSettings(
             enabled=True,
             mode=TrellisMode.PANELS,
             panel_column="group",
-            panels_per_page=2
+            panels_per_page=2,
         )
 
         layout = calculator.calculate(data, settings)

@@ -22,18 +22,18 @@ logger = logging.getLogger(__name__)
 # macOS 시스템 단축키 목록 (Cmd = Meta in Qt)
 # 이 키 조합들은 macOS가 시스템 레벨에서 가로채므로 앱에서 사용하면 안 됨
 MACOS_SYSTEM_SHORTCUTS = {
-    "Meta+H",       # Hide app
-    "Meta+M",       # Minimize window
-    "Meta+Q",       # Quit app
-    "Meta+W",       # Close window
-    "Meta+D",       # Dock / Show Desktop
-    "Meta+L",       # Go to address bar (Finder/Safari)
-    "Meta+Tab",     # App switcher
-    "Meta+Space",   # Spotlight
-    "Meta+,",       # Preferences
-    "Meta+N",       # New window (some apps)
-    "Meta+`",       # Cycle windows
-    "Ctrl+H",       # Also mapped for Cmd+H on macOS
+    "Meta+H",  # Hide app
+    "Meta+M",  # Minimize window
+    "Meta+Q",  # Quit app
+    "Meta+W",  # Close window
+    "Meta+D",  # Dock / Show Desktop
+    "Meta+L",  # Go to address bar (Finder/Safari)
+    "Meta+Tab",  # App switcher
+    "Meta+Space",  # Spotlight
+    "Meta+,",  # Preferences
+    "Meta+N",  # New window (some apps)
+    "Meta+`",  # Cycle windows
+    "Ctrl+H",  # Also mapped for Cmd+H on macOS
     "Ctrl+M",
     "Ctrl+Q",
     "Ctrl+W",
@@ -92,9 +92,7 @@ class ShortcutController:
     def _default_config_path() -> str:
         """기본 설정 파일 경로"""
         return os.path.join(
-            os.path.expanduser("~"),
-            ".data_graph_studio",
-            "shortcuts.json"
+            os.path.expanduser("~"), ".data_graph_studio", "shortcuts.json"
         )
 
     @property
@@ -109,50 +107,112 @@ class ShortcutController:
         m = self._manager
 
         # File
-        m.register("file.open", "Open File", "Ctrl+O", ShortcutCategory.FILE,
-                    description="파일 열기")
-        m.register("file.save", "Save Profile", "Ctrl+S", ShortcutCategory.FILE,
-                    description="프로파일 저장")
-        m.register("file.save_as", "Save As", "Ctrl+Shift+S", ShortcutCategory.FILE,
-                    description="다른 이름으로 저장")
-        m.register("file.export", "Export", "Ctrl+E", ShortcutCategory.FILE,
-                    description="내보내기 다이얼로그")
+        m.register(
+            "file.open",
+            "Open File",
+            "Ctrl+O",
+            ShortcutCategory.FILE,
+            description="파일 열기",
+        )
+        m.register(
+            "file.save",
+            "Save Profile",
+            "Ctrl+S",
+            ShortcutCategory.FILE,
+            description="프로파일 저장",
+        )
+        m.register(
+            "file.save_as",
+            "Save As",
+            "Ctrl+Shift+S",
+            ShortcutCategory.FILE,
+            description="다른 이름으로 저장",
+        )
+        m.register(
+            "file.export",
+            "Export",
+            "Ctrl+E",
+            ShortcutCategory.FILE,
+            description="내보내기 다이얼로그",
+        )
 
         # Edit
-        m.register("edit.undo", "Undo", "Ctrl+Z", ShortcutCategory.EDIT,
-                    description="실행 취소")
-        m.register("edit.redo", "Redo", "Ctrl+Shift+Z", ShortcutCategory.EDIT,
-                    description="다시 실행")
-        m.register("edit.annotation_mode", "Annotation Mode", "Ctrl+Shift+A",
-                    ShortcutCategory.EDIT,
-                    description="주석 모드 토글")
+        m.register(
+            "edit.undo",
+            "Undo",
+            "Ctrl+Z",
+            ShortcutCategory.EDIT,
+            description="실행 취소",
+        )
+        m.register(
+            "edit.redo",
+            "Redo",
+            "Ctrl+Shift+Z",
+            ShortcutCategory.EDIT,
+            description="다시 실행",
+        )
+        m.register(
+            "edit.annotation_mode",
+            "Annotation Mode",
+            "Ctrl+Shift+A",
+            ShortcutCategory.EDIT,
+            description="주석 모드 토글",
+        )
 
         # View
-        m.register("view.dashboard_toggle", "Dashboard Mode", "Ctrl+Shift+D",
-                    ShortcutCategory.VIEW,
-                    description="대시보드 모드 토글 (macOS Dock 충돌 회피)")
-        m.register("view.streaming_toggle", "Live Streaming", "Ctrl+Shift+L",
-                    ShortcutCategory.VIEW,
-                    description="실시간 스트리밍 토글 (macOS 주소바 충돌 회피)")
-        m.register("view.theme_toggle", "Toggle Theme", "Ctrl+T",
-                    ShortcutCategory.VIEW,
-                    description="테마 토글")
-        m.register("view.annotation_panel", "Annotation Panel", "Ctrl+Shift+B",
-                    ShortcutCategory.VIEW,
-                    description="주석 패널 토글")
-        m.register("view.fullscreen", "Fullscreen", "F11",
-                    ShortcutCategory.VIEW,
-                    description="전체 화면 토글")
+        m.register(
+            "view.dashboard_toggle",
+            "Dashboard Mode",
+            "Ctrl+Shift+D",
+            ShortcutCategory.VIEW,
+            description="대시보드 모드 토글 (macOS Dock 충돌 회피)",
+        )
+        m.register(
+            "view.streaming_toggle",
+            "Live Streaming",
+            "Ctrl+Shift+L",
+            ShortcutCategory.VIEW,
+            description="실시간 스트리밍 토글 (macOS 주소바 충돌 회피)",
+        )
+        m.register(
+            "view.theme_toggle",
+            "Toggle Theme",
+            "Ctrl+T",
+            ShortcutCategory.VIEW,
+            description="테마 토글",
+        )
+        m.register(
+            "view.annotation_panel",
+            "Annotation Panel",
+            "Ctrl+Shift+B",
+            ShortcutCategory.VIEW,
+            description="주석 패널 토글",
+        )
+        m.register(
+            "view.fullscreen",
+            "Fullscreen",
+            "F11",
+            ShortcutCategory.VIEW,
+            description="전체 화면 토글",
+        )
 
         # Graph
-        m.register("graph.pan_space", "Pan Mode (Space)", "Space",
-                    ShortcutCategory.GRAPH,
-                    description="차트 팬 모드 (텍스트 입력 중 비활성화)")
+        m.register(
+            "graph.pan_space",
+            "Pan Mode (Space)",
+            "Space",
+            ShortcutCategory.GRAPH,
+            description="차트 팬 모드 (텍스트 입력 중 비활성화)",
+        )
 
         # Data
-        m.register("data.column_create", "Create Column", "Ctrl+K",
-                    ShortcutCategory.DATA,
-                    description="컬럼 생성 다이얼로그")
+        m.register(
+            "data.column_create",
+            "Create Column",
+            "Ctrl+K",
+            ShortcutCategory.DATA,
+            description="컬럼 생성 다이얼로그",
+        )
 
         # Dashboard (Cmd+1~9)
         for i in range(1, 10):
@@ -161,13 +221,17 @@ class ShortcutController:
                 f"Focus Cell {i}",
                 f"Ctrl+{i}",
                 ShortcutCategory.VIEW,
-                description=f"대시보드 셀 {i} 포커스"
+                description=f"대시보드 셀 {i} 포커스",
             )
 
         # Help
-        m.register("help.shortcuts", "Keyboard Shortcuts", "Ctrl+/",
-                    ShortcutCategory.HELP,
-                    description="단축키 도움말 표시")
+        m.register(
+            "help.shortcuts",
+            "Keyboard Shortcuts",
+            "Ctrl+/",
+            ShortcutCategory.HELP,
+            description="단축키 도움말 표시",
+        )
 
     # ==================== 조회 ====================
 
@@ -212,9 +276,7 @@ class ShortcutController:
 
     # ==================== 커스터마이징 (FR-7.3) ====================
 
-    def set_custom_keys(
-        self, shortcut_id: str, keys: str, force: bool = False
-    ) -> bool:
+    def set_custom_keys(self, shortcut_id: str, keys: str, force: bool = False) -> bool:
         """
         단축키 키 조합 변경
 
@@ -325,9 +387,7 @@ class ShortcutController:
 
         return False
 
-    def get_conflict_warnings(
-        self, shortcut_id: str, keys: str
-    ) -> List[str]:
+    def get_conflict_warnings(self, shortcut_id: str, keys: str) -> List[str]:
         """
         키 변경 시 모든 경고 목록 반환
 
@@ -363,10 +423,7 @@ class ShortcutController:
             True: 성공, False: 실패
         """
         try:
-            data = {
-                "version": 1,
-                "customized": self._manager._customized.copy()
-            }
+            data = {"version": 1, "customized": self._manager._customized.copy()}
 
             # 디렉토리 생성
             config_dir = os.path.dirname(self._config_path)
@@ -417,9 +474,7 @@ class ShortcutController:
 
             return True
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.warning(
-                f"Shortcut config corrupted, resetting to defaults: {e}"
-            )
+            logger.warning(f"Shortcut config corrupted, resetting to defaults: {e}")
             # ERR-7.2: 기본값으로 복원
             self._manager.reset_all()
             return False

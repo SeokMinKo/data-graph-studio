@@ -18,13 +18,21 @@ ToolbarCustomizeDialog - Configure toolbar group visibility and order.
 │  [Reset Defaults]           [Cancel] [Apply] │
 └──────────────────────────────────────────────┘
 """
+
 from __future__ import annotations
 
 from typing import Optional, Dict, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
-    QPushButton, QHeaderView, QLabel, QWidget,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QPushButton,
+    QHeaderView,
+    QLabel,
+    QWidget,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
@@ -115,9 +123,7 @@ class ToolbarCustomizeDialog(QDialog):
             # Create toolbar category node
             toolbar_item = QTreeWidgetItem(self._tree)
             toolbar_item.setText(0, info.display_name)
-            toolbar_item.setFlags(
-                toolbar_item.flags() & ~Qt.ItemIsUserCheckable
-            )
+            toolbar_item.setFlags(toolbar_item.flags() & ~Qt.ItemIsUserCheckable)
             font = toolbar_item.font(0)
             font.setBold(True)
             toolbar_item.setFont(0, font)
@@ -189,17 +195,13 @@ class ToolbarCustomizeDialog(QDialog):
         up_btn = QPushButton("▲")
         up_btn.setFixedSize(28, 22)
         up_btn.setToolTip("Move Up")
-        up_btn.clicked.connect(
-            lambda checked, gid=group_id: self._move_group(gid, -1)
-        )
+        up_btn.clicked.connect(lambda checked, gid=group_id: self._move_group(gid, -1))
         btn_layout.addWidget(up_btn)
 
         down_btn = QPushButton("▼")
         down_btn.setFixedSize(28, 22)
         down_btn.setToolTip("Move Down")
-        down_btn.clicked.connect(
-            lambda checked, gid=group_id: self._move_group(gid, 1)
-        )
+        down_btn.clicked.connect(lambda checked, gid=group_id: self._move_group(gid, 1))
         btn_layout.addWidget(down_btn)
 
         self._tree.setItemWidget(item, 1, btn_widget)

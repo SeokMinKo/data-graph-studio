@@ -29,19 +29,15 @@ UI_MODULES = [
     "data_graph_studio.ui.dashboard",
     "data_graph_studio.ui.floatable",
     "data_graph_studio.ui.floating_graph",
-
     # Views
     "data_graph_studio.ui.views.project_tree_view",
-
     # Controllers
     "data_graph_studio.ui.controllers.ipc_controller",
     "data_graph_studio.ui.controllers.file_loading_controller",
     "data_graph_studio.ui.controllers.dataset_controller",
     "data_graph_studio.ui.controllers.profile_ui_controller",
-
     # Toolbars
     "data_graph_studio.ui.toolbars.compare_toolbar",
-
     # Dialogs
     "data_graph_studio.ui.dialogs.command_palette_dialog",
     "data_graph_studio.ui.dialogs.computed_column_dialog",
@@ -55,14 +51,12 @@ UI_MODULES = [
     "data_graph_studio.ui.dialogs.shortcut_edit_dialog",
     "data_graph_studio.ui.dialogs.shortcut_help_dialog",
     "data_graph_studio.ui.dialogs.streaming_dialog",
-
     # Wizards
     "data_graph_studio.ui.wizards.new_project_wizard",
     "data_graph_studio.ui.wizards.parsing_step",
     "data_graph_studio.ui.wizards.graph_setup_step",
     "data_graph_studio.ui.wizards.wpr_convert_step",
     "data_graph_studio.ui.wizards.finish_step",
-
     # Panels (most frequently touched UI)
     "data_graph_studio.ui.panels.graph_panel",
     "data_graph_studio.ui.panels.graph_options_panel",
@@ -94,7 +88,6 @@ UI_MODULES = [
     "data_graph_studio.ui.panels.side_by_side_layout",
     "data_graph_studio.ui.panels.mini_graph_widget",
     "data_graph_studio.ui.panels.data_tab",
-
     # UI models
     "data_graph_studio.ui.models.profile_model",
     "data_graph_studio.ui.models.undo_history_model",

@@ -9,20 +9,30 @@ custom grid size, dashboard name editing, and multi-dashboard tabs.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QFrame,
-    QLabel, QPushButton, QComboBox, QScrollArea, QSizePolicy,
-    QToolButton, QDialog, QSpinBox, QDialogButtonBox, QFormLayout,
-    QLineEdit, QTabWidget, QInputDialog, QMenu,
+    QWidget,
+    QGridLayout,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFrame,
+    QLabel,
+    QPushButton,
+    QComboBox,
+    QScrollArea,
+    QToolButton,
+    QDialog,
+    QSpinBox,
+    QDialogButtonBox,
+    QFormLayout,
+    QLineEdit,
 )
-from PySide6.QtCore import Qt, Signal, QTimer, QMimeData
+from PySide6.QtCore import Qt, Signal, QMimeData
 from PySide6.QtGui import QDrag
 
 from ...core.dashboard_layout import (
     DashboardLayout,
-    DashboardCell,
     LAYOUT_PRESETS,
     MIN_CELL_WIDTH,
     MIN_CELL_HEIGHT,
@@ -30,8 +40,6 @@ from ...core.dashboard_layout import (
 
 if TYPE_CHECKING:
     from ...core.dashboard_controller import DashboardController
-    from ...core.state import AppState
-    from ...core.data_engine import DataEngine
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +95,7 @@ class _DragDropCellMixin:
 # Empty Cell Placeholder
 # ---------------------------------------------------------------------------
 
+
 class _EmptyCellWidget(_DragDropCellMixin, QFrame):
     """Placeholder for an empty dashboard cell (FR-1.7)."""
 
@@ -103,7 +112,7 @@ class _EmptyCellWidget(_DragDropCellMixin, QFrame):
         self.setToolTip("Click to add a chart to this cell")
         self.setStyleSheet(
             "QFrame { border: 2px dashed #888; border-radius: 6px; background: transparent; }"
-            "QFrame[focused=\"true\"] { border: 2px solid #3b82f6; }"
+            'QFrame[focused="true"] { border: 2px solid #3b82f6; }'
         )
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -125,10 +134,13 @@ class _EmptyCellWidget(_DragDropCellMixin, QFrame):
 # Loading Spinner Cell (FR-1.10)
 # ---------------------------------------------------------------------------
 
+
 class _SpinnerCellWidget(_DragDropCellMixin, QFrame):
     """Temporary spinner shown while chart renders."""
 
-    def __init__(self, row: int = 0, col: int = 0, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, row: int = 0, col: int = 0, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._row = row
         self._col = col
@@ -136,7 +148,7 @@ class _SpinnerCellWidget(_DragDropCellMixin, QFrame):
         self.setMinimumSize(MIN_CELL_WIDTH, MIN_CELL_HEIGHT)
         self.setStyleSheet(
             "QFrame { border: 1px solid #ccc; border-radius: 4px; }"
-            "QFrame[focused=\"true\"] { border: 2px solid #3b82f6; }"
+            'QFrame[focused="true"] { border: 2px solid #3b82f6; }'
         )
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -150,11 +162,16 @@ class _SpinnerCellWidget(_DragDropCellMixin, QFrame):
 # Grid Size Dialog
 # ---------------------------------------------------------------------------
 
+
 class _GridSizeDialog(QDialog):
     """Dialog for custom grid size input."""
 
-    def __init__(self, current_rows: int = 2, current_cols: int = 2,
-                 parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        current_rows: int = 2,
+        current_cols: int = 2,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Custom Grid Size")
         form = QFormLayout(self)
@@ -186,19 +203,27 @@ class _GridSizeDialog(QDialog):
 # Cell Edit Dialog
 # ---------------------------------------------------------------------------
 
+
 class _CellEditDialog(QDialog):
     """Simple dialog to edit cell properties (chart type, profile, span)."""
 
-    def __init__(self, row: int, col: int, profiles: list[str] | None = None,
-                 current_profile: str = "", row_span: int = 1, col_span: int = 1,
-                 parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        row: int,
+        col: int,
+        profiles: list[str] | None = None,
+        current_profile: str = "",
+        row_span: int = 1,
+        col_span: int = 1,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(f"Edit Cell ({row}, {col})")
         form = QFormLayout(self)
 
         self._profile_combo = QComboBox()
         self._profile_combo.addItem("(none)", "")
-        for p in (profiles or []):
+        for p in profiles or []:
             self._profile_combo.addItem(p, p)
         idx = self._profile_combo.findData(current_profile)
         if idx >= 0:
@@ -238,6 +263,7 @@ class _CellEditDialog(QDialog):
 # ---------------------------------------------------------------------------
 # Editable Dashboard Name Label
 # ---------------------------------------------------------------------------
+
 
 class _EditableLabel(QLabel):
     """QLabel that turns into QLineEdit on double-click."""
@@ -290,6 +316,7 @@ class _EditableLabel(QLabel):
 # Dashboard Tab (internal — wraps a single grid for multi-tab)
 # ---------------------------------------------------------------------------
 
+
 class _DashboardTab(QWidget):
     """Single tab holding a scrollable grid."""
 
@@ -310,6 +337,7 @@ class _DashboardTab(QWidget):
 # ---------------------------------------------------------------------------
 # Dashboard Panel
 # ---------------------------------------------------------------------------
+
 
 class DashboardPanel(QWidget):
     """
@@ -351,13 +379,17 @@ class DashboardPanel(QWidget):
 
     def keyPressEvent(self, event):
         """Item 12: Arrow key navigation between dashboard cards"""
-        layout = self._controller.current_layout if hasattr(self._controller, 'current_layout') else None
+        layout = (
+            self._controller.current_layout
+            if hasattr(self._controller, "current_layout")
+            else None
+        )
         if layout is None:
             super().keyPressEvent(event)
             return
 
-        rows = layout.rows if hasattr(layout, 'rows') else 2
-        cols = layout.cols if hasattr(layout, 'cols') else 2
+        rows = layout.rows if hasattr(layout, "rows") else 2
+        cols = layout.cols if hasattr(layout, "cols") else 2
 
         if self._focused_cell is None:
             self._focused_cell = (0, 0)
@@ -366,13 +398,17 @@ class DashboardPanel(QWidget):
         moved = False
 
         if event.key() == Qt.Key_Left and c > 0:
-            c -= 1; moved = True
+            c -= 1
+            moved = True
         elif event.key() == Qt.Key_Right and c < cols - 1:
-            c += 1; moved = True
+            c += 1
+            moved = True
         elif event.key() == Qt.Key_Up and r > 0:
-            r -= 1; moved = True
+            r -= 1
+            moved = True
         elif event.key() == Qt.Key_Down and r < rows - 1:
-            r += 1; moved = True
+            r += 1
+            moved = True
         elif event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
             self.cell_clicked.emit(r, c)
             return
@@ -480,8 +516,12 @@ class DashboardPanel(QWidget):
                     occupied.add((cell.row + dr, cell.col + dc))
 
             widget = _SpinnerCellWidget(cell.row, cell.col)
-            widget.setMinimumSize(MIN_CELL_WIDTH * cell.col_span, MIN_CELL_HEIGHT * cell.row_span)
-            self._grid.addWidget(widget, cell.row, cell.col, cell.row_span, cell.col_span)
+            widget.setMinimumSize(
+                MIN_CELL_WIDTH * cell.col_span, MIN_CELL_HEIGHT * cell.row_span
+            )
+            self._grid.addWidget(
+                widget, cell.row, cell.col, cell.row_span, cell.col_span
+            )
             self._cell_widgets[f"{cell.row},{cell.col}"] = widget
 
         # Fill remaining positions with empty-cell placeholders
@@ -493,8 +533,9 @@ class DashboardPanel(QWidget):
                     self._grid.addWidget(empty, r, c)
                     self._cell_widgets[f"{r},{c}"] = empty
 
-    def replace_spinner(self, row: int, col: int, widget: QWidget,
-                        row_span: int = 1, col_span: int = 1) -> None:
+    def replace_spinner(
+        self, row: int, col: int, widget: QWidget, row_span: int = 1, col_span: int = 1
+    ) -> None:
         """Replace a spinner cell with the real chart widget (FR-1.10).
 
         Preserves span information so merged cells render correctly.

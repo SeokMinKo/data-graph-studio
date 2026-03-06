@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Set
 
 class CycleDetectedError(Exception):
     """Raised when adding a column would create a circular dependency (FR-3.10)."""
+
     pass
 
 
@@ -45,9 +46,7 @@ class ColumnDependencyGraph:
         """
         # Check for self-reference
         if name in dependencies:
-            raise CycleDetectedError(
-                f"Circular dependency detected: {name} → {name}"
-            )
+            raise CycleDetectedError(f"Circular dependency detected: {name} → {name}")
 
         # Temporarily add and check for cycle
         old_deps = self._edges.get(name)
@@ -60,10 +59,8 @@ class ColumnDependencyGraph:
                 self._edges[name] = old_deps
             else:
                 del self._edges[name]
-            path_str = ' → '.join(cycle_path)
-            raise CycleDetectedError(
-                f"Circular dependency detected: {path_str}"
-            )
+            path_str = " → ".join(cycle_path)
+            raise CycleDetectedError(f"Circular dependency detected: {path_str}")
 
     def remove_column(self, name: str) -> Set[str]:
         """
@@ -183,9 +180,7 @@ class ColumnDependencyGraph:
 
         return dfs(start)
 
-    def _dfs_has_cycle(
-        self, node: str, visited: Set[str], rec_stack: Set[str]
-    ) -> bool:
+    def _dfs_has_cycle(self, node: str, visited: Set[str], rec_stack: Set[str]) -> bool:
         """DFS helper for has_cycle()."""
         visited.add(node)
         rec_stack.add(node)

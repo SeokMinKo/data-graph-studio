@@ -16,7 +16,7 @@ from typing import Optional, List, Dict, Tuple, Callable, Any
 
 import polars as pl
 
-from .types import DatasetInfo, DataSource, DataProfile
+from .types import DatasetInfo, DataSource
 from .file_loader import FileLoader
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,16 @@ class DatasetManager:
     MAX_TOTAL_MEMORY = 4 * 1024 * 1024 * 1024  # 4GB
 
     DEFAULT_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     def __init__(self, loader: FileLoader):
@@ -158,7 +166,9 @@ class DatasetManager:
         if self._active_dataset_id is None:
             self._active_dataset_id = dataset_id
 
-        logger.info(f"Dataset loaded: {dataset_id} ({name}), {dataset.row_count:,} rows")
+        logger.info(
+            f"Dataset loaded: {dataset_id} ({name}), {dataset.row_count:,} rows"
+        )
         return dataset_id
 
     def load_dataset_from_dataframe(
@@ -201,7 +211,9 @@ class DatasetManager:
         if self._active_dataset_id is None:
             self._active_dataset_id = dataset_id
 
-        logger.info(f"Dataset from DataFrame: {dataset_id} ({name}), {dataset.row_count:,} rows")
+        logger.info(
+            f"Dataset from DataFrame: {dataset_id} ({name}), {dataset.row_count:,} rows"
+        )
         return dataset_id
 
     def remove_dataset(self, dataset_id: str) -> bool:
@@ -372,7 +384,11 @@ class DatasetManager:
             return []
 
         first_id = dataset_ids[0]
-        common = set(self._datasets[first_id].columns) if first_id in self._datasets else set()
+        common = (
+            set(self._datasets[first_id].columns)
+            if first_id in self._datasets
+            else set()
+        )
 
         for did in dataset_ids[1:]:
             if did in self._datasets:
@@ -394,9 +410,10 @@ class DatasetManager:
             return []
 
         return [
-            col for col in dataset.df.columns
-            if dataset.df[col].dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                                          pl.Float32, pl.Float64]
+            col
+            for col in dataset.df.columns
+            if dataset.df[col].dtype
+            in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64]
         ]
 
     # ------------------------------------------------------------------
@@ -404,7 +421,9 @@ class DatasetManager:
     # ------------------------------------------------------------------
 
     def load_datasets_parallel(
-        self, paths: list, max_workers: int = 4,
+        self,
+        paths: list,
+        max_workers: int = 4,
     ) -> Dict[str, Any]:
         """여러 파일을 병렬로 로드한다.
 
@@ -433,7 +452,9 @@ class DatasetManager:
                 try:
                     df = future.result()
                     did = self.load_dataset_from_dataframe(
-                        df, name=Path(path).name, source_path=path,
+                        df,
+                        name=Path(path).name,
+                        source_path=path,
                     )
                     results[path] = did
                 except Exception as e:

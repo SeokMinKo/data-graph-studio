@@ -1,15 +1,21 @@
 """TraceCompareDialog - Compare two ftrace files side by side."""
+
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Optional
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QComboBox, QFileDialog, QDialogButtonBox, QGroupBox, QFormLayout,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QComboBox,
+    QFileDialog,
+    QDialogButtonBox,
+    QGroupBox,
+    QFormLayout,
 )
-from PySide6.QtCore import Qt
 
 from ...core.state import ComparisonMode
 

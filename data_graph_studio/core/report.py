@@ -13,13 +13,13 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 import json
 import base64
-import io
 
 import polars as pl
 
 
 class ReportFormat(Enum):
     """레포트 출력 형식"""
+
     HTML = "html"
     PDF = "pdf"
     DOCX = "docx"
@@ -30,6 +30,7 @@ class ReportFormat(Enum):
 
 class ReportTheme(Enum):
     """레포트 테마"""
+
     LIGHT = "light"
     DARK = "dark"
     AUTO = "auto"
@@ -38,6 +39,7 @@ class ReportTheme(Enum):
 
 class PageSize(Enum):
     """페이지 크기"""
+
     A4 = "a4"
     LETTER = "letter"
     LEGAL = "legal"
@@ -46,12 +48,14 @@ class PageSize(Enum):
 
 class PageOrientation(Enum):
     """페이지 방향"""
+
     PORTRAIT = "portrait"
     LANDSCAPE = "landscape"
 
 
 class ChartImageFormat(Enum):
     """차트 이미지 형식"""
+
     PNG = "png"
     SVG = "svg"
     EMBEDDED = "embedded"  # Base64 embedded
@@ -59,6 +63,7 @@ class ChartImageFormat(Enum):
 
 class ChartType(Enum):
     """차트 타입"""
+
     BAR = "bar"
     LINE = "line"
     PIE = "pie"
@@ -81,6 +86,7 @@ class ChartType(Enum):
 
 class StatisticType(Enum):
     """통계 타입"""
+
     # Common
     COUNT = "count"
     TOTAL = "total"
@@ -89,32 +95,32 @@ class StatisticType(Enum):
     MIN = "min"
     MAX = "max"
     STD = "std"
-    
+
     # Bar/Line specific
     CHANGE_PERCENT = "change_percent"
     START_VALUE = "start_value"
     END_VALUE = "end_value"
     TREND_DIRECTION = "trend_direction"
-    
+
     # Pie/Donut specific
     PERCENTAGE = "percentage"
-    
+
     # Scatter specific
     CORRELATION = "correlation"
     R_SQUARED = "r_squared"
     X_RANGE = "x_range"
     Y_RANGE = "y_range"
-    
+
     # Heatmap specific
     MAX_CELL_LOCATION = "max_cell_location"
     MIN_CELL_LOCATION = "min_cell_location"
-    
+
     # Box plot specific
     Q1 = "q1"
     Q3 = "q3"
     IQR = "iqr"
     OUTLIER_COUNT = "outlier_count"
-    
+
     # Histogram specific
     SKEWNESS = "skewness"
     MODE = "mode"
@@ -124,21 +130,24 @@ class StatisticType(Enum):
 @dataclass
 class ChartStatisticsConfig:
     """차트 통계 설정 - 사용자가 선택 가능한 통계 옵션"""
+
     enabled_statistics: List[StatisticType] = field(default_factory=list)
     show_in_report: bool = True
     decimal_places: int = 2
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "enabled_statistics": [s.value for s in self.enabled_statistics],
             "show_in_report": self.show_in_report,
             "decimal_places": self.decimal_places,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ChartStatisticsConfig":
         return cls(
-            enabled_statistics=[StatisticType(s) for s in data.get("enabled_statistics", [])],
+            enabled_statistics=[
+                StatisticType(s) for s in data.get("enabled_statistics", [])
+            ],
             show_in_report=data.get("show_in_report", True),
             decimal_places=data.get("decimal_places", 2),
         )
@@ -147,18 +156,19 @@ class ChartStatisticsConfig:
 @dataclass
 class ChartStatistics:
     """그래프별 통계 정보"""
+
     chart_type: str
     statistics: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "chart_type": self.chart_type,
             "statistics": self.statistics,
         }
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         return self.statistics.get(key, default)
-    
+
     def set(self, key: str, value: Any):
         self.statistics[key] = value
 
@@ -166,83 +176,116 @@ class ChartStatistics:
 # 차트 타입별 기본 통계 설정
 DEFAULT_CHART_STATISTICS: Dict[str, List[StatisticType]] = {
     "bar": [
-        StatisticType.TOTAL, StatisticType.MEAN, StatisticType.MAX, 
-        StatisticType.MIN, StatisticType.COUNT
+        StatisticType.TOTAL,
+        StatisticType.MEAN,
+        StatisticType.MAX,
+        StatisticType.MIN,
+        StatisticType.COUNT,
     ],
     "horizontal_bar": [
-        StatisticType.TOTAL, StatisticType.MEAN, StatisticType.MAX, 
-        StatisticType.MIN, StatisticType.COUNT
+        StatisticType.TOTAL,
+        StatisticType.MEAN,
+        StatisticType.MAX,
+        StatisticType.MIN,
+        StatisticType.COUNT,
     ],
     "stacked_bar": [
-        StatisticType.TOTAL, StatisticType.MEAN, StatisticType.MAX, 
-        StatisticType.MIN, StatisticType.COUNT
+        StatisticType.TOTAL,
+        StatisticType.MEAN,
+        StatisticType.MAX,
+        StatisticType.MIN,
+        StatisticType.COUNT,
     ],
-    "pie": [
-        StatisticType.PERCENTAGE, StatisticType.TOTAL, StatisticType.COUNT
-    ],
-    "donut": [
-        StatisticType.PERCENTAGE, StatisticType.TOTAL, StatisticType.COUNT
-    ],
+    "pie": [StatisticType.PERCENTAGE, StatisticType.TOTAL, StatisticType.COUNT],
+    "donut": [StatisticType.PERCENTAGE, StatisticType.TOTAL, StatisticType.COUNT],
     "line": [
-        StatisticType.START_VALUE, StatisticType.END_VALUE, StatisticType.CHANGE_PERCENT,
-        StatisticType.MIN, StatisticType.MAX, StatisticType.MEAN, StatisticType.TREND_DIRECTION
+        StatisticType.START_VALUE,
+        StatisticType.END_VALUE,
+        StatisticType.CHANGE_PERCENT,
+        StatisticType.MIN,
+        StatisticType.MAX,
+        StatisticType.MEAN,
+        StatisticType.TREND_DIRECTION,
     ],
     "area": [
-        StatisticType.START_VALUE, StatisticType.END_VALUE, StatisticType.CHANGE_PERCENT,
-        StatisticType.MIN, StatisticType.MAX, StatisticType.MEAN, StatisticType.TREND_DIRECTION
+        StatisticType.START_VALUE,
+        StatisticType.END_VALUE,
+        StatisticType.CHANGE_PERCENT,
+        StatisticType.MIN,
+        StatisticType.MAX,
+        StatisticType.MEAN,
+        StatisticType.TREND_DIRECTION,
     ],
     "scatter": [
-        StatisticType.CORRELATION, StatisticType.R_SQUARED, StatisticType.COUNT,
-        StatisticType.X_RANGE, StatisticType.Y_RANGE
+        StatisticType.CORRELATION,
+        StatisticType.R_SQUARED,
+        StatisticType.COUNT,
+        StatisticType.X_RANGE,
+        StatisticType.Y_RANGE,
     ],
     "bubble": [
-        StatisticType.CORRELATION, StatisticType.R_SQUARED, StatisticType.COUNT,
-        StatisticType.X_RANGE, StatisticType.Y_RANGE
+        StatisticType.CORRELATION,
+        StatisticType.R_SQUARED,
+        StatisticType.COUNT,
+        StatisticType.X_RANGE,
+        StatisticType.Y_RANGE,
     ],
     "heatmap": [
-        StatisticType.MAX, StatisticType.MIN, StatisticType.MEAN, 
-        StatisticType.MAX_CELL_LOCATION
+        StatisticType.MAX,
+        StatisticType.MIN,
+        StatisticType.MEAN,
+        StatisticType.MAX_CELL_LOCATION,
     ],
     "box": [
-        StatisticType.MEDIAN, StatisticType.Q1, StatisticType.Q3, StatisticType.IQR,
-        StatisticType.MIN, StatisticType.MAX, StatisticType.OUTLIER_COUNT
+        StatisticType.MEDIAN,
+        StatisticType.Q1,
+        StatisticType.Q3,
+        StatisticType.IQR,
+        StatisticType.MIN,
+        StatisticType.MAX,
+        StatisticType.OUTLIER_COUNT,
     ],
     "violin": [
-        StatisticType.MEDIAN, StatisticType.Q1, StatisticType.Q3, StatisticType.IQR,
-        StatisticType.MIN, StatisticType.MAX
+        StatisticType.MEDIAN,
+        StatisticType.Q1,
+        StatisticType.Q3,
+        StatisticType.IQR,
+        StatisticType.MIN,
+        StatisticType.MAX,
     ],
     "histogram": [
-        StatisticType.MEAN, StatisticType.MEDIAN, StatisticType.STD,
-        StatisticType.SKEWNESS, StatisticType.MODE, StatisticType.BIN_COUNT
+        StatisticType.MEAN,
+        StatisticType.MEDIAN,
+        StatisticType.STD,
+        StatisticType.SKEWNESS,
+        StatisticType.MODE,
+        StatisticType.BIN_COUNT,
     ],
-    "radar": [
-        StatisticType.MEAN, StatisticType.MAX, StatisticType.MIN
-    ],
+    "radar": [StatisticType.MEAN, StatisticType.MAX, StatisticType.MIN],
     "treemap": [
-        StatisticType.TOTAL, StatisticType.COUNT, StatisticType.MAX, StatisticType.MIN
+        StatisticType.TOTAL,
+        StatisticType.COUNT,
+        StatisticType.MAX,
+        StatisticType.MIN,
     ],
-    "funnel": [
-        StatisticType.TOTAL, StatisticType.COUNT
-    ],
-    "waterfall": [
-        StatisticType.TOTAL, StatisticType.CHANGE_PERCENT
-    ],
-    "candlestick": [
-        StatisticType.MIN, StatisticType.MAX, StatisticType.MEAN
-    ],
+    "funnel": [StatisticType.TOTAL, StatisticType.COUNT],
+    "waterfall": [StatisticType.TOTAL, StatisticType.CHANGE_PERCENT],
+    "candlestick": [StatisticType.MIN, StatisticType.MAX, StatisticType.MEAN],
 }
 
 
 def get_default_statistics_for_chart(chart_type: str) -> List[StatisticType]:
     """차트 타입에 대한 기본 통계 목록 반환"""
-    return DEFAULT_CHART_STATISTICS.get(chart_type.lower(), [
-        StatisticType.COUNT, StatisticType.MEAN, StatisticType.MIN, StatisticType.MAX
-    ])
+    return DEFAULT_CHART_STATISTICS.get(
+        chart_type.lower(),
+        [StatisticType.COUNT, StatisticType.MEAN, StatisticType.MIN, StatisticType.MAX],
+    )
 
 
 @dataclass
 class ReportMetadata:
     """레포트 메타데이터"""
+
     title: str
     subtitle: Optional[str] = None
     author: Optional[str] = None
@@ -270,6 +313,7 @@ class ReportMetadata:
 @dataclass
 class DatasetSummary:
     """데이터셋 요약 정보"""
+
     id: str
     name: str
     file_path: Optional[str] = None
@@ -293,7 +337,7 @@ class DatasetSummary:
         id: str,
         name: str,
         file_path: Optional[str] = None,
-        color: str = "#1f77b4"
+        color: str = "#1f77b4",
     ) -> "DatasetSummary":
         """Polars DataFrame에서 생성"""
         columns = df.columns
@@ -317,7 +361,7 @@ class DatasetSummary:
                         date_range = {
                             "column": col,
                             "min": str(min_date),
-                            "max": str(max_date)
+                            "max": str(max_date),
                         }
                         break
                 except Exception:
@@ -334,13 +378,14 @@ class DatasetSummary:
             date_range=date_range,
             memory_bytes=df.estimated_size(),
             color=color,
-            missing_values=missing_values
+            missing_values=missing_values,
         )
 
 
 @dataclass
 class StatisticalSummary:
     """통계 요약"""
+
     column: str
     dataset_id: str = ""
     dataset_name: str = ""
@@ -369,7 +414,7 @@ class StatisticalSummary:
         series: pl.Series,
         column: str,
         dataset_id: str = "",
-        dataset_name: str = ""
+        dataset_name: str = "",
     ) -> "StatisticalSummary":
         """Polars Series에서 생성"""
         stats = StatisticalSummary(
@@ -377,7 +422,7 @@ class StatisticalSummary:
             dataset_id=dataset_id,
             dataset_name=dataset_name,
             count=len(series),
-            null_count=series.null_count()
+            null_count=series.null_count(),
         )
 
         # 수치형 컬럼인 경우 통계 계산
@@ -385,9 +430,13 @@ class StatisticalSummary:
             try:
                 stats.sum = float(series.sum()) if series.sum() is not None else None
                 stats.mean = float(series.mean()) if series.mean() is not None else None
-                stats.median = float(series.median()) if series.median() is not None else None
+                stats.median = (
+                    float(series.median()) if series.median() is not None else None
+                )
                 stats.std = float(series.std()) if series.std() is not None else None
-                stats.variance = float(series.var()) if series.var() is not None else None
+                stats.variance = (
+                    float(series.var()) if series.var() is not None else None
+                )
                 stats.min = float(series.min()) if series.min() is not None else None
                 stats.max = float(series.max()) if series.max() is not None else None
 
@@ -401,8 +450,14 @@ class StatisticalSummary:
 
                 # Skewness & Kurtosis
                 try:
-                    stats.skewness = float(series.skew()) if hasattr(series, 'skew') else None
-                    stats.kurtosis = float(series.kurtosis()) if hasattr(series, 'kurtosis') else None
+                    stats.skewness = (
+                        float(series.skew()) if hasattr(series, "skew") else None
+                    )
+                    stats.kurtosis = (
+                        float(series.kurtosis())
+                        if hasattr(series, "kurtosis")
+                        else None
+                    )
                 except Exception:
                     pass
 
@@ -415,6 +470,7 @@ class StatisticalSummary:
 @dataclass
 class ComparisonResult:
     """비교 분석 결과"""
+
     dataset_a_id: str
     dataset_a_name: str
     dataset_b_id: str
@@ -451,6 +507,7 @@ class ComparisonResult:
 @dataclass
 class DifferenceAnalysis:
     """차이 분석 결과"""
+
     dataset_a_id: str
     dataset_a_name: str
     dataset_b_id: str
@@ -461,7 +518,7 @@ class DifferenceAnalysis:
     matched_records: int = 0
     positive_count: int = 0  # A > B
     negative_count: int = 0  # A < B
-    neutral_count: int = 0   # A == B
+    neutral_count: int = 0  # A == B
     positive_percentage: float = 0.0
     negative_percentage: float = 0.0
     neutral_percentage: float = 0.0
@@ -477,6 +534,7 @@ class DifferenceAnalysis:
 @dataclass
 class ChartData:
     """차트 데이터"""
+
     id: str
     chart_type: str
     title: str
@@ -510,24 +568,26 @@ class ChartData:
             "description": self.description,
             "image_base64": self.image_base64,
             "statistics": self.statistics.to_dict() if self.statistics else None,
-            "statistics_config": self.statistics_config.to_dict() if self.statistics_config else None,
+            "statistics_config": self.statistics_config.to_dict()
+            if self.statistics_config
+            else None,
         }
 
     def set_image(self, image_bytes: bytes, format: str = "png"):
         """이미지 설정 및 Base64 인코딩"""
         self.image_bytes = image_bytes
         self.image_format = format
-        self.image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-    
+        self.image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
     def set_statistics(self, statistics: ChartStatistics):
         """통계 설정"""
         self.statistics = statistics
-    
+
     def get_statistics_for_display(self) -> Dict[str, Any]:
         """표시용 통계 반환 (설정된 통계만)"""
         if not self.statistics:
             return {}
-        
+
         if self.statistics_config and self.statistics_config.enabled_statistics:
             # 사용자가 선택한 통계만 반환
             return {
@@ -548,6 +608,7 @@ class ChartData:
 @dataclass
 class TableData:
     """테이블 데이터"""
+
     id: str
     title: str
     table_type: str  # "raw", "grouped", "pivot", "top_n", "comparison"
@@ -570,7 +631,7 @@ class TableData:
         id: str,
         title: str,
         table_type: str = "raw",
-        max_rows: Optional[int] = 100
+        max_rows: Optional[int] = 100,
     ) -> "TableData":
         """DataFrame에서 생성"""
         total_rows = len(df)
@@ -607,13 +668,14 @@ class TableData:
             rows=rows,
             column_formats=column_formats,
             total_rows=total_rows,
-            shown_rows=shown_rows
+            shown_rows=shown_rows,
         )
 
 
 @dataclass
 class ReportSection:
     """레포트 섹션"""
+
     id: str
     title: str
     section_type: str  # "summary", "overview", "statistics", "charts", "comparison", "tables", "appendix"
@@ -630,13 +692,14 @@ class ReportSection:
             "section_type": self.section_type,
             "enabled": self.enabled,
             "order": self.order,
-            "description": self.description
+            "description": self.description,
         }
 
 
 @dataclass
 class ReportOptions:
     """레포트 생성 옵션"""
+
     format: ReportFormat = ReportFormat.HTML
     theme: ReportTheme = ReportTheme.LIGHT
     page_size: PageSize = PageSize.A4
@@ -664,9 +727,14 @@ class ReportOptions:
     include_raw_data: bool = False
 
     # PDF/DOCX 옵션
-    margins: Dict[str, float] = field(default_factory=lambda: {
-        "top": 2.54, "bottom": 2.54, "left": 2.54, "right": 2.54
-    })
+    margins: Dict[str, float] = field(
+        default_factory=lambda: {
+            "top": 2.54,
+            "bottom": 2.54,
+            "left": 2.54,
+            "right": 2.54,
+        }
+    )
     header_text: Optional[str] = None
     footer_text: Optional[str] = None
     watermark: Optional[str] = None
@@ -702,13 +770,14 @@ class ReportOptions:
             "chart_dpi": self.chart_dpi,
             "include_chart_statistics": self.include_chart_statistics,
             "table_max_rows": self.table_max_rows,
-            "language": self.language
+            "language": self.language,
         }
 
 
 @dataclass
 class ReportData:
     """레포트 전체 데이터"""
+
     metadata: ReportMetadata
     datasets: List[DatasetSummary] = field(default_factory=list)
     statistics: Dict[str, List[StatisticalSummary]] = field(default_factory=dict)
@@ -728,8 +797,7 @@ class ReportData:
             "metadata": self.metadata.to_dict(),
             "datasets": [d.to_dict() for d in self.datasets],
             "statistics": {
-                k: [s.to_dict() for s in v]
-                for k, v in self.statistics.items()
+                k: [s.to_dict() for s in v] for k, v in self.statistics.items()
             },
             "comparisons": [c.to_dict() for c in self.comparisons],
             "differences": [d.to_dict() for d in self.differences],
@@ -739,12 +807,14 @@ class ReportData:
             "key_findings": self.key_findings,
             "recommendations": self.recommendations,
             "methodology_notes": self.methodology_notes,
-            "data_quality_notes": self.data_quality_notes
+            "data_quality_notes": self.data_quality_notes,
         }
 
     def to_json(self, indent: int = 2) -> str:
         """JSON 문자열로 변환"""
-        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False, default=str)
+        return json.dumps(
+            self.to_dict(), indent=indent, ensure_ascii=False, default=str
+        )
 
     def add_dataset(self, dataset: DatasetSummary):
         """데이터셋 추가"""
@@ -778,6 +848,7 @@ class ReportData:
 @dataclass
 class ReportTemplate:
     """레포트 템플릿"""
+
     id: str
     name: str
     description: str = ""
@@ -798,10 +869,16 @@ class ReportTemplate:
     logo_path: Optional[str] = None
 
     # 기본 옵션
-    default_sections: List[str] = field(default_factory=lambda: [
-        "executive_summary", "data_overview", "statistics",
-        "visualizations", "comparison", "tables"
-    ])
+    default_sections: List[str] = field(
+        default_factory=lambda: [
+            "executive_summary",
+            "data_overview",
+            "statistics",
+            "visualizations",
+            "comparison",
+            "tables",
+        ]
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환"""
@@ -815,7 +892,7 @@ class ReportTemplate:
             "secondary_color": self.secondary_color,
             "accent_color": self.accent_color,
             "font_family": self.font_family,
-            "default_sections": self.default_sections
+            "default_sections": self.default_sections,
         }
 
 
@@ -826,11 +903,7 @@ class ReportGenerator(ABC):
         self.template = template or self._get_default_template()
 
     @abstractmethod
-    def generate(
-        self,
-        report_data: ReportData,
-        options: ReportOptions
-    ) -> bytes:
+    def generate(self, report_data: ReportData, options: ReportOptions) -> bytes:
         """레포트 생성"""
         pass
 
@@ -838,14 +911,14 @@ class ReportGenerator(ABC):
         self,
         report_data: ReportData,
         options: ReportOptions,
-        output_path: Union[str, Path]
+        output_path: Union[str, Path],
     ) -> Path:
         """레포트 파일 저장"""
         output_path = Path(output_path)
         content = self.generate(report_data, options)
 
-        mode = 'wb' if isinstance(content, bytes) else 'w'
-        encoding = None if mode == 'wb' else 'utf-8'
+        mode = "wb" if isinstance(content, bytes) else "w"
+        encoding = None if mode == "wb" else "utf-8"
 
         with open(output_path, mode, encoding=encoding) as f:
             f.write(content)
@@ -853,10 +926,7 @@ class ReportGenerator(ABC):
         return output_path
 
     def preview(
-        self,
-        report_data: ReportData,
-        options: ReportOptions,
-        max_pages: int = 2
+        self, report_data: ReportData, options: ReportOptions, max_pages: int = 2
     ) -> bytes:
         """미리보기 생성"""
         return self.generate(report_data, options)
@@ -866,7 +936,7 @@ class ReportGenerator(ABC):
         return ReportTemplate(
             id="default",
             name="Default Template",
-            description="Standard report template"
+            description="Standard report template",
         )
 
     @staticmethod
@@ -875,9 +945,9 @@ class ReportGenerator(ABC):
         if value is None:
             return "-"
         if abs(value) >= 1_000_000:
-            return f"{value/1_000_000:,.{decimals}f}M"
+            return f"{value / 1_000_000:,.{decimals}f}M"
         elif abs(value) >= 1_000:
-            return f"{value/1_000:,.{decimals}f}K"
+            return f"{value / 1_000:,.{decimals}f}K"
         else:
             return f"{value:,.{decimals}f}"
 
@@ -891,7 +961,7 @@ class ReportGenerator(ABC):
     @staticmethod
     def format_bytes(bytes_value: int) -> str:
         """바이트 크기 포맷팅"""
-        for unit in ['B', 'KB', 'MB', 'GB']:
+        for unit in ["B", "KB", "MB", "GB"]:
             if bytes_value < 1024:
                 return f"{bytes_value:.1f} {unit}"
             bytes_value /= 1024
@@ -910,9 +980,7 @@ class ReportManager:
         """기본 템플릿 초기화"""
         # Default template
         self.templates["default"] = ReportTemplate(
-            id="default",
-            name="Default",
-            description="Standard report layout"
+            id="default", name="Default", description="Standard report layout"
         )
 
         # Corporate template
@@ -922,7 +990,7 @@ class ReportManager:
             description="Professional corporate style",
             primary_color="#003366",
             secondary_color="#666666",
-            accent_color="#0066cc"
+            accent_color="#0066cc",
         )
 
         # Modern template
@@ -932,7 +1000,7 @@ class ReportManager:
             description="Clean, modern design",
             primary_color="#6366f1",
             secondary_color="#ec4899",
-            accent_color="#14b8a6"
+            accent_color="#14b8a6",
         )
 
         # Minimal template
@@ -942,14 +1010,10 @@ class ReportManager:
             description="Minimalist style",
             primary_color="#171717",
             secondary_color="#737373",
-            accent_color="#3b82f6"
+            accent_color="#3b82f6",
         )
 
-    def register_generator(
-        self,
-        format: ReportFormat,
-        generator: ReportGenerator
-    ):
+    def register_generator(self, format: ReportFormat, generator: ReportGenerator):
         """생성기 등록"""
         self.generators[format] = generator
 
@@ -961,7 +1025,7 @@ class ReportManager:
         self,
         report_data: ReportData,
         options: ReportOptions,
-        output_path: Optional[Union[str, Path]] = None
+        output_path: Optional[Union[str, Path]] = None,
     ) -> Union[bytes, Path]:
         """레포트 생성"""
         generator = self.generators.get(options.format)
@@ -995,27 +1059,21 @@ class ReportManager:
 
 # Utility functions for report data collection
 def collect_statistics_from_dataframe(
-    df: pl.DataFrame,
-    dataset_id: str,
-    dataset_name: str
+    df: pl.DataFrame, dataset_id: str, dataset_name: str
 ) -> List[StatisticalSummary]:
     """DataFrame에서 통계 수집"""
     stats = []
     for col in df.columns:
         if df[col].dtype.is_numeric():
             stat = StatisticalSummary.from_series(
-                df[col],
-                column=col,
-                dataset_id=dataset_id,
-                dataset_name=dataset_name
+                df[col], column=col, dataset_id=dataset_id, dataset_name=dataset_name
             )
             stats.append(stat)
     return stats
 
 
 def create_comparison_table(
-    statistics: Dict[str, List[StatisticalSummary]],
-    metric: str = "mean"
+    statistics: Dict[str, List[StatisticalSummary]], metric: str = "mean"
 ) -> TableData:
     """비교 테이블 생성"""
     # 공통 컬럼 찾기
@@ -1045,5 +1103,5 @@ def create_comparison_table(
         columns=columns,
         rows=rows,
         total_rows=len(rows),
-        shown_rows=len(rows)
+        shown_rows=len(rows),
     )

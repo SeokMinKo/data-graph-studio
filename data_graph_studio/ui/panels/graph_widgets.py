@@ -4,7 +4,11 @@ Graph Widgets - Helper classes for graph panel
 
 import numpy as np
 from PySide6.QtWidgets import (
-    QPushButton, QDialog, QVBoxLayout, QDialogButtonBox, QColorDialog
+    QPushButton,
+    QDialog,
+    QVBoxLayout,
+    QDialogButtonBox,
+    QColorDialog,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent
@@ -14,9 +18,9 @@ import pyqtgraph as pg
 
 class ColorButton(QPushButton):
     """색상 선택 버튼"""
-    
+
     color_changed = Signal(QColor)
-    
+
     def __init__(self, color: QColor = QColor("#1f77b4"), parent=None):
         super().__init__(parent)
         self._color = color
@@ -25,7 +29,7 @@ class ColorButton(QPushButton):
         self.setToolTip("Click to choose a color")
         self.clicked.connect(self._on_clicked)
         self._update_style()
-    
+
     def _update_style(self):
         self.setStyleSheet(f"""
             QPushButton {{
@@ -37,17 +41,17 @@ class ColorButton(QPushButton):
                 border-color: #59B8E3;
             }}
         """)
-    
+
     def _on_clicked(self):
         color = QColorDialog.getColor(self._color, self, "Select Color")
         if color.isValid():
             self._color = color
             self._update_style()
             self.color_changed.emit(color)
-    
+
     def color(self) -> QColor:
         return self._color
-    
+
     def set_color(self, color: QColor):
         self._color = color
         self._update_style()
@@ -59,7 +63,9 @@ class ExpandedChartDialog(QDialog):
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint)
+        self.setWindowFlags(
+            Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinMaxButtonsHint
+        )
         self.setModal(False)
         self.setMinimumSize(800, 600)
         self.resize(1000, 700)
@@ -68,7 +74,7 @@ class ExpandedChartDialog(QDialog):
         layout.setContentsMargins(10, 10, 10, 10)
 
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setBackground('w')
+        self.plot_widget.setBackground("w")
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         layout.addWidget(self.plot_widget)
 
@@ -76,7 +82,14 @@ class ExpandedChartDialog(QDialog):
         button_box.rejected.connect(self.close)
         layout.addWidget(button_box)
 
-    def plot_histogram(self, data: np.ndarray, title: str, color: tuple, bins: int = 50, horizontal: bool = False):
+    def plot_histogram(
+        self,
+        data: np.ndarray,
+        title: str,
+        color: tuple,
+        bins: int = 50,
+        horizontal: bool = False,
+    ):
         """Plot histogram - vertical (default) or horizontal"""
         self.setWindowTitle(title)
         self.plot_widget.clear()
@@ -88,7 +101,11 @@ class ExpandedChartDialog(QDialog):
 
                 if horizontal:
                     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-                    bar_height = (bin_edges[1] - bin_edges[0]) * 0.8 if len(bin_edges) > 1 else 0.8
+                    bar_height = (
+                        (bin_edges[1] - bin_edges[0]) * 0.8
+                        if len(bin_edges) > 1
+                        else 0.8
+                    )
 
                     bar_item = pg.BarGraphItem(
                         x0=np.zeros(len(hist)),
@@ -96,37 +113,49 @@ class ExpandedChartDialog(QDialog):
                         width=hist,
                         height=bar_height,
                         brush=color,
-                        pen=pg.mkPen(color[:3], width=1)
+                        pen=pg.mkPen(color[:3], width=1),
                     )
                     self.plot_widget.addItem(bar_item)
 
-                    self.plot_widget.setLabel('bottom', 'Frequency')
-                    self.plot_widget.setLabel('left', 'Value')
+                    self.plot_widget.setLabel("bottom", "Frequency")
+                    self.plot_widget.setLabel("left", "Value")
 
                     mean_val = np.mean(clean_data)
-                    self.plot_widget.addLine(y=mean_val, pen=pg.mkPen('r', width=2, style=Qt.DashLine))
+                    self.plot_widget.addLine(
+                        y=mean_val, pen=pg.mkPen("r", width=2, style=Qt.DashLine)
+                    )
 
                     stats_text = f"Mean: {mean_val:.2f}\nMedian: {np.median(clean_data):.2f}\nStd: {np.std(clean_data):.2f}"
-                    text_item = pg.TextItem(stats_text, anchor=(0, 1), color='k')
+                    text_item = pg.TextItem(stats_text, anchor=(0, 1), color="k")
                     text_item.setPos(max(hist) * 0.1, bin_edges[-1])
                     self.plot_widget.addItem(text_item)
                 else:
-                    self.plot_widget.plot(bin_edges, hist, stepMode="center", fillLevel=0,
-                                          brush=color, pen=pg.mkPen(color[:3], width=1))
-                    self.plot_widget.setLabel('bottom', 'Value')
-                    self.plot_widget.setLabel('left', 'Frequency')
+                    self.plot_widget.plot(
+                        bin_edges,
+                        hist,
+                        stepMode="center",
+                        fillLevel=0,
+                        brush=color,
+                        pen=pg.mkPen(color[:3], width=1),
+                    )
+                    self.plot_widget.setLabel("bottom", "Value")
+                    self.plot_widget.setLabel("left", "Frequency")
 
                     mean_val = np.mean(clean_data)
-                    self.plot_widget.addLine(x=mean_val, pen=pg.mkPen('r', width=2, style=Qt.DashLine))
+                    self.plot_widget.addLine(
+                        x=mean_val, pen=pg.mkPen("r", width=2, style=Qt.DashLine)
+                    )
 
                     stats_text = f"Mean: {mean_val:.2f}\nMedian: {np.median(clean_data):.2f}\nStd: {np.std(clean_data):.2f}"
-                    text_item = pg.TextItem(stats_text, anchor=(0, 0), color='k')
+                    text_item = pg.TextItem(stats_text, anchor=(0, 0), color="k")
                     text_item.setPos(bin_edges[0], max(hist) * 0.9)
                     self.plot_widget.addItem(text_item)
             except Exception as e:
                 print(f"Error plotting histogram: {e}")
 
-    def plot_pie_chart(self, labels: list, values: list, title: str, colors: list = None):
+    def plot_pie_chart(
+        self, labels: list, values: list, title: str, colors: list = None
+    ):
         """Plot pie chart"""
         self.setWindowTitle(title)
         self.plot_widget.clear()
@@ -141,19 +170,30 @@ class ExpandedChartDialog(QDialog):
 
             if colors is None:
                 default_colors = [
-                    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+                    "#1f77b4",
+                    "#ff7f0e",
+                    "#2ca02c",
+                    "#d62728",
+                    "#9467bd",
+                    "#8c564b",
+                    "#e377c2",
+                    "#7f7f7f",
+                    "#bcbd22",
+                    "#17becf",
                 ]
-                colors = [default_colors[i % len(default_colors)] for i in range(len(labels))]
+                colors = [
+                    default_colors[i % len(default_colors)] for i in range(len(labels))
+                ]
 
             try:
                 from pyqtgraph.graphicsItems.PieChartItem import PieChartItem
+
                 pie = PieChartItem(values, brushes=[pg.mkBrush(c) for c in colors])
                 pie.setZValue(10)
                 self.plot_widget.addItem(pie)
                 self.plot_widget.setAspectLocked(True)
-                self.plot_widget.hideAxis('bottom')
-                self.plot_widget.hideAxis('left')
+                self.plot_widget.hideAxis("bottom")
+                self.plot_widget.hideAxis("left")
             except Exception:
                 x_positions = np.arange(len(labels))
                 bars = pg.BarGraphItem(
@@ -161,27 +201,31 @@ class ExpandedChartDialog(QDialog):
                     height=values,
                     width=0.6,
                     brushes=[pg.mkBrush(c) for c in colors],
-                    pens=[pg.mkPen(c, width=1) for c in colors]
+                    pens=[pg.mkPen(c, width=1) for c in colors],
                 )
                 self.plot_widget.addItem(bars)
                 # Set X-axis labels to group names
-                ax = self.plot_widget.getAxis('bottom')
+                ax = self.plot_widget.getAxis("bottom")
                 ticks = [(i, str(lbl)) for i, lbl in enumerate(labels)]
                 ax.setTicks([ticks])
 
             y0 = 0
             for i, (label, val) in enumerate(zip(labels, values)):
                 pct = (val / total) * 100
-                text = pg.TextItem(f"{label}: {pct:.1f}%", anchor=(0, 0), color='#E6E9EF')
+                text = pg.TextItem(
+                    f"{label}: {pct:.1f}%", anchor=(0, 0), color="#E6E9EF"
+                )
                 text.setPos(0, y0)
                 text.setZValue(20)
                 self.plot_widget.addItem(text)
-                y0 -= (total * 0.01)
+                y0 -= total * 0.01
 
         except Exception as e:
             print(f"Error plotting pie chart: {e}")
 
-    def plot_percentile(self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)):
+    def plot_percentile(
+        self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)
+    ):
         """Plot percentile graph"""
         self.setWindowTitle(title)
         self.plot_widget.clear()
@@ -194,16 +238,40 @@ class ExpandedChartDialog(QDialog):
             if len(clean_data) == 0:
                 return
 
-            percentiles = np.array([0, 1, 2, 3, 4, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.7, 99.9, 99.99, 100])
+            percentiles = np.array(
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    10,
+                    25,
+                    50,
+                    75,
+                    90,
+                    95,
+                    97,
+                    99,
+                    99.7,
+                    99.9,
+                    99.99,
+                    100,
+                ]
+            )
             percentile_values = np.percentile(clean_data, percentiles)
 
             pen = pg.mkPen(color=color[:3], width=2)
             # Line with markers on all percentile points
             self.plot_widget.plot(
-                percentiles, percentile_values, pen=pen,
-                symbol='o', symbolSize=7,
+                percentiles,
+                percentile_values,
+                pen=pen,
+                symbol="o",
+                symbolSize=7,
                 symbolBrush=pg.mkBrush(color[:3]),
-                symbolPen=pg.mkPen('w', width=1)
+                symbolPen=pg.mkPen("w", width=1),
             )
 
             # Highlight key percentiles with red markers
@@ -214,17 +282,19 @@ class ExpandedChartDialog(QDialog):
                 x=key_percentiles,
                 y=key_values,
                 size=10,
-                brush=pg.mkBrush('#EF4444'),
-                pen=pg.mkPen('w', width=1.5)
+                brush=pg.mkBrush("#EF4444"),
+                pen=pg.mkPen("w", width=1.5),
             )
             self.plot_widget.addItem(scatter)
 
-            self.plot_widget.setLabel('bottom', 'Percentile')
-            self.plot_widget.setLabel('left', 'Value')
+            self.plot_widget.setLabel("bottom", "Percentile")
+            self.plot_widget.setLabel("left", "Value")
 
             # Show all percentile values in stats text
-            stats_text = "\n".join([f"P{p:g}: {v:.2f}" for p, v in zip(percentiles, percentile_values)])
-            text_item = pg.TextItem(stats_text, anchor=(0, 0), color='#E6E9EF')
+            stats_text = "\n".join(
+                [f"P{p:g}: {v:.2f}" for p, v in zip(percentiles, percentile_values)]
+            )
+            text_item = pg.TextItem(stats_text, anchor=(0, 0), color="#E6E9EF")
             text_item.setPos(5, percentile_values[-1] * 0.9)
             self.plot_widget.addItem(text_item)
 
@@ -249,7 +319,14 @@ class ClickablePlotWidget(pg.PlotWidget):
         self._pie_values = None
         self._pie_colors = None
 
-    def set_data(self, data: np.ndarray, title: str, color: tuple, bins: int = 30, horizontal: bool = False):
+    def set_data(
+        self,
+        data: np.ndarray,
+        title: str,
+        color: tuple,
+        bins: int = 30,
+        horizontal: bool = False,
+    ):
         self._data = data
         self._title = title
         self._color = color
@@ -264,7 +341,9 @@ class ClickablePlotWidget(pg.PlotWidget):
         self._pie_colors = colors
         self._chart_type = "pie"
 
-    def set_percentile_data(self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)):
+    def set_percentile_data(
+        self, data: np.ndarray, title: str, color: tuple = (100, 100, 200)
+    ):
         self._data = data
         self._title = title
         self._color = color
@@ -285,11 +364,19 @@ class ClickablePlotWidget(pg.PlotWidget):
         if self._chart_type == "histogram":
             if self._data is None:
                 return
-            dialog.plot_histogram(self._data, self._title, self._color, bins=self._bins, horizontal=self._horizontal)
+            dialog.plot_histogram(
+                self._data,
+                self._title,
+                self._color,
+                bins=self._bins,
+                horizontal=self._horizontal,
+            )
         elif self._chart_type == "pie":
             if self._pie_labels is None or self._pie_values is None:
                 return
-            dialog.plot_pie_chart(self._pie_labels, self._pie_values, self._title, self._pie_colors)
+            dialog.plot_pie_chart(
+                self._pie_labels, self._pie_values, self._title, self._pie_colors
+            )
         elif self._chart_type == "percentile":
             if self._data is None:
                 return
@@ -304,15 +391,15 @@ class FormattedAxisItem(pg.AxisItem):
     """Custom axis item with value formatting"""
 
     PRESET_FORMATS = {
-        'number': '#,##0',
-        'decimal': '#,##0.00',
-        'scientific': '0.00E+00',
-        'percent': '0.0%',
-        'k': '#,##0,"K"',
-        'm': '#,##0,,"M"',
-        'b': '#,##0,,,"B"',
-        'bytes': 'bytes',
-        'time': 'time',
+        "number": "#,##0",
+        "decimal": "#,##0.00",
+        "scientific": "0.00E+00",
+        "percent": "0.0%",
+        "k": '#,##0,"K"',
+        "m": '#,##0,,"M"',
+        "b": '#,##0,,,"B"',
+        "bytes": "bytes",
+        "time": "time",
     }
 
     def __init__(self, orientation, format_type=None, **kwargs):
@@ -324,7 +411,11 @@ class FormattedAxisItem(pg.AxisItem):
 
     def set_format(self, format_type):
         self.format_type = format_type
-        if format_type and format_type not in self.PRESET_FORMATS and format_type != 'auto':
+        if (
+            format_type
+            and format_type not in self.PRESET_FORMATS
+            and format_type != "auto"
+        ):
             self.custom_format = format_type
         else:
             self.custom_format = None
@@ -332,10 +423,12 @@ class FormattedAxisItem(pg.AxisItem):
     def set_categorical(self, labels: list):
         self._categorical_labels = labels
         self._is_categorical = True if labels else False
-        if labels and self.orientation == 'bottom':
+        if labels and self.orientation == "bottom":
             self.setStyle(tickTextOffset=15, autoExpandTextSpace=True)
             # Set explicit ticks to prevent pyqtgraph from generating intermediate ticks
-            ticks = [(i, self._truncate_label(str(lbl))) for i, lbl in enumerate(labels)]
+            ticks = [
+                (i, self._truncate_label(str(lbl))) for i, lbl in enumerate(labels)
+            ]
             self.setTicks([ticks, []])  # Major ticks only, no minor ticks
 
     def clear_categorical(self):
@@ -347,7 +440,7 @@ class FormattedAxisItem(pg.AxisItem):
     def _truncate_label(text: str, max_len: int = 8) -> str:
         """Truncate long label with ellipsis"""
         if len(text) > max_len:
-            return text[:max_len - 1] + "…"
+            return text[: max_len - 1] + "…"
         return text
 
     def tickStrings(self, values, scale, spacing):
@@ -374,7 +467,7 @@ class FormattedAxisItem(pg.AxisItem):
                     strings.append("")
             return strings
 
-        if self.format_type is None or self.format_type == 'auto':
+        if self.format_type is None or self.format_type == "auto":
             return super().tickStrings(values, scale, spacing)
 
         strings = []
@@ -390,45 +483,45 @@ class FormattedAxisItem(pg.AxisItem):
             if self.custom_format:
                 return self._apply_excel_format(value, self.custom_format)
 
-            if self.format_type == 'number':
+            if self.format_type == "number":
                 return f"{value:,.0f}"
-            elif self.format_type == 'decimal':
+            elif self.format_type == "decimal":
                 return f"{value:,.2f}"
-            elif self.format_type == 'scientific':
+            elif self.format_type == "scientific":
                 return f"{value:.2e}"
-            elif self.format_type == 'percent':
+            elif self.format_type == "percent":
                 return f"{value:.1f}%"
-            elif self.format_type == 'k':
+            elif self.format_type == "k":
                 if abs(value) >= 1000:
-                    return f"{value/1000:.1f}K"
+                    return f"{value / 1000:.1f}K"
                 return f"{value:.0f}"
-            elif self.format_type == 'm':
+            elif self.format_type == "m":
                 if abs(value) >= 1_000_000:
-                    return f"{value/1_000_000:.1f}M"
+                    return f"{value / 1_000_000:.1f}M"
                 elif abs(value) >= 1000:
-                    return f"{value/1000:.1f}K"
+                    return f"{value / 1000:.1f}K"
                 return f"{value:.0f}"
-            elif self.format_type == 'b':
+            elif self.format_type == "b":
                 if abs(value) >= 1_000_000_000:
-                    return f"{value/1_000_000_000:.1f}B"
+                    return f"{value / 1_000_000_000:.1f}B"
                 elif abs(value) >= 1_000_000:
-                    return f"{value/1_000_000:.1f}M"
+                    return f"{value / 1_000_000:.1f}M"
                 elif abs(value) >= 1000:
-                    return f"{value/1000:.1f}K"
+                    return f"{value / 1000:.1f}K"
                 return f"{value:.0f}"
-            elif self.format_type == 'bytes':
+            elif self.format_type == "bytes":
                 if abs(value) >= 1_073_741_824:
-                    return f"{value/1_073_741_824:.1f}GB"
+                    return f"{value / 1_073_741_824:.1f}GB"
                 elif abs(value) >= 1_048_576:
-                    return f"{value/1_048_576:.1f}MB"
+                    return f"{value / 1_048_576:.1f}MB"
                 elif abs(value) >= 1024:
-                    return f"{value/1024:.1f}KB"
+                    return f"{value / 1024:.1f}KB"
                 return f"{value:.0f}B"
-            elif self.format_type == 'time':
+            elif self.format_type == "time":
                 if abs(value) >= 60000:
-                    return f"{value/60000:.1f}min"
+                    return f"{value / 60000:.1f}min"
                 elif abs(value) >= 1000:
-                    return f"{value/1000:.1f}s"
+                    return f"{value / 1000:.1f}s"
                 return f"{value:.0f}ms"
             else:
                 return f"{value:.2f}"
@@ -437,17 +530,17 @@ class FormattedAxisItem(pg.AxisItem):
 
     def _apply_excel_format(self, value, fmt: str) -> str:
         try:
-            if fmt.endswith('%'):
+            if fmt.endswith("%"):
                 decimal_part = fmt[:-1]
-                if '.' in decimal_part:
-                    decimals = len(decimal_part.split('.')[-1])
+                if "." in decimal_part:
+                    decimals = len(decimal_part.split(".")[-1])
                 else:
                     decimals = 0
                 return f"{value * 100:.{decimals}f}%"
 
-            if 'E' in fmt.upper():
-                if '.' in fmt:
-                    decimals = len(fmt.split('.')[1].split('E')[0].split('e')[0])
+            if "E" in fmt.upper():
+                if "." in fmt:
+                    decimals = len(fmt.split(".")[1].split("E")[0].split("e")[0])
                 else:
                     decimals = 2
                 return f"{value:.{decimals}e}"
@@ -456,35 +549,39 @@ class FormattedAxisItem(pg.AxisItem):
             suffix = ""
             temp_fmt = fmt
 
-            while temp_fmt.endswith(','):
+            while temp_fmt.endswith(","):
                 divisor *= 1000
                 temp_fmt = temp_fmt[:-1]
 
             if '"' in temp_fmt:
                 import re
+
                 suffix_match = re.search(r'"([^"]*)"$', temp_fmt)
                 if suffix_match:
                     suffix = suffix_match.group(1)
-                    temp_fmt = temp_fmt[:suffix_match.start()]
+                    temp_fmt = temp_fmt[: suffix_match.start()]
 
             prefix = ""
             if '"' in temp_fmt:
                 import re
+
                 prefix_match = re.search(r'^"([^"]*)"', temp_fmt)
                 if prefix_match:
                     prefix = prefix_match.group(1)
-                    temp_fmt = temp_fmt[prefix_match.end():]
+                    temp_fmt = temp_fmt[prefix_match.end() :]
 
             adjusted_value = value / divisor if divisor > 1 else value
 
-            if '.' in temp_fmt:
-                decimal_part = temp_fmt.split('.')[-1]
-                decimal_part = ''.join(c for c in decimal_part if c in '0#')
+            if "." in temp_fmt:
+                decimal_part = temp_fmt.split(".")[-1]
+                decimal_part = "".join(c for c in decimal_part if c in "0#")
                 decimals = len(decimal_part)
             else:
                 decimals = 0
 
-            use_thousands = '#,##' in temp_fmt or '0,00' in temp_fmt or ',##0' in temp_fmt
+            use_thousands = (
+                "#,##" in temp_fmt or "0,00" in temp_fmt or ",##0" in temp_fmt
+            )
 
             if use_thousands:
                 result = f"{adjusted_value:,.{decimals}f}"

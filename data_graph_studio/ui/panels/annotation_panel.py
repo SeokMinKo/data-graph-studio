@@ -11,7 +11,7 @@ PRD Section 5.4, Feature 5 (3.5.x)
 
 from __future__ import annotations
 
-from typing import Optional, List
+from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -106,7 +106,9 @@ class AnnotationPanel(QFrame):
 
         self._delete_orphaned_btn = QPushButton("Clean Orphaned")
         self._delete_orphaned_btn.setObjectName("smallButton")
-        self._delete_orphaned_btn.setToolTip("Remove annotations referencing deleted datasets")
+        self._delete_orphaned_btn.setToolTip(
+            "Remove annotations referencing deleted datasets"
+        )
         self._delete_orphaned_btn.clicked.connect(self._on_delete_orphaned)
         btn_layout.addWidget(self._delete_orphaned_btn)
 
@@ -146,7 +148,11 @@ class AnnotationPanel(QFrame):
         if ann.kind == "range":
             coord = f"x: {ann.x:.1f} ~ {ann.x_end:.1f}"
         else:
-            coord = f"({ann.x:.1f}, {ann.y:.1f})" if ann.y is not None else f"x: {ann.x:.1f}"
+            coord = (
+                f"({ann.x:.1f}, {ann.y:.1f})"
+                if ann.y is not None
+                else f"x: {ann.x:.1f}"
+            )
 
         label = f"{ann.icon} {preview}  {coord}"
 

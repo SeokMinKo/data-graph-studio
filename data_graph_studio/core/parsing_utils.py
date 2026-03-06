@@ -101,7 +101,9 @@ class ParsingEngine:
         return df
 
     @staticmethod
-    def _parse_delimited(settings: ParsingSettings, max_rows: Optional[int]) -> pd.DataFrame:
+    def _parse_delimited(
+        settings: ParsingSettings, max_rows: Optional[int]
+    ) -> pd.DataFrame:
         delimiter, delimiter_type = ParsingEngine._resolve_delimiter(settings)
         rows = ParsingEngine._read_rows(
             settings,
@@ -157,7 +159,9 @@ class ParsingEngine:
         skip_rows = settings.skip_rows
         comment_char = settings.comment_char
 
-        with open(settings.file_path, "r", encoding=settings.encoding, errors="replace") as f:
+        with open(
+            settings.file_path, "r", encoding=settings.encoding, errors="replace"
+        ) as f:
             for line in f:
                 if skip_rows > 0:
                     skip_rows -= 1
@@ -205,7 +209,9 @@ class ParsingEngine:
         else:
             target_rows = None
 
-        with open(settings.file_path, "r", encoding=settings.encoding, errors="replace") as f:
+        with open(
+            settings.file_path, "r", encoding=settings.encoding, errors="replace"
+        ) as f:
             for line in f:
                 if skip_rows > 0:
                     skip_rows -= 1

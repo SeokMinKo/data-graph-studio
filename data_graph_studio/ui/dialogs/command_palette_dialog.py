@@ -8,21 +8,26 @@ Opened via Ctrl+Shift+P or F1.
 from typing import Optional, List
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QLineEdit, QListWidget, QListWidgetItem,
-    QWidget, QLabel, QHBoxLayout,
+    QDialog,
+    QVBoxLayout,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence, QFont
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 
 
 class CommandEntry:
     """A single command palette entry."""
-    __slots__ = ('label', 'shortcut', 'action')
+
+    __slots__ = ("label", "shortcut", "action")
 
     def __init__(self, label: str, shortcut: str, action: QAction):
-        self.label = label        # Display text, e.g. "File > Open Data..."
+        self.label = label  # Display text, e.g. "File > Open Data..."
         self.shortcut = shortcut  # Human-readable shortcut, e.g. "Ctrl+O"
-        self.action = action      # The QAction to trigger
+        self.action = action  # The QAction to trigger
 
 
 class CommandPaletteDialog(QDialog):
@@ -167,7 +172,9 @@ class CommandPaletteDialog(QDialog):
 
             shortcut = action.shortcut().toString() if action.shortcut() else ""
             label = f"{prefix} > {text}" if prefix else text
-            self._entries.append(CommandEntry(label=label, shortcut=shortcut, action=action))
+            self._entries.append(
+                CommandEntry(label=label, shortcut=shortcut, action=action)
+            )
 
     # ── Filtering ─────────────────────────────────────────────────
 
@@ -184,9 +191,12 @@ class CommandPaletteDialog(QDialog):
             # Split query into tokens for multi-word matching
             tokens = query_lower.split()
             self._filtered = [
-                entry for entry in self._entries
-                if all(token in entry.label.lower() or token in entry.shortcut.lower()
-                       for token in tokens)
+                entry
+                for entry in self._entries
+                if all(
+                    token in entry.label.lower() or token in entry.shortcut.lower()
+                    for token in tokens
+                )
             ]
 
         self._update_list()

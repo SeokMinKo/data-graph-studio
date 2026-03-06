@@ -4,7 +4,7 @@ State Management - 앱 상태 관리
 멀티 데이터셋 비교 기능 지원
 """
 
-from typing import Optional, List, Dict, Any, Set, Callable, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
@@ -22,25 +22,30 @@ if TYPE_CHECKING:
 
 # ==================== Theme State (PRD §3.6 / §9.3) ====================
 
+
 @dataclass
 class ThemeState:
     """테마 상태 - PRD §9.3"""
-    current: str = "system"    # "light" | "dark" | "system"
+
+    current: str = "system"  # "light" | "dark" | "system"
 
 
 # ==================== Multi-Dataset Comparison ====================
 
+
 class ComparisonMode(Enum):
     """데이터셋 비교 모드"""
-    SINGLE = "single"           # 단일 데이터셋 (기존 모드)
-    OVERLAY = "overlay"         # 오버레이 비교 (하나의 차트에 여러 데이터셋)
+
+    SINGLE = "single"  # 단일 데이터셋 (기존 모드)
+    OVERLAY = "overlay"  # 오버레이 비교 (하나의 차트에 여러 데이터셋)
     SIDE_BY_SIDE = "side_by_side"  # 병렬 비교 (각각 독립 패널)
-    DIFFERENCE = "difference"   # 차이 분석 (두 데이터셋 간 차이)
+    DIFFERENCE = "difference"  # 차이 분석 (두 데이터셋 간 차이)
 
 
 @dataclass
 class DatasetMetadata:
     """데이터셋 메타데이터"""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     name: str = ""
     file_path: Optional[str] = None
@@ -70,11 +75,12 @@ DEFAULT_DATASET_COLORS = [
 # 차이 모드 색상
 DIFF_POSITIVE_COLOR = "#2ca02c"  # 초록 (증가)
 DIFF_NEGATIVE_COLOR = "#d62728"  # 빨강 (감소)
-DIFF_NEUTRAL_COLOR = "#7f7f7f"   # 회색 (변화없음)
+DIFF_NEUTRAL_COLOR = "#7f7f7f"  # 회색 (변화없음)
 
 
 class AggregationType(Enum):
     """집계 함수 타입"""
+
     SUM = "sum"
     MEAN = "mean"
     MEDIAN = "median"
@@ -89,6 +95,7 @@ class AggregationType(Enum):
 
 class ChartType(Enum):
     """차트 타입"""
+
     # 기본 차트
     LINE = "line"
     BAR = "bar"
@@ -130,6 +137,7 @@ class ChartType(Enum):
 
 class ToolMode(Enum):
     """그래프 툴 모드"""
+
     ZOOM = "zoom"
     PAN = "pan"
     RECT_SELECT = "rect_select"
@@ -145,6 +153,7 @@ class ToolMode(Enum):
 @dataclass
 class GroupColumn:
     """그룹 존의 컬럼"""
+
     name: str
     selected_values: Set[str] = field(default_factory=set)  # 선택된 값들 (빈셋=전체)
     order: int = 0
@@ -153,6 +162,7 @@ class GroupColumn:
 @dataclass
 class ValueColumn:
     """밸류 존의 컬럼"""
+
     name: str
     aggregation: AggregationType = AggregationType.SUM
     color: str = "#1f77b4"
@@ -164,6 +174,7 @@ class ValueColumn:
 @dataclass
 class FilterCondition:
     """필터 조건"""
+
     column: str
     operator: str  # eq, ne, gt, lt, ge, le, contains, etc.
     value: Any
@@ -173,20 +184,23 @@ class FilterCondition:
 @dataclass
 class SortCondition:
     """정렬 조건"""
+
     column: str
     descending: bool = False
 
 
 class GridDirection(Enum):
     """Grid View 방향"""
-    ROW = "row"       # 가로 나열
-    COLUMN = "column" # 세로 나열
-    WRAP = "wrap"     # 자동 줄바꿈
+
+    ROW = "row"  # 가로 나열
+    COLUMN = "column"  # 세로 나열
+    WRAP = "wrap"  # 자동 줄바꿈
 
 
 @dataclass
 class GridViewSettings:
     """Grid View (Facet Grid) 설정"""
+
     enabled: bool = False
     split_by: Optional[str] = None  # 분할 기준 열
     direction: GridDirection = GridDirection.WRAP
@@ -196,6 +210,7 @@ class GridViewSettings:
 @dataclass
 class ChartSettings:
     """차트 설정"""
+
     chart_type: ChartType = ChartType.LINE
     x_column: Optional[str] = None
 
@@ -229,6 +244,7 @@ class ChartSettings:
 @dataclass
 class SelectionState:
     """선택 상태"""
+
     selected_rows: Set[int] = field(default_factory=set)
     highlighted_rows: Set[int] = field(default_factory=set)
 
@@ -266,6 +282,7 @@ class DatasetState:
 
     각 데이터셋은 독립적인 그래프 설정, 필터, 정렬 등을 가질 수 있음
     """
+
     dataset_id: str
     x_column: Optional[str] = None
     group_columns: List[GroupColumn] = field(default_factory=list)
@@ -275,11 +292,12 @@ class DatasetState:
     sorts: List[SortCondition] = field(default_factory=list)
     selection: SelectionState = field(default_factory=SelectionState)
     chart_settings: ChartSettings = field(default_factory=ChartSettings)
-    profiles: List['GraphSetting'] = field(default_factory=list)
+    profiles: List["GraphSetting"] = field(default_factory=list)
 
-    def clone(self) -> 'DatasetState':
+    def clone(self) -> "DatasetState":
         """상태 복제 (선택적 deepcopy로 메모리 절약 #17)"""
         import copy
+
         new = DatasetState(dataset_id=self.dataset_id)
         new.x_column = self.x_column
         new.group_columns = copy.deepcopy(self.group_columns)
@@ -312,8 +330,11 @@ class DatasetState:
 @dataclass
 class ComparisonSettings:
     """비교 모드 설정"""
+
     mode: ComparisonMode = ComparisonMode.SINGLE
-    comparison_datasets: List[str] = field(default_factory=list)  # 비교 대상 데이터셋 ID들
+    comparison_datasets: List[str] = field(
+        default_factory=list
+    )  # 비교 대상 데이터셋 ID들
     key_column: Optional[str] = None  # 정렬/조인 기준 컬럼
     sync_scroll: bool = True
     sync_zoom: bool = True
@@ -324,7 +345,9 @@ class ComparisonSettings:
 
     # Profile comparison fields (PRD §6.1)
     comparison_target: str = "dataset"  # "dataset" | "profile"
-    comparison_profile_ids: List[str] = field(default_factory=list)  # 프로파일 비교 시 대상 ID
+    comparison_profile_ids: List[str] = field(
+        default_factory=list
+    )  # 프로파일 비교 시 대상 ID
     comparison_dataset_id: str = ""  # 프로파일 비교 시 대상 데이터셋 ID
 
 
@@ -357,21 +380,21 @@ class AppState(QObject):
     summary_updated = Signal(dict)  # 통계 데이터
 
     # Profile signals
-    profile_loaded = Signal(object)       # Profile
+    profile_loaded = Signal(object)  # Profile
     profile_cleared = Signal()
     profile_saved = Signal()
-    setting_activated = Signal(str)       # setting_id
-    setting_added = Signal(str)           # setting_id
-    setting_removed = Signal(str)         # setting_id
+    setting_activated = Signal(str)  # setting_id
+    setting_added = Signal(str)  # setting_id
+    setting_removed = Signal(str)  # setting_id
     floating_window_opened = Signal(str)  # setting_id
     floating_window_closed = Signal(str)  # window_id
 
     # Multi-dataset comparison signals
-    dataset_added = Signal(str)           # dataset_id
-    dataset_removed = Signal(str)         # dataset_id
-    dataset_activated = Signal(str)       # dataset_id
-    dataset_updated = Signal(str)         # dataset_id
-    comparison_mode_changed = Signal(str) # mode
+    dataset_added = Signal(str)  # dataset_id
+    dataset_removed = Signal(str)  # dataset_id
+    dataset_activated = Signal(str)  # dataset_id
+    dataset_updated = Signal(str)  # dataset_id
+    comparison_mode_changed = Signal(str)  # mode
     comparison_settings_changed = Signal()
 
     def __init__(self):
@@ -419,24 +442,22 @@ class AppState(QObject):
         self._tool_mode = ToolMode.PAN
 
         # 레이아웃 (높이 비율)
-        self._layout_ratios = {
-            'summary': 0.10,
-            'graph': 0.45,
-            'table': 0.45
-        }
+        self._layout_ratios = {"summary": 0.10, "graph": 0.45, "table": 0.45}
 
         # 컬럼 순서 (테이블)
         self._column_order: List[str] = []
         self._hidden_columns: Set[str] = set()
 
         # Profile 관련
-        self._current_profile: Optional['Profile'] = None
+        self._current_profile: Optional["Profile"] = None
         self._current_setting_id: Optional[str] = None
         self._floating_windows: Dict[str, Any] = {}  # window_id -> FloatingGraphWindow
 
         # Multi-dataset comparison
         self._dataset_states: Dict[str, DatasetState] = {}  # dataset_id -> DatasetState
-        self._dataset_metadata: Dict[str, DatasetMetadata] = {}  # dataset_id -> DatasetMetadata
+        self._dataset_metadata: Dict[
+            str, DatasetMetadata
+        ] = {}  # dataset_id -> DatasetMetadata
         self._active_dataset_id: Optional[str] = None
         self._comparison_settings: ComparisonSettings = ComparisonSettings()
         self._dataset_color_index: int = 0  # 다음 데이터셋에 할당할 색상 인덱스
@@ -457,9 +478,21 @@ class AppState(QObject):
     def _record_zone_undo(self, zone: str, description: str, before, after) -> None:
         """Helper to record zone change undo commands."""
         type_map = {
-            "group": (UndoActionType.ZONE_GROUP_CHANGE, "_group_columns", "group_zone_changed"),
-            "value": (UndoActionType.ZONE_VALUE_CHANGE, "_value_columns", "value_zone_changed"),
-            "hover": (UndoActionType.ZONE_HOVER_CHANGE, "_hover_columns", "hover_zone_changed"),
+            "group": (
+                UndoActionType.ZONE_GROUP_CHANGE,
+                "_group_columns",
+                "group_zone_changed",
+            ),
+            "value": (
+                UndoActionType.ZONE_VALUE_CHANGE,
+                "_value_columns",
+                "value_zone_changed",
+            ),
+            "hover": (
+                UndoActionType.ZONE_HOVER_CHANGE,
+                "_hover_columns",
+                "hover_zone_changed",
+            ),
         }
         info = type_map.get(zone)
         if not info:
@@ -553,8 +586,15 @@ class AppState(QObject):
         """특정 데이터셋의 메타데이터 조회"""
         return self._dataset_metadata.get(dataset_id)
 
-    def add_dataset(self, dataset_id: str, name: str = "", file_path: str = None,
-                    row_count: int = 0, column_count: int = 0, memory_bytes: int = 0) -> DatasetState:
+    def add_dataset(
+        self,
+        dataset_id: str,
+        name: str = "",
+        file_path: str = None,
+        row_count: int = 0,
+        column_count: int = 0,
+        memory_bytes: int = 0,
+    ) -> DatasetState:
         """
         새 데이터셋 추가
 
@@ -562,7 +602,9 @@ class AppState(QObject):
             생성된 DatasetState
         """
         # 색상 할당
-        color = DEFAULT_DATASET_COLORS[self._dataset_color_index % len(DEFAULT_DATASET_COLORS)]
+        color = DEFAULT_DATASET_COLORS[
+            self._dataset_color_index % len(DEFAULT_DATASET_COLORS)
+        ]
         self._dataset_color_index += 1
 
         # 메타데이터 생성
@@ -574,7 +616,7 @@ class AppState(QObject):
             row_count=row_count,
             column_count=column_count,
             memory_bytes=memory_bytes,
-            is_active=len(self._dataset_states) == 0  # 첫 번째 데이터셋이면 활성화
+            is_active=len(self._dataset_states) == 0,  # 첫 번째 데이터셋이면 활성화
         )
         self._dataset_metadata[dataset_id] = metadata
 
@@ -625,7 +667,10 @@ class AppState(QObject):
             return False
 
         # 이전 활성 데이터셋 비활성화
-        if self._active_dataset_id and self._active_dataset_id in self._dataset_metadata:
+        if (
+            self._active_dataset_id
+            and self._active_dataset_id in self._dataset_metadata
+        ):
             self._dataset_metadata[self._active_dataset_id].is_active = False
 
         # 새 데이터셋 활성화
@@ -772,7 +817,9 @@ class AppState(QObject):
 
     # ==================== Dataset Profiles ====================
 
-    def add_graph_setting_to_dataset(self, dataset_id: str, setting: 'GraphSetting') -> bool:
+    def add_graph_setting_to_dataset(
+        self, dataset_id: str, setting: "GraphSetting"
+    ) -> bool:
         state = self._dataset_states.get(dataset_id)
         if not state:
             return False
@@ -802,25 +849,28 @@ class AppState(QObject):
                 return True
         return False
 
-    def get_dataset_profiles(self, dataset_id: str) -> List['GraphSetting']:
+    def get_dataset_profiles(self, dataset_id: str) -> List["GraphSetting"]:
         state = self._dataset_states.get(dataset_id)
         return state.profiles if state else []
 
-    def build_graph_setting_from_state(self, name: str, dataset_id: str = "") -> 'GraphSetting':
+    def build_graph_setting_from_state(
+        self, name: str, dataset_id: str = ""
+    ) -> "GraphSetting":
         from .profile import GraphSetting
+
         current = self.get_current_graph_state()
         gs = GraphSetting(
             id=str(uuid.uuid4()),
             name=name,
             dataset_id=dataset_id,
-            chart_type=current.get('chart_type', 'line'),
-            x_column=current.get('x_column'),
-            group_columns=tuple(current.get('group_columns', [])),
-            value_columns=tuple(current.get('value_columns', [])),
-            hover_columns=tuple(current.get('hover_columns', [])),
-            chart_settings=current.get('chart_settings', {}),
-            filters=tuple(current.get('filters', [])),
-            sorts=tuple(current.get('sorts', [])),
+            chart_type=current.get("chart_type", "line"),
+            x_column=current.get("x_column"),
+            group_columns=tuple(current.get("group_columns", [])),
+            value_columns=tuple(current.get("value_columns", [])),
+            hover_columns=tuple(current.get("hover_columns", [])),
+            chart_settings=current.get("chart_settings", {}),
+            filters=tuple(current.get("filters", [])),
+            sorts=tuple(current.get("sorts", [])),
         )
         return gs
 
@@ -832,6 +882,7 @@ class AppState(QObject):
         배치 업데이트로 시그널 폭풍 방지 (6개 → 1회 통합 발사).
         """
         import copy
+
         state = self._dataset_states.get(dataset_id)
         if not state:
             return
@@ -850,14 +901,16 @@ class AppState(QObject):
             self._chart_settings = copy.deepcopy(state.chart_settings)
 
             # 시그널을 배치 큐에 추가
-            self._batch_pending_signals.extend([
-                "group_zone_changed",
-                "value_zone_changed",
-                "hover_zone_changed",
-                "chart_settings_changed",
-                "filter_changed",
-                "sort_changed",
-            ])
+            self._batch_pending_signals.extend(
+                [
+                    "group_zone_changed",
+                    "value_zone_changed",
+                    "hover_zone_changed",
+                    "chart_settings_changed",
+                    "filter_changed",
+                    "sort_changed",
+                ]
+            )
         finally:
             self.end_batch_update()
 
@@ -869,6 +922,7 @@ class AppState(QObject):
         변경된 필드만 복사 (deepcopy 최소화).
         """
         import copy
+
         target_id = dataset_id or self._active_dataset_id
         if not target_id or target_id not in self._dataset_states:
             return
@@ -955,7 +1009,9 @@ class AppState(QObject):
     def reorder_group_columns(self, new_order: List[str]):
         before = copy.deepcopy(self._group_columns)
         name_to_col = {g.name: g for g in self._group_columns}
-        self._group_columns = [name_to_col[name] for name in new_order if name in name_to_col]
+        self._group_columns = [
+            name_to_col[name] for name in new_order if name in name_to_col
+        ]
         self._reorder_groups()
         self.group_zone_changed.emit()
         after = copy.deepcopy(self._group_columns)
@@ -983,19 +1039,27 @@ class AppState(QObject):
         self,
         name: str,
         aggregation: AggregationType = AggregationType.SUM,
-        index: int = -1
+        index: int = -1,
     ):
         before = copy.deepcopy(self._value_columns)
         # 중복 허용 (같은 컬럼 다른 집계)
         col = ValueColumn(
-            name=name,
-            aggregation=aggregation,
-            order=len(self._value_columns)
+            name=name, aggregation=aggregation, order=len(self._value_columns)
         )
 
         # 색상 자동 할당
-        colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-                  "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+        colors = [
+            "#1f77b4",
+            "#ff7f0e",
+            "#2ca02c",
+            "#d62728",
+            "#9467bd",
+            "#8c564b",
+            "#e377c2",
+            "#7f7f7f",
+            "#bcbd22",
+            "#17becf",
+        ]
         col.color = colors[len(self._value_columns) % len(colors)]
 
         if index < 0:
@@ -1023,7 +1087,7 @@ class AppState(QObject):
         aggregation: Optional[AggregationType] = None,
         color: Optional[str] = None,
         use_secondary_axis: Optional[bool] = None,
-        formula: Optional[str] = None
+        formula: Optional[str] = None,
     ):
         if 0 <= index < len(self._value_columns):
             if aggregation is not None:
@@ -1091,7 +1155,9 @@ class AppState(QObject):
             self._hover_columns.remove(name)
             self.hover_zone_changed.emit()
             after = list(self._hover_columns)
-            self._record_zone_undo("hover", f"Remove hover column '{name}'", before, after)
+            self._record_zone_undo(
+                "hover", f"Remove hover column '{name}'", before, after
+            )
 
     def clear_hover_columns(self):
         """Clear all hover columns"""
@@ -1260,6 +1326,7 @@ class AppState(QObject):
 
         after = copy.deepcopy(self._sorts)
         if before != after:
+
             def _apply(value):
                 self._undo_paused += 1
                 try:
@@ -1452,7 +1519,12 @@ class AppState(QObject):
 
     def _snapshot_grid_view(self) -> dict:
         gv = self._chart_settings.grid_view
-        return {"enabled": gv.enabled, "split_by": gv.split_by, "direction": gv.direction, "max_columns": gv.max_columns}
+        return {
+            "enabled": gv.enabled,
+            "split_by": gv.split_by,
+            "direction": gv.direction,
+            "max_columns": gv.max_columns,
+        }
 
     def _restore_grid_view(self, snap: dict):
         gv = self._chart_settings.grid_view
@@ -1469,6 +1541,7 @@ class AppState(QObject):
                 self._restore_grid_view(val)
             finally:
                 self._undo_paused = max(0, self._undo_paused - 1)
+
         self._push_undo(
             UndoCommand(
                 action_type=UndoActionType.GRID_VIEW_CHANGE,
@@ -1484,7 +1557,11 @@ class AppState(QObject):
             before = self._snapshot_grid_view()
             self._chart_settings.grid_view.enabled = enabled
             self.grid_view_changed.emit()
-            self._record_grid_undo(f"Grid view {'on' if enabled else 'off'}", before, self._snapshot_grid_view())
+            self._record_grid_undo(
+                f"Grid view {'on' if enabled else 'off'}",
+                before,
+                self._snapshot_grid_view(),
+            )
 
     def set_grid_view_split_by(self, column: Optional[str]):
         """Grid View 분할 기준 열 설정"""
@@ -1492,7 +1569,9 @@ class AppState(QObject):
             before = self._snapshot_grid_view()
             self._chart_settings.grid_view.split_by = column
             self.grid_view_changed.emit()
-            self._record_grid_undo(f"Grid split by '{column}'", before, self._snapshot_grid_view())
+            self._record_grid_undo(
+                f"Grid split by '{column}'", before, self._snapshot_grid_view()
+            )
 
     def set_grid_view_direction(self, direction: GridDirection):
         """Grid View 방향 설정"""
@@ -1500,7 +1579,11 @@ class AppState(QObject):
             before = self._snapshot_grid_view()
             self._chart_settings.grid_view.direction = direction
             self.grid_view_changed.emit()
-            self._record_grid_undo(f"Grid direction → {direction.value}", before, self._snapshot_grid_view())
+            self._record_grid_undo(
+                f"Grid direction → {direction.value}",
+                before,
+                self._snapshot_grid_view(),
+            )
 
     def update_grid_view_settings(self, **kwargs):
         """Grid View 설정 업데이트"""
@@ -1514,7 +1597,9 @@ class AppState(QObject):
                     changed = True
         if changed:
             self.grid_view_changed.emit()
-            self._record_grid_undo("Update grid view", before, self._snapshot_grid_view())
+            self._record_grid_undo(
+                "Update grid view", before, self._snapshot_grid_view()
+            )
 
     # ==================== Layout ====================
 
@@ -1543,6 +1628,7 @@ class AppState(QObject):
         self._column_order = order
         after = list(self._column_order)
         if before and before != after:
+
             def _apply(val):
                 self._undo_paused += 1
                 try:
@@ -1636,7 +1722,7 @@ class AppState(QObject):
     # ==================== Profile ====================
 
     @property
-    def current_profile(self) -> Optional['Profile']:
+    def current_profile(self) -> Optional["Profile"]:
         """현재 프로파일"""
         return self._current_profile
 
@@ -1646,7 +1732,7 @@ class AppState(QObject):
         return self._current_setting_id
 
     @property
-    def current_setting(self) -> Optional['GraphSetting']:
+    def current_setting(self) -> Optional["GraphSetting"]:
         """현재 활성 설정"""
         if self._current_profile and self._current_setting_id:
             return self._current_profile.get_setting(self._current_setting_id)
@@ -1657,7 +1743,7 @@ class AppState(QObject):
         """플로팅 윈도우 목록"""
         return self._floating_windows
 
-    def set_profile(self, profile: Optional['Profile']):
+    def set_profile(self, profile: Optional["Profile"]):
         """프로파일 설정"""
         self._current_profile = profile
         self._current_setting_id = None
@@ -1679,7 +1765,7 @@ class AppState(QObject):
                 self._current_setting_id = setting_id
                 self.setting_activated.emit(setting_id)
 
-    def add_setting(self, setting: 'GraphSetting'):
+    def add_setting(self, setting: "GraphSetting"):
         """현재 프로파일에 설정 추가"""
         if self._current_profile:
             self._current_profile.add_setting(setting)
@@ -1711,66 +1797,61 @@ class AppState(QObject):
     def get_current_graph_state(self) -> Dict[str, Any]:
         """현재 그래프 상태를 딕셔너리로 반환 (설정 저장용)"""
         return {
-            'chart_type': self._chart_settings.chart_type.value,
-            'x_column': self._x_column,
-            'group_columns': [
+            "chart_type": self._chart_settings.chart_type.value,
+            "x_column": self._x_column,
+            "group_columns": [
                 {
-                    'name': gc.name,
-                    'selected_values': list(gc.selected_values),
-                    'order': gc.order
+                    "name": gc.name,
+                    "selected_values": list(gc.selected_values),
+                    "order": gc.order,
                 }
                 for gc in self._group_columns
             ],
-            'value_columns': [
+            "value_columns": [
                 {
-                    'name': vc.name,
-                    'aggregation': vc.aggregation.value,
-                    'color': vc.color,
-                    'use_secondary_axis': vc.use_secondary_axis,
-                    'order': vc.order,
-                    'formula': vc.formula
+                    "name": vc.name,
+                    "aggregation": vc.aggregation.value,
+                    "color": vc.color,
+                    "use_secondary_axis": vc.use_secondary_axis,
+                    "order": vc.order,
+                    "formula": vc.formula,
                 }
                 for vc in self._value_columns
             ],
-            'hover_columns': self._hover_columns.copy(),
-            'chart_settings': {
-                'line_width': self._chart_settings.line_width,
-                'marker_size': self._chart_settings.marker_size,
-                'fill_opacity': self._chart_settings.fill_opacity,
-                'show_data_labels': self._chart_settings.show_data_labels,
-                'x_log_scale': self._chart_settings.x_log_scale,
-                'y_log_scale': self._chart_settings.y_log_scale,
-                'y_min': self._chart_settings.y_min,
-                'y_max': self._chart_settings.y_max,
-                'y_label': self._chart_settings.y_label,
-                'secondary_y_log_scale': self._chart_settings.secondary_y_log_scale,
-                'secondary_y_min': self._chart_settings.secondary_y_min,
-                'secondary_y_max': self._chart_settings.secondary_y_max,
-                'secondary_y_label': self._chart_settings.secondary_y_label,
+            "hover_columns": self._hover_columns.copy(),
+            "chart_settings": {
+                "line_width": self._chart_settings.line_width,
+                "marker_size": self._chart_settings.marker_size,
+                "fill_opacity": self._chart_settings.fill_opacity,
+                "show_data_labels": self._chart_settings.show_data_labels,
+                "x_log_scale": self._chart_settings.x_log_scale,
+                "y_log_scale": self._chart_settings.y_log_scale,
+                "y_min": self._chart_settings.y_min,
+                "y_max": self._chart_settings.y_max,
+                "y_label": self._chart_settings.y_label,
+                "secondary_y_log_scale": self._chart_settings.secondary_y_log_scale,
+                "secondary_y_min": self._chart_settings.secondary_y_min,
+                "secondary_y_max": self._chart_settings.secondary_y_max,
+                "secondary_y_label": self._chart_settings.secondary_y_label,
             },
-            'filters': [
+            "filters": [
                 {
-                    'column': f.column,
-                    'operator': f.operator,
-                    'value': f.value,
-                    'enabled': f.enabled
+                    "column": f.column,
+                    "operator": f.operator,
+                    "value": f.value,
+                    "enabled": f.enabled,
                 }
                 for f in self._filters
             ],
-            'advanced_filter_ast': node_to_dict(self._advanced_filter_ast),
-            'filter_presets': dict(self._filter_presets),
-            'sorts': [
-                {
-                    'column': s.column,
-                    'descending': s.descending
-                }
-                for s in self._sorts
+            "advanced_filter_ast": node_to_dict(self._advanced_filter_ast),
+            "filter_presets": dict(self._filter_presets),
+            "sorts": [
+                {"column": s.column, "descending": s.descending} for s in self._sorts
             ],
         }
 
-    def apply_graph_setting(self, setting: 'GraphSetting'):
+    def apply_graph_setting(self, setting: "GraphSetting"):
         """GraphSetting을 현재 상태에 적용 (배치 업데이트로 시그널 통합)"""
-        from .profile import GraphSetting
 
         self.begin_batch_update()
         try:
@@ -1787,9 +1868,9 @@ class AppState(QObject):
             self._group_columns.clear()
             for gc_data in setting.group_columns:
                 gc = GroupColumn(
-                    name=gc_data.get('name', ''),
-                    selected_values=set(gc_data.get('selected_values', [])),
-                    order=gc_data.get('order', 0)
+                    name=gc_data.get("name", ""),
+                    selected_values=set(gc_data.get("selected_values", [])),
+                    order=gc_data.get("order", 0),
                 )
                 self._group_columns.append(gc)
 
@@ -1797,16 +1878,16 @@ class AppState(QObject):
             self._value_columns.clear()
             for vc_data in setting.value_columns:
                 try:
-                    agg = AggregationType(vc_data.get('aggregation', 'sum'))
+                    agg = AggregationType(vc_data.get("aggregation", "sum"))
                 except ValueError:
                     agg = AggregationType.SUM
                 vc = ValueColumn(
-                    name=vc_data.get('name', ''),
+                    name=vc_data.get("name", ""),
                     aggregation=agg,
-                    color=vc_data.get('color', '#1f77b4'),
-                    use_secondary_axis=vc_data.get('use_secondary_axis', False),
-                    order=vc_data.get('order', 0),
-                    formula=vc_data.get('formula', '')
+                    color=vc_data.get("color", "#1f77b4"),
+                    use_secondary_axis=vc_data.get("use_secondary_axis", False),
+                    order=vc_data.get("order", 0),
+                    formula=vc_data.get("formula", ""),
                 )
                 self._value_columns.append(vc)
 
@@ -1816,51 +1897,61 @@ class AppState(QObject):
             # 차트 설정 복원
             cs = setting.chart_settings
             if cs:
-                self._chart_settings.line_width = cs.get('line_width', 2)
-                self._chart_settings.marker_size = cs.get('marker_size', 6)
-                self._chart_settings.fill_opacity = cs.get('fill_opacity', 0.3)
-                self._chart_settings.show_data_labels = cs.get('show_data_labels', False)
-                self._chart_settings.x_log_scale = cs.get('x_log_scale', False)
-                self._chart_settings.y_log_scale = cs.get('y_log_scale', False)
-                self._chart_settings.y_min = cs.get('y_min')
-                self._chart_settings.y_max = cs.get('y_max')
-                self._chart_settings.y_label = cs.get('y_label')
-                self._chart_settings.secondary_y_log_scale = cs.get('secondary_y_log_scale', False)
-                self._chart_settings.secondary_y_min = cs.get('secondary_y_min')
-                self._chart_settings.secondary_y_max = cs.get('secondary_y_max')
-                self._chart_settings.secondary_y_label = cs.get('secondary_y_label')
+                self._chart_settings.line_width = cs.get("line_width", 2)
+                self._chart_settings.marker_size = cs.get("marker_size", 6)
+                self._chart_settings.fill_opacity = cs.get("fill_opacity", 0.3)
+                self._chart_settings.show_data_labels = cs.get(
+                    "show_data_labels", False
+                )
+                self._chart_settings.x_log_scale = cs.get("x_log_scale", False)
+                self._chart_settings.y_log_scale = cs.get("y_log_scale", False)
+                self._chart_settings.y_min = cs.get("y_min")
+                self._chart_settings.y_max = cs.get("y_max")
+                self._chart_settings.y_label = cs.get("y_label")
+                self._chart_settings.secondary_y_log_scale = cs.get(
+                    "secondary_y_log_scale", False
+                )
+                self._chart_settings.secondary_y_min = cs.get("secondary_y_min")
+                self._chart_settings.secondary_y_max = cs.get("secondary_y_max")
+                self._chart_settings.secondary_y_label = cs.get("secondary_y_label")
 
             # 필터 복원 (include_filters가 True인 경우만)
             if setting.include_filters:
                 self._filters.clear()
                 for f_data in setting.filters:
                     f = FilterCondition(
-                        column=f_data.get('column', ''),
-                        operator=f_data.get('operator', 'eq'),
-                        value=f_data.get('value'),
-                        enabled=f_data.get('enabled', True)
+                        column=f_data.get("column", ""),
+                        operator=f_data.get("operator", "eq"),
+                        value=f_data.get("value"),
+                        enabled=f_data.get("enabled", True),
                     )
                     self._filters.append(f)
-                self._advanced_filter_ast = node_from_dict(getattr(setting, 'advanced_filter_ast', None))
-                self._filter_presets = dict(getattr(setting, 'filter_presets', {}) or {})
+                self._advanced_filter_ast = node_from_dict(
+                    getattr(setting, "advanced_filter_ast", None)
+                )
+                self._filter_presets = dict(
+                    getattr(setting, "filter_presets", {}) or {}
+                )
 
             # 정렬 복원 (include_sorts가 True인 경우만)
             if setting.include_sorts:
                 self._sorts.clear()
                 for s_data in setting.sorts:
                     s = SortCondition(
-                        column=s_data.get('column', ''),
-                        descending=s_data.get('descending', False)
+                        column=s_data.get("column", ""),
+                        descending=s_data.get("descending", False),
                     )
                     self._sorts.append(s)
 
             # 시그널을 배치 큐에 추가
-            self._batch_pending_signals.extend([
-                "group_zone_changed",
-                "value_zone_changed",
-                "hover_zone_changed",
-                "chart_settings_changed",
-            ])
+            self._batch_pending_signals.extend(
+                [
+                    "group_zone_changed",
+                    "value_zone_changed",
+                    "hover_zone_changed",
+                    "chart_settings_changed",
+                ]
+            )
             if setting.include_filters:
                 self._batch_pending_signals.append("filter_changed")
             if setting.include_sorts:

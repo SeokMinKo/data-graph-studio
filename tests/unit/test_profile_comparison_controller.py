@@ -3,7 +3,6 @@
 import time
 import uuid
 
-import pytest
 
 from data_graph_studio.core.profile import GraphSetting
 from data_graph_studio.core.profile_controller import ProfileController
@@ -17,6 +16,7 @@ from data_graph_studio.core.profile_comparison_controller import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_setting(**overrides) -> GraphSetting:
     return GraphSetting(
@@ -285,7 +285,6 @@ def test_fr10_profile_renamed_signal_forwarded():
 
     cc.start_comparison("ds-1", ["p0", "p1"], ComparisonMode.SIDE_BY_SIDE)
 
-    renamed = []
     cc.comparison_mode_changed.connect(lambda m: None)  # avoid unconnected warnings
 
     # We track panel_removed to ensure rename does NOT remove

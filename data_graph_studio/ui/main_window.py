@@ -3,26 +3,33 @@ Main Window - 메인 윈도우 및 레이아웃
 """
 
 import os
-import gc
-import json
 import logging
-import time
 from pathlib import Path
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QMenuBar, QMenu, QToolBar, QStatusBar, QFileDialog, QMessageBox,
-    QProgressDialog, QApplication, QLabel, QDialog, QFrame,
-    QInputDialog, QTabWidget, QColorDialog, QPushButton, QDockWidget,
-    QLineEdit
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QSplitter,
+    QStatusBar,
+    QFileDialog,
+    QMessageBox,
+    QApplication,
+    QLabel,
+    QFrame,
+    QInputDialog,
+    QTabWidget,
+    QDockWidget,
+    QLineEdit,
 )
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QThread, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QColor, QShortcut
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut
 
 # -- Essential imports (used in __init__, type annotations, base classes) ------
-from ..core.data_engine import DataEngine, LoadingProgress, FileType, DelimiterType
-from ..core.state import AppState, ToolMode, ChartType, ComparisonMode, AggregationType
+from ..core.data_engine import DataEngine
+from ..core.state import AppState, ChartType
 from ..core.streaming_controller import StreamingController
 from ..core.io_abstract import RealFileSystem, ITimerFactory
 from ..core.undo_manager import UndoStack
@@ -58,7 +65,8 @@ from .views.project_tree_view import ProjectTreeView
 # -- Controllers (instantiated in __init__) -----------------------------------
 from .controllers.ipc_controller import IPCController
 from .controllers.file_loading_controller import (
-    FileLoadingController, DataLoaderThread,
+    FileLoadingController,
+    DataLoaderThread,
 )
 from .controllers.dataset_controller import DatasetController
 from .controllers.profile_ui_controller import ProfileUIController
@@ -83,6 +91,7 @@ from .toolbars.toolbar_manager import ToolbarManager
 
 class _QtTimerWrapper:
     """Wraps QTimer to match the start/stop interface expected by FileWatcher."""
+
     def __init__(self, interval_ms: int, callback):
         self._timer = QTimer()
         self._timer.setInterval(interval_ms)
@@ -97,6 +106,7 @@ class _QtTimerWrapper:
 
 class _QtTimerFactory(ITimerFactory):
     """Production timer factory using PySide6 QTimer."""
+
     def create_timer(self, interval_ms: int, callback):
         return _QtTimerWrapper(interval_ms, callback)
 
@@ -104,7 +114,7 @@ class _QtTimerFactory(ITimerFactory):
 class MainWindow(QMainWindow):
     """
     Data Graph Studio 메인 윈도우
-    
+
     Layout:
     ┌─────────────────────────────────┐
     │  Menu Bar                       │
@@ -120,7 +130,7 @@ class MainWindow(QMainWindow):
     │  Status Bar                     │
     └─────────────────────────────────┘
     """
-    
+
     # 대용량 파일 경고 임계값
     LARGE_FILE_WARNING_MB = 500  # 500MB 이상 파일 경고
     HUGE_FILE_WARNING_MB = 2000  # 2GB 이상 파일 강력 경고
@@ -132,12 +142,16 @@ class MainWindow(QMainWindow):
         # Core components
         self.engine = DataEngine()
         self.state = AppState()
-        
+
         # Profile management (Project Explorer)
         self.profile_store = ProfileStore()
-        self.profile_controller = ProfileController(self.profile_store, self.state)  # undo_stack set later
+        self.profile_controller = ProfileController(
+            self.profile_store, self.state
+        )  # undo_stack set later
         self.profile_comparison_controller = ProfileComparisonController(
-            self.profile_store, self.profile_controller, self.state,
+            self.profile_store,
+            self.profile_controller,
+            self.state,
         )
 
         # Streaming controller
@@ -149,7 +163,9 @@ class MainWindow(QMainWindow):
 
         # ===== v2 Feature Controllers =====
         # Undo/Redo stack (session-only)
-        self._undo_stack = UndoStack(max_depth=200, on_changed=self._on_undo_stack_changed)
+        self._undo_stack = UndoStack(
+            max_depth=200, on_changed=self._on_undo_stack_changed
+        )
         self.state.set_undo_stack(self._undo_stack)
         self.profile_controller._main_undo_stack = self._undo_stack
 
@@ -163,7 +179,9 @@ class MainWindow(QMainWindow):
         self._dashboard_toggling = False  # FR-B1.8: guard flag
 
         # Feature 5: Annotations/Bookmarks
-        self._annotation_controller = AnnotationController(undo_manager=self._undo_stack)
+        self._annotation_controller = AnnotationController(
+            undo_manager=self._undo_stack
+        )
         self._annotation_panel: Optional[AnnotationPanel] = None
 
         # Feature 7: Keyboard Shortcuts
@@ -254,7 +272,7 @@ class MainWindow(QMainWindow):
 
         # Auto-update (Windows)
         QTimer.singleShot(2000, self._auto_check_updates)
-    
+
     def _setup_window(self):
         """윈도우 기본 설정"""
         self.setObjectName("DataGraphStudioMainWindow")
@@ -267,10 +285,9 @@ class MainWindow(QMainWindow):
 
         # 중앙 정렬
         self.move(
-            (screen.width() - self.width()) // 2,
-            (screen.height() - self.height()) // 2
+            (screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2
         )
-        
+
         # 드래그 앤 드롭 활성화
         self.setAcceptDrops(True)
 
@@ -278,7 +295,7 @@ class MainWindow(QMainWindow):
     def _format_tooltip(action_name: str, shortcut: str) -> str:
         """툴팁에 단축키를 보기 좋게 포맷팅"""
         return f"<b>{action_name}</b><br><span style='color: #C2C8D1;'>Shortcut: {shortcut}</span>"
-    
+
     def _setup_menubar(self, *a, **kw):
         return self._menu_setup_ctrl._setup_menubar(*a, **kw)
 
@@ -325,7 +342,7 @@ class MainWindow(QMainWindow):
         self._sidebar_tabs.setMinimumWidth(100)
         self._sidebar_tabs.setMaximumWidth(350)
         # Style handled by global theme stylesheet
-        
+
         # Project Explorer (새로운 트리 뷰) + 검색바
         self.profile_model = ProfileModel(self.profile_store, self.state)
         self.project_tree = ProjectTreeView()
@@ -335,11 +352,15 @@ class MainWindow(QMainWindow):
         self.project_tree.new_profile_requested.connect(self._on_new_profile_requested)
         self.project_tree.rename_requested.connect(self._on_profile_rename_requested)
         self.project_tree.delete_requested.connect(self._on_profile_delete_requested)
-        self.project_tree.duplicate_requested.connect(self._on_profile_duplicate_requested)
+        self.project_tree.duplicate_requested.connect(
+            self._on_profile_duplicate_requested
+        )
         self.project_tree.export_requested.connect(self._on_profile_export_requested)
         self.project_tree.import_requested.connect(self._on_profile_import_requested)
         self.project_tree.compare_requested.connect(self._on_profile_compare_requested)
-        self.project_tree.copy_to_dataset_requested.connect(self._on_copy_to_dataset_requested)
+        self.project_tree.copy_to_dataset_requested.connect(
+            self._on_copy_to_dataset_requested
+        )
         self.project_tree.favorite_toggled.connect(self._on_favorite_toggled)
 
         # 검색바 + 트리를 컨테이너로 감싸기
@@ -356,17 +377,19 @@ class MainWindow(QMainWindow):
         project_layout.addWidget(self.project_tree)
 
         self._sidebar_tabs.addTab(project_container, "Projects")
-        
+
         # Dataset Manager (내부용 - 탭에서 제거됨, 기능은 유지)
         self.dataset_manager = DatasetManagerPanel(self.engine, self.state)
         self.dataset_manager.dataset_activated.connect(self._on_dataset_activated)
         self.dataset_manager.dataset_removed.connect(self._on_dataset_remove_requested)
         self.dataset_manager.add_dataset_requested.connect(self._on_add_dataset)
-        self.dataset_manager.comparison_mode_changed.connect(self._on_comparison_mode_changed)
+        self.dataset_manager.comparison_mode_changed.connect(
+            self._on_comparison_mode_changed
+        )
         self.dataset_manager.comparison_started.connect(self._on_comparison_started)
         # NOTE: Datasets 탭 제거됨 - Projects 탭만 사용
         # self._sidebar_tabs.addTab(self.dataset_manager, "Datasets")
-        
+
         self.root_splitter.addWidget(self._sidebar_tabs)
 
         # 메인 스플리터 (수직)
@@ -385,7 +408,9 @@ class MainWindow(QMainWindow):
 
         self.profile_bar = ProfileBar(self.state)
         self.profile_bar.setting_clicked.connect(self._on_profile_setting_clicked)
-        self.profile_bar.setting_double_clicked.connect(self._on_profile_setting_double_clicked)
+        self.profile_bar.setting_double_clicked.connect(
+            self._on_profile_setting_double_clicked
+        )
         self.profile_bar.add_setting_requested.connect(self._on_add_setting_requested)
         self.profile_bar.compare_requested.connect(self._on_compare_profiles_requested)
         profile_bar_layout.addWidget(self.profile_bar)
@@ -393,10 +418,12 @@ class MainWindow(QMainWindow):
         # Graph Panel (상단)
         self.graph_panel = GraphPanel(self.state, self.engine)
         self.main_splitter.addWidget(self.graph_panel)
-        
+
         # Connect empty state signals
         self.graph_panel._empty_state.open_file_requested.connect(self._on_open_file)
-        self.graph_panel._empty_state.load_sample_requested.connect(self._on_load_sample_data)
+        self.graph_panel._empty_state.load_sample_requested.connect(
+            self._on_load_sample_data
+        )
 
         # Table Panel (하단)
         self.table_panel = TablePanel(self.state, self.engine, self.graph_panel)
@@ -421,7 +448,7 @@ class MainWindow(QMainWindow):
 
         # Converter Options dock
         self._setup_converter_options_dock()
-    
+
     def _setup_history_dock(self):
         if self._history_dock is not None:
             return
@@ -433,7 +460,9 @@ class MainWindow(QMainWindow):
         dock = QDockWidget("History", self)
         dock.setObjectName("HistoryDock")
         dock.setWidget(self._history_panel)
-        dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         self._history_dock = dock
 
@@ -486,9 +515,9 @@ class MainWindow(QMainWindow):
         if self._history_panel is not None:
             self._history_panel.refresh()
         # #8: Sync Edit menu enabled state
-        if hasattr(self, '_edit_undo_action'):
+        if hasattr(self, "_edit_undo_action"):
             self._edit_undo_action.setEnabled(self._undo_stack.can_undo())
-        if hasattr(self, '_edit_redo_action'):
+        if hasattr(self, "_edit_redo_action"):
             self._edit_redo_action.setEnabled(self._undo_stack.can_redo())
 
     def _on_undo(self):
@@ -499,14 +528,14 @@ class MainWindow(QMainWindow):
 
     def _on_copy_selection(self):
         """Copy current selection to clipboard."""
-        if hasattr(self, 'table_panel') and hasattr(self.table_panel, 'copy_selection'):
+        if hasattr(self, "table_panel") and hasattr(self.table_panel, "copy_selection"):
             self.table_panel.copy_selection()
         else:
             self.statusbar.showMessage("Nothing to copy", 3000)
 
     def _on_select_all(self):
         """Select all data in table."""
-        if hasattr(self, 'table_panel') and hasattr(self.table_panel, 'select_all'):
+        if hasattr(self, "table_panel") and hasattr(self.table_panel, "select_all"):
             self.table_panel.select_all()
         else:
             self.statusbar.showMessage("Select all not available", 3000)
@@ -522,13 +551,18 @@ class MainWindow(QMainWindow):
         panel_widgets = [self.graph_panel, self.table_panel]
 
         # Verify all panels are in splitter, rebuild if necessary
-        current_widgets = [self.main_splitter.widget(i) for i in range(self.main_splitter.count())]
+        current_widgets = [
+            self.main_splitter.widget(i) for i in range(self.main_splitter.count())
+        ]
 
         # Check if any panel is missing from the splitter
         needs_rebuild = False
         for panel in panel_widgets:
-            if panel not in current_widgets and self._placeholders.get(
-                self._get_panel_key(panel), panel) not in current_widgets:
+            if (
+                panel not in current_widgets
+                and self._placeholders.get(self._get_panel_key(panel), panel)
+                not in current_widgets
+            ):
                 needs_rebuild = True
                 break
 
@@ -549,8 +583,8 @@ class MainWindow(QMainWindow):
             total_height = 800  # 기본값
 
         sizes = [
-            int(total_height * 0.4),   # Graph
-            int(total_height * 0.6),   # Table
+            int(total_height * 0.4),  # Graph
+            int(total_height * 0.6),  # Table
         ]
         self.main_splitter.setSizes(sizes)
 
@@ -621,7 +655,9 @@ class MainWindow(QMainWindow):
         """Setup accessibility properties for screen readers (Items 1-3)"""
         # Main window
         self.setAccessibleName("Data Graph Studio Main Window")
-        self.setAccessibleDescription("Main application window for data visualization and analysis")
+        self.setAccessibleDescription(
+            "Main application window for data visualization and analysis"
+        )
 
         # Menu bar
         mb = self.menuBar()
@@ -629,59 +665,73 @@ class MainWindow(QMainWindow):
             mb.setAccessibleName("Main Menu Bar")
 
         # Sidebar
-        if hasattr(self, '_sidebar_tabs'):
+        if hasattr(self, "_sidebar_tabs"):
             self._sidebar_tabs.setAccessibleName("Sidebar Navigation")
-            self._sidebar_tabs.setAccessibleDescription("Project explorer and dataset management")
+            self._sidebar_tabs.setAccessibleDescription(
+                "Project explorer and dataset management"
+            )
 
         # Project tree
-        if hasattr(self, 'project_tree'):
+        if hasattr(self, "project_tree"):
             self.project_tree.setAccessibleName("Project Explorer Tree")
 
         # Project search
-        if hasattr(self, '_project_search'):
+        if hasattr(self, "_project_search"):
             self._project_search.setAccessibleName("Filter Profiles Search")
 
         # Graph panel
-        if hasattr(self, 'graph_panel'):
+        if hasattr(self, "graph_panel"):
             self.graph_panel.setAccessibleName("Graph Panel")
-            self.graph_panel.setAccessibleDescription("Main chart and visualization area")
+            self.graph_panel.setAccessibleDescription(
+                "Main chart and visualization area"
+            )
             self.graph_panel.setFocusPolicy(Qt.StrongFocus)
 
         # Table panel
-        if hasattr(self, 'table_panel'):
+        if hasattr(self, "table_panel"):
             self.table_panel.setAccessibleName("Table Panel")
-            self.table_panel.setAccessibleDescription("Data table view with search and filtering")
+            self.table_panel.setAccessibleDescription(
+                "Data table view with search and filtering"
+            )
             self.table_panel.setFocusPolicy(Qt.StrongFocus)
             # Table sub-widgets
-            if hasattr(self.table_panel, 'search_input'):
+            if hasattr(self.table_panel, "search_input"):
                 self.table_panel.search_input.setAccessibleName("Table Search Input")
-            if hasattr(self.table_panel, 'table_view'):
+            if hasattr(self.table_panel, "table_view"):
                 self.table_panel.table_view.setAccessibleName("Data Table View")
-                self.table_panel.table_view.setAccessibleDescription("Sortable data table showing loaded dataset")
-            if hasattr(self.table_panel, 'filter_bar'):
+                self.table_panel.table_view.setAccessibleDescription(
+                    "Sortable data table showing loaded dataset"
+                )
+            if hasattr(self.table_panel, "filter_bar"):
                 self.table_panel.filter_bar.setAccessibleName("Active Filters Bar")
-            if hasattr(self.table_panel, 'group_combo1'):
+            if hasattr(self.table_panel, "group_combo1"):
                 self.table_panel.group_combo1.setAccessibleName("Group By Column 1")
-            if hasattr(self.table_panel, 'group_combo2'):
+            if hasattr(self.table_panel, "group_combo2"):
                 self.table_panel.group_combo2.setAccessibleName("Group By Column 2")
-            if hasattr(self.table_panel, 'agg_combo'):
+            if hasattr(self.table_panel, "agg_combo"):
                 self.table_panel.agg_combo.setAccessibleName("Aggregation Function")
-            if hasattr(self.table_panel, 'table_view_mode_combo'):
-                self.table_panel.table_view_mode_combo.setAccessibleName("Table View Mode")
-            if hasattr(self.table_panel, 'limit_marking_btn'):
-                self.table_panel.limit_marking_btn.setAccessibleName("Limit to Marking Toggle")
-            if hasattr(self.table_panel, 'expand_btn'):
+            if hasattr(self.table_panel, "table_view_mode_combo"):
+                self.table_panel.table_view_mode_combo.setAccessibleName(
+                    "Table View Mode"
+                )
+            if hasattr(self.table_panel, "limit_marking_btn"):
+                self.table_panel.limit_marking_btn.setAccessibleName(
+                    "Limit to Marking Toggle"
+                )
+            if hasattr(self.table_panel, "expand_btn"):
                 self.table_panel.expand_btn.setAccessibleName("Expand All Groups")
-            if hasattr(self.table_panel, 'collapse_btn'):
+            if hasattr(self.table_panel, "collapse_btn"):
                 self.table_panel.collapse_btn.setAccessibleName("Collapse All Groups")
 
         # Profile bar
-        if hasattr(self, 'profile_bar'):
+        if hasattr(self, "profile_bar"):
             self.profile_bar.setAccessibleName("Profile Bar")
-            self.profile_bar.setAccessibleDescription("Graph profile settings and management")
+            self.profile_bar.setAccessibleDescription(
+                "Graph profile settings and management"
+            )
 
         # Summary panel
-        if hasattr(self, 'summary_panel'):
+        if hasattr(self, "summary_panel"):
             self.summary_panel.setAccessibleName("Summary Panel")
 
         # History dock
@@ -689,13 +739,13 @@ class MainWindow(QMainWindow):
             self._history_dock.setAccessibleName("History Panel Dock")
 
         # Set tab order: sidebar → table → graph → profile bar
-        if hasattr(self, '_project_search') and hasattr(self, 'table_panel'):
+        if hasattr(self, "_project_search") and hasattr(self, "table_panel"):
             tp = self.table_panel
             gp = self.graph_panel
             QWidget.setTabOrder(self._project_search, self.project_tree)
-            if hasattr(tp, 'search_input'):
+            if hasattr(tp, "search_input"):
                 QWidget.setTabOrder(self.project_tree, tp.search_input)
-                if hasattr(tp, 'table_view'):
+                if hasattr(tp, "table_view"):
                     QWidget.setTabOrder(tp.search_input, tp.table_view)
                     QWidget.setTabOrder(tp.table_view, gp)
 
@@ -733,6 +783,7 @@ class MainWindow(QMainWindow):
 
         # Version badge
         from data_graph_studio import __version__
+
         self._status_version_label = QLabel(f"v{__version__}")
         self._status_version_label.setObjectName("statusVersionLabel")
 
@@ -750,8 +801,15 @@ class MainWindow(QMainWindow):
 
     def _on_cycle_theme(self, event=None):
         """Cycle through themes when clicking the theme label."""
-        theme_order = ['midnight', 'dark', 'light', 'tailwind', 'tailwind-dark', 'high-contrast']
-        current = getattr(self, '_current_theme', 'midnight')
+        theme_order = [
+            "midnight",
+            "dark",
+            "light",
+            "tailwind",
+            "tailwind-dark",
+            "high-contrast",
+        ]
+        current = getattr(self, "_current_theme", "midnight")
         try:
             idx = theme_order.index(current)
         except ValueError:
@@ -790,7 +848,7 @@ class MainWindow(QMainWindow):
     def _setup_ipc_server(self):
         """IPC 서버 설정 - 외부 프로세스에서 앱 제어 가능"""
         self._ipc_controller.setup()
-    
+
     # ==================== IPC Delegates (-> IPCController) ====================
     # These delegate methods maintain backward compatibility for tests that
     # call _ipc_* methods directly on MainWindow / mock stand-ins.
@@ -877,11 +935,12 @@ class MainWindow(QMainWindow):
         """상태바 메모리 사용량 업데이트"""
         try:
             from ..utils.memory import MemoryMonitor
+
             proc_mem = MemoryMonitor.get_process_memory()
             sys_mem = MemoryMonitor.get_system_memory()
 
-            proc_str = MemoryMonitor.format_memory(proc_mem['rss_mb'])
-            sys_pct = sys_mem['percent']
+            proc_str = MemoryMonitor.format_memory(proc_mem["rss_mb"])
+            sys_pct = sys_mem["percent"]
 
             # 레벨 결정 (메모리 사용량에 따라)
             if sys_pct > 85:
@@ -902,7 +961,7 @@ class MainWindow(QMainWindow):
             )
         except Exception as e:
             logger.debug(f"Memory status update failed: {e}")
-    
+
     def _connect_signals(self):
         """시그널 연결"""
         # State signals
@@ -936,27 +995,31 @@ class MainWindow(QMainWindow):
         self._streaming_controller.streaming_state_changed.connect(
             self._on_streaming_state_changed
         )
-        self._streaming_controller.data_updated.connect(
-            self._on_streaming_data_updated
-        )
-        self._streaming_controller.file_deleted.connect(
-            self._on_streaming_file_deleted
-        )
+        self._streaming_controller.data_updated.connect(self._on_streaming_data_updated)
+        self._streaming_controller.file_deleted.connect(self._on_streaming_file_deleted)
 
     def _setup_float_handlers(self):
         """메인 패널들의 Float 버튼 핸들러 설정"""
         # Connect float buttons for main panels
-        self.summary_panel.float_btn.clicked.connect(lambda: self._float_main_panel("summary"))
+        self.summary_panel.float_btn.clicked.connect(
+            lambda: self._float_main_panel("summary")
+        )
         # GraphPanel은 내부적으로 float 처리
         # TablePanel도 내부적으로 float 처리
 
         # Create placeholders
-        for key, title in [("summary", "Overview"), ("graph", "Graph"), ("table", "Table")]:
+        for key, title in [
+            ("summary", "Overview"),
+            ("graph", "Graph"),
+            ("table", "Table"),
+        ]:
             placeholder = QFrame()
             placeholder.setObjectName("floatPlaceholder")
             layout = QVBoxLayout(placeholder)
             layout.setAlignment(Qt.AlignCenter)
-            label = QLabel(f"{title}\n\nFloating as separate window\n\nClick 'Dock' to return")
+            label = QLabel(
+                f"{title}\n\nFloating as separate window\n\nClick 'Dock' to return"
+            )
             label.setObjectName("floatPlaceholderLabel")
             label.setAlignment(Qt.AlignCenter)
             layout.addWidget(label)
@@ -972,7 +1035,7 @@ class MainWindow(QMainWindow):
     def _update_ui_state(self):
         """Update UI state with modern styling"""
         has_data = self.state.is_data_loaded
-        
+
         # Update status bar
         if has_data:
             self._status_data_label.setText(f"{self.state.total_rows:,} rows")
@@ -985,7 +1048,7 @@ class MainWindow(QMainWindow):
 
         # Export menu enable/disable based on data state
         self._update_export_menu_state()
-    
+
     def _update_selection_status(self):
         """선택 상태 업데이트"""
         if self.state.selection.has_selection:
@@ -997,18 +1060,20 @@ class MainWindow(QMainWindow):
             )
         else:
             self._status_selection_label.setText("")
-    
+
     # ==================== Actions ====================
-    
+
     # ==================== File Loading Delegates (-> FileLoadingController) ====================
 
     def _on_manage_parser_profiles(self):
         """Open parser profile manager dialog."""
         from data_graph_studio.parsers import FtraceParser, ParserProfileStore
-        from data_graph_studio.ui.dialogs.parser_profile_dialog import ParserProfileDialog
+        from data_graph_studio.ui.dialogs.parser_profile_dialog import (
+            ParserProfileDialog,
+        )
 
         parser = FtraceParser()
-        if not hasattr(self, '_parser_profile_store'):
+        if not hasattr(self, "_parser_profile_store"):
             self._parser_profile_store = ParserProfileStore()
 
         dialog = ParserProfileDialog(parser, self._parser_profile_store, self)
@@ -1017,7 +1082,7 @@ class MainWindow(QMainWindow):
     def _on_run_parser(self, parser_key: str):
         """Run a custom parser: open file → parse → load."""
         from pathlib import Path
-        from data_graph_studio.parsers import FtraceParser, ParserProfileStore
+        from data_graph_studio.parsers import FtraceParser
 
         parsers = {
             "ftrace": FtraceParser,
@@ -1057,7 +1122,8 @@ class MainWindow(QMainWindow):
         if dataset_id:
             self._on_data_loaded()
             self.statusBar().showMessage(
-                f"{parser.name}: loaded {len(df)} rows from {Path(file_path).name}", 5000
+                f"{parser.name}: loaded {len(df)} rows from {Path(file_path).name}",
+                5000,
             )
         else:
             QMessageBox.warning(self, parser.name, "Failed to load parsed data.")
@@ -1131,35 +1197,53 @@ class MainWindow(QMainWindow):
 
     def _on_loading_finished(self, success: bool):
         self._file_controller._on_loading_finished(success)
-    
+
     def _apply_pending_wizard_result(self):
         """마법사 결과 적용 (로딩 완료 후)"""
-        if not hasattr(self, '_pending_wizard_result') or self._pending_wizard_result is None:
+        if (
+            not hasattr(self, "_pending_wizard_result")
+            or self._pending_wizard_result is None
+        ):
             return
 
         result = self._pending_wizard_result
         self._pending_wizard_result = None
 
-        graph_setting = result.get('graph_setting')
-        project_name = (result.get('project_name') or "").strip()
+        graph_setting = result.get("graph_setting")
+        project_name = (result.get("project_name") or "").strip()
 
         active_id = self.engine.active_dataset_id
         if active_id and project_name:
             # Ensure this dataset exists in AppState metadata, then rename as project name.
             dataset = self.engine.get_dataset(active_id)
-            if self.state.get_dataset_metadata(active_id) is None and dataset is not None:
+            if (
+                self.state.get_dataset_metadata(active_id) is None
+                and dataset is not None
+            ):
                 try:
                     row_count = dataset.row_count
                 except Exception:
-                    row_count = len(dataset.df) if getattr(dataset, "df", None) is not None else 0
+                    row_count = (
+                        len(dataset.df)
+                        if getattr(dataset, "df", None) is not None
+                        else 0
+                    )
                 try:
                     column_count = dataset.column_count
                 except Exception:
-                    column_count = len(dataset.df.columns) if getattr(dataset, "df", None) is not None else 0
+                    column_count = (
+                        len(dataset.df.columns)
+                        if getattr(dataset, "df", None) is not None
+                        else 0
+                    )
                 try:
                     memory_bytes = dataset.memory_bytes
                 except Exception:
-                    memory_bytes = dataset.df.estimated_size() if getattr(dataset, "df", None) is not None else 0
+                    memory_bytes = (
+                        dataset.df.estimated_size()
+                        if getattr(dataset, "df", None) is not None
+                        else 0
+                    )
 
                 source_path = None
                 if getattr(dataset, "source", None) is not None:
@@ -1185,6 +1269,7 @@ class MainWindow(QMainWindow):
             if active_id:
                 # 프로젝트 탐색창에 추가
                 from dataclasses import replace
+
                 graph_setting = replace(graph_setting, dataset_id=active_id)
                 self.profile_store.add(graph_setting)
                 self.profile_model.add_profile_incremental(active_id, graph_setting)
@@ -1209,7 +1294,7 @@ class MainWindow(QMainWindow):
     def _do_autofit(self):
         """실제 autofit 수행."""
         try:
-            if hasattr(self, 'graph_panel') and self.engine.is_loaded:
+            if hasattr(self, "graph_panel") and self.engine.is_loaded:
                 self.graph_panel.autofit()
         except Exception as e:
             logger.debug(f"Auto-fit after profile switch failed: {e}")
@@ -1222,10 +1307,18 @@ class MainWindow(QMainWindow):
 
     def _quick_switch_profile(self, index: int):
         """Alt+N 으로 현재 데이터셋의 N번째 프로파일 적용"""
-        dataset_id = self.engine.active_dataset_id if hasattr(self.engine, 'active_dataset_id') else None
+        dataset_id = (
+            self.engine.active_dataset_id
+            if hasattr(self.engine, "active_dataset_id")
+            else None
+        )
         if not dataset_id:
             return
-        profiles = list(self.profile_store.get_by_dataset(dataset_id)) if hasattr(self.profile_store, 'get_by_dataset') else []
+        profiles = (
+            list(self.profile_store.get_by_dataset(dataset_id))
+            if hasattr(self.profile_store, "get_by_dataset")
+            else []
+        )
         if index <= len(profiles):
             profile = profiles[index - 1]
             self.profile_controller.apply_profile(profile.id)
@@ -1235,47 +1328,47 @@ class MainWindow(QMainWindow):
 
     def _cancel_loading(self):
         self._file_controller._cancel_loading()
-    
+
     def _on_data_loaded(self):
         """데이터 로드 완료"""
         self._update_ui_state()
         self._menu_setup_ctrl._update_menu_state()
-        
+
         # 패널들에 데이터 전달
         self.table_panel.set_data(self.engine.df)
         if self.engine.is_windowed:
             self.state.set_visible_rows(len(self.engine.df))
-        
+
         # 그래프 패널에 컬럼 목록 전달 (X-Axis 드롭다운용)
         self.graph_panel.set_columns(self.engine.columns)
-        
+
         # Data 탭에 컬럼 목록 전달 (X/Y/Group/Hover 설정용)
-        if hasattr(self.graph_panel.options_panel, 'data_tab'):
+        if hasattr(self.graph_panel.options_panel, "data_tab"):
             self.graph_panel.options_panel.data_tab.set_columns(
                 self.engine.columns, self.engine
             )
-        
+
         self.graph_panel.refresh()
         self.graph_panel.autofit()
-        
+
         self.summary_panel.refresh()
 
     def _on_window_changed(self):
         """Window 이동 시 그래프/요약 갱신"""
         self.graph_panel.refresh()
         self.summary_panel.refresh()
-    
+
     def _on_data_cleared(self):
         """데이터 클리어"""
         self._update_ui_state()
         self.table_panel.clear()
         self.graph_panel.clear()
         self.summary_panel.clear()
-        
+
         # Data 탭 클리어
-        if hasattr(self.graph_panel.options_panel, 'data_tab'):
+        if hasattr(self.graph_panel.options_panel, "data_tab"):
             self.graph_panel.options_panel.data_tab.clear()
-    
+
     def _update_summary_from_profile(self):
         self._profile_ui_controller._update_summary_from_profile()
 
@@ -1293,13 +1386,13 @@ class MainWindow(QMainWindow):
 
         # Delegate tool mode to Compare view panels
         if self._profile_comparison_view is not None:
-            if hasattr(self._profile_comparison_view, 'set_tool_mode'):
+            if hasattr(self._profile_comparison_view, "set_tool_mode"):
                 self._profile_comparison_view.set_tool_mode(mode)
-    
+
     def _reset_graph_view(self):
         """그래프 뷰 리셋 — Compare 뷰 활성 시 위임"""
         if self._profile_comparison_view is not None:
-            if hasattr(self._profile_comparison_view, 'reset_all_views'):
+            if hasattr(self._profile_comparison_view, "reset_all_views"):
                 self._profile_comparison_view.reset_all_views()
                 return
         self.graph_panel.reset_view()
@@ -1307,17 +1400,17 @@ class MainWindow(QMainWindow):
     def _on_clear_selection(self):
         """Clear selection and highlight"""
         self.state.clear_selection()
-        if hasattr(self, 'graph_panel') and self.graph_panel is not None:
+        if hasattr(self, "graph_panel") and self.graph_panel is not None:
             self.graph_panel.main_graph.highlight_selection([])
-    
+
     def _autofit_graph(self):
         """그래프 자동 맞춤 — Compare 뷰 활성 시 위임"""
         if self._profile_comparison_view is not None:
-            if hasattr(self._profile_comparison_view, 'autofit'):
+            if hasattr(self._profile_comparison_view, "autofit"):
                 self._profile_comparison_view.autofit()
                 return
         self.graph_panel.autofit()
-    
+
     def _on_export(self, *a, **kw):
         return self._export_ui_ctrl._on_export(*a, **kw)
 
@@ -1336,43 +1429,70 @@ class MainWindow(QMainWindow):
     def _on_set_x_bins(self):
         """Set X-axis histogram bins"""
         current_bins = 30
-        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+        if hasattr(self, "graph_panel") and hasattr(self.graph_panel, "stat_panel"):
             current_bins = self.graph_panel.stat_panel._x_bins
-        
+
         value, ok = QInputDialog.getInt(
-            self, "Set X Bins", "Number of bins for X-axis histogram:",
-            current_bins, 5, 200, 5
+            self,
+            "Set X Bins",
+            "Number of bins for X-axis histogram:",
+            current_bins,
+            5,
+            200,
+            5,
         )
-        if ok and hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+        if (
+            ok
+            and hasattr(self, "graph_panel")
+            and hasattr(self.graph_panel, "stat_panel")
+        ):
             self.graph_panel.stat_panel.x_bins_spin.setValue(value)
-    
+
     def _on_set_y_bins(self):
         """Set Y-axis histogram bins"""
         current_bins = 30
-        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+        if hasattr(self, "graph_panel") and hasattr(self.graph_panel, "stat_panel"):
             current_bins = self.graph_panel.stat_panel._y_bins
-        
+
         value, ok = QInputDialog.getInt(
-            self, "Set Y Bins", "Number of bins for Y-axis histogram:",
-            current_bins, 5, 200, 5
+            self,
+            "Set Y Bins",
+            "Number of bins for Y-axis histogram:",
+            current_bins,
+            5,
+            200,
+            5,
         )
-        if ok and hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+        if (
+            ok
+            and hasattr(self, "graph_panel")
+            and hasattr(self.graph_panel, "stat_panel")
+        ):
             self.graph_panel.stat_panel.y_bins_spin.setValue(value)
-    
+
     def _on_set_both_bins(self):
         """Set both X and Y histogram bins"""
         current_bins = 30
-        if hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+        if hasattr(self, "graph_panel") and hasattr(self.graph_panel, "stat_panel"):
             current_bins = self.graph_panel.stat_panel._x_bins
-        
+
         value, ok = QInputDialog.getInt(
-            self, "Set Bins", "Number of bins for both histograms:",
-            current_bins, 5, 200, 5
+            self,
+            "Set Bins",
+            "Number of bins for both histograms:",
+            current_bins,
+            5,
+            200,
+            5,
         )
-        if ok and hasattr(self, 'graph_panel') and hasattr(self.graph_panel, 'stat_panel'):
+        if (
+            ok
+            and hasattr(self, "graph_panel")
+            and hasattr(self.graph_panel, "stat_panel")
+        ):
             self.graph_panel.stat_panel.x_bins_spin.setValue(value)
             self.graph_panel.stat_panel.y_bins_spin.setValue(value)
-    
+
     def _show_tips(self, *a, **kw):
         return self._help_ctrl._show_tips(*a, **kw)
 
@@ -1385,66 +1505,51 @@ class MainWindow(QMainWindow):
     def _on_new_profile_menu(self):
         self._profile_ui_controller._on_new_profile_menu()
 
-
     def _on_load_profile_menu(self):
         self._profile_ui_controller._on_load_profile_menu()
 
-
     def _on_save_profile_menu(self):
         self._profile_ui_controller._on_save_profile_menu()
-
 
     # ==================== Profile Actions ====================
 
     def _on_profile_setting_clicked(self, setting_id: str):
         self._profile_ui_controller._on_profile_setting_clicked(setting_id)
 
-
     def _on_profile_setting_double_clicked(self, setting_id: str):
         self._profile_ui_controller._on_profile_setting_double_clicked(setting_id)
-
 
     def _on_add_setting_requested(self):
         self._profile_ui_controller._on_add_setting_requested()
 
-
     def _on_compare_profiles_requested(self):
         self._profile_ui_controller._on_compare_profiles_requested()
 
-
     def _show_profile_manager(self):
         self._profile_ui_controller._show_profile_manager()
-
 
     # ==================== Project Explorer Actions ====================
 
     def _on_profile_apply_requested(self, profile_id: str):
         self._profile_ui_controller._on_profile_apply_requested(profile_id)
 
-
     def _on_new_profile_requested(self, dataset_id: str):
         self._profile_ui_controller._on_new_profile_requested(dataset_id)
-
 
     def _on_profile_rename_requested(self, profile_id: str):
         self._profile_ui_controller._on_profile_rename_requested(profile_id)
 
-
     def _on_profile_delete_requested(self, profile_id: str):
         self._profile_ui_controller._on_profile_delete_requested(profile_id)
-
 
     def _on_profile_duplicate_requested(self, profile_id: str):
         self._profile_ui_controller._on_profile_duplicate_requested(profile_id)
 
-
     def _on_profile_export_requested(self, profile_id: str):
         self._profile_ui_controller._on_profile_export_requested(profile_id)
 
-
     def _on_profile_import_requested(self, dataset_id: str):
         self._profile_ui_controller._on_profile_import_requested(dataset_id)
-
 
     def _on_profile_compare_requested(self, profile_ids: list, options: dict):
         self._profile_ui_controller._on_profile_compare_requested(profile_ids, options)
@@ -1455,36 +1560,28 @@ class MainWindow(QMainWindow):
     def _on_favorite_toggled(self, profile_id: str):
         self._profile_ui_controller._on_favorite_toggled(profile_id)
 
-
     # ==================== Multi-Dataset Operations ====================
 
     def _on_add_dataset(self):
         self._dataset_controller._on_add_dataset()
 
-
     def _add_dataset_from_file(self, file_path: str):
         self._dataset_controller._add_dataset_from_file(file_path)
-
 
     def _load_dataset(self, file_path: str, settings: Optional[ParsingSettings] = None):
         self._dataset_controller._load_dataset(file_path, settings)
 
-
     def _load_dataset_with_settings(self, file_path: str, settings: ParsingSettings):
         self._dataset_controller._load_dataset_with_settings(file_path, settings)
-
 
     def _on_dataset_loading_finished(self, success: bool):
         self._dataset_controller._on_dataset_loading_finished(success)
 
-
     def _on_dataset_activated(self, dataset_id: str):
         self._dataset_controller._on_dataset_activated(dataset_id)
 
-
     def _on_dataset_remove_requested(self, dataset_id: str):
         self._dataset_controller._on_dataset_remove_requested(dataset_id)
-
 
     def _set_comparison_mode(self, *a, **kw):
         return self._comparison_ui_ctrl._set_comparison_mode(*a, **kw)
@@ -1555,15 +1652,15 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """창 닫기 이벤트"""
         # Stop streaming
-        if hasattr(self, '_streaming_controller'):
+        if hasattr(self, "_streaming_controller"):
             self._streaming_controller.shutdown()
 
         # Stop IPC server
-        if hasattr(self, '_ipc_server'):
+        if hasattr(self, "_ipc_server"):
             self._ipc_server.stop()
 
         # Stop export worker thread
-        if hasattr(self, '_export_controller'):
+        if hasattr(self, "_export_controller"):
             self._export_controller.shutdown()
 
         # Wait for loader thread if running
@@ -1576,73 +1673,78 @@ class MainWindow(QMainWindow):
             self._floating_graph_manager.close_all()
 
         # Save toolbar state
-        if hasattr(self, '_toolbar_manager'):
+        if hasattr(self, "_toolbar_manager"):
             self._toolbar_manager._save_state()
 
         # TODO: 저장 확인
         event.accept()
-    
+
     # ==================== Drag & Drop ====================
-    
+
     def dragEnterEvent(self, event):
         """드래그 진입 이벤트"""
         if event.mimeData().hasUrls():
             # 지원하는 파일인지 확인
             from ..core.clipboard_manager import DragDropHandler
+
             urls = event.mimeData().urls()
             supported = DragDropHandler.get_supported_files(urls)
             if supported:
                 event.acceptProposedAction()
-                self.statusBar().showMessage(f"Drop to load: {', '.join(os.path.basename(f) for f in supported)}")
+                self.statusBar().showMessage(
+                    f"Drop to load: {', '.join(os.path.basename(f) for f in supported)}"
+                )
                 return
-        
+
         # 텍스트 데이터 (클립보드에서 드래그)
         if event.mimeData().hasText() or event.mimeData().hasHtml():
             event.acceptProposedAction()
             self.statusBar().showMessage("Drop to paste data")
             return
-        
+
         event.ignore()
-    
+
     def dragLeaveEvent(self, event):
         """드래그 이탈 이벤트"""
         self.statusBar().clearMessage()
-    
+
     def dropEvent(self, event):
         """드롭 이벤트"""
         mime = event.mimeData()
-        
+
         # 파일 드롭
         if mime.hasUrls():
             from ..core.clipboard_manager import DragDropHandler
+
             files = DragDropHandler.get_supported_files(mime.urls())
             if files:
                 event.acceptProposedAction()
                 self._handle_dropped_files(files)
                 return
-        
+
         # 텍스트/HTML 데이터 드롭 (Excel에서 드래그 등)
         if mime.hasHtml() or mime.hasText():
             event.acceptProposedAction()
             self._paste_from_clipboard()
             return
-        
+
         event.ignore()
-    
+
     def _handle_dropped_files(self, files: list):
         """드롭된 파일 처리"""
         if not files:
             return
-        
+
         if len(files) == 1:
             from ..core.clipboard_manager import DragDropHandler
+
             file_path = files[0]
             file_type = DragDropHandler.get_file_type(file_path)
-            
-            if file_type == 'project':
+
+            if file_type == "project":
                 # 프로젝트 파일 로드
                 self._load_project_file(file_path)
-            elif file_type == 'profile':
+            elif file_type == "profile":
                 # 프로필 적용
                 self._on_load_profile_menu()
             else:
@@ -1651,16 +1753,25 @@ class MainWindow(QMainWindow):
         else:
             # 여러 파일 → 멀티파일 다이얼로그 활용
             self._file_controller._on_open_multiple_files_with_paths(files)
-    
+
     # ==================== Clipboard ====================
-    
+
     def _is_text_input_focused(self) -> bool:
         """Check if a text input widget currently has focus."""
-        from PySide6.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox
+        from PySide6.QtWidgets import (
+            QLineEdit,
+            QTextEdit,
+            QPlainTextEdit,
+            QSpinBox,
+            QDoubleSpinBox,
+        )
+
         fw = QApplication.focusWidget()
         if fw is None:
             return False
-        return isinstance(fw, (QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox))
+        return isinstance(
+            fw, (QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox)
+        )
 
     def keyPressEvent(self, event):
         """키보드 이벤트 - 클립보드 및 차트 단축키"""
@@ -1673,18 +1784,20 @@ class MainWindow(QMainWindow):
         if event.key() == Qt.Key_V and event.modifiers() == Qt.ControlModifier:
             self._paste_from_clipboard()
             return
-        
+
         # Ctrl+Shift+C: 그래프 이미지 복사
-        if event.key() == Qt.Key_C and event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+        if event.key() == Qt.Key_C and event.modifiers() == (
+            Qt.ControlModifier | Qt.ShiftModifier
+        ):
             self._copy_graph_to_clipboard()
             return
-        
+
         # Ctrl+C: 선택된 데이터 복사 (테이블에 포커스 있을 때)
         if event.key() == Qt.Key_C and event.modifiers() == Qt.ControlModifier:
             if self.table_panel and self.table_panel.hasFocus():
                 self._copy_selection_to_clipboard()
                 return
-        
+
         # Skip single-key shortcuts when a text input has focus
         if event.modifiers() == Qt.NoModifier and self._is_text_input_focused():
             super().keyPressEvent(event)
@@ -1701,75 +1814,83 @@ class MainWindow(QMainWindow):
                 Qt.Key_5: ChartType.AREA,
                 Qt.Key_6: ChartType.HISTOGRAM,
             }
-            
+
             if event.key() in chart_shortcuts:
                 chart_type = chart_shortcuts[event.key()]
                 self.state.set_chart_type(chart_type)
                 self.statusBar().showMessage(f"Chart: {chart_type.name}", 2000)
                 return
-            
+
             # F → AutoFit
             if event.key() == Qt.Key_F:
-                if hasattr(self, '_autofit_btn_action'):
+                if hasattr(self, "_autofit_btn_action"):
                     self._autofit_btn_action.trigger()
                 return
-            
+
             # Home → Reset View
             if event.key() == Qt.Key_Home:
-                if hasattr(self, '_reset_btn_action'):
+                if hasattr(self, "_reset_btn_action"):
                     self._reset_btn_action.trigger()
                 return
-            
+
             # Delete → Delete Drawing
             if event.key() == Qt.Key_Delete:
-                if hasattr(self, '_delete_drawing_action'):
+                if hasattr(self, "_delete_drawing_action"):
                     self._delete_drawing_action.trigger()
                 return
-        
+
         # 기본 처리
         super().keyPressEvent(event)
-    
+
     def _paste_from_clipboard(self, *a, **kw):
         return self._data_ops_ctrl._paste_from_clipboard(*a, **kw)
 
     def _copy_graph_to_clipboard(self):
         """그래프를 이미지로 클립보드에 복사"""
         try:
-            if self.graph_panel and hasattr(self.graph_panel, 'main_graph') and self.graph_panel.main_graph:
+            if (
+                self.graph_panel
+                and hasattr(self.graph_panel, "main_graph")
+                and self.graph_panel.main_graph
+            ):
                 # PyQtGraph에서 이미지 캡처
                 exporter = None
                 try:
                     from pyqtgraph.exporters import ImageExporter
+
                     exporter = ImageExporter(self.graph_panel.main_graph.plotItem)
-                    exporter.parameters()['width'] = 1920
-                    
+                    exporter.parameters()["width"] = 1920
+
                     # QImage로 내보내기
                     from PySide6.QtGui import QImage
                     import tempfile
-                    
+
                     # 임시 파일로 저장 후 로드
-                    temp_path = os.path.join(tempfile.gettempdir(), 'dgs_temp_chart.png')
+                    temp_path = os.path.join(
+                        tempfile.gettempdir(), "dgs_temp_chart.png"
+                    )
                     exporter.export(temp_path)
-                    
+
                     image = QImage(temp_path)
                     if not image.isNull():
                         from ..core.clipboard_manager import ClipboardManager
+
                         msg = ClipboardManager.copy_image(image)
                         self.statusBar().showMessage(f"✓ {msg}", 3000)
-                    
+
                     # 임시 파일 삭제
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
-                        
+
                 except Exception as e:
                     self.statusBar().showMessage(f"Export error: {e}", 3000)
         except Exception as e:
             self.statusBar().showMessage(f"Copy error: {e}", 3000)
-    
+
     def _copy_selection_to_clipboard(self):
         """테이블 선택 영역 복사"""
         try:
-            if self.table_panel and hasattr(self.table_panel, 'table_view'):
+            if self.table_panel and hasattr(self.table_panel, "table_view"):
                 selection = self.table_panel.table_view.selectionModel()
                 if selection.hasSelection():
                     # 선택된 행/열 데이터 추출
@@ -1777,7 +1898,7 @@ class MainWindow(QMainWindow):
                     if indexes:
                         rows = sorted(set(idx.row() for idx in indexes))
                         cols = sorted(set(idx.column() for idx in indexes))
-                        
+
                         # 데이터 추출
                         model = self.table_panel.table_view.model()
                         data = []
@@ -1786,15 +1907,16 @@ class MainWindow(QMainWindow):
                             for col in cols:
                                 idx = model.index(row, col)
                                 value = model.data(idx, Qt.DisplayRole)
-                                row_data.append(str(value) if value else '')
-                            data.append('\t'.join(row_data))
-                        
-                        text = '\n'.join(data)
+                                row_data.append(str(value) if value else "")
+                            data.append("\t".join(row_data))
+
+                        text = "\n".join(data)
                         from ..core.clipboard_manager import ClipboardManager
-                        msg = ClipboardManager.copy_text(text)
+
+                        ClipboardManager.copy_text(text)
                         self.statusBar().showMessage(f"✓ Copied {len(rows)} rows", 3000)
                         return
-            
+
             self.statusBar().showMessage("No selection to copy", 3000)
         except Exception as e:
             self.statusBar().showMessage(f"Copy error: {e}", 3000)
@@ -1869,16 +1991,19 @@ class MainWindow(QMainWindow):
 
         types = ["Linear", "Polynomial (2nd)", "Polynomial (3rd)", "Exponential"]
         trend_type, ok = QInputDialog.getItem(
-            self, "Add Trend Line", "Select trend line type:",
-            types, 0, False
+            self, "Add Trend Line", "Select trend line type:", types, 0, False
         )
-        if ok and hasattr(self.graph_panel, 'main_graph') and self.graph_panel.main_graph:
+        if (
+            ok
+            and hasattr(self.graph_panel, "main_graph")
+            and self.graph_panel.main_graph
+        ):
             mg = self.graph_panel.main_graph
             degree_map = {"Linear": 1, "Polynomial (2nd)": 2, "Polynomial (3rd)": 3}
             if trend_type in degree_map:
                 mg._add_trendline_degree(degree_map[trend_type])
             elif trend_type == "Exponential":
-                if hasattr(mg, '_add_exponential_trendline'):
+                if hasattr(mg, "_add_exponential_trendline"):
                     mg._add_exponential_trendline()
                 else:
                     mg._add_trendline_degree(1)
@@ -1890,27 +2015,45 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Curve Fitting", "No data loaded.")
             return
 
-        from data_graph_studio.graph.curve_fitting import CurveFitter, FitType, CurveFitSettings
+        from data_graph_studio.graph.curve_fitting import (
+            CurveFitter,
+            FitType,
+            CurveFitSettings,
+        )
         import numpy as np
 
         # 컬럼 선택
         columns = self.engine.columns
         numeric_cols = [c for c in columns if self.engine.df[c].dtype.is_numeric()]
         if len(numeric_cols) < 2:
-            QMessageBox.warning(self, "Curve Fitting", "Need at least 2 numeric columns.")
+            QMessageBox.warning(
+                self, "Curve Fitting", "Need at least 2 numeric columns."
+            )
             return
 
-        x_col, ok = QInputDialog.getItem(self, "Curve Fitting", "Select X column:", numeric_cols, 0, False)
+        x_col, ok = QInputDialog.getItem(
+            self, "Curve Fitting", "Select X column:", numeric_cols, 0, False
+        )
         if not ok:
             return
-        y_col, ok = QInputDialog.getItem(self, "Curve Fitting", "Select Y column:", numeric_cols, 0, False)
+        y_col, ok = QInputDialog.getItem(
+            self, "Curve Fitting", "Select Y column:", numeric_cols, 0, False
+        )
         if not ok:
             return
 
         # 피팅 타입 선택
-        fit_options = ["Linear", "Polynomial (degree 2)", "Polynomial (degree 3)",
-                       "Exponential", "Power", "Logarithmic"]
-        fit_choice, ok = QInputDialog.getItem(self, "Curve Fitting", "Select fit type:", fit_options, 0, False)
+        fit_options = [
+            "Linear",
+            "Polynomial (degree 2)",
+            "Polynomial (degree 3)",
+            "Exponential",
+            "Power",
+            "Logarithmic",
+        ]
+        fit_choice, ok = QInputDialog.getItem(
+            self, "Curve Fitting", "Select fit type:", fit_options, 0, False
+        )
         if not ok:
             return
 
@@ -1935,23 +2078,23 @@ class MainWindow(QMainWindow):
         result = fitter.fit(x, y, fit_type, settings)
 
         if result is None or result.predict_func is None:
-            QMessageBox.warning(self, "Curve Fitting", "Fitting failed for the selected data.")
+            QMessageBox.warning(
+                self, "Curve Fitting", "Fitting failed for the selected data."
+            )
             return
 
         # 결과 표시
         eq = result.get_equation_string()
         stats_str = result.get_statistics_string()
-        QMessageBox.information(
-            self, "Curve Fitting Result",
-            f"{eq}\n\n{stats_str}"
-        )
+        QMessageBox.information(self, "Curve Fitting Result", f"{eq}\n\n{stats_str}")
 
         # 그래프에 피팅 커브 추가
         x_line = np.linspace(x.min(), x.max(), 200)
         y_line = result.predict_func(x_line)
         try:
             import pyqtgraph as pg
-            pen = pg.mkPen(color='r', width=2, style=pg.QtCore.Qt.DashLine)
+
+            pen = pg.mkPen(color="r", width=2, style=pg.QtCore.Qt.DashLine)
             plot_widget = self.graph_panel._plot_widget
             plot_widget.plot(x_line, y_line, pen=pen, name=f"Fit: {eq}")
         except Exception:
@@ -1964,9 +2107,9 @@ class MainWindow(QMainWindow):
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Calculate Statistics", "No data loaded.")
             return
-        
+
         # 통계 패널 업데이트 트리거
-        if hasattr(self.graph_panel, 'stat_panel'):
+        if hasattr(self.graph_panel, "stat_panel"):
             self.graph_panel.stat_panel.refresh()
         self.summary_panel.refresh()
         self.statusbar.showMessage("Statistics calculated", 3000)
@@ -1976,17 +2119,20 @@ class MainWindow(QMainWindow):
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Export Report", "No data loaded.")
             return
-        
+
         # ReportDialog 사용
         try:
             from .dialogs.report_dialog import ReportDialog
+
             dialog = ReportDialog(self.engine, self.state, self.graph_panel, self)
             dialog.exec()
         except ImportError:
             # ReportDialog가 없으면 간단한 내보내기
             file_path, selected_filter = QFileDialog.getSaveFileName(
-                self, "Export Report", "report",
-                "HTML Report (*.html);;PDF Report (*.pdf)"
+                self,
+                "Export Report",
+                "report",
+                "HTML Report (*.html);;PDF Report (*.pdf)",
             )
             if file_path:
                 self.statusbar.showMessage(f"Report exported to {file_path}", 3000)
@@ -2000,50 +2146,42 @@ class MainWindow(QMainWindow):
     def _on_open_profile(self):
         self._profile_ui_controller._on_open_profile()
 
-
     def _on_open_project(self):
         self._profile_ui_controller._on_open_project()
-
 
     def _on_save_profile_file(self):
         return self._profile_ui_controller._on_save_profile_file()
 
-
     def _on_save_profile_file_as(self):
         self._profile_ui_controller._on_save_profile_file_as()
-
 
     def _on_save_project_file(self):
         return self._profile_ui_controller._on_save_project_file()
 
-
     def _on_save_project_file_as(self):
         self._profile_ui_controller._on_save_project_file_as()
-
 
     def _save_project_to(self, path: str):
         self._profile_ui_controller._save_project_to(path)
 
-
     def _on_save_profile_bundle_as(self):
         self._profile_ui_controller._on_save_profile_bundle_as()
-
 
     def _on_save_data(self):
         """Save Data - 현재 데이터를 원본 포맷으로 저장"""
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Save Data", "No data loaded.")
             return
-        
-        current_path = getattr(self.engine, '_current_file_path', None)
+
+        current_path = getattr(self.engine, "_current_file_path", None)
         if current_path:
             try:
                 ext = Path(current_path).suffix.lower()
-                if ext == '.parquet':
+                if ext == ".parquet":
                     self.engine.df.write_parquet(current_path)
-                elif ext in ('.xlsx', '.xls'):
+                elif ext in (".xlsx", ".xls"):
                     self.engine.df.write_excel(current_path)
-                elif ext == '.json':
+                elif ext == ".json":
                     self.engine.df.write_json(current_path)
                 else:
                     self.engine.df.write_csv(current_path)
@@ -2058,16 +2196,18 @@ class MainWindow(QMainWindow):
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Save Data As", "No data loaded.")
             return
-        
+
         file_path, selected_filter = QFileDialog.getSaveFileName(
-            self, "Save Data As", "data",
-            "CSV Files (*.csv);;Excel Files (*.xlsx);;Parquet Files (*.parquet);;All Files (*.*)"
+            self,
+            "Save Data As",
+            "data",
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;Parquet Files (*.parquet);;All Files (*.*)",
         )
         if file_path:
             try:
-                if file_path.endswith('.xlsx'):
+                if file_path.endswith(".xlsx"):
                     self.engine.df.write_excel(file_path)
-                elif file_path.endswith('.parquet'):
+                elif file_path.endswith(".parquet"):
                     self.engine.df.write_parquet(file_path)
                 else:
                     self.engine.df.write_csv(file_path)
@@ -2123,25 +2263,27 @@ class MainWindow(QMainWindow):
         if not self.state.is_data_loaded:
             QMessageBox.information(self, "Remove Field", "No data loaded.")
             return
-        
+
         columns = self.engine.columns
         if not columns:
             QMessageBox.information(self, "Remove Field", "No columns available.")
             return
-        
+
         column, ok = QInputDialog.getItem(
-            self, "Remove Field", "Select column to remove:",
-            columns, 0, False
+            self, "Remove Field", "Select column to remove:", columns, 0, False
         )
         if ok and column:
             reply = QMessageBox.question(
-                self, "Confirm Remove",
+                self,
+                "Confirm Remove",
                 f"Are you sure you want to remove column '{column}'?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
             )
             if reply == QMessageBox.Yes:
                 try:
                     from ..core.undo_manager import UndoCommand, UndoActionType
+
                     before_df = self.engine.df
                     self.engine.drop_column(column)
                     after_df = self.engine.df
@@ -2160,12 +2302,14 @@ class MainWindow(QMainWindow):
                             description=f"Remove column '{column}'",
                             do=lambda: _apply_drop(after_df),
                             undo=lambda: _apply_drop(before_df),
-                            timestamp=__import__('time').time(),
+                            timestamp=__import__("time").time(),
                         )
                     )
                     self.statusbar.showMessage(f"Column '{column}' removed", 3000)
                 except Exception as e:
-                    QMessageBox.warning(self, "Remove Field", f"Failed to remove column: {e}")
+                    QMessageBox.warning(
+                        self, "Remove Field", f"Failed to remove column: {e}"
+                    )
 
     # ============================================================
     # New Menu Action Methods (Graph Menu - Options)
@@ -2245,12 +2389,14 @@ class MainWindow(QMainWindow):
     def _show_shortcuts_dialog(self):
         """Show keyboard shortcuts help dialog (Ctrl+/)"""
         from .dialogs.shortcut_help_dialog import ShortcutHelpDialog
+
         dlg = ShortcutHelpDialog(self._shortcut_controller, parent=self)
         dlg.exec()
 
     def _show_edit_shortcuts_dialog(self):
         """Show shortcut customization dialog"""
         from .dialogs.shortcut_edit_dialog import ShortcutEditDialog
+
         dlg = ShortcutEditDialog(self._shortcut_controller, parent=self)
         dlg.shortcut_changed.connect(self._on_shortcut_customized)
         dlg.exec()

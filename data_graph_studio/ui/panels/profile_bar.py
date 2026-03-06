@@ -2,13 +2,21 @@
 Profile Bar - 프로파일 설정 바 UI
 """
 
-from typing import Optional, List
 from PySide6.QtWidgets import (
-    QWidget, QFrame, QHBoxLayout, QVBoxLayout, QLabel,
-    QPushButton, QComboBox, QScrollArea, QMenu, QSizePolicy,
-    QToolButton, QMessageBox, QFileDialog, QInputDialog
+    QWidget,
+    QFrame,
+    QHBoxLayout,
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    QComboBox,
+    QScrollArea,
+    QMenu,
+    QToolButton,
+    QMessageBox,
+    QInputDialog,
 )
-from PySide6.QtCore import Qt, Signal, QSize, QMimeData
+from PySide6.QtCore import Qt, Signal, QMimeData
 from PySide6.QtGui import QDrag, QMouseEvent, QAction
 
 from ...core.state import AppState
@@ -237,13 +245,13 @@ class AddSettingButton(QPushButton):
 class ProfileBar(QFrame):
     """프로파일 바 - Summary Panel 아래에 위치"""
 
-    setting_clicked = Signal(str)         # setting_id
+    setting_clicked = Signal(str)  # setting_id
     setting_double_clicked = Signal(str)  # setting_id -> float
     add_setting_requested = Signal()
     profile_load_requested = Signal()
     profile_save_requested = Signal()
     profile_new_requested = Signal()
-    compare_requested = Signal()           # Compare Profiles 요청
+    compare_requested = Signal()  # Compare Profiles 요청
 
     def __init__(self, state: AppState, profile_controller=None, parent=None):
         super().__init__(parent)
@@ -252,7 +260,9 @@ class ProfileBar(QFrame):
         self._profile_controller = profile_controller
 
         self.setAccessibleName("Profile Bar")
-        self.setAccessibleDescription("Profile settings and graph configuration management")
+        self.setAccessibleDescription(
+            "Profile settings and graph configuration management"
+        )
 
         self._setup_ui()
         self._connect_signals()
@@ -281,7 +291,9 @@ class ProfileBar(QFrame):
 
         # 프로파일 라벨
         profile_label = QLabel("Profile:")
-        profile_label.setStyleSheet("color: #C2C8D1; font-size: 12px; background: transparent;")
+        profile_label.setStyleSheet(
+            "color: #C2C8D1; font-size: 12px; background: transparent;"
+        )
         header_layout.addWidget(profile_label)
 
         # 프로파일 드롭다운
@@ -439,10 +451,7 @@ class ProfileBar(QFrame):
     def _on_new_profile(self):
         """새 프로파일 생성"""
         name, ok = QInputDialog.getText(
-            self,
-            "New Profile",
-            "Enter profile name:",
-            text="New Profile"
+            self, "New Profile", "Enter profile name:", text="New Profile"
         )
         if ok and name.strip():
             profile = Profile.create_new(name.strip())
@@ -487,7 +496,9 @@ class ProfileBar(QFrame):
         btn = SettingButton(setting, is_active)
         btn.clicked.connect(lambda: self._on_setting_clicked(setting.id))
         btn.double_clicked.connect(lambda: self.setting_double_clicked.emit(setting.id))
-        btn.float_requested.connect(lambda: self.setting_double_clicked.emit(setting.id))
+        btn.float_requested.connect(
+            lambda: self.setting_double_clicked.emit(setting.id)
+        )
         btn.edit_requested.connect(lambda: self._on_edit_setting(setting.id))
         btn.duplicate_requested.connect(lambda: self._on_duplicate_setting(setting.id))
         btn.delete_requested.connect(lambda: self._on_delete_setting(setting.id))
@@ -529,7 +540,7 @@ class ProfileBar(QFrame):
             "Delete Setting",
             "Are you sure you want to delete this setting?",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             if self._profile_controller:
@@ -542,10 +553,7 @@ class ProfileBar(QFrame):
         setting = self._profile_controller._store.get(setting_id)
         if setting:
             name, ok = QInputDialog.getText(
-                self,
-                "Rename Setting",
-                "Enter new name:",
-                text=setting.name
+                self, "Rename Setting", "Enter new name:", text=setting.name
             )
             if ok and name.strip():
                 self._profile_controller.rename_profile(setting_id, name.strip())

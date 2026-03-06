@@ -5,7 +5,7 @@ Trellis Visualization - Spotfire 스타일 트렐리스 시각화
 """
 
 from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 import polars as pl
 import math
@@ -13,13 +13,15 @@ import math
 
 class TrellisMode(Enum):
     """트렐리스 모드"""
+
     ROWS_AND_COLUMNS = "rows_columns"  # 행과 열로 분할
-    PANELS = "panels"                   # 페이지 형태로 분할
+    PANELS = "panels"  # 페이지 형태로 분할
 
 
 @dataclass
 class TrellisSettings:
     """트렐리스 설정"""
+
     enabled: bool = False
     mode: TrellisMode = TrellisMode.ROWS_AND_COLUMNS
 
@@ -43,6 +45,7 @@ class TrellisSettings:
 @dataclass
 class TrellisPanel:
     """트렐리스 패널"""
+
     row_idx: int
     col_idx: int
     row_value: Any
@@ -58,6 +61,7 @@ class TrellisPanel:
 @dataclass
 class TrellisLayout:
     """트렐리스 레이아웃"""
+
     n_rows: int
     n_cols: int
     panels: List[Dict[str, Any]]
@@ -89,7 +93,7 @@ class TrellisCalculator:
         settings: TrellisSettings,
         total_width: float = 100,
         total_height: float = 100,
-        value_column: Optional[str] = None
+        value_column: Optional[str] = None,
     ) -> TrellisLayout:
         """
         트렐리스 레이아웃 계산
@@ -109,21 +113,23 @@ class TrellisCalculator:
             return TrellisLayout(
                 n_rows=1,
                 n_cols=1,
-                panels=[{
-                    "row_idx": 0,
-                    "col_idx": 0,
-                    "row_value": None,
-                    "col_value": None,
-                    "data": data,
-                    "x": 0,
-                    "y": 0,
-                    "width": total_width,
-                    "height": total_height,
-                    "label": ""
-                }],
+                panels=[
+                    {
+                        "row_idx": 0,
+                        "col_idx": 0,
+                        "row_value": None,
+                        "col_value": None,
+                        "data": data,
+                        "x": 0,
+                        "y": 0,
+                        "width": total_width,
+                        "height": total_height,
+                        "label": "",
+                    }
+                ],
                 row_values=[None],
                 col_values=[None],
-                sync_axes=settings.sync_axes
+                sync_axes=settings.sync_axes,
             )
 
         if settings.mode == TrellisMode.ROWS_AND_COLUMNS:
@@ -141,20 +147,20 @@ class TrellisCalculator:
         settings: TrellisSettings,
         total_width: float,
         total_height: float,
-        value_column: Optional[str]
+        value_column: Optional[str],
     ) -> TrellisLayout:
         """Rows and Columns 모드 계산"""
 
         # 행/열 고유값 추출
         if settings.row_column and settings.row_column in data.columns:
             row_values = data[settings.row_column].unique().sort().to_list()
-            row_values = row_values[:settings.max_rows]
+            row_values = row_values[: settings.max_rows]
         else:
             row_values = [None]
 
         if settings.col_column and settings.col_column in data.columns:
             col_values = data[settings.col_column].unique().sort().to_list()
-            col_values = col_values[:settings.max_cols]
+            col_values = col_values[: settings.max_cols]
         else:
             col_values = [None]
 
@@ -195,8 +201,12 @@ class TrellisCalculator:
                     continue
 
                 # 좌표 계산
-                x = total_width * spacing + col_idx * (panel_width + total_width * spacing)
-                y = total_height * spacing + row_idx * (panel_height + total_height * spacing)
+                x = total_width * spacing + col_idx * (
+                    panel_width + total_width * spacing
+                )
+                y = total_height * spacing + row_idx * (
+                    panel_height + total_height * spacing
+                )
 
                 # 레이블
                 label_parts = []
@@ -206,18 +216,20 @@ class TrellisCalculator:
                     label_parts.append(f"{settings.col_column}={col_val}")
                 label = ", ".join(label_parts)
 
-                panels.append({
-                    "row_idx": row_idx,
-                    "col_idx": col_idx,
-                    "row_value": row_val,
-                    "col_value": col_val,
-                    "data": panel_data,
-                    "x": x,
-                    "y": y,
-                    "width": panel_width,
-                    "height": panel_height,
-                    "label": label
-                })
+                panels.append(
+                    {
+                        "row_idx": row_idx,
+                        "col_idx": col_idx,
+                        "row_value": row_val,
+                        "col_value": col_val,
+                        "data": panel_data,
+                        "x": x,
+                        "y": y,
+                        "width": panel_width,
+                        "height": panel_height,
+                        "label": label,
+                    }
+                )
 
         return TrellisLayout(
             n_rows=n_rows,
@@ -227,7 +239,7 @@ class TrellisCalculator:
             col_values=col_values,
             sync_axes=settings.sync_axes,
             shared_y_range=shared_y_range,
-            total_panels=len(panels)
+            total_panels=len(panels),
         )
 
     def _calculate_panels(
@@ -236,7 +248,7 @@ class TrellisCalculator:
         settings: TrellisSettings,
         total_width: float,
         total_height: float,
-        value_column: Optional[str]
+        value_column: Optional[str],
     ) -> TrellisLayout:
         """Panels 모드 계산 (페이지네이션)"""
 
@@ -244,14 +256,18 @@ class TrellisCalculator:
             return self._calculate_rows_and_columns(
                 data,
                 TrellisSettings(enabled=False),
-                total_width, total_height, value_column
+                total_width,
+                total_height,
+                value_column,
             )
 
         # 패널 값 추출
         panel_values = data[settings.panel_column].unique().sort().to_list()
         total_panels = len(panel_values)
         panels_per_page = max(1, settings.panels_per_page)  # Ensure at least 1
-        total_pages = math.ceil(total_panels / panels_per_page) if total_panels > 0 else 1
+        total_pages = (
+            math.ceil(total_panels / panels_per_page) if total_panels > 0 else 1
+        )
 
         # 그리드 계산 (정사각형에 가깝게)
         n_cols = math.ceil(math.sqrt(panels_per_page))
@@ -276,30 +292,32 @@ class TrellisCalculator:
             col_idx = idx % n_cols
 
             # 데이터 필터링
-            panel_data = data.filter(
-                pl.col(settings.panel_column) == panel_val
-            )
+            panel_data = data.filter(pl.col(settings.panel_column) == panel_val)
 
             if len(panel_data) == 0 and not settings.show_empty_panels:
                 continue
 
             # 좌표
             x = total_width * spacing + col_idx * (panel_width + total_width * spacing)
-            y = total_height * spacing + row_idx * (panel_height + total_height * spacing)
+            y = total_height * spacing + row_idx * (
+                panel_height + total_height * spacing
+            )
 
-            panels.append({
-                "row_idx": row_idx,
-                "col_idx": col_idx,
-                "row_value": None,
-                "col_value": None,
-                "panel_value": panel_val,
-                "data": panel_data,
-                "x": x,
-                "y": y,
-                "width": panel_width,
-                "height": panel_height,
-                "label": f"{settings.panel_column}={panel_val}"
-            })
+            panels.append(
+                {
+                    "row_idx": row_idx,
+                    "col_idx": col_idx,
+                    "row_value": None,
+                    "col_value": None,
+                    "panel_value": panel_val,
+                    "data": panel_data,
+                    "x": x,
+                    "y": y,
+                    "width": panel_width,
+                    "height": panel_height,
+                    "label": f"{settings.panel_column}={panel_val}",
+                }
+            )
 
         return TrellisLayout(
             n_rows=n_rows,
@@ -311,14 +329,11 @@ class TrellisCalculator:
             shared_y_range=shared_y_range,
             total_panels=total_panels,
             panels_per_page=panels_per_page,
-            total_pages=total_pages
+            total_pages=total_pages,
         )
 
     def get_panel_data(
-        self,
-        layout: TrellisLayout,
-        row_idx: int,
-        col_idx: int
+        self, layout: TrellisLayout, row_idx: int, col_idx: int
     ) -> Optional[pl.DataFrame]:
         """특정 패널의 데이터 반환"""
         for panel in layout.panels:
@@ -327,10 +342,7 @@ class TrellisCalculator:
         return None
 
     def get_panel_bounds(
-        self,
-        layout: TrellisLayout,
-        row_idx: int,
-        col_idx: int
+        self, layout: TrellisLayout, row_idx: int, col_idx: int
     ) -> Optional[Dict[str, float]]:
         """특정 패널의 경계 반환"""
         for panel in layout.panels:
@@ -339,6 +351,6 @@ class TrellisCalculator:
                     "x": panel["x"],
                     "y": panel["y"],
                     "width": panel["width"],
-                    "height": panel["height"]
+                    "height": panel["height"],
                 }
         return None

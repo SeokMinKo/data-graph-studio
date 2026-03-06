@@ -246,8 +246,12 @@ class UndoStack:
         )
 
         # Backward-compat for tests: expose snapshot lists when present.
-        setattr(compound, "before_state", [getattr(c, "before_state", None) for c in items])
-        setattr(compound, "after_state", [getattr(c, "after_state", None) for c in items])
+        setattr(
+            compound, "before_state", [getattr(c, "before_state", None) for c in items]
+        )
+        setattr(
+            compound, "after_state", [getattr(c, "after_state", None) for c in items]
+        )
 
         # Compound items already executed when they were pushed (if they were commands).
         # So we only record the compound now.
@@ -260,15 +264,15 @@ class UndoStack:
             except Exception:
                 pass
 
-# (removed UndoAction compatibility layer)
+    # (removed UndoAction compatibility layer)
     def _enforce_max_depth(self) -> None:
         while len(self._commands) > self.max_depth:
             self._commands.pop(0)
             self._index = max(0, self._index - 1)
         # Memory-based eviction (#7)
         if self.max_memory_bytes > 0:
-            total = sum(getattr(c, 'size_hint', 0) for c in self._commands)
+            total = sum(getattr(c, "size_hint", 0) for c in self._commands)
             while total > self.max_memory_bytes and len(self._commands) > 1:
                 removed = self._commands.pop(0)
                 self._index = max(0, self._index - 1)
-                total -= getattr(removed, 'size_hint', 0)
+                total -= getattr(removed, "size_hint", 0)

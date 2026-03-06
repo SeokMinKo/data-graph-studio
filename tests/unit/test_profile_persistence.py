@@ -1,7 +1,5 @@
 """Tests for ProfileStore JSON persistence (save_to_disk / load_from_disk)."""
 
-import json
-import time
 import uuid
 
 from data_graph_studio.core.profile import GraphSetting

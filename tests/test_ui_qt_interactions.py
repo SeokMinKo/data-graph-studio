@@ -56,7 +56,9 @@ def test_toggle_dashboard_mode_action_does_not_block(qtbot, monkeypatch) -> None
     from PySide6.QtWidgets import QMessageBox
 
     # Make message boxes non-blocking for tests
-    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *args, **kwargs: QMessageBox.Ok
+    )
     monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
 
     from data_graph_studio.ui.main_window import MainWindow

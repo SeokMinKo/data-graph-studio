@@ -14,9 +14,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List
 
 from PySide6.QtWidgets import (
-    QFileDialog, QMessageBox, QProgressDialog, QApplication, QDialog,
+    QFileDialog,
+    QMessageBox,
+    QProgressDialog,
+    QApplication,
+    QDialog,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtCore import Qt, QThread, Signal
 
 from ...core.data_engine import DataEngine, LoadingProgress
 from ...core.clipboard_manager import ClipboardManager
@@ -31,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 class DataLoaderThread(QThread):
     """비동기 데이터 로딩 스레드"""
+
     progress_updated = Signal(object)  # LoadingProgress
     finished_loading = Signal(bool)  # success
 
@@ -50,6 +55,7 @@ class DataLoaderThread(QThread):
 
 class DataLoaderThreadWithSettings(QThread):
     """비동기 데이터 로딩 스레드 (파싱 설정 적용)"""
+
     progress_updated = Signal(object)  # LoadingProgress
     finished_loading = Signal(bool)  # success
 
@@ -64,7 +70,10 @@ class DataLoaderThreadWithSettings(QThread):
 
         # Get process filter for ETL files
         process_filter = None
-        if hasattr(self.settings, 'etl_selected_processes') and self.settings.etl_selected_processes:
+        if (
+            hasattr(self.settings, "etl_selected_processes")
+            and self.settings.etl_selected_processes
+        ):
             process_filter = self.settings.etl_selected_processes
 
         success = self.engine.load_file(
@@ -73,13 +82,19 @@ class DataLoaderThreadWithSettings(QThread):
             encoding=self.settings.encoding,
             delimiter=self.settings.delimiter,
             delimiter_type=self.settings.delimiter_type,
-            regex_pattern=self.settings.regex_pattern if self.settings.regex_pattern else None,
+            regex_pattern=self.settings.regex_pattern
+            if self.settings.regex_pattern
+            else None,
             has_header=self.settings.has_header,
             skip_rows=self.settings.skip_rows,
-            comment_char=self.settings.comment_char if self.settings.comment_char else None,
-            excluded_columns=self.settings.excluded_columns if self.settings.excluded_columns else None,
+            comment_char=self.settings.comment_char
+            if self.settings.comment_char
+            else None,
+            excluded_columns=self.settings.excluded_columns
+            if self.settings.excluded_columns
+            else None,
             process_filter=process_filter,
-            optimize_memory=True
+            optimize_memory=True,
         )
         self.finished_loading.emit(success)
 
@@ -90,7 +105,7 @@ class DataLoaderThreadWithSettings(QThread):
 class FileLoadingController:
     """파일 로딩/저장/최근파일/클립보드/샘플 데이터 관리 컨트롤러"""
 
-    def __init__(self, window: 'MainWindow'):
+    def __init__(self, window: "MainWindow"):
         self._w = window
         self._file_watcher = None
         self._watch_enabled = False
@@ -111,12 +126,12 @@ class FileLoadingController:
             "Excel (*.xlsx *.xls);;"
             "Parquet (*.parquet);;"
             "JSON (*.json);;"
-            "All Files (*.*)"
+            "All Files (*.*)",
         )
 
         if file_path:
             ext = Path(file_path).suffix.lower()
-            if ext == '.dgs':
+            if ext == ".dgs":
                 self._load_project_file(file_path)
                 return
             self._show_new_project_wizard(file_path)
@@ -134,7 +149,7 @@ class FileLoadingController:
             "Excel (*.xlsx *.xls);;"
             "Parquet (*.parquet);;"
             "JSON (*.json);;"
-            "All Files (*.*)"
+            "All Files (*.*)",
         )
 
         if file_path:
@@ -156,9 +171,7 @@ class FileLoadingController:
         if not file_paths:
             return
 
-        progress = QProgressDialog(
-            "Loading files...", "Cancel", 0, len(file_paths), w
-        )
+        progress = QProgressDialog("Loading files...", "Cancel", 0, len(file_paths), w)
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
         progress.show()
@@ -193,7 +206,7 @@ class FileLoadingController:
                         name=name,
                         row_count=dataset.row_count,
                         column_count=dataset.column_count,
-                        memory_bytes=dataset.memory_bytes
+                        memory_bytes=dataset.memory_bytes,
                     )
 
         progress.setValue(len(file_paths))
@@ -216,11 +229,10 @@ class FileLoadingController:
     def _on_open_multiple_files_with_paths(self, file_paths: List[str]):
         """드롭된 여러 파일을 멀티 데이터셋으로 로드"""
         from ...core.state import ComparisonMode
+
         w = self._w
 
-        progress = QProgressDialog(
-            "Loading files...", "Cancel", 0, len(file_paths), w
-        )
+        progress = QProgressDialog("Loading files...", "Cancel", 0, len(file_paths), w)
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
         progress.show()
@@ -268,22 +280,23 @@ class FileLoadingController:
             return
 
         from ..wizards.new_project_wizard import NewProjectWizard
+
         wizard = NewProjectWizard(file_path, self._w)
         wizard.project_created.connect(self._on_wizard_project_created)
         wizard.exec()
 
     def _on_wizard_project_created(self, result: dict):
         """마법사에서 프로젝트 생성 완료 시 호출"""
-        parsing_settings = result.get('parsing_settings')
-        graph_setting = result.get('graph_setting')
-        project_name = result.get('project_name')
+        parsing_settings = result.get("parsing_settings")
+        graph_setting = result.get("graph_setting")
+        project_name = result.get("project_name")
 
         if parsing_settings is None:
             return
 
         self._w._pending_wizard_result = {
-            'graph_setting': graph_setting,
-            'project_name': project_name,
+            "graph_setting": graph_setting,
+            "project_name": project_name,
         }
 
         self._load_file_with_settings(parsing_settings.file_path, parsing_settings)
@@ -295,12 +308,13 @@ class FileLoadingController:
 
         ext = Path(file_path).suffix.lower()
 
-        if ext in ['.parquet', '.xlsx', '.xls', '.json']:
+        if ext in [".parquet", ".xlsx", ".xls", ".json"]:
             # Show quick preview for binary formats before loading
             self._show_binary_format_preview(file_path, ext)
             return
 
         from ..dialogs.parsing_preview_dialog import ParsingPreviewDialog
+
         dialog = ParsingPreviewDialog(file_path, self._w)
         if dialog.exec() == QDialog.Accepted:
             settings = dialog.get_settings()
@@ -309,13 +323,14 @@ class FileLoadingController:
     def _show_binary_format_preview(self, file_path: str, ext: str):
         """Parquet/Excel/JSON 파일 미리보기 후 로드"""
         import polars as pl
+
         w = self._w
         try:
-            if ext == '.parquet':
+            if ext == ".parquet":
                 preview_df = pl.read_parquet(file_path, n_rows=20)
-            elif ext in ('.xlsx', '.xls'):
+            elif ext in (".xlsx", ".xls"):
                 preview_df = pl.read_excel(file_path).head(20)
-            elif ext == '.json':
+            elif ext == ".json":
                 preview_df = pl.read_json(file_path).head(20)
             else:
                 self._load_file(file_path)
@@ -330,7 +345,8 @@ class FileLoadingController:
                 f"{'...' if len(preview_df.columns) > 20 else ''}"
             )
             reply = QMessageBox.question(
-                w, "File Preview",
+                w,
+                "File Preview",
                 f"{info}\n\nLoad this file?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes,
@@ -363,7 +379,7 @@ class FileLoadingController:
                 f"Current available memory: {sys_mem['available_gb']:.1f} GB\n\n"
                 f"Do you want to continue?",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.No,
             )
             if reply != QMessageBox.Yes:
                 return False
@@ -375,7 +391,7 @@ class FileLoadingController:
                 f"Loading may take some time.\n\n"
                 f"Continue?",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
+                QMessageBox.Yes,
             )
             if reply != QMessageBox.Yes:
                 return False
@@ -392,7 +408,9 @@ class FileLoadingController:
                 logger.debug("Waiting for previous loader thread to finish...")
                 w.engine.cancel_loading()
                 if not w._loader_thread.wait(2000):
-                    logger.warning("Loader thread did not finish in time, terminating...")
+                    logger.warning(
+                        "Loader thread did not finish in time, terminating..."
+                    )
                     w._loader_thread.terminate()
                     w._loader_thread.wait(1000)
             w._loader_thread = None
@@ -404,10 +422,7 @@ class FileLoadingController:
         self._cleanup_loader_thread()
 
         w._progress_dialog = QProgressDialog(
-            f"Loading {Path(file_path).name}...",
-            "Cancel",
-            0, 100,
-            w
+            f"Loading {Path(file_path).name}...", "Cancel", 0, 100, w
         )
         w._progress_dialog.setWindowModality(Qt.WindowModal)
         w._progress_dialog.setAutoClose(True)
@@ -427,10 +442,7 @@ class FileLoadingController:
         self._cleanup_loader_thread()
 
         w._progress_dialog = QProgressDialog(
-            f"Loading {Path(file_path).name}...",
-            "Cancel",
-            0, 100,
-            w
+            f"Loading {Path(file_path).name}...", "Cancel", 0, 100, w
         )
         w._progress_dialog.setWindowModality(Qt.WindowModal)
         w._progress_dialog.setAutoClose(True)
@@ -452,7 +464,7 @@ class FileLoadingController:
 
             try:
                 proc_mem = MemoryMonitor.get_process_memory()
-                mem_str = MemoryMonitor.format_memory(proc_mem['rss_mb'])
+                mem_str = MemoryMonitor.format_memory(proc_mem["rss_mb"])
             except Exception:
                 mem_str = "--"
 
@@ -478,28 +490,36 @@ class FileLoadingController:
 
             if w.engine.dataset_count == 0:
                 import uuid
+
                 dataset_id = str(uuid.uuid4())[:8]
-                name = Path(w.engine._source.path).name if w.engine._source and w.engine._source.path else "Dataset"
+                name = (
+                    Path(w.engine._source.path).name
+                    if w.engine._source and w.engine._source.path
+                    else "Dataset"
+                )
                 from ...core.data_engine import DatasetInfo
+
                 dataset_info = DatasetInfo(
                     id=dataset_id,
                     name=name,
                     df=w.engine.df,
                     lazy_df=w.engine._lazy_df,
                     source=w.engine._source,
-                    profile=w.engine.profile
+                    profile=w.engine.profile,
                 )
                 w.engine._datasets[dataset_id] = dataset_info
                 w.engine._active_dataset_id = dataset_id
 
-                memory_bytes = w.engine.df.estimated_size() if w.engine.df is not None else 0
+                memory_bytes = (
+                    w.engine.df.estimated_size() if w.engine.df is not None else 0
+                )
                 w.state.add_dataset(
                     dataset_id=dataset_id,
                     name=name,
                     file_path=w.engine._source.path if w.engine._source else None,
                     row_count=w.engine.row_count,
                     column_count=w.engine.column_count,
-                    memory_bytes=memory_bytes
+                    memory_bytes=memory_bytes,
                 )
 
             if w.engine.profile:
@@ -508,10 +528,16 @@ class FileLoadingController:
             w.profile_model.refresh()
 
             gc.collect()
-            logger.info(f"Data loaded: {w.engine.row_count:,} rows, {w.engine.column_count} columns")
+            logger.info(
+                f"Data loaded: {w.engine.row_count:,} rows, {w.engine.column_count} columns"
+            )
 
             # Add to recent files
-            source_path = w.engine._source.path if w.engine._source and w.engine._source.path else None
+            source_path = (
+                w.engine._source.path
+                if w.engine._source and w.engine._source.path
+                else None
+            )
             if source_path and source_path != "clipboard":
                 self._add_to_recent_files(source_path)
 
@@ -519,11 +545,7 @@ class FileLoadingController:
         else:
             error_msg = w.engine.progress.error_message or "Unknown error"
             logger.error(f"Failed to load file: {error_msg}")
-            QMessageBox.critical(
-                w,
-                "Error",
-                f"Failed to load file:\n{error_msg}"
-            )
+            QMessageBox.critical(w, "Error", f"Failed to load file:\n{error_msg}")
 
     def _cancel_loading(self):
         """로딩 취소"""
@@ -542,6 +564,7 @@ class FileLoadingController:
         """프로젝트 파일 (.dgs) 로드"""
         from ...core.project import Project
         from ...core.profile import GraphSetting
+
         w = self._w
         try:
             project = Project.load(file_path)
@@ -550,8 +573,9 @@ class FileLoadingController:
             errors = project.validate()
             if errors:
                 QMessageBox.warning(
-                    w, "Load Project",
-                    f"Some data files not found:\n" + "\n".join(errors)
+                    w,
+                    "Load Project",
+                    "Some data files not found:\n" + "\n".join(errors),
                 )
 
             loaded_count = 0
@@ -569,7 +593,7 @@ class FileLoadingController:
                                 name=ds.name or Path(resolved_path).name,
                                 row_count=dataset.row_count,
                                 column_count=dataset.column_count,
-                                memory_bytes=dataset.memory_bytes
+                                memory_bytes=dataset.memory_bytes,
                             )
                         if ds.is_active:
                             active_dataset_id = dataset_id
@@ -577,7 +601,11 @@ class FileLoadingController:
             if active_dataset_id:
                 w.engine.activate_dataset(active_dataset_id)
             elif loaded_count > 0:
-                ids = w.engine.get_dataset_ids() if hasattr(w.engine, 'get_dataset_ids') else []
+                ids = (
+                    w.engine.get_dataset_ids()
+                    if hasattr(w.engine, "get_dataset_ids")
+                    else []
+                )
                 if ids:
                     w.engine.activate_dataset(ids[0])
 
@@ -589,15 +617,17 @@ class FileLoadingController:
                     logger.warning(f"Failed to restore profile: {e}")
 
             w._last_project_path = file_path
-            w.statusbar.showMessage(f"Project loaded: {file_path} ({loaded_count} datasets, {len(project.profiles)} profiles)", 3000)
+            w.statusbar.showMessage(
+                f"Project loaded: {file_path} ({loaded_count} datasets, {len(project.profiles)} profiles)",
+                3000,
+            )
 
             if loaded_count > 0:
                 w._on_data_loaded()
 
         except Exception as e:
             QMessageBox.critical(
-                w, "Load Project Error",
-                f"Failed to load project file:\n{e}"
+                w, "Load Project Error", f"Failed to load project file:\n{e}"
             )
 
     # ==================== Sample Data ====================
@@ -615,8 +645,10 @@ class FileLoadingController:
         base_date = datetime(2024, 1, 1)
         dates = [base_date + timedelta(days=i % 365) for i in range(n_rows)]
 
-        regions = np.random.choice(['서울', '부산', '대구', '인천', '광주'], n_rows)
-        products = np.random.choice(['노트북', '스마트폰', '태블릿', '모니터', '키보드'], n_rows)
+        regions = np.random.choice(["서울", "부산", "대구", "인천", "광주"], n_rows)
+        products = np.random.choice(
+            ["노트북", "스마트폰", "태블릿", "모니터", "키보드"], n_rows
+        )
 
         base_sales = 10000 + np.random.normal(0, 2000, n_rows)
         seasonal = 3000 * np.sin(np.arange(n_rows) * 2 * np.pi / 365)
@@ -625,16 +657,20 @@ class FileLoadingController:
         quantity = np.random.randint(1, 50, n_rows)
         price = np.random.choice([150, 300, 500, 900, 1200], n_rows)
 
-        df = pl.DataFrame({
-            'date': dates,
-            'region': regions,
-            'product': products,
-            'sales': sales,
-            'quantity': quantity,
-            'price': price,
-        })
+        df = pl.DataFrame(
+            {
+                "date": dates,
+                "region": regions,
+                "product": products,
+                "sales": sales,
+                "quantity": quantity,
+                "price": price,
+            }
+        )
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        ) as f:
             df.write_csv(f.name)
             temp_path = f.name
 
@@ -687,15 +723,18 @@ class FileLoadingController:
     def _update_recent_files_menu(self):
         """최근 파일 메뉴 업데이트 (Enhanced UX: parent folder, pin, gray missing)"""
         from PySide6.QtGui import QAction
+
         w = self._w
         w._recent_files_menu.clear()
 
         recent_data = self._get_recent_files_data()
-        pinned = recent_data.get('pinned', [])
-        files = recent_data.get('files', [])
+        pinned = recent_data.get("pinned", [])
+        files = recent_data.get("files", [])
 
         # Show pinned first
-        all_entries = [(f, True) for f in pinned if f not in files[:0]] + [(f, False) for f in files]
+        all_entries = [(f, True) for f in pinned if f not in files[:0]] + [
+            (f, False) for f in files
+        ]
         # Deduplicate
         seen = set()
         unique_entries = []
@@ -711,7 +750,7 @@ class FileLoadingController:
         else:
             for file_path, is_pinned in unique_entries[:15]:
                 p = Path(file_path)
-                parent = str(p.parent).replace(str(Path.home()), '~')
+                parent = str(p.parent).replace(str(Path.home()), "~")
                 prefix = "📌 " if is_pinned else ""
                 label = f"{prefix}{p.name}  ({parent})"
                 action = QAction(label, w)
@@ -720,7 +759,9 @@ class FileLoadingController:
                 exists = p.exists()
                 if not exists:
                     action.setEnabled(False)
-                action.triggered.connect(lambda checked, fp=file_path: self._open_recent_file(fp))
+                action.triggered.connect(
+                    lambda checked, fp=file_path: self._open_recent_file(fp)
+                )
                 w._recent_files_menu.addAction(action)
 
             w._recent_files_menu.addSeparator()
@@ -733,29 +774,29 @@ class FileLoadingController:
         try:
             recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
             if recent_file_path.exists():
-                with open(recent_file_path, 'r', encoding='utf-8') as f:
+                with open(recent_file_path, "r", encoding="utf-8") as f:
                     return json.load(f)
         except Exception:
             pass
-        return {'files': [], 'pinned': []}
+        return {"files": [], "pinned": []}
 
     def _get_recent_files(self) -> List[str]:
         """최근 파일 목록 가져오기 (existing files only)"""
         data = self._get_recent_files_data()
-        return [f for f in data.get('files', []) if Path(f).exists()]
+        return [f for f in data.get("files", []) if Path(f).exists()]
 
     def _pin_recent_file(self, file_path: str):
         """최근 파일 핀 토글"""
         try:
             data = self._get_recent_files_data()
-            pinned = data.get('pinned', [])
+            pinned = data.get("pinned", [])
             if file_path in pinned:
                 pinned.remove(file_path)
             else:
                 pinned.insert(0, file_path)
-            data['pinned'] = pinned
+            data["pinned"] = pinned
             recent_file_path = Path.home() / ".data_graph_studio" / "recent_files.json"
-            with open(recent_file_path, 'w', encoding='utf-8') as f:
+            with open(recent_file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             self._update_recent_files_menu()
         except Exception as e:
@@ -769,14 +810,14 @@ class FileLoadingController:
             recent_file_path = recent_dir / "recent_files.json"
 
             data = self._get_recent_files_data()
-            recent_files = data.get('files', [])
+            recent_files = data.get("files", [])
             if file_path in recent_files:
                 recent_files.remove(file_path)
             recent_files.insert(0, file_path)
             recent_files = recent_files[:20]
-            data['files'] = recent_files
+            data["files"] = recent_files
 
-            with open(recent_file_path, 'w', encoding='utf-8') as f:
+            with open(recent_file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
             self._update_recent_files_menu()
@@ -788,7 +829,9 @@ class FileLoadingController:
         if Path(file_path).exists():
             self._show_parsing_preview(file_path)
         else:
-            QMessageBox.warning(self._w, "File Not Found", f"File no longer exists:\n{file_path}")
+            QMessageBox.warning(
+                self._w, "File Not Found", f"File no longer exists:\n{file_path}"
+            )
             self._update_recent_files_menu()
 
     def _clear_recent_files(self):
@@ -807,6 +850,7 @@ class FileLoadingController:
     def _toggle_file_watch(self, enabled: bool):
         """파일 감시 토글"""
         from PySide6.QtCore import QFileSystemWatcher
+
         w = self._w
         self._watch_enabled = enabled
 
@@ -815,7 +859,9 @@ class FileLoadingController:
             if source_path and Path(source_path).exists():
                 if self._file_watcher is None:
                     self._file_watcher = QFileSystemWatcher(w)
-                    self._file_watcher.fileChanged.connect(self._on_watched_file_changed)
+                    self._file_watcher.fileChanged.connect(
+                        self._on_watched_file_changed
+                    )
                 self._file_watcher.addPath(source_path)
                 w.statusbar.showMessage(f"Watching: {Path(source_path).name}", 3000)
             else:
@@ -831,7 +877,8 @@ class FileLoadingController:
         """감시 중인 파일이 변경되었을 때"""
         w = self._w
         reply = QMessageBox.question(
-            w, "File Changed",
+            w,
+            "File Changed",
             f"The file has been modified externally:\n{Path(path).name}\n\nReload?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.Yes,
@@ -851,8 +898,7 @@ class FileLoadingController:
 
         w = self._w
         url, ok = QInputDialog.getText(
-            w, "Import from URL",
-            "Enter data URL (CSV, Parquet, or JSON):"
+            w, "Import from URL", "Enter data URL (CSV, Parquet, or JSON):"
         )
         if not ok or not url.strip():
             return
@@ -863,9 +909,9 @@ class FileLoadingController:
 
         try:
             url_lower = url.lower()
-            if url_lower.endswith('.parquet'):
+            if url_lower.endswith(".parquet"):
                 df = pl.read_parquet(url)
-            elif url_lower.endswith('.json'):
+            elif url_lower.endswith(".json"):
                 df = pl.read_json(url)
             else:
                 df = pl.read_csv(url)
@@ -888,7 +934,9 @@ class FileLoadingController:
             else:
                 w.statusbar.showMessage("Failed to load URL data", 5000)
         except Exception as e:
-            QMessageBox.warning(w, "URL Import Error", f"Failed to import from URL:\n{e}")
+            QMessageBox.warning(
+                w, "URL Import Error", f"Failed to import from URL:\n{e}"
+            )
             w.statusbar.showMessage("URL import failed", 3000)
 
     # ==================== Loading Profiles ====================
@@ -896,6 +944,7 @@ class FileLoadingController:
     def _save_loading_profile(self):
         """현재 파싱 설정을 프로필로 저장"""
         from PySide6.QtWidgets import QInputDialog
+
         w = self._w
 
         name, ok = QInputDialog.getText(w, "Save Loading Profile", "Profile name:")
@@ -908,19 +957,19 @@ class FileLoadingController:
             return
 
         profile = {
-            'name': name.strip(),
-            'encoding': source.encoding if source.encoding else 'utf-8',
-            'delimiter': source.delimiter if source.delimiter else ',',
-            'has_header': source.has_header,
-            'skip_rows': source.skip_rows,
-            'comment_char': source.comment_char,
+            "name": name.strip(),
+            "encoding": source.encoding if source.encoding else "utf-8",
+            "delimiter": source.delimiter if source.delimiter else ",",
+            "has_header": source.has_header,
+            "skip_rows": source.skip_rows,
+            "comment_char": source.comment_char,
         }
 
         profiles_dir = Path.home() / ".data_graph_studio" / "loading_profiles"
         profiles_dir.mkdir(parents=True, exist_ok=True)
         profile_path = profiles_dir / f"{name.strip().replace(' ', '_')}.json"
 
-        with open(profile_path, 'w', encoding='utf-8') as f:
+        with open(profile_path, "w", encoding="utf-8") as f:
             json.dump(profile, f, ensure_ascii=False, indent=2)
 
         w.statusbar.showMessage(f"Loading profile saved: {name}", 3000)
@@ -928,6 +977,7 @@ class FileLoadingController:
     def _load_loading_profile(self):
         """저장된 파싱 프로필 로드"""
         from PySide6.QtWidgets import QInputDialog
+
         w = self._w
 
         profiles_dir = Path.home() / ".data_graph_studio" / "loading_profiles"
@@ -940,7 +990,7 @@ class FileLoadingController:
             w.statusbar.showMessage("No saved loading profiles", 3000)
             return
 
-        names = [p.stem.replace('_', ' ') for p in profile_files]
+        names = [p.stem.replace("_", " ") for p in profile_files]
         name, ok = QInputDialog.getItem(
             w, "Load Profile", "Select loading profile:", names, 0, False
         )
@@ -948,10 +998,12 @@ class FileLoadingController:
             return
 
         idx = names.index(name)
-        with open(profile_files[idx], 'r', encoding='utf-8') as f:
+        with open(profile_files[idx], "r", encoding="utf-8") as f:
             profile = json.load(f)
 
-        w.statusbar.showMessage(f"Loading profile loaded: {profile.get('name', name)}", 3000)
+        w.statusbar.showMessage(
+            f"Loading profile loaded: {profile.get('name', name)}", 3000
+        )
         return profile
 
     # ==================== Data Save ====================
@@ -963,15 +1015,15 @@ class FileLoadingController:
             QMessageBox.information(w, "Save Data", "No data loaded.")
             return
 
-        current_path = getattr(w.engine, '_current_file_path', None)
+        current_path = getattr(w.engine, "_current_file_path", None)
         if current_path:
             try:
                 ext = Path(current_path).suffix.lower()
-                if ext == '.parquet':
+                if ext == ".parquet":
                     w.engine.df.write_parquet(current_path)
-                elif ext in ('.xlsx', '.xls'):
+                elif ext in (".xlsx", ".xls"):
                     w.engine.df.write_excel(current_path)
-                elif ext == '.json':
+                elif ext == ".json":
                     w.engine.df.write_json(current_path)
                 else:
                     w.engine.df.write_csv(current_path)
@@ -989,14 +1041,16 @@ class FileLoadingController:
             return
 
         file_path, selected_filter = QFileDialog.getSaveFileName(
-            w, "Save Data As", "data",
-            "CSV Files (*.csv);;Excel Files (*.xlsx);;Parquet Files (*.parquet);;All Files (*.*)"
+            w,
+            "Save Data As",
+            "data",
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;Parquet Files (*.parquet);;All Files (*.*)",
         )
         if file_path:
             try:
-                if file_path.endswith('.xlsx'):
+                if file_path.endswith(".xlsx"):
                     w.engine.df.write_excel(file_path)
-                elif file_path.endswith('.parquet'):
+                elif file_path.endswith(".parquet"):
                     w.engine.df.write_parquet(file_path)
                 else:
                     w.engine.df.write_csv(file_path)
@@ -1008,11 +1062,16 @@ class FileLoadingController:
     def _on_import_data(self):
         """Import - 데이터 임포트"""
         from PySide6.QtWidgets import QInputDialog
+
         w = self._w
-        sources = ["From File...", "From Clipboard", "From URL...", "From Database (Coming Soon)"]
+        sources = [
+            "From File...",
+            "From Clipboard",
+            "From URL...",
+            "From Database (Coming Soon)",
+        ]
         source, ok = QInputDialog.getItem(
-            w, "Import Data", "Select import source:",
-            sources, 0, False
+            w, "Import Data", "Select import source:", sources, 0, False
         )
         if ok:
             if source == "From File...":

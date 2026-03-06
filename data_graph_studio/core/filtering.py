@@ -31,17 +31,19 @@ def _is_safe_regex_pattern(pattern: str) -> bool:
 
 class FilterType(Enum):
     """필터 타입"""
-    NUMERIC = "numeric"        # 숫자 필터
-    TEXT = "text"              # 텍스트 필터
-    DATE = "date"              # 날짜 필터
-    BOOLEAN = "boolean"        # 불리언 필터
-    CHECKBOX = "checkbox"      # 체크박스 (다중 선택)
-    RANGE = "range"            # 범위 슬라이더
+
+    NUMERIC = "numeric"  # 숫자 필터
+    TEXT = "text"  # 텍스트 필터
+    DATE = "date"  # 날짜 필터
+    BOOLEAN = "boolean"  # 불리언 필터
+    CHECKBOX = "checkbox"  # 체크박스 (다중 선택)
+    RANGE = "range"  # 범위 슬라이더
     TEXT_SEARCH = "text_search"  # 텍스트 검색
 
 
 class FilterOperator(Enum):
     """필터 연산자"""
+
     # 비교 연산자
     EQUALS = "eq"
     NOT_EQUALS = "ne"
@@ -79,6 +81,7 @@ class Filter:
     """
     단일 필터 정의
     """
+
     column: str
     operator: FilterOperator
     value: Any
@@ -140,25 +143,39 @@ class Filter:
             if self.case_sensitive:
                 return col.cast(pl.Utf8).str.contains(str(self.value))
             else:
-                return col.cast(pl.Utf8).str.to_lowercase().str.contains(str(self.value).lower())
+                return (
+                    col.cast(pl.Utf8)
+                    .str.to_lowercase()
+                    .str.contains(str(self.value).lower())
+                )
 
         elif self.operator == FilterOperator.NOT_CONTAINS:
             if self.case_sensitive:
                 return ~col.cast(pl.Utf8).str.contains(str(self.value))
             else:
-                return ~col.cast(pl.Utf8).str.to_lowercase().str.contains(str(self.value).lower())
+                return ~col.cast(pl.Utf8).str.to_lowercase().str.contains(
+                    str(self.value).lower()
+                )
 
         elif self.operator == FilterOperator.STARTS_WITH:
             if self.case_sensitive:
                 return col.cast(pl.Utf8).str.starts_with(str(self.value))
             else:
-                return col.cast(pl.Utf8).str.to_lowercase().str.starts_with(str(self.value).lower())
+                return (
+                    col.cast(pl.Utf8)
+                    .str.to_lowercase()
+                    .str.starts_with(str(self.value).lower())
+                )
 
         elif self.operator == FilterOperator.ENDS_WITH:
             if self.case_sensitive:
                 return col.cast(pl.Utf8).str.ends_with(str(self.value))
             else:
-                return col.cast(pl.Utf8).str.to_lowercase().str.ends_with(str(self.value).lower())
+                return (
+                    col.cast(pl.Utf8)
+                    .str.to_lowercase()
+                    .str.ends_with(str(self.value).lower())
+                )
 
         elif self.operator == FilterOperator.MATCHES_REGEX:
             pattern = str(self.value)
@@ -192,6 +209,7 @@ class FilteringScheme:
 
     시각화별로 독립적인 필터 집합을 정의합니다.
     """
+
     name: str
     filters: List[Filter] = field(default_factory=list)
     inherit_from: Optional[str] = None  # 상속받을 스킴
@@ -272,9 +290,7 @@ class FilteringManager(QObject):
         return self._active_scheme
 
     def create_scheme(
-        self,
-        name: str,
-        inherit_from: Optional[str] = None
+        self, name: str, inherit_from: Optional[str] = None
     ) -> FilteringScheme:
         """
         새 필터링 스킴 생성
@@ -333,7 +349,7 @@ class FilteringManager(QObject):
         value: Any,
         filter_type: FilterType = FilterType.NUMERIC,
         enabled: bool = True,
-        case_sensitive: bool = True
+        case_sensitive: bool = True,
     ) -> None:
         """
         필터 추가
@@ -356,7 +372,7 @@ class FilteringManager(QObject):
             value=value,
             enabled=enabled,
             filter_type=filter_type,
-            case_sensitive=case_sensitive
+            case_sensitive=case_sensitive,
         )
 
         self._schemes[scheme_name].add_filter(filter_obj)
@@ -383,11 +399,7 @@ class FilteringManager(QObject):
             self.filter_changed.emit(scheme_name)
 
     def add_range_filter(
-        self,
-        scheme_name: str,
-        column: str,
-        min_value: Any,
-        max_value: Any
+        self, scheme_name: str, column: str, min_value: Any, max_value: Any
     ) -> None:
         """범위 필터 추가 (슬라이더용)"""
         self.add_filter(
@@ -395,14 +407,11 @@ class FilteringManager(QObject):
             column=column,
             operator=FilterOperator.BETWEEN,
             value=(min_value, max_value),
-            filter_type=FilterType.RANGE
+            filter_type=FilterType.RANGE,
         )
 
     def add_checkbox_filter(
-        self,
-        scheme_name: str,
-        column: str,
-        selected_values: List[Any]
+        self, scheme_name: str, column: str, selected_values: List[Any]
     ) -> None:
         """체크박스 필터 추가"""
         self.add_filter(
@@ -410,14 +419,11 @@ class FilteringManager(QObject):
             column=column,
             operator=FilterOperator.IN_LIST,
             value=selected_values,
-            filter_type=FilterType.CHECKBOX
+            filter_type=FilterType.CHECKBOX,
         )
 
     def update_checkbox_filter(
-        self,
-        scheme_name: str,
-        column: str,
-        selected_values: List[Any]
+        self, scheme_name: str, column: str, selected_values: List[Any]
     ) -> None:
         """체크박스 필터 업데이트"""
         if scheme_name not in self._schemes:
@@ -440,7 +446,7 @@ class FilteringManager(QObject):
         scheme_name: str,
         column: str,
         search_text: str,
-        case_sensitive: bool = True
+        case_sensitive: bool = True,
     ) -> None:
         """텍스트 검색 필터 추가"""
         self.add_filter(
@@ -449,14 +455,10 @@ class FilteringManager(QObject):
             operator=FilterOperator.CONTAINS,
             value=search_text,
             filter_type=FilterType.TEXT_SEARCH,
-            case_sensitive=case_sensitive
+            case_sensitive=case_sensitive,
         )
 
-    def apply_filters(
-        self,
-        scheme_name: str,
-        data: pl.DataFrame
-    ) -> pl.DataFrame:
+    def apply_filters(self, scheme_name: str, data: pl.DataFrame) -> pl.DataFrame:
         """
         필터 적용
 
@@ -484,13 +486,16 @@ class FilteringManager(QObject):
                         result = result.filter(expr)
                     except Exception as e:
                         import logging as _logging
+
                         _logging.getLogger(__name__).debug(
                             "Filter on column '%s' failed, skipping: %s", f.column, e
                         )
 
         return result
 
-    def _get_all_filters(self, scheme: FilteringScheme, _visited: Optional[Set[str]] = None) -> List[Filter]:
+    def _get_all_filters(
+        self, scheme: FilteringScheme, _visited: Optional[Set[str]] = None
+    ) -> List[Filter]:
         """상속 포함 모든 필터 조회 (순환 상속 방어)"""
         if _visited is None:
             _visited = set()
@@ -512,11 +517,7 @@ class FilteringManager(QObject):
 
         return filters
 
-    def get_filter_indices(
-        self,
-        scheme_name: str,
-        data: pl.DataFrame
-    ) -> Set[int]:
+    def get_filter_indices(self, scheme_name: str, data: pl.DataFrame) -> Set[int]:
         """
         필터된 행의 인덱스 집합 반환
 

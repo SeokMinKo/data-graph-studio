@@ -4,7 +4,7 @@ Advanced Expressions - Spotfire 스타일 수식 엔진
 계산 컬럼, OVER 표현식 (윈도우 함수), 데이터 함수 등을 지원합니다.
 """
 
-from typing import List, Dict, Any, Optional, Union, Callable, Set
+from typing import List, Dict, Any, Optional, Union, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import re
@@ -14,20 +14,22 @@ import numpy as np
 
 class ExpressionType(Enum):
     """표현식 타입"""
-    ARITHMETIC = "arithmetic"       # 산술 연산
-    COMPARISON = "comparison"       # 비교 연산
-    LOGICAL = "logical"            # 논리 연산
-    AGGREGATE = "aggregate"        # 집계 함수
-    WINDOW = "window"              # 윈도우 함수 (OVER)
-    STRING = "string"              # 문자열 함수
-    DATE = "date"                  # 날짜 함수
-    MATH = "math"                  # 수학 함수
-    CONDITIONAL = "conditional"    # 조건문
+
+    ARITHMETIC = "arithmetic"  # 산술 연산
+    COMPARISON = "comparison"  # 비교 연산
+    LOGICAL = "logical"  # 논리 연산
+    AGGREGATE = "aggregate"  # 집계 함수
+    WINDOW = "window"  # 윈도우 함수 (OVER)
+    STRING = "string"  # 문자열 함수
+    DATE = "date"  # 날짜 함수
+    MATH = "math"  # 수학 함수
+    CONDITIONAL = "conditional"  # 조건문
 
 
 @dataclass
 class ValidationResult:
     """유효성 검사 결과"""
+
     is_valid: bool
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -43,27 +45,43 @@ class ExpressionParser:
 
     # 집계 함수 목록
     AGGREGATE_FUNCTIONS = {
-        'sum', 'avg', 'mean', 'count', 'min', 'max',
-        'median', 'std', 'var', 'first', 'last'
+        "sum",
+        "avg",
+        "mean",
+        "count",
+        "min",
+        "max",
+        "median",
+        "std",
+        "var",
+        "first",
+        "last",
     }
 
     # 윈도우 함수 목록
     WINDOW_FUNCTIONS = {
-        'rank', 'denserank', 'dense_rank', 'rownumber', 'row_number',
-        'lag', 'lead', 'firstvalue', 'lastvalue'
+        "rank",
+        "denserank",
+        "dense_rank",
+        "rownumber",
+        "row_number",
+        "lag",
+        "lead",
+        "firstvalue",
+        "lastvalue",
     }
 
     def __init__(self):
         # 컬럼 참조 패턴: [column_name]
-        self._column_pattern = re.compile(r'\[([^\]]+)\]')
+        self._column_pattern = re.compile(r"\[([^\]]+)\]")
 
         # 함수 호출 패턴: FunctionName(...)
-        self._function_pattern = re.compile(r'(\w+)\s*\(')
+        self._function_pattern = re.compile(r"(\w+)\s*\(")
 
         # OVER 패턴
         self._over_pattern = re.compile(
-            r'(\w+)\s*\(\s*\[([^\]]+)\]\s*\)\s*OVER\s*\(\s*\[?([^\]\)]+)\]?\s*\)',
-            re.IGNORECASE
+            r"(\w+)\s*\(\s*\[([^\]]+)\]\s*\)\s*OVER\s*\(\s*\[?([^\]\)]+)\]?\s*\)",
+            re.IGNORECASE,
         )
 
         # 문자열 연결 패턴
@@ -73,7 +91,7 @@ class ExpressionParser:
         self,
         expression: str,
         data: pl.DataFrame,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> Union[pl.Series, Any]:
         """
         수식 평가
@@ -109,22 +127,19 @@ class ExpressionParser:
         """집계 표현식인지 확인"""
         expr_lower = expression.lower()
         for func in self.AGGREGATE_FUNCTIONS:
-            if re.search(rf'\b{func}\s*\(', expr_lower):
+            if re.search(rf"\b{func}\s*\(", expr_lower):
                 # OVER가 있으면 윈도우 함수
-                if 'over' not in expr_lower:
+                if "over" not in expr_lower:
                     return True
         return False
 
     def _is_conditional_expression(self, expression: str) -> bool:
         """조건 표현식인지 확인"""
         expr_lower = expression.lower().strip()
-        return expr_lower.startswith('if(') or expr_lower.startswith('case ')
+        return expr_lower.startswith("if(") or expr_lower.startswith("case ")
 
     def _evaluate_simple(
-        self,
-        expression: str,
-        data: pl.DataFrame,
-        context: Dict[str, Any]
+        self, expression: str, data: pl.DataFrame, context: Dict[str, Any]
     ) -> pl.Series:
         """단순 수식 평가"""
         # 컬럼 참조를 Polars 표현식으로 변환
@@ -151,10 +166,7 @@ class ExpressionParser:
         return result
 
     def _calculate_expression(
-        self,
-        expression: str,
-        data: pl.DataFrame,
-        columns_used: List[str]
+        self, expression: str, data: pl.DataFrame, columns_used: List[str]
     ) -> pl.Series:
         """수식 계산"""
         # 간단한 산술 연산 처리
@@ -167,14 +179,14 @@ class ExpressionParser:
                 # 언더스코어로 컬럼명 변환 (특수문자 처리)
                 safe_name = f"_col_{col.replace(' ', '_').replace('-', '_')}"
                 local_vars[safe_name] = data[col].to_numpy()
-                expr = expr.replace(f'[{col}]', safe_name)
+                expr = expr.replace(f"[{col}]", safe_name)
 
         # 문자열 연결 연산자 (&) 처리
-        if '&' in expr:
+        if "&" in expr:
             return self._evaluate_string_concat(expression, data)
 
         # numpy 함수 추가
-        local_vars['np'] = np
+        local_vars["np"] = np
 
         try:
             # 안전한 평가
@@ -186,15 +198,11 @@ class ExpressionParser:
                 return pl.Series([result] * len(data))
             return pl.Series(result)
 
-        except Exception as e:
+        except Exception:
             # 평가 실패 시 None 반환
             return pl.Series([None] * len(data))
 
-    def _evaluate_aggregate(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> Any:
+    def _evaluate_aggregate(self, expression: str, data: pl.DataFrame) -> Any:
         """집계 표현식 평가"""
         expr_lower = expression.lower()
 
@@ -210,34 +218,31 @@ class ExpressionParser:
         values = data[col_name]
 
         # 함수 적용
-        if 'sum(' in expr_lower:
+        if "sum(" in expr_lower:
             return values.sum()
-        elif 'avg(' in expr_lower or 'mean(' in expr_lower:
+        elif "avg(" in expr_lower or "mean(" in expr_lower:
             return values.mean()
-        elif 'count(' in expr_lower:
+        elif "count(" in expr_lower:
             return len(values)
-        elif 'min(' in expr_lower:
+        elif "min(" in expr_lower:
             return values.min()
-        elif 'max(' in expr_lower:
+        elif "max(" in expr_lower:
             return values.max()
-        elif 'median(' in expr_lower:
+        elif "median(" in expr_lower:
             return values.median()
-        elif 'std(' in expr_lower:
+        elif "std(" in expr_lower:
             return values.std()
-        elif 'var(' in expr_lower:
+        elif "var(" in expr_lower:
             return values.var()
-        elif 'first(' in expr_lower:
+        elif "first(" in expr_lower:
             return values[0] if len(values) > 0 else None
-        elif 'last(' in expr_lower:
+        elif "last(" in expr_lower:
             return values[-1] if len(values) > 0 else None
 
         return None
 
     def _evaluate_over_expression(
-        self,
-        expression: str,
-        data: pl.DataFrame,
-        match: re.Match
+        self, expression: str, data: pl.DataFrame, match: re.Match
     ) -> pl.Series:
         """OVER 표현식 평가 (윈도우 함수)"""
         func_name = match.group(1).lower()
@@ -245,41 +250,46 @@ class ExpressionParser:
         partition_col = match.group(3)
 
         # AllPrevious 처리
-        if partition_col.lower().startswith('allprevious'):
-            inner_match = re.search(r'\[([^\]]+)\]', partition_col)
+        if partition_col.lower().startswith("allprevious"):
+            inner_match = re.search(r"\[([^\]]+)\]", partition_col)
             if inner_match:
                 partition_col = inner_match.group(1)
-                return self._evaluate_running_aggregate(func_name, value_col, partition_col, data)
+                return self._evaluate_running_aggregate(
+                    func_name, value_col, partition_col, data
+                )
 
         if value_col not in data.columns:
             return pl.Series([None] * len(data))
 
         # 파티션별 집계
         if partition_col in data.columns:
-            if func_name == 'sum':
+            if func_name == "sum":
                 result = data.select(
-                    pl.col(value_col).sum().over(partition_col).alias('result')
-                )['result']
-            elif func_name in ('avg', 'mean'):
+                    pl.col(value_col).sum().over(partition_col).alias("result")
+                )["result"]
+            elif func_name in ("avg", "mean"):
                 result = data.select(
-                    pl.col(value_col).mean().over(partition_col).alias('result')
-                )['result']
-            elif func_name == 'count':
+                    pl.col(value_col).mean().over(partition_col).alias("result")
+                )["result"]
+            elif func_name == "count":
                 result = data.select(
-                    pl.col(value_col).count().over(partition_col).alias('result')
-                )['result']
-            elif func_name == 'min':
+                    pl.col(value_col).count().over(partition_col).alias("result")
+                )["result"]
+            elif func_name == "min":
                 result = data.select(
-                    pl.col(value_col).min().over(partition_col).alias('result')
-                )['result']
-            elif func_name == 'max':
+                    pl.col(value_col).min().over(partition_col).alias("result")
+                )["result"]
+            elif func_name == "max":
                 result = data.select(
-                    pl.col(value_col).max().over(partition_col).alias('result')
-                )['result']
-            elif func_name in ('rank', 'denserank', 'dense_rank'):
+                    pl.col(value_col).max().over(partition_col).alias("result")
+                )["result"]
+            elif func_name in ("rank", "denserank", "dense_rank"):
                 result = data.select(
-                    pl.col(value_col).rank(method='dense', descending=True).over(partition_col).alias('result')
-                )['result']
+                    pl.col(value_col)
+                    .rank(method="dense", descending=True)
+                    .over(partition_col)
+                    .alias("result")
+                )["result"]
             else:
                 result = pl.Series([None] * len(data))
 
@@ -288,58 +298,44 @@ class ExpressionParser:
         return pl.Series([None] * len(data))
 
     def _evaluate_running_aggregate(
-        self,
-        func_name: str,
-        value_col: str,
-        partition_col: str,
-        data: pl.DataFrame
+        self, func_name: str, value_col: str, partition_col: str, data: pl.DataFrame
     ) -> pl.Series:
         """누적 집계"""
         if value_col not in data.columns:
             return pl.Series([None] * len(data))
 
-        if func_name == 'sum':
+        if func_name == "sum":
             return data.select(
-                pl.col(value_col).cum_sum().over(partition_col).alias('result')
-            )['result']
-        elif func_name in ('avg', 'mean'):
+                pl.col(value_col).cum_sum().over(partition_col).alias("result")
+            )["result"]
+        elif func_name in ("avg", "mean"):
             # 누적 평균
             cum_sum = data.select(
-                pl.col(value_col).cum_sum().over(partition_col).alias('sum')
-            )['sum']
+                pl.col(value_col).cum_sum().over(partition_col).alias("sum")
+            )["sum"]
             cum_count = data.select(
-                pl.col(value_col).cum_count().over(partition_col).alias('count')
-            )['count']
+                pl.col(value_col).cum_count().over(partition_col).alias("count")
+            )["count"]
             return cum_sum / cum_count
 
         return pl.Series([None] * len(data))
 
-    def _evaluate_conditional(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
+    def _evaluate_conditional(self, expression: str, data: pl.DataFrame) -> pl.Series:
         """조건문 평가"""
         expr_lower = expression.lower().strip()
 
-        if expr_lower.startswith('if('):
+        if expr_lower.startswith("if("):
             return self._evaluate_if(expression, data)
-        elif expr_lower.startswith('case '):
+        elif expr_lower.startswith("case "):
             return self._evaluate_case(expression, data)
 
         return pl.Series([None] * len(data))
 
-    def _evaluate_if(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
+    def _evaluate_if(self, expression: str, data: pl.DataFrame) -> pl.Series:
         """IF 표현식 평가: If(condition, true_value, false_value)"""
         # 간단한 파싱
         match = re.match(
-            r"If\s*\(\s*(.+?)\s*,\s*(.+?)\s*,\s*(.+?)\s*\)",
-            expression,
-            re.IGNORECASE
+            r"If\s*\(\s*(.+?)\s*,\s*(.+?)\s*,\s*(.+?)\s*\)", expression, re.IGNORECASE
         )
 
         if not match:
@@ -372,18 +368,13 @@ class ExpressionParser:
 
         return pl.Series(result)
 
-    def _evaluate_case(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
+    def _evaluate_case(self, expression: str, data: pl.DataFrame) -> pl.Series:
         """CASE 표현식 평가"""
         # Case When ... Then ... Else ... End
         when_pattern = re.compile(
-            r'When\s+(.+?)\s+Then\s+(.+?)(?=\s+When|\s+Else|\s+End)',
-            re.IGNORECASE
+            r"When\s+(.+?)\s+Then\s+(.+?)(?=\s+When|\s+Else|\s+End)", re.IGNORECASE
         )
-        else_pattern = re.compile(r'Else\s+(.+?)\s+End', re.IGNORECASE)
+        else_pattern = re.compile(r"Else\s+(.+?)\s+End", re.IGNORECASE)
 
         when_matches = when_pattern.findall(expression)
         else_match = else_pattern.search(expression)
@@ -413,14 +404,10 @@ class ExpressionParser:
 
         return pl.Series(result)
 
-    def _evaluate_condition(
-        self,
-        condition: str,
-        data: pl.DataFrame
-    ) -> List[bool]:
+    def _evaluate_condition(self, condition: str, data: pl.DataFrame) -> List[bool]:
         """조건식 평가"""
         # 비교 연산자 추출
-        operators = ['>=', '<=', '!=', '<>', '=', '>', '<']
+        operators = [">=", "<=", "!=", "<>", "=", ">", "<"]
         op = None
         for o in operators:
             if o in condition:
@@ -444,21 +431,29 @@ class ExpressionParser:
         # 비교
         result = []
         for i in range(len(data)):
-            l = left_val[i] if isinstance(left_val, (list, pl.Series, np.ndarray)) else left_val
-            r = right_val[i] if isinstance(right_val, (list, pl.Series, np.ndarray)) else right_val
+            l = (
+                left_val[i]
+                if isinstance(left_val, (list, pl.Series, np.ndarray))
+                else left_val
+            )
+            r = (
+                right_val[i]
+                if isinstance(right_val, (list, pl.Series, np.ndarray))
+                else right_val
+            )
 
             try:
-                if op == '=' or op == '==':
+                if op == "=" or op == "==":
                     result.append(l == r)
-                elif op == '!=' or op == '<>':
+                elif op == "!=" or op == "<>":
                     result.append(l != r)
-                elif op == '>':
+                elif op == ">":
                     result.append(l > r)
-                elif op == '<':
+                elif op == "<":
                     result.append(l < r)
-                elif op == '>=':
+                elif op == ">=":
                     result.append(l >= r)
-                elif op == '<=':
+                elif op == "<=":
                     result.append(l <= r)
                 else:
                     result.append(False)
@@ -467,17 +462,14 @@ class ExpressionParser:
 
         return result
 
-    def _parse_value(
-        self,
-        value_str: str,
-        data: pl.DataFrame
-    ) -> Any:
+    def _parse_value(self, value_str: str, data: pl.DataFrame) -> Any:
         """값 문자열 파싱"""
         value_str = value_str.strip()
 
         # 문자열 리터럴
-        if (value_str.startswith("'") and value_str.endswith("'")) or \
-           (value_str.startswith('"') and value_str.endswith('"')):
+        if (value_str.startswith("'") and value_str.endswith("'")) or (
+            value_str.startswith('"') and value_str.endswith('"')
+        ):
             return value_str[1:-1]
 
         # 컬럼 참조
@@ -490,7 +482,7 @@ class ExpressionParser:
 
         # 숫자
         try:
-            if '.' in value_str:
+            if "." in value_str:
                 return float(value_str)
             return int(value_str)
         except ValueError:
@@ -498,83 +490,67 @@ class ExpressionParser:
 
         return value_str
 
-    def _handle_string_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
+    def _handle_string_functions(self, expression: str, data: pl.DataFrame) -> str:
         """문자열 함수 처리"""
         expr = expression
 
         # Upper([col])
-        for match in re.finditer(r'Upper\s*\(\s*\[([^\]]+)\]\s*\)', expr, re.IGNORECASE):
+        for match in re.finditer(
+            r"Upper\s*\(\s*\[([^\]]+)\]\s*\)", expr, re.IGNORECASE
+        ):
             col = match.group(1)
             if col in data.columns:
                 # 직접 결과 반환을 위해 플래그 설정
                 pass
 
         # Lower([col])
-        for match in re.finditer(r'Lower\s*\(\s*\[([^\]]+)\]\s*\)', expr, re.IGNORECASE):
+        for match in re.finditer(
+            r"Lower\s*\(\s*\[([^\]]+)\]\s*\)", expr, re.IGNORECASE
+        ):
             col = match.group(1)
             if col in data.columns:
                 pass
 
         return expr
 
-    def _handle_math_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
+    def _handle_math_functions(self, expression: str, data: pl.DataFrame) -> str:
         """수학 함수 처리"""
         expr = expression
 
         # Abs
-        expr = re.sub(r'Abs\s*\(', 'np.abs(', expr, flags=re.IGNORECASE)
+        expr = re.sub(r"Abs\s*\(", "np.abs(", expr, flags=re.IGNORECASE)
 
         # Sqrt
-        expr = re.sub(r'Sqrt\s*\(', 'np.sqrt(', expr, flags=re.IGNORECASE)
+        expr = re.sub(r"Sqrt\s*\(", "np.sqrt(", expr, flags=re.IGNORECASE)
 
         # Round
-        expr = re.sub(r'Round\s*\(', 'np.round(', expr, flags=re.IGNORECASE)
+        expr = re.sub(r"Round\s*\(", "np.round(", expr, flags=re.IGNORECASE)
 
         # Log
-        expr = re.sub(r'Log\s*\(', 'np.log(', expr, flags=re.IGNORECASE)
+        expr = re.sub(r"Log\s*\(", "np.log(", expr, flags=re.IGNORECASE)
 
         # Exp
-        expr = re.sub(r'Exp\s*\(', 'np.exp(', expr, flags=re.IGNORECASE)
+        expr = re.sub(r"Exp\s*\(", "np.exp(", expr, flags=re.IGNORECASE)
 
         # Power
-        expr = re.sub(r'Power\s*\(', 'np.power(', expr, flags=re.IGNORECASE)
+        expr = re.sub(r"Power\s*\(", "np.power(", expr, flags=re.IGNORECASE)
 
         return expr
 
-    def _handle_date_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
+    def _handle_date_functions(self, expression: str, data: pl.DataFrame) -> str:
         """날짜 함수 처리"""
         # Year, Month, Day 등
         # 이 함수들은 별도 처리 필요
         return expression
 
-    def _handle_null_functions(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> str:
+    def _handle_null_functions(self, expression: str, data: pl.DataFrame) -> str:
         """NULL 처리 함수"""
         return expression
 
-    def _evaluate_string_concat(
-        self,
-        expression: str,
-        data: pl.DataFrame
-    ) -> pl.Series:
+    def _evaluate_string_concat(self, expression: str, data: pl.DataFrame) -> pl.Series:
         """문자열 연결 평가"""
-        parts = expression.split('&')
-        result = [''] * len(data)
+        parts = expression.split("&")
+        result = [""] * len(data)
 
         for part in parts:
             part = part.strip()
@@ -588,8 +564,9 @@ class ExpressionParser:
                     result = [r + str(v) for r, v in zip(result, values)]
 
             # 문자열 리터럴
-            elif (part.startswith("'") and part.endswith("'")) or \
-                 (part.startswith('"') and part.endswith('"')):
+            elif (part.startswith("'") and part.endswith("'")) or (
+                part.startswith('"') and part.endswith('"')
+            ):
                 literal = part[1:-1]
                 result = [r + literal for r in result]
 
@@ -612,7 +589,7 @@ class OverExpression:
         aggregate_func: str,
         value_column: str,
         partition_by: Optional[List[str]] = None,
-        order_by: Optional[List[str]] = None
+        order_by: Optional[List[str]] = None,
     ):
         self.aggregate_func = aggregate_func.lower()
         self.value_column = value_column
@@ -628,17 +605,17 @@ class OverExpression:
         expr = pl.col(self.value_column)
 
         # 집계 함수 적용
-        if self.aggregate_func == 'sum':
+        if self.aggregate_func == "sum":
             expr = expr.sum()
-        elif self.aggregate_func in ('avg', 'mean'):
+        elif self.aggregate_func in ("avg", "mean"):
             expr = expr.mean()
-        elif self.aggregate_func == 'count':
+        elif self.aggregate_func == "count":
             expr = expr.count()
-        elif self.aggregate_func == 'min':
+        elif self.aggregate_func == "min":
             expr = expr.min()
-        elif self.aggregate_func == 'max':
+        elif self.aggregate_func == "max":
             expr = expr.max()
-        elif self.aggregate_func == 'rank':
+        elif self.aggregate_func == "rank":
             expr = expr.rank()
         else:
             return pl.Series([None] * len(data))
@@ -647,7 +624,7 @@ class OverExpression:
         if self.partition_by:
             expr = expr.over(self.partition_by)
 
-        return data.select(expr.alias('result'))['result']
+        return data.select(expr.alias("result"))["result"]
 
 
 @dataclass
@@ -657,6 +634,7 @@ class CalculatedColumn:
 
     수식 기반의 새 컬럼을 정의합니다.
     """
+
     name: str
     expression: str
     description: str = ""
@@ -695,17 +673,14 @@ class DataFunction:
 
     Python 코드를 사용한 커스텀 함수입니다.
     """
+
     name: str
     parameters: List[str]
     body: str
     description: str = ""
     return_type: str = "any"
 
-    def execute(
-        self,
-        data: pl.DataFrame,
-        **kwargs
-    ) -> Any:
+    def execute(self, data: pl.DataFrame, **kwargs) -> Any:
         """
         함수 실행
 
@@ -717,17 +692,12 @@ class DataFunction:
             함수 실행 결과
         """
         # 안전한 실행 환경
-        local_vars = {
-            'data': data,
-            'np': np,
-            'pl': pl,
-            **kwargs
-        }
+        local_vars = {"data": data, "np": np, "pl": pl, **kwargs}
 
         try:
             exec(self.body, {"__builtins__": {}}, local_vars)
-            return local_vars.get('result')
-        except Exception as e:
+            return local_vars.get("result")
+        except Exception:
             return None
 
 
@@ -745,49 +715,49 @@ class DataFunctionRegistry:
     def _register_builtins(self) -> None:
         """내장 함수 등록"""
         # Normalize (정규화)
-        self._functions['Normalize'] = DataFunction(
-            name='Normalize',
-            parameters=['column'],
-            body='''
+        self._functions["Normalize"] = DataFunction(
+            name="Normalize",
+            parameters=["column"],
+            body="""
 values = data[column].to_numpy()
 min_val = np.min(values)
 max_val = np.max(values)
 result = (values - min_val) / (max_val - min_val) if max_val != min_val else values
-''',
-            description='값을 0-1 범위로 정규화'
+""",
+            description="값을 0-1 범위로 정규화",
         )
 
         # ZScore (표준화)
-        self._functions['ZScore'] = DataFunction(
-            name='ZScore',
-            parameters=['column'],
-            body='''
+        self._functions["ZScore"] = DataFunction(
+            name="ZScore",
+            parameters=["column"],
+            body="""
 values = data[column].to_numpy()
 result = (values - np.mean(values)) / np.std(values) if np.std(values) != 0 else values
-''',
-            description='Z-점수로 표준화'
+""",
+            description="Z-점수로 표준화",
         )
 
         # Percentile
-        self._functions['Percentile'] = DataFunction(
-            name='Percentile',
-            parameters=['column', 'percentile'],
-            body='''
+        self._functions["Percentile"] = DataFunction(
+            name="Percentile",
+            parameters=["column", "percentile"],
+            body="""
 values = data[column].to_numpy()
 result = np.percentile(values, percentile)
-''',
-            description='백분위수 계산'
+""",
+            description="백분위수 계산",
         )
 
         # MovingAverage
-        self._functions['MovingAverage'] = DataFunction(
-            name='MovingAverage',
-            parameters=['column', 'window'],
-            body='''
+        self._functions["MovingAverage"] = DataFunction(
+            name="MovingAverage",
+            parameters=["column", "window"],
+            body="""
 values = data[column].to_numpy()
 result = np.convolve(values, np.ones(window)/window, mode='same')
-''',
-            description='이동 평균'
+""",
+            description="이동 평균",
         )
 
     def register(self, func: DataFunction) -> None:
@@ -809,14 +779,9 @@ result = np.convolve(values, np.ones(window)/window, mode='same')
 
     def list_builtin_functions(self) -> List[str]:
         """내장 함수 목록"""
-        return ['Normalize', 'ZScore', 'Percentile', 'MovingAverage']
+        return ["Normalize", "ZScore", "Percentile", "MovingAverage"]
 
-    def execute(
-        self,
-        name: str,
-        data: pl.DataFrame,
-        **kwargs
-    ) -> Any:
+    def execute(self, name: str, data: pl.DataFrame, **kwargs) -> Any:
         """함수 실행"""
         func = self.get(name)
         if func is None:
@@ -833,9 +798,7 @@ class ExpressionValidator:
         self._parser = ExpressionParser()
 
     def validate(
-        self,
-        expression: str,
-        available_columns: List[str]
+        self, expression: str, available_columns: List[str]
     ) -> ValidationResult:
         """
         수식 유효성 검사
@@ -859,25 +822,25 @@ class ExpressionValidator:
                 errors.append(f"Column '{col}' does not exist")
 
         # 괄호 균형 검사
-        if expression.count('(') != expression.count(')'):
+        if expression.count("(") != expression.count(")"):
             errors.append("Unbalanced parentheses")
 
         # 대괄호 균형 검사
-        if expression.count('[') != expression.count(']'):
+        if expression.count("[") != expression.count("]"):
             errors.append("Unbalanced brackets")
 
         return ValidationResult(
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
-            referenced_columns=referenced
+            referenced_columns=referenced,
         )
 
     def check_circular_reference(
         self,
         column_name: str,
         expression: str,
-        existing_calculated_columns: Dict[str, str]
+        existing_calculated_columns: Dict[str, str],
     ) -> bool:
         """
         순환 참조 검사

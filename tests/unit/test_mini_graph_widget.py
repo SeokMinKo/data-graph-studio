@@ -9,17 +9,16 @@ UT-8b: MiniGraphWidget without GraphSetting uses state (backward compat)
        SideBySideLayout uses ViewSyncManager
 """
 
-import gc
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication
 
 
 # ---------------------------------------------------------------------------
 # Ensure QApplication
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _ensure_qapp():
@@ -48,6 +47,7 @@ class FakeDatasetInfo:
             return self._data
         # Return a mock that behaves like a DataFrame with numeric series
         import numpy as np
+
         mock_df = MagicMock()
         mock_df.columns = self._columns
         mock_df.__len__ = lambda s: self.row_count
@@ -56,16 +56,26 @@ class FakeDatasetInfo:
         class FakeSeries:
             def __init__(self, n):
                 self._data = np.random.randn(n)
-            def mean(self): return float(np.mean(self._data))
-            def min(self): return float(np.min(self._data))
-            def max(self): return float(np.max(self._data))
-            def to_numpy(self): return self._data
+
+            def mean(self):
+                return float(np.mean(self._data))
+
+            def min(self):
+                return float(np.min(self._data))
+
+            def max(self):
+                return float(np.max(self._data))
+
+            def to_numpy(self):
+                return self._data
 
         series_cache = {}
+
         def getitem(key):
             if key not in series_cache:
                 series_cache[key] = FakeSeries(self.row_count)
             return series_cache[key]
+
         mock_df.__getitem__ = getitem
         mock_df.__contains__ = lambda s, k: k in self._columns
         return mock_df
@@ -99,11 +109,15 @@ class FakeDataEngine:
 
 @pytest.fixture()
 def state(qtbot):
-    from data_graph_studio.core.state import AppState, ValueColumn
+    from data_graph_studio.core.state import AppState
+
     s = AppState()
     s.add_dataset(
-        dataset_id="ds-1", name="Test Dataset",
-        row_count=100, column_count=3, memory_bytes=1000,
+        dataset_id="ds-1",
+        name="Test Dataset",
+        row_count=100,
+        column_count=3,
+        memory_bytes=1000,
     )
     s.set_x_column("time")
     s.add_value_column("voltage")
@@ -121,6 +135,7 @@ def engine():
 def graph_setting():
     """A GraphSetting with different columns from state."""
     from data_graph_studio.core.profile import GraphSetting
+
     return GraphSetting(
         id="gs-1",
         name="Current Profile",
@@ -128,8 +143,14 @@ def graph_setting():
         chart_type="bar",
         x_column="time",
         value_columns=(
-            {"name": "current", "aggregation": "sum", "color": "#ff7f0e",
-             "use_secondary_axis": False, "order": 0, "formula": ""},
+            {
+                "name": "current",
+                "aggregation": "sum",
+                "color": "#ff7f0e",
+                "use_secondary_axis": False,
+                "order": 0,
+                "formula": "",
+            },
         ),
     )
 
@@ -178,7 +199,9 @@ class TestMiniGraphWidgetWithGraphSetting:
             f"found labels: {[l.text() for l in labels]}"
         )
 
-    def test_effective_x_column_uses_graph_setting(self, state, engine, graph_setting, qtbot):
+    def test_effective_x_column_uses_graph_setting(
+        self, state, engine, graph_setting, qtbot
+    ):
         """When graph_setting provided, effective x_column comes from setting."""
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
 
@@ -188,7 +211,9 @@ class TestMiniGraphWidgetWithGraphSetting:
         # The effective x_column should be from graph_setting
         assert widget.effective_x_column == graph_setting.x_column
 
-    def test_effective_value_columns_uses_graph_setting(self, state, engine, graph_setting, qtbot):
+    def test_effective_value_columns_uses_graph_setting(
+        self, state, engine, graph_setting, qtbot
+    ):
         """When graph_setting provided, effective value_columns comes from setting."""
         from data_graph_studio.ui.panels.side_by_side_layout import MiniGraphWidget
 
@@ -247,15 +272,20 @@ class TestMiniGraphWidgetBackwardCompat:
         widget = MiniGraphWidget("ds-1", engine, state)
         qtbot.addWidget(widget)
 
-        expected = [
-            {"name": vc.name, "aggregation": vc.aggregation.value,
-             "color": vc.color, "use_secondary_axis": vc.use_secondary_axis,
-             "order": vc.order, "formula": vc.formula}
+        [
+            {
+                "name": vc.name,
+                "aggregation": vc.aggregation.value,
+                "color": vc.color,
+                "use_secondary_axis": vc.use_secondary_axis,
+                "order": vc.order,
+                "formula": vc.formula,
+            }
             for vc in state.value_columns
         ]
         # Just check the names match
         effective_names = [
-            vc.name if hasattr(vc, 'name') else vc.get('name', '')
+            vc.name if hasattr(vc, "name") else vc.get("name", "")
             for vc in widget.effective_value_columns
         ]
         state_names = [vc.name for vc in state.value_columns]
@@ -331,6 +361,7 @@ class TestSideBySideLayoutViewSyncManager:
     @pytest.fixture()
     def layout_widget(self, state, engine, qtbot):
         from data_graph_studio.ui.panels.side_by_side_layout import SideBySideLayout
+
         w = SideBySideLayout(engine, state)
         qtbot.addWidget(w)
         return w
@@ -338,6 +369,7 @@ class TestSideBySideLayoutViewSyncManager:
     def test_has_view_sync_manager(self, layout_widget):
         """SideBySideLayout has a ViewSyncManager instance."""
         from data_graph_studio.core.view_sync import ViewSyncManager
+
         assert hasattr(layout_widget, "_view_sync_manager")
         assert isinstance(layout_widget._view_sync_manager, ViewSyncManager)
 
@@ -379,8 +411,11 @@ class TestSideBySideLayoutViewSyncManager:
 
         # Add a second dataset so side-by-side has panels
         state.add_dataset(
-            dataset_id="ds-2", name="Dataset 2",
-            row_count=50, column_count=2, memory_bytes=500,
+            dataset_id="ds-2",
+            name="Dataset 2",
+            row_count=50,
+            column_count=2,
+            memory_bytes=500,
         )
 
         w = SideBySideLayout(engine, state)
@@ -396,8 +431,11 @@ class TestSideBySideLayoutViewSyncManager:
         from data_graph_studio.ui.panels.side_by_side_layout import SideBySideLayout
 
         state.add_dataset(
-            dataset_id="ds-2", name="Dataset 2",
-            row_count=50, column_count=2, memory_bytes=500,
+            dataset_id="ds-2",
+            name="Dataset 2",
+            row_count=50,
+            column_count=2,
+            memory_bytes=500,
         )
 
         w = SideBySideLayout(engine, state)

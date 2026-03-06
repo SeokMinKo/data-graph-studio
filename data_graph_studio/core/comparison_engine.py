@@ -15,6 +15,7 @@ import numpy as np
 try:
     from scipy import stats as scipy_stats
     from scipy.stats import pearsonr, spearmanr, ttest_ind, mannwhitneyu, ks_2samp
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -137,26 +138,35 @@ class ComparisonEngine:
                 return None
             merged = df_a.select([key_column, value_column]).join(
                 df_b.select([key_column, value_column]),
-                on=key_column, how="full", suffix="_b",
+                on=key_column,
+                how="full",
+                suffix="_b",
             )
             value_a_col = value_column
             value_b_col = f"{value_column}_b"
         else:
             min_len = min(len(df_a), len(df_b))
-            merged = pl.DataFrame({
-                "index": list(range(min_len)),
-                value_column: df_a[value_column].head(min_len),
-                f"{value_column}_b": df_b[value_column].head(min_len),
-            })
+            merged = pl.DataFrame(
+                {
+                    "index": list(range(min_len)),
+                    value_column: df_a[value_column].head(min_len),
+                    f"{value_column}_b": df_b[value_column].head(min_len),
+                }
+            )
             key_column = "index"
             value_a_col = value_column
             value_b_col = f"{value_column}_b"
 
-        result = merged.with_columns([
-            (pl.col(value_a_col) - pl.col(value_b_col)).alias("diff"),
-            ((pl.col(value_a_col) - pl.col(value_b_col)) /
-             pl.col(value_b_col).abs() * 100).alias("diff_pct"),
-        ]).rename({value_a_col: "value_a", value_b_col: "value_b"})
+        result = merged.with_columns(
+            [
+                (pl.col(value_a_col) - pl.col(value_b_col)).alias("diff"),
+                (
+                    (pl.col(value_a_col) - pl.col(value_b_col))
+                    / pl.col(value_b_col).abs()
+                    * 100
+                ).alias("diff_pct"),
+            ]
+        ).rename({value_a_col: "value_a", value_b_col: "value_b"})
 
         return result
 
@@ -183,8 +193,14 @@ class ComparisonEngine:
                 continue
 
             series = df[value_column]
-            if series.dtype not in [pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                                    pl.Float32, pl.Float64]:
+            if series.dtype not in [
+                pl.Int8,
+                pl.Int16,
+                pl.Int32,
+                pl.Int64,
+                pl.Float32,
+                pl.Float64,
+            ]:
                 continue
 
             stats[did] = {
@@ -266,8 +282,10 @@ class ComparisonEngine:
         if not HAS_SCIPY:
             return {
                 "error": "scipy is not installed",
-                "test_name": "none", "statistic": None,
-                "p_value": None, "is_significant": None,
+                "test_name": "none",
+                "statistic": None,
+                "p_value": None,
+                "is_significant": None,
                 "effect_size": None,
                 "interpretation": "Statistical testing requires scipy",
             }
@@ -293,9 +311,12 @@ class ComparisonEngine:
             test_type = self._select_test_type(data_a, data_b)
 
         result: Dict[str, Any] = {
-            "test_name": test_type, "statistic": None,
-            "p_value": None, "is_significant": None,
-            "effect_size": None, "interpretation": "",
+            "test_name": test_type,
+            "statistic": None,
+            "p_value": None,
+            "is_significant": None,
+            "effect_size": None,
+            "interpretation": "",
         }
 
         try:
@@ -303,7 +324,7 @@ class ComparisonEngine:
                 stat, p_val = ttest_ind(data_a, data_b, equal_var=False)
                 result["test_name"] = "Welch's t-test"
             elif test_type == "mannwhitney":
-                stat, p_val = mannwhitneyu(data_a, data_b, alternative='two-sided')
+                stat, p_val = mannwhitneyu(data_a, data_b, alternative="two-sided")
                 result["test_name"] = "Mann-Whitney U test"
             elif test_type == "ks":
                 stat, p_val = ks_2samp(data_a, data_b)
@@ -312,14 +333,22 @@ class ComparisonEngine:
                 return {"error": f"Unknown test type: {test_type}"}
 
             pooled_std = np.sqrt((np.var(data_a, ddof=1) + np.var(data_b, ddof=1)) / 2)
-            effect_size = (np.mean(data_a) - np.mean(data_b)) / pooled_std if pooled_std > 0 else 0.0
+            effect_size = (
+                (np.mean(data_a) - np.mean(data_b)) / pooled_std
+                if pooled_std > 0
+                else 0.0
+            )
 
             result["statistic"] = float(stat)
             result["p_value"] = float(p_val)
             result["is_significant"] = p_val < 0.05
             result["effect_size"] = float(effect_size)
             result["interpretation"] = self._interpret_test_result(
-                result["test_name"], p_val, effect_size, ds_a.name, ds_b.name,
+                result["test_name"],
+                p_val,
+                effect_size,
+                ds_a.name,
+                ds_b.name,
             )
 
         except Exception as e:
@@ -392,8 +421,11 @@ class ComparisonEngine:
         else:
             effect_text = "large"
 
-        direction = f"{name_a} > {name_b}" if effect_size > 0 else (
-            f"{name_a} < {name_b}" if effect_size < 0 else f"{name_a} ≈ {name_b}")
+        direction = (
+            f"{name_a} > {name_b}"
+            if effect_size > 0
+            else (f"{name_a} < {name_b}" if effect_size < 0 else f"{name_a} ≈ {name_b}")
+        )
 
         return (
             f"The difference between datasets is {sig_text}. "
@@ -424,8 +456,10 @@ class ComparisonEngine:
         if not HAS_SCIPY:
             return {
                 "error": "scipy is not installed",
-                "method": method, "correlation": None,
-                "p_value": None, "is_significant": None,
+                "method": method,
+                "correlation": None,
+                "p_value": None,
+                "is_significant": None,
                 "strength": None,
                 "interpretation": "Correlation calculation requires scipy",
             }
@@ -454,9 +488,12 @@ class ComparisonEngine:
         data_b = data_b[:min_len]
 
         result: Dict[str, Any] = {
-            "method": method, "correlation": None,
-            "p_value": None, "is_significant": None,
-            "strength": None, "interpretation": "",
+            "method": method,
+            "correlation": None,
+            "p_value": None,
+            "is_significant": None,
+            "strength": None,
+            "interpretation": "",
         }
 
         try:
@@ -528,11 +565,21 @@ class ComparisonEngine:
             if did not in result:
                 result[did] = {}
 
-            result[did]["skewness"] = float(scipy_stats.skew(data)) if HAS_SCIPY else None
-            result[did]["kurtosis"] = float(scipy_stats.kurtosis(data)) if HAS_SCIPY else None
-            result[did]["iqr"] = float(np.percentile(data, 75) - np.percentile(data, 25))
+            result[did]["skewness"] = (
+                float(scipy_stats.skew(data)) if HAS_SCIPY else None
+            )
+            result[did]["kurtosis"] = (
+                float(scipy_stats.kurtosis(data)) if HAS_SCIPY else None
+            )
+            result[did]["iqr"] = float(
+                np.percentile(data, 75) - np.percentile(data, 25)
+            )
             result[did]["range"] = float(np.max(data) - np.min(data))
-            result[did]["cv"] = float(np.std(data, ddof=1) / np.mean(data) * 100) if np.mean(data) != 0 else None
+            result[did]["cv"] = (
+                float(np.std(data, ddof=1) / np.mean(data) * 100)
+                if np.mean(data) != 0
+                else None
+            )
 
         return result
 
@@ -572,8 +619,8 @@ class ComparisonEngine:
             is_normal = p_val >= 0.05
             interpretation = (
                 f"Data appears to be normally distributed (p = {p_val:.4f})"
-                if is_normal else
-                f"Data is not normally distributed (p = {p_val:.4f})"
+                if is_normal
+                else f"Data is not normally distributed (p = {p_val:.4f})"
             )
 
             return {

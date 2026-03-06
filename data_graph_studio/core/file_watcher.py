@@ -30,13 +30,13 @@ logger = logging.getLogger(__name__)
 
 # ─── Constants ──────────────────────────────────────────────────────
 
-MIN_POLL_INTERVAL_MS = 500      # 0.5 seconds
-MAX_POLL_INTERVAL_MS = 60000    # 60 seconds
-DEFAULT_POLL_INTERVAL_MS = 1000 # 1 second
-DEBOUNCE_MS = 300               # 300ms debounce
-MAX_WATCHED_FILES = 10          # Section 10.2
+MIN_POLL_INTERVAL_MS = 500  # 0.5 seconds
+MAX_POLL_INTERVAL_MS = 60000  # 60 seconds
+DEFAULT_POLL_INTERVAL_MS = 1000  # 1 second
+DEBOUNCE_MS = 300  # 300ms debounce
+MAX_WATCHED_FILES = 10  # Section 10.2
 LARGE_FILE_THRESHOLD = 2 * 1024 * 1024 * 1024  # 2GB
-MAX_BACKOFF_MS = 30000          # 30 seconds max backoff
+MAX_BACKOFF_MS = 30000  # 30 seconds max backoff
 
 
 def _clamp_interval(ms: int) -> int:
@@ -46,17 +46,19 @@ def _clamp_interval(ms: int) -> int:
 
 # ─── Per-file watch state ──────────────────────────────────────────
 
+
 @dataclass
 class _WatchEntry:
     """Internal per-file watch state."""
+
     path: str
-    mode: str                      # "reload" | "tail"
+    mode: str  # "reload" | "tail"
     last_mtime: float = 0.0
     last_size: int = 0
-    last_row_count: int = 0        # For tail mode: row count at last check
-    last_header: str = ""          # For tail mode: CSV header line for schema check
-    self_modifying: bool = False   # FR-2.8: self-change flag
-    backoff_multiplier: int = 1    # Error backoff multiplier
+    last_row_count: int = 0  # For tail mode: row count at last check
+    last_header: str = ""  # For tail mode: CSV header line for schema check
+    self_modifying: bool = False  # FR-2.8: self-change flag
+    backoff_multiplier: int = 1  # Error backoff multiplier
     registered_at: float = field(default_factory=time.time)
 
 
@@ -74,9 +76,9 @@ class FileWatcher(QObject):
     """
 
     # ── Signals ───────────────────────────────────────────────
-    file_changed = Signal(str)       # file_path
-    file_deleted = Signal(str)       # file_path
-    rows_appended = Signal(str, int) # file_path, new_row_count
+    file_changed = Signal(str)  # file_path
+    file_deleted = Signal(str)  # file_path
+    rows_appended = Signal(str, int)  # file_path, new_row_count
 
     def __init__(
         self,
@@ -99,7 +101,7 @@ class FileWatcher(QObject):
 
         # Debounce state (per-file)
         self._debounce_pending: Dict[str, str] = {}  # path → event_type
-        self._debounce_data: Dict[str, int] = {}      # path → new_row_count (for tail)
+        self._debounce_data: Dict[str, int] = {}  # path → new_row_count (for tail)
         self._debounce_timer: Any = None
 
     # ── Properties ────────────────────────────────────────────
@@ -168,7 +170,9 @@ class FileWatcher(QObject):
                     header = lines[0]
                     row_count = len(lines) - 1  # subtract header
             except Exception as e:
-                logger.warning(f"FileWatcher: cannot read {file_path} for row count: {e}")
+                logger.warning(
+                    f"FileWatcher: cannot read {file_path} for row count: {e}"
+                )
 
         # Create entry
         entry = _WatchEntry(
@@ -285,7 +289,9 @@ class FileWatcher(QObject):
             # Ensure effective interval doesn't exceed MAX_BACKOFF_MS
             effective = self._poll_interval_ms * entry.backoff_multiplier
             if effective > MAX_BACKOFF_MS:
-                entry.backoff_multiplier = MAX_BACKOFF_MS // max(self._poll_interval_ms, 1)
+                entry.backoff_multiplier = MAX_BACKOFF_MS // max(
+                    self._poll_interval_ms, 1
+                )
 
     def _reset_backoff(self, file_path: str) -> None:
         """Reset backoff to normal after a successful poll."""
@@ -373,18 +379,18 @@ class FileWatcher(QObject):
             # Seek-based: only read new bytes appended since last check
             if current_size > entry.last_size and entry.last_header:
                 try:
-                    with open(path, 'rb') as f:
+                    with open(path, "rb") as f:
                         f.seek(entry.last_size)
                         new_data = f.read()
                     text = new_data.decode("utf-8", errors="replace")
                     # Drop first partial line: seek may land mid-line
-                    if text and text[0] != '\n' and entry.last_size > 0:
-                        first_nl = text.find('\n')
+                    if text and text[0] != "\n" and entry.last_size > 0:
+                        first_nl = text.find("\n")
                         if first_nl == -1:
                             # Entire chunk is a partial line — skip, don't advance last_size
                             entry.last_mtime = st.st_mtime
                             return
-                        text = text[first_nl + 1:]
+                        text = text[first_nl + 1 :]
                         # Adjust last_size to end of the partial line we dropped
                         entry.last_size += first_nl + 1
                     new_lines = [l for l in text.splitlines() if l.strip()]

@@ -25,7 +25,9 @@ def test_from_app_state_creates_setting(state):
     state._filters = [{"column": "col", "operator": "eq", "value": 1}]
     state._sorts = [{"column": "col", "descending": True}]
 
-    setting = GraphSettingMapper.from_app_state(state, name="My Setting", dataset_id="ds1")
+    setting = GraphSettingMapper.from_app_state(
+        state, name="My Setting", dataset_id="ds1"
+    )
 
     assert setting.dataset_id == "ds1"
     assert setting.name == "My Setting"
@@ -78,7 +80,9 @@ def test_round_trip_preserves_data(state):
     state._filters = [{"column": "f1", "operator": "gt", "value": 5}]
     state._sorts = [{"column": "s1", "descending": True}]
 
-    setting = GraphSettingMapper.from_app_state(state, name="Round Trip", dataset_id="ds2")
+    setting = GraphSettingMapper.from_app_state(
+        state, name="Round Trip", dataset_id="ds2"
+    )
 
     new_state = AppState()
     new_state.begin_batch_update = MagicMock()
@@ -132,7 +136,9 @@ def test_signal_batching(state):
 
 def test_from_app_state_includes_title_subtitle_in_chart_settings(state):
     state.update_chart_settings(title="T-A", subtitle="S-A")
-    setting = GraphSettingMapper.from_app_state(state, name="WithTitle", dataset_id="ds1")
+    setting = GraphSettingMapper.from_app_state(
+        state, name="WithTitle", dataset_id="ds1"
+    )
     assert setting.chart_settings.get("title") == "T-A"
     assert setting.chart_settings.get("subtitle") == "S-A"
 

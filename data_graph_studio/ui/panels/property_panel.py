@@ -11,16 +11,32 @@ from enum import Enum
 try:
     from PySide6.QtCore import Qt, Signal
     from PySide6.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-        QFrame, QPushButton, QLineEdit, QCheckBox, QSpinBox,
-        QDoubleSpinBox, QComboBox, QColorDialog, QFontDialog,
-        QGroupBox, QToolButton, QTreeWidget, QTreeWidgetItem,
-        QSizePolicy
+        QWidget,
+        QVBoxLayout,
+        QHBoxLayout,
+        QLabel,
+        QScrollArea,
+        QFrame,
+        QPushButton,
+        QLineEdit,
+        QCheckBox,
+        QSpinBox,
+        QDoubleSpinBox,
+        QComboBox,
+        QColorDialog,
+        QFontDialog,
+        QGroupBox,
+        QToolButton,
+        QTreeWidget,
+        QTreeWidgetItem,
+        QSizePolicy,
     )
     from PySide6.QtGui import QColor, QFont
+
     HAS_QT = True
 except ImportError:
     HAS_QT = False
+
     class Signal:
         def __init__(self, *args):
             pass
@@ -28,6 +44,7 @@ except ImportError:
 
 class PropertyType(Enum):
     """속성 타입"""
+
     STRING = "string"
     NUMBER = "number"
     INTEGER = "integer"
@@ -42,6 +59,7 @@ class PropertyType(Enum):
 @dataclass
 class PropertyItem:
     """속성 항목"""
+
     name: str
     display_name: str
     property_type: PropertyType
@@ -62,6 +80,7 @@ class PropertyItem:
 @dataclass
 class PropertyGroup:
     """속성 그룹"""
+
     name: str
     display_name: str = ""
     expanded: bool = True
@@ -187,7 +206,7 @@ class FontPickerWidget:
         family: str = "Arial",
         size: int = 10,
         bold: bool = False,
-        italic: bool = False
+        italic: bool = False,
     ):
         self._family = family
         self._size = size
@@ -200,7 +219,7 @@ class FontPickerWidget:
             "family": self._family,
             "size": self._size,
             "bold": self._bold,
-            "italic": self._italic
+            "italic": self._italic,
         }
 
     def set_font(
@@ -208,7 +227,7 @@ class FontPickerWidget:
         family: Optional[str] = None,
         size: Optional[int] = None,
         bold: Optional[bool] = None,
-        italic: Optional[bool] = None
+        italic: Optional[bool] = None,
     ) -> None:
         """폰트 설정"""
         if family is not None:
@@ -238,6 +257,7 @@ class FontPickerWidget:
 
 
 if HAS_QT:
+
     class PropertyPanelWidget(QWidget):
         """
         속성 패널 위젯
@@ -300,11 +320,18 @@ if HAS_QT:
 
                 for item_name, prop in group.items.items():
                     prop_item = QTreeWidgetItem([prop.display_name])
-                    prop_item.setData(0, Qt.ItemDataRole.UserRole, (group_name, item_name))
+                    prop_item.setData(
+                        0, Qt.ItemDataRole.UserRole, (group_name, item_name)
+                    )
 
                     # Issue #9 — type-specific editor widgets
                     if prop.property_type == PropertyType.BOOLEAN:
-                        prop_item.setCheckState(1, Qt.CheckState.Checked if prop.value else Qt.CheckState.Unchecked)
+                        prop_item.setCheckState(
+                            1,
+                            Qt.CheckState.Checked
+                            if prop.value
+                            else Qt.CheckState.Unchecked,
+                        )
                     elif prop.property_type == PropertyType.NUMBER:
                         spin = QDoubleSpinBox()
                         spin.setDecimals(4)
@@ -316,9 +343,13 @@ if HAS_QT:
                             spin.setMaximum(prop.max_value)
                         else:
                             spin.setMaximum(1e12)
-                        spin.setValue(float(prop.value) if prop.value is not None else 0.0)
+                        spin.setValue(
+                            float(prop.value) if prop.value is not None else 0.0
+                        )
                         spin.valueChanged.connect(
-                            lambda v, gn=group_name, itn=item_name: self._on_spin_changed(gn, itn, v)
+                            lambda v, gn=group_name, itn=item_name: (
+                                self._on_spin_changed(gn, itn, v)
+                            )
                         )
                         group_item.addChild(prop_item)
                         self._tree.setItemWidget(prop_item, 1, spin)
@@ -335,7 +366,9 @@ if HAS_QT:
                             spin.setMaximum(2147483647)
                         spin.setValue(int(prop.value) if prop.value is not None else 0)
                         spin.valueChanged.connect(
-                            lambda v, gn=group_name, itn=item_name: self._on_spin_changed(gn, itn, v)
+                            lambda v, gn=group_name, itn=item_name: (
+                                self._on_spin_changed(gn, itn, v)
+                            )
                         )
                         group_item.addChild(prop_item)
                         self._tree.setItemWidget(prop_item, 1, spin)
@@ -346,13 +379,17 @@ if HAS_QT:
                         if prop.value in prop.enum_values:
                             combo.setCurrentText(str(prop.value))
                         combo.currentTextChanged.connect(
-                            lambda v, gn=group_name, itn=item_name: self._on_spin_changed(gn, itn, v)
+                            lambda v, gn=group_name, itn=item_name: (
+                                self._on_spin_changed(gn, itn, v)
+                            )
                         )
                         group_item.addChild(prop_item)
                         self._tree.setItemWidget(prop_item, 1, combo)
                         continue
                     else:
-                        prop_item.setText(1, str(prop.value) if prop.value is not None else "")
+                        prop_item.setText(
+                            1, str(prop.value) if prop.value is not None else ""
+                        )
 
                     group_item.addChild(prop_item)
 

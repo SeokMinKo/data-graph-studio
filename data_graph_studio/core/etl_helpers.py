@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 try:
     from etl.etl import IEtlFileObserver, build_from_stream
     from etl.system import System
+
     HAS_ETL_PARSER = True
 except ImportError:
     HAS_ETL_PARSER = False
@@ -33,16 +34,17 @@ def is_binary_etl(path: str) -> bool:
         바이너리이면 True.
     """
     try:
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             header = f.read(512)
     except Exception:
         return False
     if not header:
         return False
-    null_count = header.count(b'\x00')
+    null_count = header.count(b"\x00")
     non_printable_count = sum(1 for b in header if b < 32 and b not in (9, 10, 13))
-    is_text = (null_count == 0 and
-               (non_printable_count / len(header) < 0.05 if len(header) > 0 else True))
+    is_text = null_count == 0 and (
+        non_printable_count / len(header) < 0.05 if len(header) > 0 else True
+    )
     return not is_text
 
 
@@ -84,18 +86,23 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 mof = system.get_mof()
                 event_def = mof.get_event_definition()
                 record = {
-                    'Timestamp': self._filetime_to_datetime(getattr(event, 'timestamp', None)),
-                    'EventType': str(event_def) if event_def else 'Unknown',
-                    'ProcessID': getattr(event, 'process_id', None),
-                    'ThreadID': getattr(event, 'thread_id', None),
-                    'DiskNumber': getattr(mof.source, 'DiskNumber', None),
-                    'TransferSize': getattr(mof.source, 'TransferSize', None),
-                    'ByteOffset': getattr(mof.source, 'ByteOffset', None),
-                    'IrpFlags': getattr(mof.source, 'IrpFlags', None),
-                    'HighResResponseTime': getattr(mof.source, 'HighResResponseTime',
-                                                   getattr(mof.source, 'HighResponseTime', None)),
-                    'IssuingThreadId': getattr(mof.source, 'IssuingThreadId', None),
-                    'Source': 'SystemTrace',
+                    "Timestamp": self._filetime_to_datetime(
+                        getattr(event, "timestamp", None)
+                    ),
+                    "EventType": str(event_def) if event_def else "Unknown",
+                    "ProcessID": getattr(event, "process_id", None),
+                    "ThreadID": getattr(event, "thread_id", None),
+                    "DiskNumber": getattr(mof.source, "DiskNumber", None),
+                    "TransferSize": getattr(mof.source, "TransferSize", None),
+                    "ByteOffset": getattr(mof.source, "ByteOffset", None),
+                    "IrpFlags": getattr(mof.source, "IrpFlags", None),
+                    "HighResResponseTime": getattr(
+                        mof.source,
+                        "HighResResponseTime",
+                        getattr(mof.source, "HighResponseTime", None),
+                    ),
+                    "IssuingThreadId": getattr(mof.source, "IssuingThreadId", None),
+                    "Source": "SystemTrace",
                 }
                 self.events.append(record)
             except Exception:
@@ -113,15 +120,23 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
                 if msg is None:
                     return
                 record = {
-                    'Timestamp': self._filetime_to_datetime(getattr(event, 'timestamp', None)),
-                    'EventType': str(getattr(msg, 'name', getattr(msg, 'opcode_name', 'ETW'))),
-                    'ProcessID': getattr(event, 'process_id', None),
-                    'ThreadID': getattr(event, 'thread_id', None),
-                    'DiskNumber': None, 'TransferSize': None, 'ByteOffset': None,
-                    'IrpFlags': None, 'HighResResponseTime': None, 'IssuingThreadId': None,
-                    'Source': 'ETW',
+                    "Timestamp": self._filetime_to_datetime(
+                        getattr(event, "timestamp", None)
+                    ),
+                    "EventType": str(
+                        getattr(msg, "name", getattr(msg, "opcode_name", "ETW"))
+                    ),
+                    "ProcessID": getattr(event, "process_id", None),
+                    "ThreadID": getattr(event, "thread_id", None),
+                    "DiskNumber": None,
+                    "TransferSize": None,
+                    "ByteOffset": None,
+                    "IrpFlags": None,
+                    "HighResResponseTime": None,
+                    "IssuingThreadId": None,
+                    "Source": "ETW",
                 }
-                if hasattr(msg, 'properties'):
+                if hasattr(msg, "properties"):
                     for key, val in msg.properties.items():
                         if key not in record:
                             record[key] = str(val) if val is not None else None
@@ -129,12 +144,17 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
             except Exception:
                 self._error_count += 1
 
-        def on_perfinfo_trace(self, event): pass
-        def on_trace_record(self, event): pass
-        def on_win_trace(self, event): pass
+        def on_perfinfo_trace(self, event):
+            pass
+
+        def on_trace_record(self, event):
+            pass
+
+        def on_win_trace(self, event):
+            pass
 
     try:
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             raw_data = f.read()
     except Exception as e:
         raise ValueError(f"ETL 파일 읽기 실패: {e}")
@@ -154,9 +174,17 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
         raise ValueError("ETL 파일에서 파싱 가능한 이벤트를 찾지 못했습니다.")
 
     base_columns = [
-        'Timestamp', 'EventType', 'ProcessID', 'ThreadID',
-        'DiskNumber', 'TransferSize', 'ByteOffset',
-        'IrpFlags', 'HighResResponseTime', 'IssuingThreadId', 'Source',
+        "Timestamp",
+        "EventType",
+        "ProcessID",
+        "ThreadID",
+        "DiskNumber",
+        "TransferSize",
+        "ByteOffset",
+        "IrpFlags",
+        "HighResResponseTime",
+        "IssuingThreadId",
+        "Source",
     ]
     extra_columns: set = set()
     for evt in all_events:
@@ -172,14 +200,22 @@ def parse_etl_binary(path: str) -> pl.DataFrame:
 
     df = pl.DataFrame(df_dict)
 
-    if 'Timestamp' in df.columns:
+    if "Timestamp" in df.columns:
         try:
-            df = df.with_columns(pl.col('Timestamp').cast(pl.Datetime('us')))
+            df = df.with_columns(pl.col("Timestamp").cast(pl.Datetime("us")))
         except Exception:
             pass
 
-    numeric_cols = ['ProcessID', 'ThreadID', 'DiskNumber', 'TransferSize',
-                    'ByteOffset', 'IrpFlags', 'HighResResponseTime', 'IssuingThreadId']
+    numeric_cols = [
+        "ProcessID",
+        "ThreadID",
+        "DiskNumber",
+        "TransferSize",
+        "ByteOffset",
+        "IrpFlags",
+        "HighResResponseTime",
+        "IssuingThreadId",
+    ]
     for col in numeric_cols:
         if col in df.columns:
             try:

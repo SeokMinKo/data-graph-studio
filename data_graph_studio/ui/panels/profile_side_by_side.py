@@ -11,11 +11,16 @@ from __future__ import annotations
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QSplitter, QCheckBox, QPushButton, QGridLayout,
-    QSizePolicy,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QSplitter,
+    QPushButton,
+    QGridLayout,
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
 
 from .side_by_side_layout import MiniGraphWidget
@@ -247,16 +252,24 @@ class ProfileSideBySideLayout(QWidget):
                 continue
 
             panel = MiniGraphWidget(
-                self.dataset_id, self.engine, self.state,
+                self.dataset_id,
+                self.engine,
+                self.state,
                 graph_setting=gs,
             )
-            panel.activated.connect(lambda did, _pid=pid: self.profile_activated.emit(_pid))
+            panel.activated.connect(
+                lambda did, _pid=pid: self.profile_activated.emit(_pid)
+            )
             panel.view_range_changed.connect(
-                lambda src_id, xr, yr, _pid=pid: self._view_sync_manager.on_source_range_changed(_pid, xr, yr)
+                lambda src_id, xr, yr, _pid=pid: (
+                    self._view_sync_manager.on_source_range_changed(_pid, xr, yr)
+                )
             )
             # Route selection_changed through ViewSyncManager
             panel.selection_changed.connect(
-                lambda src_id, region, _pid=pid: self._view_sync_manager.on_source_selection_changed(_pid, region)
+                lambda src_id, region, _pid=pid: (
+                    self._view_sync_manager.on_source_selection_changed(_pid, region)
+                )
             )
             # Route row_selection_changed → always sync to other panels
             panel.row_selection_changed.connect(
@@ -299,7 +312,9 @@ class ProfileSideBySideLayout(QWidget):
         # Remove old container
         self._clear_content_widgets()
 
-        panel_list = [self._panels[pid] for pid in self._profile_ids if pid in self._panels]
+        panel_list = [
+            self._panels[pid] for pid in self._profile_ids if pid in self._panels
+        ]
 
         # Set minimum width on all panels
         for panel in panel_list:

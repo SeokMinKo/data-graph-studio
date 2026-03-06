@@ -17,52 +17,88 @@ OUT_MANUAL = ROOT / "docs" / "changelog-manual-mapping-priority.md"
 
 # Keyword-driven mapping (lightweight, maintainable)
 RULES = [
-    (re.compile(r"Open Project|프로젝트 열기|저장/로드|프로젝트 탐색창|데이터셋 표시|로드", re.I), [
-        "tests/test_project.py",
-        "tests/unit/test_main_graph_event_sequence.py",
-    ]),
-    (re.compile(r"Perfetto|permission denied|one-shot|fallback", re.I), [
-        "tests/unit/test_perfetto_oneshot_fallback.py",
-        "tests/unit/test_trace_controller_perfetto_pipeline.py",
-    ]),
-    (re.compile(r"Selection|Draw|mouseReleaseEvent|드래그|drawing", re.I), [
-        "tests/unit/test_main_graph_event_sequence.py",
-        "tests/test_drawing.py",
-        "tests/unit/test_selection_sync.py",
-    ]),
-    (re.compile(r"Undo|Redo", re.I), [
-        "tests/test_project.py",
-        "tests/test_bug_fixes.py",
-    ]),
-    (re.compile(r"Windows|Program Files|권한", re.I), [
-        "tests/test_updater_validation.py",
-    ]),
-    (re.compile(r"autosave|세션 복원|프로파일", re.I), [
-        "tests/test_project.py",
-        "tests/unit/test_ipc_profile.py",
-    ]),
-    (re.compile(r"multi-file|multiple files|멀티 데이터셋", re.I), [
-        "tests/test_bug_fixes.py",
-        "tests/test_multi_dataset.py",
-    ]),
+    (
+        re.compile(
+            r"Open Project|프로젝트 열기|저장/로드|프로젝트 탐색창|데이터셋 표시|로드",
+            re.I,
+        ),
+        [
+            "tests/test_project.py",
+            "tests/unit/test_main_graph_event_sequence.py",
+        ],
+    ),
+    (
+        re.compile(r"Perfetto|permission denied|one-shot|fallback", re.I),
+        [
+            "tests/unit/test_perfetto_oneshot_fallback.py",
+            "tests/unit/test_trace_controller_perfetto_pipeline.py",
+        ],
+    ),
+    (
+        re.compile(r"Selection|Draw|mouseReleaseEvent|드래그|drawing", re.I),
+        [
+            "tests/unit/test_main_graph_event_sequence.py",
+            "tests/test_drawing.py",
+            "tests/unit/test_selection_sync.py",
+        ],
+    ),
+    (
+        re.compile(r"Undo|Redo", re.I),
+        [
+            "tests/test_project.py",
+            "tests/test_bug_fixes.py",
+        ],
+    ),
+    (
+        re.compile(r"Windows|Program Files|권한", re.I),
+        [
+            "tests/test_updater_validation.py",
+        ],
+    ),
+    (
+        re.compile(r"autosave|세션 복원|프로파일", re.I),
+        [
+            "tests/test_project.py",
+            "tests/unit/test_ipc_profile.py",
+        ],
+    ),
+    (
+        re.compile(r"multi-file|multiple files|멀티 데이터셋", re.I),
+        [
+            "tests/test_bug_fixes.py",
+            "tests/test_multi_dataset.py",
+        ],
+    ),
 ]
 
 # Function-level hints for quick triage
 FUNCTION_RULES = [
-    (re.compile(r"Open Project|저장/로드|복원|프로젝트", re.I), [
-        "tests/test_project.py::TestProjectFileIO::test_load_project",
-        "tests/test_project.py::TestProjectRegressionCoverage::test_legacy_data_source_migrates_to_data_sources",
-    ]),
-    (re.compile(r"Selection|Draw|mouseReleaseEvent|드래그", re.I), [
-        "tests/unit/test_main_graph_event_sequence.py::TestMainGraphMouseEventSequence::test_rect_select_press_move_release_selects_expected_points",
-        "tests/unit/test_main_graph_event_sequence.py::TestMainGraphMouseEventSequence::test_mode_switch_during_rect_drag_cleans_stale_selection_state",
-    ]),
-    (re.compile(r"Perfetto|permission denied|fallback", re.I), [
-        "tests/unit/test_perfetto_oneshot_fallback.py::test_oneshot_fallback_command_used_when_config_mode_fails",
-    ]),
-    (re.compile(r"multi-file|multiple files|멀티 데이터셋", re.I), [
-        "tests/test_bug_fixes.py::TestFileLoadingControllerRegression::test_open_multiple_files_with_paths_enables_overlay_compare",
-    ]),
+    (
+        re.compile(r"Open Project|저장/로드|복원|프로젝트", re.I),
+        [
+            "tests/test_project.py::TestProjectFileIO::test_load_project",
+            "tests/test_project.py::TestProjectRegressionCoverage::test_legacy_data_source_migrates_to_data_sources",
+        ],
+    ),
+    (
+        re.compile(r"Selection|Draw|mouseReleaseEvent|드래그", re.I),
+        [
+            "tests/unit/test_main_graph_event_sequence.py::TestMainGraphMouseEventSequence::test_rect_select_press_move_release_selects_expected_points",
+            "tests/unit/test_main_graph_event_sequence.py::TestMainGraphMouseEventSequence::test_mode_switch_during_rect_drag_cleans_stale_selection_state",
+        ],
+    ),
+    (
+        re.compile(r"Perfetto|permission denied|fallback", re.I),
+        [
+            "tests/unit/test_perfetto_oneshot_fallback.py::test_oneshot_fallback_command_used_when_config_mode_fails",
+        ],
+    ),
+    (
+        re.compile(r"multi-file|multiple files|멀티 데이터셋", re.I),
+        [
+            "tests/test_bug_fixes.py::TestFileLoadingControllerRegression::test_open_multiple_files_with_paths_enables_overlay_compare",
+        ],
+    ),
 ]
 
 PRIORITY_KEYWORDS = [
@@ -127,7 +163,9 @@ def score_to_label(score: int) -> str:
     return "P3"
 
 
-def generate_index(rows: list[tuple[str, str]]) -> tuple[list[str], list[tuple[int, str, str]]]:
+def generate_index(
+    rows: list[tuple[str, str]],
+) -> tuple[list[str], list[tuple[int, str, str]]]:
     lines = [
         "# CHANGELOG ↔ Test Index",
         "",
@@ -144,7 +182,11 @@ def generate_index(rows: list[tuple[str, str]]) -> tuple[list[str], list[tuple[i
         funcs = map_test_functions(bug)
         if tests:
             test_cell = "<br>".join(f"`{t}`" for t in tests)
-            func_cell = "<br>".join(f"`{f}`" for f in funcs) if funcs else "(function mapping pending)"
+            func_cell = (
+                "<br>".join(f"`{f}`" for f in funcs)
+                if funcs
+                else "(function mapping pending)"
+            )
         else:
             test_cell = "(manual mapping needed)"
             func_cell = "(manual mapping needed)"
@@ -164,7 +206,9 @@ def generate_manual_priority(manual_items: list[tuple[int, str, str]]) -> list[s
         "|---|---:|---|---|",
     ]
 
-    for score, version, bug in sorted(manual_items, key=lambda x: (-x[0], x[1]), reverse=False):
+    for score, version, bug in sorted(
+        manual_items, key=lambda x: (-x[0], x[1]), reverse=False
+    ):
         lines.append(f"| {score_to_label(score)} | {score} | {version} | {bug} |")
 
     if not manual_items:

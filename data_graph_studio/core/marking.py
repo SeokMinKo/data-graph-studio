@@ -12,10 +12,11 @@ from PySide6.QtCore import QObject, Signal
 
 class MarkMode(Enum):
     """마킹 모드"""
-    REPLACE = "replace"      # 기존 선택 대체
-    ADD = "add"              # 기존 선택에 추가
-    REMOVE = "remove"        # 기존 선택에서 제거
-    TOGGLE = "toggle"        # 선택 토글
+
+    REPLACE = "replace"  # 기존 선택 대체
+    ADD = "add"  # 기존 선택에 추가
+    REMOVE = "remove"  # 기존 선택에서 제거
+    TOGGLE = "toggle"  # 선택 토글
     INTERSECT = "intersect"  # 교집합만 유지
 
 
@@ -26,6 +27,7 @@ class Marking:
 
     Spotfire의 마킹은 여러 시각화에서 공유되는 선택 상태입니다.
     """
+
     name: str
     color: str
     selected_indices: Set[int] = field(default_factory=set)
@@ -73,10 +75,7 @@ class Marking:
         self._table_selections.clear()
 
     def select_for_table(
-        self,
-        indices: Set[int],
-        table_name: str,
-        mode: MarkMode = MarkMode.REPLACE
+        self, indices: Set[int], table_name: str, mode: MarkMode = MarkMode.REPLACE
     ) -> None:
         """
         특정 테이블에 대한 선택
@@ -158,10 +157,7 @@ class MarkingManager(QObject):
 
     def _create_default_marking(self) -> None:
         """기본 마킹 생성"""
-        self._markings["Main"] = Marking(
-            name="Main",
-            color=self.DEFAULT_COLORS[0]
-        )
+        self._markings["Main"] = Marking(name="Main", color=self.DEFAULT_COLORS[0])
         self._color_index = 1
 
     @property
@@ -250,7 +246,7 @@ class MarkingManager(QObject):
         marking_name: str,
         indices: Set[int],
         mode: MarkMode = MarkMode.REPLACE,
-        table_name: Optional[str] = None
+        table_name: Optional[str] = None,
     ) -> None:
         """
         마킹에 인덱스 선택
@@ -275,14 +271,18 @@ class MarkingManager(QObject):
             marking.select(indices, mode)
 
         # 시그널 발생
-        selected = marking.get_for_table(table_name) if table_name else marking.selected_indices
+        selected = (
+            marking.get_for_table(table_name)
+            if table_name
+            else marking.selected_indices
+        )
         self.marking_changed.emit(marking_name, set(selected))
 
     def mark_active(
         self,
         indices: Set[int],
         mode: MarkMode = MarkMode.REPLACE,
-        table_name: Optional[str] = None
+        table_name: Optional[str] = None,
     ) -> None:
         """
         활성 마킹에 인덱스 선택
@@ -295,9 +295,7 @@ class MarkingManager(QObject):
         self.mark(self._active_marking, indices, mode, table_name)
 
     def get_marked(
-        self,
-        marking_name: str,
-        table_name: Optional[str] = None
+        self, marking_name: str, table_name: Optional[str] = None
     ) -> Set[int]:
         """
         마킹된 인덱스 조회
@@ -322,9 +320,7 @@ class MarkingManager(QObject):
         return set(marking.selected_indices)
 
     def clear_marking(
-        self,
-        marking_name: str,
-        table_name: Optional[str] = None
+        self, marking_name: str, table_name: Optional[str] = None
     ) -> None:
         """
         마킹 클리어

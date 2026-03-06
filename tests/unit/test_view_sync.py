@@ -5,16 +5,15 @@ TDD: tests written before implementation.
 """
 
 import gc
-import time
 
 import pytest
-from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QWidget
 
 
 # ---------------------------------------------------------------------------
 # Ensure a QApplication exists for the entire test module
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _ensure_qapp():
@@ -253,6 +252,7 @@ class TestWeakRefCleanup:
 
         # Explicitly invalidate the C++ object to ensure shiboken releases
         import shiboken6
+
         shiboken6.delete(p1)
         del p1
         gc.collect()
@@ -272,6 +272,7 @@ class TestWeakRefCleanup:
 
         # Explicitly delete p2 via shiboken to ensure cleanup
         import shiboken6
+
         shiboken6.delete(p2)
         del p2
         gc.collect()

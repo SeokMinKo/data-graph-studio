@@ -8,12 +8,20 @@ from typing import Optional, List, Tuple
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QFileDialog, QGroupBox,
-    QCheckBox, QComboBox, QFrame, QMessageBox, QSizePolicy
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QListWidget,
+    QListWidgetItem,
+    QFileDialog,
+    QGroupBox,
+    QCheckBox,
+    QComboBox,
+    QFrame,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QIcon, QColor
 
 from ...core.data_engine import DataEngine
 
@@ -120,7 +128,9 @@ class MultiFileDialog(QDialog):
         options_layout = QVBoxLayout(options_group)
 
         self.auto_compare_cb = QCheckBox("Automatically start comparison after loading")
-        self.auto_compare_cb.setToolTip("Begin dataset comparison as soon as all files are loaded")
+        self.auto_compare_cb.setToolTip(
+            "Begin dataset comparison as soon as all files are loaded"
+        )
         self.auto_compare_cb.setChecked(True)
         options_layout.addWidget(self.auto_compare_cb)
 
@@ -129,8 +139,12 @@ class MultiFileDialog(QDialog):
         self.naming_combo = QComboBox()
         self.naming_combo.setToolTip("How to name datasets when loaded")
         self.naming_combo.addItem("Use file name", "filename")
-        self.naming_combo.addItem("Use file name (without extension)", "filename_no_ext")
-        self.naming_combo.addItem("Use sequential numbers (Data 1, Data 2, ...)", "sequential")
+        self.naming_combo.addItem(
+            "Use file name (without extension)", "filename_no_ext"
+        )
+        self.naming_combo.addItem(
+            "Use sequential numbers (Data 1, Data 2, ...)", "sequential"
+        )
         naming_layout.addWidget(self.naming_combo, 1)
         options_layout.addLayout(naming_layout)
 
@@ -143,7 +157,9 @@ class MultiFileDialog(QDialog):
 
         # Memory warning
         self.warning_label = QLabel("")
-        self.warning_label.setStyleSheet("color: #f57c00; padding: 8px; background: #fff3e0; border-radius: 4px;")
+        self.warning_label.setStyleSheet(
+            "color: #f57c00; padding: 8px; background: #fff3e0; border-radius: 4px;"
+        )
         self.warning_label.setWordWrap(True)
         self.warning_label.hide()
         layout.addWidget(self.warning_label)
@@ -181,7 +197,7 @@ class MultiFileDialog(QDialog):
             "CSV Files (*.csv);;"
             "Excel Files (*.xlsx *.xls);;"
             "Parquet Files (*.parquet);;"
-            "All Files (*)"
+            "All Files (*)",
         )
 
         for path in file_paths:
@@ -210,12 +226,15 @@ class MultiFileDialog(QDialog):
     def _update_summary(self):
         """요약 정보 업데이트"""
         checked_count = sum(
-            1 for i in range(self.file_list.count())
+            1
+            for i in range(self.file_list.count())
             if self.file_list.item(i).checkState() == Qt.Checked
         )
         total_count = self.file_list.count()
 
-        self.summary_label.setText(f"{checked_count} of {total_count} files will be opened")
+        self.summary_label.setText(
+            f"{checked_count} of {total_count} files will be opened"
+        )
         self.open_btn.setEnabled(checked_count > 0)
 
         # Calculate total size
@@ -230,7 +249,7 @@ class MultiFileDialog(QDialog):
         # Memory warning
         if total_size > 500 * 1024 * 1024:  # 500MB
             self.warning_label.setText(
-                f"⚠️ Total file size: {total_size / (1024*1024):.1f} MB. "
+                f"⚠️ Total file size: {total_size / (1024 * 1024):.1f} MB. "
                 "Loading large files may affect performance."
             )
             self.warning_label.show()
@@ -282,7 +301,9 @@ class MultiFileDialog(QDialog):
             return Path(file_path).name
 
 
-def open_multi_file_dialog(parent=None, engine: DataEngine = None) -> Optional[Tuple[List[str], str, bool]]:
+def open_multi_file_dialog(
+    parent=None, engine: DataEngine = None
+) -> Optional[Tuple[List[str], str, bool]]:
     """
     다중 파일 선택 다이얼로그 열기
 
@@ -294,6 +315,6 @@ def open_multi_file_dialog(parent=None, engine: DataEngine = None) -> Optional[T
         return (
             dialog.get_selected_files(),
             dialog.get_naming_option(),
-            dialog.should_auto_compare()
+            dialog.should_auto_compare(),
         )
     return None

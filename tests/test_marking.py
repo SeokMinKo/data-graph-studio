@@ -3,7 +3,6 @@ Marking System 테스트 - Spotfire 스타일 마킹 시스템
 """
 
 import pytest
-from typing import Set
 
 from data_graph_studio.core.marking import (
     Marking,
@@ -25,11 +24,7 @@ class TestMarking:
 
     def test_init_with_indices(self):
         """인덱스와 함께 초기화"""
-        marking = Marking(
-            name="Test",
-            color="#00ff00",
-            selected_indices={1, 2, 3}
-        )
+        marking = Marking(name="Test", color="#00ff00", selected_indices={1, 2, 3})
 
         assert len(marking.selected_indices) == 3
         assert 1 in marking.selected_indices
@@ -78,7 +73,7 @@ class TestMarking:
 
         assert len(marking.selected_indices) == 3
         assert 2 not in marking.selected_indices  # 토글로 제거
-        assert 4 in marking.selected_indices      # 토글로 추가
+        assert 4 in marking.selected_indices  # 토글로 추가
 
     def test_select_intersect(self):
         """선택 교집합 테스트"""

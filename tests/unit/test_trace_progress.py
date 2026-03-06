@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import patch
 
 from PySide6.QtWidgets import QApplication
 
@@ -40,8 +39,12 @@ class TestDetectSysfsPath:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="")
-            return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+                return subprocess.CompletedProcess(
+                    args=[], returncode=1, stdout="", stderr=""
+                )
+            return subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr=""
+            )
 
         with patch.object(ctrl, "_run_adb_cmd", side_effect=side_effect):
             path = ctrl._detect_sysfs_path("SERIAL123")
@@ -69,8 +72,12 @@ class TestStartStopSequence:
             "events": ["block/block_rq_issue", "block/block_rq_complete"],
             "save_path": "/tmp/test_trace.txt",
         }
-        with patch.object(ctrl, "_run_adb_cmd") as mock_cmd, \
-             patch.object(ctrl, "_detect_sysfs_path", return_value="/sys/kernel/tracing"):
+        with (
+            patch.object(ctrl, "_run_adb_cmd") as mock_cmd,
+            patch.object(
+                ctrl, "_detect_sysfs_path", return_value="/sys/kernel/tracing"
+            ),
+        ):
             mock_cmd.return_value = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="", stderr=""
             )
@@ -114,7 +121,9 @@ class TestCleanupGuarantee:
             def side_effect(serial: str, cmd: str) -> subprocess.CompletedProcess:
                 if "cat" in cmd:
                     raise subprocess.TimeoutExpired(cmd="adb", timeout=10)
-                return subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+                return subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout="", stderr=""
+                )
 
             mock_cmd.side_effect = side_effect
             try:
@@ -149,7 +158,7 @@ class TestShlexQuote:
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="ok", stderr=""
             )
-            ctrl._run_adb_cmd("SERIAL", 'cat /sys/kernel/tracing/trace')
+            ctrl._run_adb_cmd("SERIAL", "cat /sys/kernel/tracing/trace")
             cmd = mock_run.call_args.args[0]
             # The shell command should be quoted via shlex
             assert "su" in " ".join(cmd) or "shell" in " ".join(cmd)

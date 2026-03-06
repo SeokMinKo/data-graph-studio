@@ -9,15 +9,23 @@ ShortcutEditDialog — FR-7.3 ~ FR-7.5: 단축키 커스터마이징 UI
 from typing import Optional, Dict
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget,
-    QTreeWidgetItem, QPushButton, QHeaderView, QWidget,
-    QMessageBox, QKeySequenceEdit, QDialogButtonBox
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QPushButton,
+    QHeaderView,
+    QWidget,
+    QMessageBox,
+    QKeySequenceEdit,
+    QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence, QFont
 
 from ...core.shortcut_controller import ShortcutController
-from ..shortcuts import ShortcutCategory
 
 
 class ShortcutEditDialog(QDialog):
@@ -40,9 +48,7 @@ class ShortcutEditDialog(QDialog):
     shortcut_changed = Signal(str, str)  # shortcut_id, new_keys
 
     def __init__(
-        self,
-        controller: ShortcutController,
-        parent: Optional[QWidget] = None
+        self, controller: ShortcutController, parent: Optional[QWidget] = None
     ):
         super().__init__(parent)
         self._controller = controller
@@ -137,10 +143,7 @@ class ShortcutEditDialog(QDialog):
                 if shortcut.id in self._controller.get_customized():
                     status = "Modified"
 
-                item = QTreeWidgetItem(
-                    category_item,
-                    [shortcut.name, keys_str, status]
-                )
+                item = QTreeWidgetItem(category_item, [shortcut.name, keys_str, status])
                 item.setData(0, Qt.UserRole, shortcut.id)
                 self._item_map[shortcut.id] = item
 
@@ -157,16 +160,14 @@ class ShortcutEditDialog(QDialog):
             shortcut_id=shortcut_id,
             current_keys=current_keys,
             controller=self._controller,
-            parent=self
+            parent=self,
         )
 
         if dlg.exec() == QDialog.Accepted:
             new_keys = dlg.captured_keys()
             if new_keys and new_keys != current_keys:
                 # 경고 확인
-                warnings = self._controller.get_conflict_warnings(
-                    shortcut_id, new_keys
-                )
+                warnings = self._controller.get_conflict_warnings(shortcut_id, new_keys)
                 if warnings:
                     msg = "\n".join(warnings)
                     reply = QMessageBox.warning(
@@ -174,7 +175,7 @@ class ShortcutEditDialog(QDialog):
                         "Shortcut Conflict",
                         msg,
                         QMessageBox.Yes | QMessageBox.Cancel,
-                        QMessageBox.Cancel
+                        QMessageBox.Cancel,
                     )
                     if reply != QMessageBox.Yes:
                         return
@@ -191,7 +192,7 @@ class ShortcutEditDialog(QDialog):
             "Reset All Shortcuts",
             "Reset all shortcuts to their default values?",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             self._controller.reset_all()
@@ -216,7 +217,7 @@ class _KeyCaptureDialog(QDialog):
         shortcut_id: str,
         current_keys: str,
         controller: ShortcutController,
-        parent: Optional[QWidget] = None
+        parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
         self._shortcut_id = shortcut_id
@@ -245,9 +246,7 @@ class _KeyCaptureDialog(QDialog):
 
         self._key_edit.keySequenceChanged.connect(self._on_key_changed)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -259,9 +258,7 @@ class _KeyCaptureDialog(QDialog):
             self._warning_label.setText("")
             return
 
-        warnings = self._controller.get_conflict_warnings(
-            self._shortcut_id, keys_str
-        )
+        warnings = self._controller.get_conflict_warnings(self._shortcut_id, keys_str)
         if warnings:
             self._warning_label.setText("\n".join(warnings))
         else:

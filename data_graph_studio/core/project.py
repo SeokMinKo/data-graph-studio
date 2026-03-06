@@ -9,7 +9,6 @@ import tempfile
 import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DataSourceRef:
     """데이터 소스 참조"""
+
     path: str
     file_type: str
     encoding: str = "utf-8"
@@ -34,7 +34,11 @@ class DataSourceRef:
         if os.path.isabs(self.path):
             return True
         # Windows drive letter paths (e.g., C:/foo or C:\foo)
-        if len(self.path) >= 3 and self.path[1] == ':' and (self.path[2] == '/' or self.path[2] == '\\'):
+        if (
+            len(self.path) >= 3
+            and self.path[1] == ":"
+            and (self.path[2] == "/" or self.path[2] == "\\")
+        ):
             return True
         return False
 
@@ -46,37 +50,38 @@ class DataSourceRef:
 
     def to_dict(self) -> Dict:
         return {
-            'path': self.path,
-            'file_type': self.file_type,
-            'encoding': self.encoding,
-            'delimiter': self.delimiter,
-            'has_header': self.has_header,
-            'sheet_name': self.sheet_name,
-            'dataset_id': self.dataset_id,
-            'name': self.name,
-            'color': self.color,
-            'is_active': self.is_active,
+            "path": self.path,
+            "file_type": self.file_type,
+            "encoding": self.encoding,
+            "delimiter": self.delimiter,
+            "has_header": self.has_header,
+            "sheet_name": self.sheet_name,
+            "dataset_id": self.dataset_id,
+            "name": self.name,
+            "color": self.color,
+            "is_active": self.is_active,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'DataSourceRef':
+    def from_dict(cls, data: Dict) -> "DataSourceRef":
         return cls(
-            path=data['path'],
-            file_type=data['file_type'],
-            encoding=data.get('encoding', 'utf-8'),
-            delimiter=data.get('delimiter', ','),
-            has_header=data.get('has_header', True),
-            sheet_name=data.get('sheet_name'),
-            dataset_id=data.get('dataset_id'),
-            name=data.get('name'),
-            color=data.get('color'),
-            is_active=data.get('is_active', False),
+            path=data["path"],
+            file_type=data["file_type"],
+            encoding=data.get("encoding", "utf-8"),
+            delimiter=data.get("delimiter", ","),
+            has_header=data.get("has_header", True),
+            sheet_name=data.get("sheet_name"),
+            dataset_id=data.get("dataset_id"),
+            name=data.get("name"),
+            color=data.get("color"),
+            is_active=data.get("is_active", False),
         )
 
 
 @dataclass
 class ComparisonState:
     """비교 상태 저장"""
+
     mode: str = "single"  # single, overlay, side_by_side, difference
     comparison_datasets: List[str] = field(default_factory=list)
     key_column: Optional[str] = None
@@ -85,27 +90,28 @@ class ComparisonState:
 
     def to_dict(self) -> Dict:
         return {
-            'mode': self.mode,
-            'comparison_datasets': self.comparison_datasets,
-            'key_column': self.key_column,
-            'sync_scroll': self.sync_scroll,
-            'sync_zoom': self.sync_zoom,
+            "mode": self.mode,
+            "comparison_datasets": self.comparison_datasets,
+            "key_column": self.key_column,
+            "sync_scroll": self.sync_scroll,
+            "sync_zoom": self.sync_zoom,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'ComparisonState':
+    def from_dict(cls, data: Dict) -> "ComparisonState":
         return cls(
-            mode=data.get('mode', 'single'),
-            comparison_datasets=data.get('comparison_datasets', []),
-            key_column=data.get('key_column'),
-            sync_scroll=data.get('sync_scroll', True),
-            sync_zoom=data.get('sync_zoom', True),
+            mode=data.get("mode", "single"),
+            comparison_datasets=data.get("comparison_datasets", []),
+            key_column=data.get("key_column"),
+            sync_scroll=data.get("sync_scroll", True),
+            sync_zoom=data.get("sync_zoom", True),
         )
 
 
 @dataclass
 class Project:
     """프로젝트"""
+
     name: str
     version: str = "1.1"  # Version bump for multi-dataset support
     author: str = ""
@@ -143,56 +149,60 @@ class Project:
     def to_dict(self) -> Dict:
         """딕셔너리로 변환"""
         return {
-            'name': self.name,
-            'version': self.version,
-            'author': self.author,
-            'description': self.description,
-            'created_at': self.created_at,
-            'modified_at': self.modified_at,
-            'data_source': self.data_source.to_dict() if self.data_source else None,
-            'data_sources': [ds.to_dict() for ds in self.data_sources],
-            'comparison_state': self.comparison_state.to_dict() if self.comparison_state else None,
-            'state': self.state,
-            'dashboards': self.dashboards,
-            'calculated_fields': self.calculated_fields,
-            'profiles': self.profiles,
-            'theme': self.theme,
+            "name": self.name,
+            "version": self.version,
+            "author": self.author,
+            "description": self.description,
+            "created_at": self.created_at,
+            "modified_at": self.modified_at,
+            "data_source": self.data_source.to_dict() if self.data_source else None,
+            "data_sources": [ds.to_dict() for ds in self.data_sources],
+            "comparison_state": self.comparison_state.to_dict()
+            if self.comparison_state
+            else None,
+            "state": self.state,
+            "dashboards": self.dashboards,
+            "calculated_fields": self.calculated_fields,
+            "profiles": self.profiles,
+            "theme": self.theme,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'Project':
+    def from_dict(cls, data: Dict) -> "Project":
         """딕셔너리에서 복원"""
         project = cls(
-            name=data['name'],
-            version=data.get('version', '1.0'),
-            author=data.get('author', ''),
-            description=data.get('description', ''),
-            created_at=data.get('created_at', time.time()),
-            modified_at=data.get('modified_at', time.time()),
+            name=data["name"],
+            version=data.get("version", "1.0"),
+            author=data.get("author", ""),
+            description=data.get("description", ""),
+            created_at=data.get("created_at", time.time()),
+            modified_at=data.get("modified_at", time.time()),
         )
 
         # 단일 데이터 소스 (레거시 지원)
-        if data.get('data_source'):
-            project.data_source = DataSourceRef.from_dict(data['data_source'])
+        if data.get("data_source"):
+            project.data_source = DataSourceRef.from_dict(data["data_source"])
 
         # 다중 데이터 소스
-        if data.get('data_sources'):
+        if data.get("data_sources"):
             project.data_sources = [
-                DataSourceRef.from_dict(ds) for ds in data['data_sources']
+                DataSourceRef.from_dict(ds) for ds in data["data_sources"]
             ]
         # 레거시 프로젝트에서 data_source를 data_sources로 마이그레이션
         elif project.data_source and not project.data_sources:
             project.data_sources = [project.data_source]
 
         # 비교 상태
-        if data.get('comparison_state'):
-            project.comparison_state = ComparisonState.from_dict(data['comparison_state'])
+        if data.get("comparison_state"):
+            project.comparison_state = ComparisonState.from_dict(
+                data["comparison_state"]
+            )
 
-        project.state = data.get('state', {})
-        project.dashboards = data.get('dashboards', [])
-        project.calculated_fields = data.get('calculated_fields', [])
-        project.profiles = data.get('profiles', [])
-        project.theme = data.get('theme', 'midnight')
+        project.state = data.get("state", {})
+        project.dashboards = data.get("dashboards", [])
+        project.calculated_fields = data.get("calculated_fields", [])
+        project.profiles = data.get("profiles", [])
+        project.theme = data.get("theme", "midnight")
 
         return project
 
@@ -209,7 +219,9 @@ class Project:
             if ds.dataset_id == dataset_id:
                 self.data_sources.pop(i)
                 if self.data_source and self.data_source.dataset_id == dataset_id:
-                    self.data_source = self.data_sources[0] if self.data_sources else None
+                    self.data_source = (
+                        self.data_sources[0] if self.data_sources else None
+                    )
                 return True
         return False
 
@@ -223,31 +235,31 @@ class Project:
     def get_all_data_sources(self) -> List[DataSourceRef]:
         """모든 데이터 소스 반환"""
         return self.data_sources.copy()
-    
+
     def to_json(self, indent: int = 2) -> str:
         """JSON 문자열로 변환"""
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
-    
+
     @classmethod
-    def from_json(cls, json_str: str) -> 'Project':
+    def from_json(cls, json_str: str) -> "Project":
         """JSON에서 복원"""
         data = json.loads(json_str)
         return cls.from_dict(data)
-    
+
     def save(self, path: str):
         """파일로 저장 (atomic write)"""
         # .dgs 확장자 보장
-        if not path.endswith('.dgs'):
-            path = path + '.dgs'
+        if not path.endswith(".dgs"):
+            path = path + ".dgs"
 
         self.modified_at = time.time()
         content = self.to_json()
 
         # Atomic write: 임시 파일에 쓰고 성공 시 교체
-        dir_path = os.path.dirname(path) or '.'
-        fd, tmp_path = tempfile.mkstemp(suffix='.dgs.tmp', dir=dir_path)
+        dir_path = os.path.dirname(path) or "."
+        fd, tmp_path = tempfile.mkstemp(suffix=".dgs.tmp", dir=dir_path)
         try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)
             os.replace(tmp_path, path)
             self._path = path  # 쓰기 성공 후에만 _path 설정
@@ -258,18 +270,18 @@ class Project:
             except OSError:
                 pass
             raise
-    
+
     @classmethod
-    def load(cls, path: str) -> 'Project':
+    def load(cls, path: str) -> "Project":
         """파일에서 로드"""
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         project = cls.from_json(content)
         project._path = path
-        
+
         return project
-    
+
     def validate(self) -> List[str]:
         """유효성 검사"""
         errors = []
@@ -300,111 +312,111 @@ class Project:
 
 class ProjectManager:
     """프로젝트 매니저"""
-    
+
     MAX_RECENT_FILES = 10
-    
+
     def __init__(self):
         self._current: Optional[Project] = None
         self._dirty: bool = False
         self._recent_files: List[str] = []
         self._autosave_path: Optional[str] = None
-    
+
     @property
     def current_project(self) -> Optional[Project]:
         """현재 프로젝트"""
         return self._current
-    
+
     @property
     def is_dirty(self) -> bool:
         """수정 여부"""
         return self._dirty
-    
+
     def new_project(self, name: str = "Untitled") -> Project:
         """새 프로젝트 생성"""
         self._current = Project(name=name)
         self._dirty = False
         return self._current
-    
+
     def mark_dirty(self):
         """수정됨으로 표시"""
         self._dirty = True
-    
+
     def save(self, path: Optional[str] = None):
         """저장"""
         if not self._current:
             return
-        
+
         if path is None:
             path = self._current._path
-        
+
         if path is None:
             raise ValueError("No path specified")
-        
+
         self._current.save(path)
         self._dirty = False
-        
+
         self._add_recent_file(path)
-    
+
     def load(self, path: str) -> Project:
         """로드"""
         self._current = Project.load(path)
         self._dirty = False
         self._add_recent_file(path)
         return self._current
-    
+
     def _add_recent_file(self, path: str):
         """최근 파일 추가"""
         # 이미 있으면 제거
         if path in self._recent_files:
             self._recent_files.remove(path)
-        
+
         # 앞에 추가
         self._recent_files.insert(0, path)
-        
+
         # 최대 개수 유지
-        self._recent_files = self._recent_files[:self.MAX_RECENT_FILES]
-    
+        self._recent_files = self._recent_files[: self.MAX_RECENT_FILES]
+
     def get_recent_files(self) -> List[str]:
         """최근 파일 목록"""
         return self._recent_files.copy()
-    
+
     def clear_recent_files(self):
         """최근 파일 클리어"""
         self._recent_files.clear()
-    
+
     def get_autosave_path(self) -> Optional[str]:
         """자동 저장 경로"""
         if self._autosave_path:
             return self._autosave_path
-        
+
         # 기본 경로
-        home = os.path.expanduser('~')
-        autosave_dir = os.path.join(home, '.data-graph-studio', 'autosave')
+        home = os.path.expanduser("~")
+        autosave_dir = os.path.join(home, ".data-graph-studio", "autosave")
         os.makedirs(autosave_dir, exist_ok=True)
-        
-        return os.path.join(autosave_dir, 'autosave.dgs')
-    
+
+        return os.path.join(autosave_dir, "autosave.dgs")
+
     def autosave(self):
         """자동 저장"""
         if not self._current:
             return
-        
+
         path = self.get_autosave_path()
         if path:
             self._current.save(path)
-    
+
     def recover_autosave(self, path: str) -> Optional[Project]:
         """자동 저장에서 복구"""
         if os.path.exists(path):
             return Project.load(path)
         return None
-    
+
     def close_project(self) -> bool:
         """프로젝트 닫기"""
         if self._dirty:
             # 저장되지 않은 변경사항 있음
             return False
-        
+
         self._current = None
         self._dirty = False
         return True

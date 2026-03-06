@@ -1,15 +1,14 @@
 """Tests for the redesigned DataTab (Search + ListBox pattern)."""
+
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from PySide6.QtCore import Qt
 
 from data_graph_studio.ui.panels.data_tab import (
     _SearchableColumnPicker,
     _ColumnListBox,
-    _ListBoxItem,
     _YAxisListItem,
     _is_numeric_dtype,
     DataTab,
@@ -19,6 +18,7 @@ from data_graph_studio.ui.panels.data_tab import (
 # ---------------------------------------------------------------------------
 # _is_numeric_dtype
 # ---------------------------------------------------------------------------
+
 
 class TestIsNumericDtype:
     def test_int_types(self):
@@ -40,6 +40,7 @@ class TestIsNumericDtype:
 # ---------------------------------------------------------------------------
 # _SearchableColumnPicker
 # ---------------------------------------------------------------------------
+
 
 class TestSearchableColumnPicker:
     def test_set_items(self, qtbot):
@@ -69,6 +70,7 @@ class TestSearchableColumnPicker:
 # ---------------------------------------------------------------------------
 # _ColumnListBox
 # ---------------------------------------------------------------------------
+
 
 class TestColumnListBox:
     def test_add_and_items(self, qtbot):
@@ -123,6 +125,7 @@ class TestColumnListBox:
 # _YAxisListItem
 # ---------------------------------------------------------------------------
 
+
 class TestYAxisListItem:
     def test_creation(self, qtbot):
         item = _YAxisListItem("price")
@@ -168,6 +171,7 @@ class TestYAxisListItem:
 # DataTab (integration-level, mocked state)
 # ---------------------------------------------------------------------------
 
+
 class TestDataTab:
     @pytest.fixture
     def mock_state(self):
@@ -199,11 +203,21 @@ class TestDataTab:
         engine = MagicMock()
         engine.df = MagicMock()
         engine.df.columns = ["id", "price", "volume", "category"]
+
         # Simulate dtypes
         class FakeDtype:
-            def __init__(self, s): self._s = s
-            def __str__(self): return self._s
-        engine.df.dtypes = [FakeDtype("Int64"), FakeDtype("Float64"), FakeDtype("Float64"), FakeDtype("Utf8")]
+            def __init__(self, s):
+                self._s = s
+
+            def __str__(self):
+                return self._s
+
+        engine.df.dtypes = [
+            FakeDtype("Int64"),
+            FakeDtype("Float64"),
+            FakeDtype("Float64"),
+            FakeDtype("Utf8"),
+        ]
         return engine
 
     def test_creation(self, qtbot, mock_state):
@@ -238,9 +252,9 @@ class TestDataTab:
         """Verify Agg 1/Agg 2 combos are removed."""
         tab = DataTab(mock_state)
         qtbot.addWidget(tab)
-        assert not hasattr(tab, '_agg_combo')
-        assert not hasattr(tab, '_agg_combo_2')
-        assert not hasattr(tab, '_secondary_agg')
+        assert not hasattr(tab, "_agg_combo")
+        assert not hasattr(tab, "_agg_combo_2")
+        assert not hasattr(tab, "_secondary_agg")
 
     def test_section_order(self, qtbot, mock_state):
         """Verify section order: Filter → Group By → X-Axis → Y-Axis → Hover."""
@@ -254,7 +268,9 @@ class TestDataTab:
             if item is None:
                 continue
             w = item.widget()
-            if w and isinstance(w, type(tab._x_combo).__mro__[0].__mro__[0]):  # QLabel check
+            if w and isinstance(
+                w, type(tab._x_combo).__mro__[0].__mro__[0]
+            ):  # QLabel check
                 pass
             # Check layout items for section headers
             sub = item.layout()
@@ -263,15 +279,26 @@ class TestDataTab:
                     sub_item = sub.itemAt(j)
                     if sub_item and sub_item.widget():
                         from PySide6.QtWidgets import QLabel
+
                         ww = sub_item.widget()
-                        if isinstance(ww, QLabel) and ww.objectName() == "sectionHeader":
+                        if (
+                            isinstance(ww, QLabel)
+                            and ww.objectName() == "sectionHeader"
+                        ):
                             headers.append(ww.text())
             if w is not None:
                 from PySide6.QtWidgets import QLabel
+
                 if isinstance(w, QLabel) and w.objectName() == "sectionHeader":
                     headers.append(w.text())
 
-        assert headers == ["Filter", "Group By", "X-Axis", "Y-Axis (Values)", "Hover Columns"]
+        assert headers == [
+            "Filter",
+            "Group By",
+            "X-Axis",
+            "Y-Axis (Values)",
+            "Hover Columns",
+        ]
 
     def test_filter_changed_signal_interface(self, qtbot, mock_state):
         """Verify filter_changed signal exists and emits dict."""

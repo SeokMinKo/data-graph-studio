@@ -22,10 +22,19 @@ class GraphSettingMapper:
 
         # Build chart_settings dict from AppState
         chart_settings_dict = {}
-        if hasattr(state, '_chart_settings') and state._chart_settings:
+        if hasattr(state, "_chart_settings") and state._chart_settings:
             cs = state._chart_settings
-            for attr in ['show_legend', 'show_grid', 'show_markers', 'line_width', 
-                         'marker_size', 'opacity', 'color_palette', 'title', 'subtitle']:
+            for attr in [
+                "show_legend",
+                "show_grid",
+                "show_markers",
+                "line_width",
+                "marker_size",
+                "opacity",
+                "color_palette",
+                "title",
+                "subtitle",
+            ]:
                 if hasattr(cs, attr):
                     chart_settings_dict[attr] = getattr(cs, attr)
 
@@ -33,25 +42,31 @@ class GraphSettingMapper:
         group_cols = []
         for g in state.group_columns:
             if isinstance(g, GroupColumn):
-                group_cols.append({
-                    'name': g.name,
-                    'selected_values': list(g.selected_values),
-                    'order': g.order,
-                })
+                group_cols.append(
+                    {
+                        "name": g.name,
+                        "selected_values": list(g.selected_values),
+                        "order": g.order,
+                    }
+                )
             else:
                 group_cols.append(g)
 
         value_cols = []
         for v in state.value_columns:
             if isinstance(v, ValueColumn):
-                value_cols.append({
-                    'name': v.name,
-                    'aggregation': v.aggregation.value if hasattr(v.aggregation, 'value') else str(v.aggregation),
-                    'color': v.color,
-                    'use_secondary_axis': v.use_secondary_axis,
-                    'order': v.order,
-                    'formula': v.formula,
-                })
+                value_cols.append(
+                    {
+                        "name": v.name,
+                        "aggregation": v.aggregation.value
+                        if hasattr(v.aggregation, "value")
+                        else str(v.aggregation),
+                        "color": v.color,
+                        "use_secondary_axis": v.use_secondary_axis,
+                        "order": v.order,
+                        "formula": v.formula,
+                    }
+                )
             else:
                 value_cols.append(v)
 
@@ -104,11 +119,13 @@ class GraphSettingMapper:
                 if isinstance(g, GroupColumn):
                     normalized_groups.append(g)
                 elif isinstance(g, dict):
-                    normalized_groups.append(GroupColumn(
-                        name=g.get('name', ''),
-                        selected_values=set(g.get('selected_values', [])),
-                        order=g.get('order', 0),
-                    ))
+                    normalized_groups.append(
+                        GroupColumn(
+                            name=g.get("name", ""),
+                            selected_values=set(g.get("selected_values", [])),
+                            order=g.get("order", 0),
+                        )
+                    )
                 else:
                     normalized_groups.append(GroupColumn(name=str(g)))
 
@@ -126,6 +143,7 @@ class GraphSettingMapper:
         # --- value_columns ---
         try:
             from .state import AggregationType
+
             state.clear_value_zone()
             normalized_values: list[ValueColumn] = []
             for v in setting.value_columns:
@@ -133,17 +151,19 @@ class GraphSettingMapper:
                     normalized_values.append(v)
                 elif isinstance(v, dict):
                     try:
-                        agg = AggregationType(v.get('aggregation', 'sum'))
+                        agg = AggregationType(v.get("aggregation", "sum"))
                     except ValueError:
                         agg = AggregationType.SUM
-                    normalized_values.append(ValueColumn(
-                        name=v.get('name', ''),
-                        aggregation=agg,
-                        color=v.get('color', '#1f77b4'),
-                        use_secondary_axis=v.get('use_secondary_axis', False),
-                        order=v.get('order', 0),
-                        formula=v.get('formula', ''),
-                    ))
+                    normalized_values.append(
+                        ValueColumn(
+                            name=v.get("name", ""),
+                            aggregation=agg,
+                            color=v.get("color", "#1f77b4"),
+                            use_secondary_axis=v.get("use_secondary_axis", False),
+                            order=v.get("order", 0),
+                            formula=v.get("formula", ""),
+                        )
+                    )
                 else:
                     normalized_values.append(ValueColumn(name=str(v)))
 
@@ -185,7 +205,9 @@ class GraphSettingMapper:
                         try:
                             setattr(cs, key, value)
                         except Exception as e:
-                            logger.warning("Failed to apply chart_setting '%s': %s", key, e)
+                            logger.warning(
+                                "Failed to apply chart_setting '%s': %s", key, e
+                            )
         except Exception as e:
             logger.warning("Failed to apply chart_settings: %s", e)
 

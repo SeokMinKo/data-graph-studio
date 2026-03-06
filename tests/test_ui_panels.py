@@ -4,8 +4,6 @@ UI/UX Panels 테스트 - Spotfire 스타일 UI 컴포넌트
 
 import pytest
 import polars as pl
-from unittest.mock import MagicMock, patch
-import sys
 
 # Qt imports
 from PySide6.QtWidgets import QApplication
@@ -16,12 +14,9 @@ if not app:
     app = QApplication([])
 
 from data_graph_studio.ui.panels.filter_panel import (
-    FilterWidget,
     FilterPanelModel,
-    FilterType as UIFilterType,
     RangeSliderWidget,
     CheckboxListWidget,
-    TextSearchWidget,
 )
 
 from data_graph_studio.ui.panels.property_panel import (
@@ -29,8 +24,6 @@ from data_graph_studio.ui.panels.property_panel import (
     PropertyItem,
     PropertyGroup,
     PropertyType,
-    ColorPickerWidget,
-    FontPickerWidget,
 )
 
 from data_graph_studio.ui.panels.tooltip_config import (
@@ -47,7 +40,6 @@ from data_graph_studio.ui.panels.legend_panel import (
 
 from data_graph_studio.ui.panels.color_scheme import (
     ColorScheme,
-    ColorPalette,
     ColorScale,
     ColorSchemeManager,
 )
@@ -58,13 +50,17 @@ class TestFilterPanelModel:
 
     @pytest.fixture
     def sample_data(self):
-        return pl.DataFrame({
-            "id": [1, 2, 3, 4, 5],
-            "category": ["A", "A", "B", "B", "C"],
-            "sales": [100, 200, 150, 250, 80],
-            "active": [True, False, True, False, True],
-            "date": pl.date_range(pl.date(2024, 1, 1), pl.date(2024, 1, 5), eager=True)
-        })
+        return pl.DataFrame(
+            {
+                "id": [1, 2, 3, 4, 5],
+                "category": ["A", "A", "B", "B", "C"],
+                "sales": [100, 200, 150, 250, 80],
+                "active": [True, False, True, False, True],
+                "date": pl.date_range(
+                    pl.date(2024, 1, 1), pl.date(2024, 1, 5), eager=True
+                ),
+            }
+        )
 
     def test_init(self, sample_data):
         """초기화"""
@@ -81,10 +77,10 @@ class TestFilterPanelModel:
         # 필터 타입이 반환되어야 함 (구체적인 타입은 구현에 따라 다를 수 있음)
         sales_type = model.get_filter_type("sales")
         assert sales_type is not None
-        
+
         category_type = model.get_filter_type("category")
         assert category_type is not None
-        
+
         active_type = model.get_filter_type("active")
         assert active_type is not None
 
@@ -105,7 +101,7 @@ class TestFilterPanelModel:
         model.set_data(sample_data)
 
         result = model.get_value_range("sales")
-        
+
         # 튜플 또는 기타 범위 형식 반환
         assert result is not None
         if isinstance(result, tuple) and len(result) == 2:
@@ -213,7 +209,7 @@ class TestPropertyPanel:
             name="color",
             display_name="Color",
             property_type=PropertyType.COLOR,
-            value="#FF0000"
+            value="#FF0000",
         )
         panel.add_item("Appearance", item)
 
@@ -229,7 +225,7 @@ class TestPropertyPanel:
             name="width",
             display_name="Width",
             property_type=PropertyType.NUMBER,
-            value=100
+            value=100,
         )
         panel.add_item("Size", item)
 
@@ -252,9 +248,7 @@ class TestTooltipConfig:
         config = TooltipConfig()
 
         item = TooltipItem(
-            column="sales",
-            display_name="Sales",
-            format_string="${value:,.0f}"
+            column="sales", display_name="Sales", format_string="${value:,.0f}"
         )
         config.add_item(item)
 
@@ -263,15 +257,12 @@ class TestTooltipConfig:
     def test_format_tooltip(self):
         """툴팁 포맷팅"""
         config = TooltipConfig()
-        config.add_item(TooltipItem(
-            column="name",
-            display_name="Name"
-        ))
-        config.add_item(TooltipItem(
-            column="value",
-            display_name="Value",
-            format_string="{value:.2f}"
-        ))
+        config.add_item(TooltipItem(column="name", display_name="Name"))
+        config.add_item(
+            TooltipItem(
+                column="value", display_name="Value", format_string="{value:.2f}"
+            )
+        )
 
         data = {"name": "Test", "value": 123.456}
         formatter = TooltipFormatter(config)
@@ -323,45 +314,41 @@ class TestLegendSeriesSync:
     def test_series_colors_unique(self):
         """각 시리즈(그룹)가 고유한 색상을 갖는지 테스트"""
         from data_graph_studio.ui.panels.color_scheme import ColorScheme
-        
+
         # 5개 그룹이 있을 때 각각 고유 색상을 가져야 함
         scheme = ColorScheme(
-            name="Test",
-            colors=["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF"]
+            name="Test", colors=["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF"]
         )
-        
+
         group_names = ["Group A", "Group B", "Group C", "Group D", "Group E"]
         colors = [scheme.get_color(i) for i in range(len(group_names))]
-        
+
         # 모든 색상이 고유해야 함
         assert len(set(colors)) == len(group_names)
-    
+
     def test_series_colors_cycle(self):
         """그룹 수가 팔레트보다 많을 때 색상 순환 테스트"""
         from data_graph_studio.ui.panels.color_scheme import ColorScheme
-        
-        scheme = ColorScheme(
-            name="Small",
-            colors=["#FF0000", "#00FF00", "#0000FF"]
-        )
-        
+
+        scheme = ColorScheme(name="Small", colors=["#FF0000", "#00FF00", "#0000FF"])
+
         # 5개 그룹, 3개 색상 → 순환
         colors = [scheme.get_color(i) for i in range(5)]
-        
+
         assert colors[0] == colors[3]  # 순환
         assert colors[1] == colors[4]
-    
+
     def test_legend_visibility(self):
         """Legend 표시/숨김 동작 테스트"""
         config = LegendConfig()
-        
+
         # 기본 표시
         assert config.visible is True
-        
+
         # 숨김
         config.visible = False
         assert config.visible is False
-        
+
         # 다시 표시
         config.visible = True
         assert config.visible is True
@@ -372,20 +359,14 @@ class TestColorScheme:
 
     def test_init(self):
         """초기화"""
-        scheme = ColorScheme(
-            name="Custom",
-            colors=["#FF0000", "#00FF00", "#0000FF"]
-        )
+        scheme = ColorScheme(name="Custom", colors=["#FF0000", "#00FF00", "#0000FF"])
 
         assert scheme.name == "Custom"
         assert len(scheme.colors) == 3
 
     def test_get_color(self):
         """색상 조회"""
-        scheme = ColorScheme(
-            name="Test",
-            colors=["#FF0000", "#00FF00", "#0000FF"]
-        )
+        scheme = ColorScheme(name="Test", colors=["#FF0000", "#00FF00", "#0000FF"])
 
         assert scheme.get_color(0) == "#FF0000"
         assert scheme.get_color(1) == "#00FF00"
@@ -393,10 +374,7 @@ class TestColorScheme:
 
     def test_interpolate(self):
         """색상 보간"""
-        scale = ColorScale(
-            colors=["#000000", "#FFFFFF"],
-            positions=[0.0, 1.0]
-        )
+        scale = ColorScale(colors=["#000000", "#FFFFFF"], positions=[0.0, 1.0])
 
         color = scale.interpolate(0.5)
 
@@ -419,20 +397,14 @@ class TestColorSchemeManager:
 
     def test_add_scheme(self, manager):
         """스킴 추가"""
-        scheme = ColorScheme(
-            name="MyColors",
-            colors=["#111111", "#222222"]
-        )
+        scheme = ColorScheme(name="MyColors", colors=["#111111", "#222222"])
         manager.add_scheme(scheme)
 
         assert "MyColors" in manager.list_schemes()
 
     def test_get_scheme(self, manager):
         """스킴 조회"""
-        scheme = ColorScheme(
-            name="TestScheme",
-            colors=["#AAAAAA"]
-        )
+        scheme = ColorScheme(name="TestScheme", colors=["#AAAAAA"])
         manager.add_scheme(scheme)
 
         retrieved = manager.get_scheme("TestScheme")
@@ -456,15 +428,16 @@ class TestStatPanel:
     def sample_data(self):
         """테스트용 샘플 데이터"""
         import numpy as np
+
         np.random.seed(42)
         return {
-            'x_data': np.random.randn(100),
-            'y_data': np.random.randn(100) * 10 + 50,
-            'group_data': {
-                'Group A': 100.0,
-                'Group B': 200.0,
-                'Group C': 150.0,
-            }
+            "x_data": np.random.randn(100),
+            "y_data": np.random.randn(100) * 10 + 50,
+            "group_data": {
+                "Group A": 100.0,
+                "Group B": 200.0,
+                "Group C": 150.0,
+            },
         }
 
     def test_stat_panel_init(self):
@@ -489,11 +462,11 @@ class TestStatPanel:
         panel = StatPanel(state)
 
         # 4개 그래프 위젯 확인
-        assert hasattr(panel, 'x_hist_widget')
-        assert hasattr(panel, 'y_hist_widget')
-        assert hasattr(panel, 'pie_widget')
-        assert hasattr(panel, 'percentile_widget')
-        assert hasattr(panel, 'stats_label')
+        assert hasattr(panel, "x_hist_widget")
+        assert hasattr(panel, "y_hist_widget")
+        assert hasattr(panel, "pie_widget")
+        assert hasattr(panel, "percentile_widget")
+        assert hasattr(panel, "stats_label")
 
     def test_stat_panel_update_histograms(self, sample_data):
         """히스토그램 업데이트 테스트"""
@@ -505,9 +478,7 @@ class TestStatPanel:
 
         # 데이터 업데이트
         panel.update_histograms(
-            sample_data['x_data'],
-            sample_data['y_data'],
-            sample_data['group_data']
+            sample_data["x_data"], sample_data["y_data"], sample_data["group_data"]
         )
 
         # 데이터가 저장되었는지 확인
@@ -524,11 +495,11 @@ class TestStatPanel:
         panel = StatPanel(state)
 
         stats = {
-            'mean': 50.0,
-            'median': 49.5,
-            'std': 10.0,
-            'min': 20.0,
-            'max': 80.0,
+            "mean": 50.0,
+            "median": 49.5,
+            "std": 10.0,
+            "min": 20.0,
+            "max": 80.0,
         }
 
         panel.update_stats(stats)
@@ -546,9 +517,9 @@ class TestStatPanel:
         panel = StatPanel(state)
 
         group_data = {
-            'Category A': 150.0,
-            'Category B': 250.0,
-            'Category C': 100.0,
+            "Category A": 150.0,
+            "Category B": 250.0,
+            "Category C": 100.0,
         }
 
         panel.set_group_data(group_data)
@@ -586,7 +557,7 @@ class TestExpandedChartDialog:
         from data_graph_studio.ui.panels.graph_panel import ExpandedChartDialog
 
         dialog = ExpandedChartDialog("Pie Test")
-        labels = ['A', 'B', 'C']
+        labels = ["A", "B", "C"]
         values = [100, 200, 150]
 
         # 플롯 호출 (에러 없이 실행되어야 함)
@@ -628,7 +599,7 @@ class TestClickablePlotWidget:
         from data_graph_studio.ui.panels.graph_panel import ClickablePlotWidget
 
         widget = ClickablePlotWidget()
-        labels = ['A', 'B', 'C']
+        labels = ["A", "B", "C"]
         values = [100, 200, 150]
 
         widget.set_pie_data(labels, values, "Test Pie")

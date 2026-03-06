@@ -39,8 +39,8 @@ class StreamingController(QObject):
 
     # ── Signals ───────────────────────────────────────────────
     streaming_state_changed = Signal(str)  # "off" | "live" | "paused"
-    data_updated = Signal(str, int)        # file_path, new_row_count
-    file_deleted = Signal(str)             # file_path (notifies UI before stop)
+    data_updated = Signal(str, int)  # file_path, new_row_count
+    file_deleted = Signal(str)  # file_path (notifies UI before stop)
 
     def __init__(
         self,

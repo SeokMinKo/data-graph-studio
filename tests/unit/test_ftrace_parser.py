@@ -64,7 +64,9 @@ def _write_tmp(content: str) -> str:
 class TestParseRawBasic:
     """UT-1: Normal ftrace text → correct DataFrame."""
 
-    def test_columns_and_types(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+    def test_columns_and_types(
+        self, parser: FtraceParser, settings: Dict[str, Any]
+    ) -> None:
         path = _write_tmp(SAMPLE_FTRACE)
         try:
             df = parser.parse_raw(path, settings)
@@ -93,7 +95,9 @@ class TestParseRawBasic:
 class TestCommentSkip:
     """UT-2: Comment lines are skipped."""
 
-    def test_comments_skipped(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+    def test_comments_skipped(
+        self, parser: FtraceParser, settings: Dict[str, Any]
+    ) -> None:
         path = _write_tmp(SAMPLE_FTRACE)
         try:
             df = parser.parse_raw(path, settings)
@@ -106,7 +110,9 @@ class TestCommentSkip:
 class TestEventsFilter:
     """UT-3: Events filter."""
 
-    def test_filter_single_event(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+    def test_filter_single_event(
+        self, parser: FtraceParser, settings: Dict[str, Any]
+    ) -> None:
         settings["events"] = ["block_rq_issue"]
         path = _write_tmp(SAMPLE_FTRACE)
         try:
@@ -120,7 +126,9 @@ class TestEventsFilter:
 class TestCpusFilter:
     """UT-4: CPUs filter."""
 
-    def test_filter_single_cpu(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+    def test_filter_single_cpu(
+        self, parser: FtraceParser, settings: Dict[str, Any]
+    ) -> None:
         settings["cpus"] = [1]
         path = _write_tmp(SAMPLE_FTRACE)
         try:
@@ -134,7 +142,9 @@ class TestCpusFilter:
 class TestIntegerTimestamp:
     """UT-5+: integer timestamp formats."""
 
-    def test_integer_timestamp(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+    def test_integer_timestamp(
+        self, parser: FtraceParser, settings: Dict[str, Any]
+    ) -> None:
         text = """     kworker/0:1-12345 [000] .... 12345: block_rq_issue: 8,0 R 4096 () 1234 + 8 [kworker/0:1]\n"""
         path = _write_tmp(text)
         try:
@@ -149,7 +159,9 @@ class TestIntegerTimestamp:
 class TestEventFilterCategoryPrefix:
     """UT-5+: event filter category prefix compatibility."""
 
-    def test_filter_with_prefix(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+    def test_filter_with_prefix(
+        self, parser: FtraceParser, settings: Dict[str, Any]
+    ) -> None:
         settings["events"] = ["block/block_rq_issue", "block/block_rq_complete"]
         path = _write_tmp(SAMPLE_FTRACE)
         try:
@@ -205,7 +217,9 @@ class TestHeaderOnly:
 class TestNonStandardLines:
     """UT-8: Non-standard lines are skipped."""
 
-    def test_garbage_lines(self, parser: FtraceParser, settings: Dict[str, Any]) -> None:
+    def test_garbage_lines(
+        self, parser: FtraceParser, settings: Dict[str, Any]
+    ) -> None:
         text = "garbage line\nrandom stuff\n" + SAMPLE_FTRACE
         path = _write_tmp(text)
         try:

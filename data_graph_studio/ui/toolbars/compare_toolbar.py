@@ -16,18 +16,24 @@ from __future__ import annotations
 from typing import Dict
 
 from PySide6.QtWidgets import (
-    QToolBar, QToolButton, QPushButton, QWidget, QLabel,
-    QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox,
+    QToolBar,
+    QToolButton,
+    QPushButton,
+    QWidget,
+    QLabel,
+    QHBoxLayout,
+    QVBoxLayout,
+    QCheckBox,
 )
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Signal, QSize
 from PySide6.QtGui import QAction, QActionGroup
 
 
 class CompareToolbar(QToolBar):
     """Toolbar for compare side-by-side mode controls (two-row layout)."""
 
-    grid_layout_changed = Signal(str)   # "row" | "column" | "grid"
-    sync_changed = Signal(str, bool)    # key, checked
+    grid_layout_changed = Signal(str)  # "row" | "column" | "grid"
+    sync_changed = Signal(str, bool)  # key, checked
     exit_requested = Signal()
 
     # Default sync states

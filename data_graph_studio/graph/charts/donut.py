@@ -14,8 +14,16 @@ class DonutChart:
     """
 
     DEFAULT_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     def calculate(
@@ -25,7 +33,7 @@ class DonutChart:
         inner_radius_ratio: float = 0.5,
         start_angle: float = 90,
         sort_by_value: bool = False,
-        colors: Optional[List[str]] = None
+        colors: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         도넛 차트 데이터 계산
@@ -53,7 +61,7 @@ class DonutChart:
                 "start_angles": [],
                 "end_angles": [],
                 "inner_radius_ratio": inner_radius_ratio,
-                "colors": []
+                "colors": [],
             }
 
         if sort_by_value:
@@ -81,8 +89,10 @@ class DonutChart:
 
         # 색상
         if colors is None:
-            colors = [self.DEFAULT_COLORS[i % len(self.DEFAULT_COLORS)]
-                      for i in range(len(sorted_labels))]
+            colors = [
+                self.DEFAULT_COLORS[i % len(self.DEFAULT_COLORS)]
+                for i in range(len(sorted_labels))
+            ]
 
         return {
             "labels": sorted_labels,
@@ -93,7 +103,7 @@ class DonutChart:
             "end_angles": end_angles,
             "inner_radius_ratio": inner_radius_ratio,
             "colors": colors,
-            "total": total
+            "total": total,
         }
 
     def get_arc_paths(
@@ -104,7 +114,7 @@ class DonutChart:
         center_y: float,
         outer_radius: float,
         inner_radius_ratio: float = 0.5,
-        **kwargs
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """
         SVG/Canvas용 호 경로 계산
@@ -125,42 +135,41 @@ class DonutChart:
             mid_rad = (start_rad + end_rad) / 2
             label_radius = (outer_radius + inner_radius) / 2
 
-            arcs.append({
-                "label": label,
-                "value": result["values"][i],
-                "percentage": result["percentages"][i],
-                "start_angle": result["start_angles"][i],
-                "end_angle": result["end_angles"][i],
-                "color": result["colors"][i],
-                # 호 포인트
-                "outer_start": (
-                    center_x + outer_radius * np.cos(start_rad),
-                    center_y - outer_radius * np.sin(start_rad)
-                ),
-                "outer_end": (
-                    center_x + outer_radius * np.cos(end_rad),
-                    center_y - outer_radius * np.sin(end_rad)
-                ),
-                "inner_start": (
-                    center_x + inner_radius * np.cos(start_rad),
-                    center_y - inner_radius * np.sin(start_rad)
-                ),
-                "inner_end": (
-                    center_x + inner_radius * np.cos(end_rad),
-                    center_y - inner_radius * np.sin(end_rad)
-                ),
-                # 레이블 위치
-                "label_x": center_x + label_radius * np.cos(mid_rad),
-                "label_y": center_y - label_radius * np.sin(mid_rad)
-            })
+            arcs.append(
+                {
+                    "label": label,
+                    "value": result["values"][i],
+                    "percentage": result["percentages"][i],
+                    "start_angle": result["start_angles"][i],
+                    "end_angle": result["end_angles"][i],
+                    "color": result["colors"][i],
+                    # 호 포인트
+                    "outer_start": (
+                        center_x + outer_radius * np.cos(start_rad),
+                        center_y - outer_radius * np.sin(start_rad),
+                    ),
+                    "outer_end": (
+                        center_x + outer_radius * np.cos(end_rad),
+                        center_y - outer_radius * np.sin(end_rad),
+                    ),
+                    "inner_start": (
+                        center_x + inner_radius * np.cos(start_rad),
+                        center_y - inner_radius * np.sin(start_rad),
+                    ),
+                    "inner_end": (
+                        center_x + inner_radius * np.cos(end_rad),
+                        center_y - inner_radius * np.sin(end_rad),
+                    ),
+                    # 레이블 위치
+                    "label_x": center_x + label_radius * np.cos(mid_rad),
+                    "label_y": center_y - label_radius * np.sin(mid_rad),
+                }
+            )
 
         return arcs
 
     def get_center_text(
-        self,
-        values: List[float],
-        format_str: str = "{:,.0f}",
-        title: str = "Total"
+        self, values: List[float], format_str: str = "{:,.0f}", title: str = "Total"
     ) -> Dict[str, Any]:
         """
         중앙 텍스트 정보
@@ -170,8 +179,4 @@ class DonutChart:
         """
         total = sum(v for v in values if v > 0)
 
-        return {
-            "title": title,
-            "value": format_str.format(total),
-            "raw_value": total
-        }
+        return {"title": title, "value": format_str.format(total), "raw_value": total}

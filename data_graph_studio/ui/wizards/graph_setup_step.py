@@ -5,7 +5,7 @@ Graph Setup Step - Step 2 of New Project Wizard
 from __future__ import annotations
 
 import uuid
-from typing import List, Optional, Sequence
+from typing import List, Optional
 
 import numpy as np
 import pyqtgraph as pg
@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -111,7 +110,9 @@ class GraphSetupStep(QWizardPage):
         # Group column
         left_layout.addWidget(QLabel("Group 컬럼"))
         self.group_column_combo = QComboBox()
-        self.group_column_combo.setToolTip("Column to group data by (creates separate series)")
+        self.group_column_combo.setToolTip(
+            "Column to group data by (creates separate series)"
+        )
         left_layout.addWidget(self.group_column_combo)
 
         # Hover columns with search
@@ -152,7 +153,9 @@ class GraphSetupStep(QWizardPage):
     def _connect_signals(self):
         self.chart_type_combo.currentIndexChanged.connect(self._schedule_preview_update)
         self.x_column_combo.currentIndexChanged.connect(self._schedule_preview_update)
-        self.group_column_combo.currentIndexChanged.connect(self._schedule_preview_update)
+        self.group_column_combo.currentIndexChanged.connect(
+            self._schedule_preview_update
+        )
         self.y_columns_list.itemChanged.connect(self._schedule_preview_update)
         self.hover_columns_list.itemChanged.connect(self._schedule_preview_update)
         self.expand_button.clicked.connect(self._open_expanded_preview)
@@ -321,8 +324,14 @@ class GraphSetupStep(QWizardPage):
             if y_data is None:
                 return
             hist, bin_edges = np.histogram(y_data[~np.isnan(y_data)], bins=30)
-            plot_widget.plot(bin_edges, hist, stepMode="center", fillLevel=0,
-                             brush=(31, 119, 180, 150), pen=pg.mkPen((31, 119, 180)))
+            plot_widget.plot(
+                bin_edges,
+                hist,
+                stepMode="center",
+                fillLevel=0,
+                brush=(31, 119, 180, 150),
+                pen=pg.mkPen((31, 119, 180)),
+            )
             return
 
         if chart_type == "Pie":
@@ -331,6 +340,7 @@ class GraphSetupStep(QWizardPage):
                 return
             try:
                 from pyqtgraph.graphicsItems.PieChartItem import PieChartItem
+
                 values = np.array(y_data)
                 values = values[~np.isnan(values)]
                 if len(values) == 0:
@@ -338,11 +348,11 @@ class GraphSetupStep(QWizardPage):
                 pie = PieChartItem(values.tolist())
                 plot_widget.addItem(pie)
                 plot_widget.setAspectLocked(True)
-                plot_widget.hideAxis('bottom')
-                plot_widget.hideAxis('left')
+                plot_widget.hideAxis("bottom")
+                plot_widget.hideAxis("left")
             except Exception:
                 indices = np.arange(len(y_data))
-                plot_widget.plot(indices, y_data, pen=None, symbol='o')
+                plot_widget.plot(indices, y_data, pen=None, symbol="o")
             return
 
         # Common charts
@@ -351,13 +361,21 @@ class GraphSetupStep(QWizardPage):
             if y_data is None:
                 continue
             if chart_type == "Scatter":
-                plot_widget.plot(x_data, y_data, pen=None, symbol='o')
+                plot_widget.plot(x_data, y_data, pen=None, symbol="o")
             elif chart_type == "Bar":
                 x_idx = np.arange(len(y_data))
-                bar = pg.BarGraphItem(x=x_idx, height=y_data, width=0.6, brush=(31, 119, 180, 180))
+                bar = pg.BarGraphItem(
+                    x=x_idx, height=y_data, width=0.6, brush=(31, 119, 180, 180)
+                )
                 plot_widget.addItem(bar)
             elif chart_type == "Area":
-                plot_widget.plot(x_data, y_data, pen=pg.mkPen(width=2), fillLevel=0, brush=(31, 119, 180, 100))
+                plot_widget.plot(
+                    x_data,
+                    y_data,
+                    pen=pg.mkPen(width=2),
+                    fillLevel=0,
+                    brush=(31, 119, 180, 100),
+                )
             else:  # Line default
                 plot_widget.plot(x_data, y_data, pen=pg.mkPen(width=2))
 
@@ -367,7 +385,9 @@ class GraphSetupStep(QWizardPage):
             # Get raw series first
             if hasattr(df, "to_pandas"):
                 raw = df[column].to_pandas()
-            elif hasattr(df, "__class__") and df.__class__.__name__.lower().startswith("dataframe"):
+            elif hasattr(df, "__class__") and df.__class__.__name__.lower().startswith(
+                "dataframe"
+            ):
                 raw = df[column]
             elif hasattr(df, "__getitem__"):
                 series = df[column]
@@ -380,11 +400,12 @@ class GraphSetupStep(QWizardPage):
                 return None
             else:
                 return None
-            
+
             # Try numeric conversion
             try:
                 import pandas as pd
-                numeric = pd.to_numeric(raw, errors='coerce')
+
+                numeric = pd.to_numeric(raw, errors="coerce")
                 result = numeric.to_numpy(dtype=float)
                 # If all NaN, use index instead
                 if np.all(np.isnan(result)):

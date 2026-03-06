@@ -24,11 +24,13 @@ class DummyParsingStep(QWizardPage):
 
 @pytest.fixture
 def sample_df():
-    return pl.DataFrame({
-        "date": [1, 2, 3],
-        "sales": [10, 20, 30],
-        "profit": [3, 6, 9],
-    })
+    return pl.DataFrame(
+        {
+            "date": [1, 2, 3],
+            "sales": [10, 20, 30],
+            "profit": [3, 6, 9],
+        }
+    )
 
 
 def _create_wizard_with_step(graph_step: GraphSetupStep, df):
@@ -42,7 +44,7 @@ def _create_wizard_with_step(graph_step: GraphSetupStep, df):
 
 def test_initialize_page_populates_columns(sample_df):
     step = GraphSetupStep()
-    wizard = _create_wizard_with_step(step, sample_df)
+    _create_wizard_with_step(step, sample_df)
 
     step.initializePage()
 
@@ -54,7 +56,7 @@ def test_initialize_page_populates_columns(sample_df):
 
 def test_validate_page_requires_x_and_y(sample_df):
     step = GraphSetupStep()
-    wizard = _create_wizard_with_step(step, sample_df)
+    _create_wizard_with_step(step, sample_df)
 
     step.initializePage()
     assert step.validatePage() is False
@@ -68,7 +70,7 @@ def test_validate_page_requires_x_and_y(sample_df):
 
 def test_get_graph_setting(sample_df):
     step = GraphSetupStep()
-    wizard = _create_wizard_with_step(step, sample_df)
+    _create_wizard_with_step(step, sample_df)
 
     step.initializePage()
     step.chart_type_combo.setCurrentText("Line")

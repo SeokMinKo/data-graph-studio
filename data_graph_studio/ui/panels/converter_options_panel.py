@@ -1,12 +1,20 @@
 """Converter Options Panel — editable converter parameters with debounced re-computation."""
+
 from __future__ import annotations
 
 from typing import Any, Dict
 
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Signal, QTimer
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QFormLayout, QGroupBox, QSpinBox,
-    QDoubleSpinBox, QLineEdit, QPushButton, QLabel,
+    QWidget,
+    QVBoxLayout,
+    QFormLayout,
+    QGroupBox,
+    QSpinBox,
+    QDoubleSpinBox,
+    QLineEdit,
+    QPushButton,
+    QLabel,
 )
 
 

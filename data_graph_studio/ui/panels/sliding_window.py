@@ -18,7 +18,7 @@ class SlidingWindowWidget(QWidget):
 
     range_changed = Signal(float, float)  # min, max
 
-    def __init__(self, orientation: str = 'horizontal', parent=None):
+    def __init__(self, orientation: str = "horizontal", parent=None):
         super().__init__(parent)
         self.orientation = orientation  # 'horizontal' for X-axis, 'vertical' for Y-axis
 
@@ -38,7 +38,7 @@ class SlidingWindowWidget(QWidget):
         self.setMouseTracking(True)
 
     def _setup_ui(self):
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             self.setMinimumHeight(50)
             self.setMaximumHeight(60)
         else:
@@ -87,7 +87,9 @@ class SlidingWindowWidget(QWidget):
 
         # Ensure valid range
         if self._window_min >= self._window_max:
-            self._window_max = self._window_min + (self._data_max - self._data_min) * 0.1
+            self._window_max = (
+                self._window_min + (self._data_max - self._data_min) * 0.1
+            )
 
         self.update()
 
@@ -105,13 +107,13 @@ class SlidingWindowWidget(QWidget):
             return 0.5
         norm = (value - self._data_min) / data_range
         # Vertical axis: invert so min at bottom, max at top
-        if self.orientation == 'vertical':
+        if self.orientation == "vertical":
             return 1.0 - norm
         return norm
 
     def _pos_to_value(self, pos: float) -> float:
         """Convert widget position (0-1 normalized) to data value"""
-        if self.orientation == 'vertical':
+        if self.orientation == "vertical":
             pos = 1.0 - pos
         return self._data_min + pos * (self._data_max - self._data_min)
 
@@ -122,14 +124,14 @@ class SlidingWindowWidget(QWidget):
         rect = self.rect()
         margin = 4
 
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             plot_rect = rect.adjusted(margin, margin + 15, -margin, -margin)
         else:
             plot_rect = rect.adjusted(margin + 15, margin, -margin, -margin)
 
         # Background
-        painter.fillRect(plot_rect, QColor('#323D4A'))
-        painter.setPen(QPen(QColor('#3E4A59'), 1))
+        painter.fillRect(plot_rect, QColor("#323D4A"))
+        painter.setPen(QPen(QColor("#3E4A59"), 1))
         painter.drawRect(plot_rect)
 
         # Draw data overview (simplified histogram/line)
@@ -153,7 +155,7 @@ class SlidingWindowWidget(QWidget):
             return
 
         # Downsample for display
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             n_bins = min(plot_rect.width(), 100)
         else:
             n_bins = min(plot_rect.height(), 100)
@@ -165,23 +167,27 @@ class SlidingWindowWidget(QWidget):
             max_hist = max(hist) if max(hist) > 0 else 1
 
             # Draw histogram bars
-            painter.setPen(QPen(QColor('#94A3B8'), 1))
-            painter.setBrush(QBrush(QColor('#CBD5E1')))
+            painter.setPen(QPen(QColor("#94A3B8"), 1))
+            painter.setBrush(QBrush(QColor("#CBD5E1")))
 
-            if self.orientation == 'horizontal':
+            if self.orientation == "horizontal":
                 bar_width = plot_rect.width() / len(hist)
                 for i, h in enumerate(hist):
                     bar_height = (h / max_hist) * (plot_rect.height() - 4)
                     x = plot_rect.left() + i * bar_width
                     y = plot_rect.bottom() - bar_height - 2
-                    painter.drawRect(int(x), int(y), int(bar_width - 1), int(bar_height))
+                    painter.drawRect(
+                        int(x), int(y), int(bar_width - 1), int(bar_height)
+                    )
             else:
                 bar_height = plot_rect.height() / len(hist)
                 for i, h in enumerate(hist):
                     bar_width = (h / max_hist) * (plot_rect.width() - 4)
                     x = plot_rect.left() + 2
                     y = plot_rect.bottom() - (i + 1) * bar_height
-                    painter.drawRect(int(x), int(y), int(bar_width), int(bar_height - 1))
+                    painter.drawRect(
+                        int(x), int(y), int(bar_width), int(bar_height - 1)
+                    )
         except Exception:
             pass
 
@@ -191,91 +197,139 @@ class SlidingWindowWidget(QWidget):
         win_start = self._value_to_pos(self._window_min)
         win_end = self._value_to_pos(self._window_max)
 
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             x1 = plot_rect.left() + win_start * plot_rect.width()
             x2 = plot_rect.left() + win_end * plot_rect.width()
 
             # Draw shaded regions outside window
             painter.fillRect(
-                int(plot_rect.left()), plot_rect.top(),
-                int(x1 - plot_rect.left()), plot_rect.height(),
-                QColor(0, 0, 0, 40)
+                int(plot_rect.left()),
+                plot_rect.top(),
+                int(x1 - plot_rect.left()),
+                plot_rect.height(),
+                QColor(0, 0, 0, 40),
             )
             painter.fillRect(
-                int(x2), plot_rect.top(),
-                int(plot_rect.right() - x2), plot_rect.height(),
-                QColor(0, 0, 0, 40)
+                int(x2),
+                plot_rect.top(),
+                int(plot_rect.right() - x2),
+                plot_rect.height(),
+                QColor(0, 0, 0, 40),
             )
 
             # Draw window frame
-            painter.setPen(QPen(QColor('#59B8E3'), 2))
+            painter.setPen(QPen(QColor("#59B8E3"), 2))
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(int(x1), plot_rect.top(), int(x2 - x1), plot_rect.height())
 
             # Draw handles
             handle_width = 6
-            painter.fillRect(int(x1 - handle_width // 2), plot_rect.top(),
-                            handle_width, plot_rect.height(), QColor('#59B8E3'))
-            painter.fillRect(int(x2 - handle_width // 2), plot_rect.top(),
-                            handle_width, plot_rect.height(), QColor('#59B8E3'))
+            painter.fillRect(
+                int(x1 - handle_width // 2),
+                plot_rect.top(),
+                handle_width,
+                plot_rect.height(),
+                QColor("#59B8E3"),
+            )
+            painter.fillRect(
+                int(x2 - handle_width // 2),
+                plot_rect.top(),
+                handle_width,
+                plot_rect.height(),
+                QColor("#59B8E3"),
+            )
         else:
             # _value_to_pos already inverts for vertical (min→bottom, max→top)
-            y_top = plot_rect.top() + self._value_to_pos(self._window_max) * plot_rect.height()
-            y_bottom = plot_rect.top() + self._value_to_pos(self._window_min) * plot_rect.height()
+            y_top = (
+                plot_rect.top()
+                + self._value_to_pos(self._window_max) * plot_rect.height()
+            )
+            y_bottom = (
+                plot_rect.top()
+                + self._value_to_pos(self._window_min) * plot_rect.height()
+            )
 
             # Draw shaded regions outside window
             painter.fillRect(
-                plot_rect.left(), plot_rect.top(),
-                plot_rect.width(), int(y_top - plot_rect.top()),
-                QColor(0, 0, 0, 40)
+                plot_rect.left(),
+                plot_rect.top(),
+                plot_rect.width(),
+                int(y_top - plot_rect.top()),
+                QColor(0, 0, 0, 40),
             )
             painter.fillRect(
-                plot_rect.left(), int(y_bottom),
-                plot_rect.width(), int(plot_rect.bottom() - y_bottom),
-                QColor(0, 0, 0, 40)
+                plot_rect.left(),
+                int(y_bottom),
+                plot_rect.width(),
+                int(plot_rect.bottom() - y_bottom),
+                QColor(0, 0, 0, 40),
             )
 
             # Draw window frame
-            painter.setPen(QPen(QColor('#59B8E3'), 2))
+            painter.setPen(QPen(QColor("#59B8E3"), 2))
             painter.setBrush(Qt.NoBrush)
-            painter.drawRect(plot_rect.left(), int(y_top), plot_rect.width(), int(y_bottom - y_top))
+            painter.drawRect(
+                plot_rect.left(), int(y_top), plot_rect.width(), int(y_bottom - y_top)
+            )
 
             # Draw handles
             handle_height = 6
-            painter.fillRect(plot_rect.left(), int(y_top - handle_height // 2),
-                            plot_rect.width(), handle_height, QColor('#59B8E3'))
-            painter.fillRect(plot_rect.left(), int(y_bottom - handle_height // 2),
-                            plot_rect.width(), handle_height, QColor('#59B8E3'))
+            painter.fillRect(
+                plot_rect.left(),
+                int(y_top - handle_height // 2),
+                plot_rect.width(),
+                handle_height,
+                QColor("#59B8E3"),
+            )
+            painter.fillRect(
+                plot_rect.left(),
+                int(y_bottom - handle_height // 2),
+                plot_rect.width(),
+                handle_height,
+                QColor("#59B8E3"),
+            )
 
     def _draw_labels(self, painter, rect, plot_rect):
         """Draw axis labels"""
-        font = QFont('Arial', 8)
+        font = QFont("Arial", 8)
         painter.setFont(font)
-        painter.setPen(QColor('#C2C8D1'))
+        painter.setPen(QColor("#C2C8D1"))
 
         # Format values
         def fmt(v):
             if abs(v) >= 1e6:
-                return f'{v/1e6:.1f}M'
+                return f"{v / 1e6:.1f}M"
             elif abs(v) >= 1e3:
-                return f'{v/1e3:.1f}K'
+                return f"{v / 1e3:.1f}K"
             elif abs(v) < 0.01 and v != 0:
-                return f'{v:.2e}'
+                return f"{v:.2e}"
             else:
-                return f'{v:.2f}'
+                return f"{v:.2f}"
 
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             # Draw min/max labels
             painter.drawText(plot_rect.left(), rect.top() + 12, fmt(self._data_min))
-            painter.drawText(plot_rect.right() - 40, rect.top() + 12, fmt(self._data_max))
+            painter.drawText(
+                plot_rect.right() - 40, rect.top() + 12, fmt(self._data_max)
+            )
 
             # Draw current window values
-            win_start_x = plot_rect.left() + self._value_to_pos(self._window_min) * plot_rect.width()
-            win_end_x = plot_rect.left() + self._value_to_pos(self._window_max) * plot_rect.width()
+            win_start_x = (
+                plot_rect.left()
+                + self._value_to_pos(self._window_min) * plot_rect.width()
+            )
+            win_end_x = (
+                plot_rect.left()
+                + self._value_to_pos(self._window_max) * plot_rect.width()
+            )
 
-            painter.setPen(QColor('#59B8E3'))
-            painter.drawText(int(win_start_x) - 20, rect.bottom() - 2, fmt(self._window_min))
-            painter.drawText(int(win_end_x) - 20, rect.bottom() - 2, fmt(self._window_max))
+            painter.setPen(QColor("#59B8E3"))
+            painter.drawText(
+                int(win_start_x) - 20, rect.bottom() - 2, fmt(self._window_min)
+            )
+            painter.drawText(
+                int(win_end_x) - 20, rect.bottom() - 2, fmt(self._window_max)
+            )
         else:
             # Vertical labels
             painter.drawText(2, plot_rect.bottom(), fmt(self._data_min))
@@ -289,21 +343,27 @@ class SlidingWindowWidget(QWidget):
         self._drag_start = pos
 
         margin = 4
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             plot_rect = self.rect().adjusted(margin, margin + 15, -margin, -margin)
             x = pos.x()
 
-            win_start_x = plot_rect.left() + self._value_to_pos(self._window_min) * plot_rect.width()
-            win_end_x = plot_rect.left() + self._value_to_pos(self._window_max) * plot_rect.width()
+            win_start_x = (
+                plot_rect.left()
+                + self._value_to_pos(self._window_min) * plot_rect.width()
+            )
+            win_end_x = (
+                plot_rect.left()
+                + self._value_to_pos(self._window_max) * plot_rect.width()
+            )
 
             handle_size = 10
 
             if abs(x - win_start_x) < handle_size:
-                self._drag_mode = 'left'
+                self._drag_mode = "left"
             elif abs(x - win_end_x) < handle_size:
-                self._drag_mode = 'right'
+                self._drag_mode = "right"
             elif win_start_x <= x <= win_end_x:
-                self._drag_mode = 'move'
+                self._drag_mode = "move"
             else:
                 self._drag_mode = None
         else:
@@ -311,17 +371,23 @@ class SlidingWindowWidget(QWidget):
             y = pos.y()
 
             # _value_to_pos already inverts for vertical
-            win_top_y = plot_rect.top() + self._value_to_pos(self._window_max) * plot_rect.height()
-            win_bottom_y = plot_rect.top() + self._value_to_pos(self._window_min) * plot_rect.height()
+            win_top_y = (
+                plot_rect.top()
+                + self._value_to_pos(self._window_max) * plot_rect.height()
+            )
+            win_bottom_y = (
+                plot_rect.top()
+                + self._value_to_pos(self._window_min) * plot_rect.height()
+            )
 
             handle_size = 10
 
             if abs(y - win_top_y) < handle_size:
-                self._drag_mode = 'top'
+                self._drag_mode = "top"
             elif abs(y - win_bottom_y) < handle_size:
-                self._drag_mode = 'bottom'
+                self._drag_mode = "bottom"
             elif win_top_y <= y <= win_bottom_y:
-                self._drag_mode = 'move'
+                self._drag_mode = "move"
             else:
                 self._drag_mode = None
 
@@ -335,7 +401,7 @@ class SlidingWindowWidget(QWidget):
         pos = event.position()
 
         margin = 4
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             plot_rect = self.rect().adjusted(margin, margin + 15, -margin, -margin)
         else:
             plot_rect = self.rect().adjusted(margin + 15, margin, -margin, -margin)
@@ -343,11 +409,13 @@ class SlidingWindowWidget(QWidget):
         if self._dragging and self._drag_mode:
             delta_value = 0
 
-            if self.orientation == 'horizontal':
+            if self.orientation == "horizontal":
                 delta_px = pos.x() - self._drag_start.x()
-                delta_value = (delta_px / plot_rect.width()) * (self._data_max - self._data_min)
+                delta_value = (delta_px / plot_rect.width()) * (
+                    self._data_max - self._data_min
+                )
 
-                if self._drag_mode == 'move':
+                if self._drag_mode == "move":
                     new_min = self._drag_start_min + delta_value
                     new_max = self._drag_start_max + delta_value
                     window_size = self._drag_start_max - self._drag_start_min
@@ -362,20 +430,34 @@ class SlidingWindowWidget(QWidget):
                     self._window_min = new_min
                     self._window_max = new_max
 
-                elif self._drag_mode == 'left':
+                elif self._drag_mode == "left":
                     new_min = self._drag_start_min + delta_value
-                    new_min = max(self._data_min, min(new_min, self._window_max - 0.01 * (self._data_max - self._data_min)))
+                    new_min = max(
+                        self._data_min,
+                        min(
+                            new_min,
+                            self._window_max - 0.01 * (self._data_max - self._data_min),
+                        ),
+                    )
                     self._window_min = new_min
 
-                elif self._drag_mode == 'right':
+                elif self._drag_mode == "right":
                     new_max = self._drag_start_max + delta_value
-                    new_max = min(self._data_max, max(new_max, self._window_min + 0.01 * (self._data_max - self._data_min)))
+                    new_max = min(
+                        self._data_max,
+                        max(
+                            new_max,
+                            self._window_min + 0.01 * (self._data_max - self._data_min),
+                        ),
+                    )
                     self._window_max = new_max
             else:
                 delta_px = self._drag_start.y() - pos.y()
-                delta_value = (delta_px / plot_rect.height()) * (self._data_max - self._data_min)
+                delta_value = (delta_px / plot_rect.height()) * (
+                    self._data_max - self._data_min
+                )
 
-                if self._drag_mode == 'move':
+                if self._drag_mode == "move":
                     new_min = self._drag_start_min + delta_value
                     new_max = self._drag_start_max + delta_value
                     window_size = self._drag_start_max - self._drag_start_min
@@ -390,24 +472,42 @@ class SlidingWindowWidget(QWidget):
                     self._window_min = new_min
                     self._window_max = new_max
 
-                elif self._drag_mode == 'top':
+                elif self._drag_mode == "top":
                     new_max = self._drag_start_max + delta_value
-                    new_max = min(self._data_max, max(new_max, self._window_min + 0.01 * (self._data_max - self._data_min)))
+                    new_max = min(
+                        self._data_max,
+                        max(
+                            new_max,
+                            self._window_min + 0.01 * (self._data_max - self._data_min),
+                        ),
+                    )
                     self._window_max = new_max
 
-                elif self._drag_mode == 'bottom':
+                elif self._drag_mode == "bottom":
                     new_min = self._drag_start_min + delta_value
-                    new_min = max(self._data_min, min(new_min, self._window_max - 0.01 * (self._data_max - self._data_min)))
+                    new_min = max(
+                        self._data_min,
+                        min(
+                            new_min,
+                            self._window_max - 0.01 * (self._data_max - self._data_min),
+                        ),
+                    )
                     self._window_min = new_min
 
             self.range_changed.emit(self._window_min, self._window_max)
             self.update()
         else:
             # Update cursor based on position
-            if self.orientation == 'horizontal':
+            if self.orientation == "horizontal":
                 x = pos.x()
-                win_start_x = plot_rect.left() + self._value_to_pos(self._window_min) * plot_rect.width()
-                win_end_x = plot_rect.left() + self._value_to_pos(self._window_max) * plot_rect.width()
+                win_start_x = (
+                    plot_rect.left()
+                    + self._value_to_pos(self._window_min) * plot_rect.width()
+                )
+                win_end_x = (
+                    plot_rect.left()
+                    + self._value_to_pos(self._window_max) * plot_rect.width()
+                )
 
                 if abs(x - win_start_x) < 10 or abs(x - win_end_x) < 10:
                     self.setCursor(Qt.SizeHorCursor)
@@ -418,8 +518,14 @@ class SlidingWindowWidget(QWidget):
             else:
                 y = pos.y()
                 # _value_to_pos already inverts for vertical
-                win_top_y = plot_rect.top() + self._value_to_pos(self._window_max) * plot_rect.height()
-                win_bottom_y = plot_rect.top() + self._value_to_pos(self._window_min) * plot_rect.height()
+                win_top_y = (
+                    plot_rect.top()
+                    + self._value_to_pos(self._window_max) * plot_rect.height()
+                )
+                win_bottom_y = (
+                    plot_rect.top()
+                    + self._value_to_pos(self._window_min) * plot_rect.height()
+                )
 
                 if abs(y - win_top_y) < 10 or abs(y - win_bottom_y) < 10:
                     self.setCursor(Qt.SizeVerCursor)

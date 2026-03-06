@@ -14,11 +14,6 @@ import uuid
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFrame,
-    QLabel, QPushButton, QMenu, QSizePolicy,
-)
-from PySide6.QtCore import Qt, Signal
 
 try:
     from ..core.state import ChartType
@@ -29,6 +24,7 @@ except ImportError:
 @dataclass
 class GridPosition:
     """그리드 위치 (legacy — kept for test compatibility)."""
+
     row: int
     col: int
     row_span: int = 1
@@ -37,32 +33,47 @@ class GridPosition:
     def __eq__(self, other):
         if not isinstance(other, GridPosition):
             return False
-        return (self.row == other.row and
-                self.col == other.col and
-                self.row_span == other.row_span and
-                self.col_span == other.col_span)
+        return (
+            self.row == other.row
+            and self.col == other.col
+            and self.row_span == other.row_span
+            and self.col_span == other.col_span
+        )
 
-    def overlaps(self, other: 'GridPosition') -> bool:
+    def overlaps(self, other: "GridPosition") -> bool:
         r1_start, r1_end = self.row, self.row + self.row_span
         c1_start, c1_end = self.col, self.col + self.col_span
         r2_start, r2_end = other.row, other.row + other.row_span
         c2_start, c2_end = other.col, other.col + other.col_span
-        return (r1_start < r2_end and r2_start < r1_end and
-                c1_start < c2_end and c2_start < c1_end)
+        return (
+            r1_start < r2_end
+            and r2_start < r1_end
+            and c1_start < c2_end
+            and c2_start < c1_end
+        )
 
     def to_dict(self) -> Dict:
-        return {'row': self.row, 'col': self.col,
-                'row_span': self.row_span, 'col_span': self.col_span}
+        return {
+            "row": self.row,
+            "col": self.col,
+            "row_span": self.row_span,
+            "col_span": self.col_span,
+        }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'GridPosition':
-        return cls(row=data['row'], col=data['col'],
-                   row_span=data.get('row_span', 1), col_span=data.get('col_span', 1))
+    def from_dict(cls, data: Dict) -> "GridPosition":
+        return cls(
+            row=data["row"],
+            col=data["col"],
+            row_span=data.get("row_span", 1),
+            col_span=data.get("col_span", 1),
+        )
 
 
 @dataclass
 class DashboardItem:
     """대시보드 아이템 (legacy)."""
+
     id: str
     title: str
     chart_type: ChartType
@@ -71,17 +82,25 @@ class DashboardItem:
     filters: List[Dict] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
-        return {'id': self.id, 'title': self.title,
-                'chart_type': self.chart_type.value,
-                'position': self.position.to_dict(),
-                'config': self.config, 'filters': self.filters}
+        return {
+            "id": self.id,
+            "title": self.title,
+            "chart_type": self.chart_type.value,
+            "position": self.position.to_dict(),
+            "config": self.config,
+            "filters": self.filters,
+        }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'DashboardItem':
-        return cls(id=data['id'], title=data['title'],
-                   chart_type=ChartType(data['chart_type']),
-                   position=GridPosition.from_dict(data['position']),
-                   config=data.get('config', {}), filters=data.get('filters', []))
+    def from_dict(cls, data: Dict) -> "DashboardItem":
+        return cls(
+            id=data["id"],
+            title=data["title"],
+            chart_type=ChartType(data["chart_type"]),
+            position=GridPosition.from_dict(data["position"]),
+            config=data.get("config", {}),
+            filters=data.get("filters", []),
+        )
 
 
 class DashboardLayout:
@@ -106,7 +125,9 @@ class DashboardLayout:
                 return item
         return None
 
-    def check_collision(self, position: GridPosition, exclude_id: Optional[str] = None) -> bool:
+    def check_collision(
+        self, position: GridPosition, exclude_id: Optional[str] = None
+    ) -> bool:
         for item in self.items:
             if exclude_id and item.id == exclude_id:
                 continue
@@ -114,7 +135,9 @@ class DashboardLayout:
                 return True
         return False
 
-    def find_empty_position(self, row_span: int = 1, col_span: int = 1) -> Optional[GridPosition]:
+    def find_empty_position(
+        self, row_span: int = 1, col_span: int = 1
+    ) -> Optional[GridPosition]:
         for row in range(self.rows - row_span + 1):
             for col in range(self.cols - col_span + 1):
                 pos = GridPosition(row, col, row_span, col_span)
@@ -127,7 +150,7 @@ class DashboardLayout:
         self.cols = cols
 
     def add_shared_filter(self, column: str, op: str, value: Any):
-        self.shared_filters.append({'column': column, 'op': op, 'value': value})
+        self.shared_filters.append({"column": column, "op": op, "value": value})
 
     def remove_shared_filter(self, index: int):
         if 0 <= index < len(self.shared_filters):
@@ -143,31 +166,42 @@ class DashboardLayout:
         return self.shared_filters + item.filters
 
     def to_dict(self) -> Dict:
-        return {'name': self.name, 'rows': self.rows, 'cols': self.cols,
-                'items': [item.to_dict() for item in self.items],
-                'shared_filters': self.shared_filters}
+        return {
+            "name": self.name,
+            "rows": self.rows,
+            "cols": self.cols,
+            "items": [item.to_dict() for item in self.items],
+            "shared_filters": self.shared_filters,
+        }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'DashboardLayout':
-        layout = cls(rows=data['rows'], cols=data['cols'],
-                     name=data.get('name', 'Untitled Dashboard'))
-        for item_data in data.get('items', []):
+    def from_dict(cls, data: Dict) -> "DashboardLayout":
+        layout = cls(
+            rows=data["rows"],
+            cols=data["cols"],
+            name=data.get("name", "Untitled Dashboard"),
+        )
+        for item_data in data.get("items", []):
             layout.add_item(DashboardItem.from_dict(item_data))
-        layout.shared_filters = data.get('shared_filters', [])
+        layout.shared_filters = data.get("shared_filters", [])
         return layout
 
 
 @dataclass
 class Dashboard:
     """대시보드 (legacy)."""
+
     id: str
     name: str
     layout: DashboardLayout
 
     @classmethod
-    def create(cls, name: str, rows: int = 2, cols: int = 2) -> 'Dashboard':
-        return cls(id=str(uuid.uuid4()), name=name,
-                   layout=DashboardLayout(rows=rows, cols=cols, name=name))
+    def create(cls, name: str, rows: int = 2, cols: int = 2) -> "Dashboard":
+        return cls(
+            id=str(uuid.uuid4()),
+            name=name,
+            layout=DashboardLayout(rows=rows, cols=cols, name=name),
+        )
 
 
 class DashboardManager:

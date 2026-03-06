@@ -9,6 +9,7 @@ CSV, TSV, TXT, Excel, Parquet, JSON, ETL 형식을 지원하며,
 상태 소유:
     _df, _lazy_df, _progress, _cancel_loading
 """
+
 import gc
 import os
 import re
@@ -19,37 +20,42 @@ import subprocess
 import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable, Set
-from datetime import datetime
 
 import polars as pl
-import numpy as np
 
 from .types import (
-    FileType, DelimiterType, LoadingProgress, DataProfile, ColumnInfo,
-    DataSource, PrecisionMode, DatasetInfo,
+    FileType,
+    DelimiterType,
+    LoadingProgress,
+    DataProfile,
+    ColumnInfo,
+    DataSource,
+    PrecisionMode,
 )
 
 from .etl_helpers import HAS_ETL_PARSER
 
 logger = logging.getLogger(__name__)
 
+
 def detect_encoding(path: str, sample_size: int = 10000) -> str:
     """파일 인코딩을 자동 감지한다."""
     try:
         from charset_normalizer import from_path
+
         result = from_path(path)
         best = result.best()
-        return best.encoding if best else 'utf-8'
+        return best.encoding if best else "utf-8"
     except ImportError:
         # Fallback: try utf-8, then latin-1
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 f.read(sample_size)
-            return 'utf-8'
+            return "utf-8"
         except UnicodeDecodeError:
-            return 'latin-1'
+            return "latin-1"
     except Exception:
-        return 'utf-8'
+        return "utf-8"
 
 
 class FileLoader:
@@ -70,14 +76,23 @@ class FileLoader:
     RETRY_DELAY_SECONDS = 0.5
 
     PRECISION_SENSITIVE_PATTERNS = [
-        r'price', r'amount', r'rate', r'ratio', r'percent',
-        r'lat', r'lon', r'coord', r'precision', r'accuracy',
-        r'scientific', r'decimal',
+        r"price",
+        r"amount",
+        r"rate",
+        r"ratio",
+        r"percent",
+        r"lat",
+        r"lon",
+        r"coord",
+        r"precision",
+        r"accuracy",
+        r"scientific",
+        r"decimal",
     ]
 
     def __init__(self, precision_mode: PrecisionMode = PrecisionMode.AUTO):
         """FileLoader를 초기화한다.
-            precision_mode: 부동소수점 정밀도 모드."""
+        precision_mode: 부동소수점 정밀도 모드."""
         self._df: Optional[pl.DataFrame] = None
         self._lazy_df: Optional[pl.LazyFrame] = None
         self._source: Optional[DataSource] = None
@@ -94,68 +109,86 @@ class FileLoader:
         self._window_start: int = 0
         self._window_size: int = 200_000
         self._windowed: bool = False
+
     @property
     def df(self) -> Optional[pl.DataFrame]:
         """현재 로딩된 DataFrame."""
         return self._df
+
     @property
     def profile(self) -> Optional[DataProfile]:
         """데이터 프로파일."""
         return self._profile
+
     @property
     def progress(self) -> LoadingProgress:
         """로딩 진행 상태."""
         return self._progress
+
     @property
     def source(self) -> Optional[DataSource]:
         """데이터 소스 정보."""
         return self._source
+
     @property
     def is_loaded(self) -> bool:
         """데이터 로드 여부."""
         return self._df is not None
+
     @property
     def row_count(self) -> int:
         """총 행 수 (windowed인 경우 전체 행 수)."""
         if self._windowed and self._total_rows > 0:
             return self._total_rows
         return len(self._df) if self._df is not None else 0
+
     @property
     def column_count(self) -> int:
         """총 컬럼 수."""
         return len(self._df.columns) if self._df is not None else 0
+
     @property
     def columns(self) -> List[str]:
         """컬럼 이름 목록."""
         return self._df.columns if self._df is not None else []
+
     @property
     def dtypes(self) -> Dict[str, str]:
         """컬럼별 데이터 타입."""
         if self._df is None:
             return {}
-        return {col: str(dtype) for col, dtype in zip(self._df.columns, self._df.dtypes)}
+        return {
+            col: str(dtype) for col, dtype in zip(self._df.columns, self._df.dtypes)
+        }
+
     @property
     def is_windowed(self) -> bool:
         """windowed 모드 여부."""
         return self._windowed
+
     @property
     def total_rows(self) -> int:
         """전체 행 수."""
         return self._total_rows if self._total_rows else self.row_count
+
     @property
     def window_start(self) -> int:
         """현재 윈도우 시작 행."""
         return self._window_start
+
     @property
     def window_size(self) -> int:
         """현재 윈도우 크기."""
         return self._window_size
+
     @property
     def has_lazy(self) -> bool:
         """LazyFrame 존재 여부."""
         return self._lazy_df is not None
 
-    def set_progress_callback(self, callback: Callable[[LoadingProgress], None]) -> None:
+    def set_progress_callback(
+        self, callback: Callable[[LoadingProgress], None]
+    ) -> None:
         """진행률 콜백을 설정한다."""
         self._progress_callback = callback
 
@@ -170,42 +203,46 @@ class FileLoader:
     def cancel_loading(self) -> None:
         """진행 중인 로딩을 취소한다."""
         self._cancel_loading = True
+
     @staticmethod
     def detect_file_type(path: str) -> FileType:
         """파일 형식을 확장자로 감지한다."""
         ext = Path(path).suffix.lower()
         mapping = {
-            '.csv': FileType.CSV,
-            '.tsv': FileType.TSV,
-            '.txt': FileType.TXT,
-            '.log': FileType.TXT,
-            '.dat': FileType.TXT,
-            '.etl': FileType.ETL,
-            '.xlsx': FileType.EXCEL,
-            '.xls': FileType.EXCEL,
-            '.parquet': FileType.PARQUET,
-            '.pq': FileType.PARQUET,
-            '.json': FileType.JSON,
+            ".csv": FileType.CSV,
+            ".tsv": FileType.TSV,
+            ".txt": FileType.TXT,
+            ".log": FileType.TXT,
+            ".dat": FileType.TXT,
+            ".etl": FileType.ETL,
+            ".xlsx": FileType.EXCEL,
+            ".xls": FileType.EXCEL,
+            ".parquet": FileType.PARQUET,
+            ".pq": FileType.PARQUET,
+            ".json": FileType.JSON,
         }
         return mapping.get(ext, FileType.TXT)
+
     @staticmethod
-    def detect_delimiter(path: str, encoding: str = "utf-8", sample_lines: int = 10) -> str:
+    def detect_delimiter(
+        path: str, encoding: str = "utf-8", sample_lines: int = 10
+    ) -> str:
         """구분자를 자동 감지한다."""
-        delimiters = [',', '\t', ';', '|', ' ']
+        delimiters = [",", "\t", ";", "|", " "]
         delimiter_counts: Dict[str, int] = {d: 0 for d in delimiters}
 
         try:
-            with open(path, 'r', encoding=encoding, errors='ignore') as f:
+            with open(path, "r", encoding=encoding, errors="ignore") as f:
                 for i, line in enumerate(f):
                     if i >= sample_lines:
                         break
                     for d in delimiters:
                         delimiter_counts[d] += line.count(d)
 
-            best = ','
+            best = ","
             best_count = 0
             for d, count in delimiter_counts.items():
-                if d == ' ':
+                if d == " ":
                     if best_count == 0 and count > 0:
                         best = d
                 elif count > best_count:
@@ -213,7 +250,7 @@ class FileLoader:
                     best_count = count
             return best
         except Exception:
-            return ','
+            return ","
 
     def load_file(
         self,
@@ -244,16 +281,24 @@ class FileLoader:
             self._precision_mode = precision_mode
 
         if not self._retry_file_access(path):
-            self._update_progress(status="error", error_message=f"File not found or not accessible: {path}")
+            self._update_progress(
+                status="error",
+                error_message=f"File not found or not accessible: {path}",
+            )
             return False
 
         if file_type is None:
             file_type = self.detect_file_type(path)
 
         # Auto-detect encoding for text-based formats
-        if encoding == "utf-8" and file_type in (FileType.CSV, FileType.TSV, FileType.TXT, FileType.CUSTOM):
+        if encoding == "utf-8" and file_type in (
+            FileType.CSV,
+            FileType.TSV,
+            FileType.TXT,
+            FileType.CUSTOM,
+        ):
             detected = detect_encoding(path)
-            if detected and detected != 'utf-8':
+            if detected and detected != "utf-8":
                 logger.info(f"Auto-detected encoding: {detected}")
                 encoding = detected
 
@@ -282,8 +327,12 @@ class FileLoader:
 
         if self._should_convert_to_parquet(file_type, file_size):
             parquet_path = self._prepare_parquet_from_csv(
-                path, encoding=encoding, delimiter=delimiter,
-                has_header=has_header, skip_rows=skip_rows, comment_char=comment_char,
+                path,
+                encoding=encoding,
+                delimiter=delimiter,
+                has_header=has_header,
+                skip_rows=skip_rows,
+                comment_char=comment_char,
             )
             if parquet_path:
                 path = parquet_path
@@ -293,19 +342,43 @@ class FileLoader:
             self._cancel_loading = False
             self._loading_thread = threading.Thread(
                 target=self._load_file_internal,
-                args=(path, file_type, encoding, delimiter, delimiter_type,
-                      regex_pattern, has_header, skip_rows, comment_char,
-                      sheet_name, chunk_size, optimize_memory, excluded_columns,
-                      process_filter, sample_n),
+                args=(
+                    path,
+                    file_type,
+                    encoding,
+                    delimiter,
+                    delimiter_type,
+                    regex_pattern,
+                    has_header,
+                    skip_rows,
+                    comment_char,
+                    sheet_name,
+                    chunk_size,
+                    optimize_memory,
+                    excluded_columns,
+                    process_filter,
+                    sample_n,
+                ),
             )
             self._loading_thread.start()
             return True
 
         return self._load_file_internal(
-            path, file_type, encoding, delimiter, delimiter_type,
-            regex_pattern, has_header, skip_rows, comment_char,
-            sheet_name, chunk_size, optimize_memory, excluded_columns,
-            process_filter, sample_n,
+            path,
+            file_type,
+            encoding,
+            delimiter,
+            delimiter_type,
+            regex_pattern,
+            has_header,
+            skip_rows,
+            comment_char,
+            sheet_name,
+            chunk_size,
+            optimize_memory,
+            excluded_columns,
+            process_filter,
+            sample_n,
         )
 
     def set_window(self, start: int, size: int) -> bool:
@@ -325,7 +398,9 @@ class FileLoader:
     def load_lazy(self, path: str, **kwargs: Any) -> bool:
         """LazyFrame으로 파일을 로드한다."""
         if not self._retry_file_access(path):
-            self._update_progress(status="error", error_message=f"File not found: {path}")
+            self._update_progress(
+                status="error", error_message=f"File not found: {path}"
+            )
             return False
 
         file_type = self.detect_file_type(path)
@@ -351,7 +426,9 @@ class FileLoader:
             self._update_progress(status="error", error_message=str(e))
             return False
 
-    def collect_lazy(self, limit: Optional[int] = None, optimize_memory: bool = True) -> bool:
+    def collect_lazy(
+        self, limit: Optional[int] = None, optimize_memory: bool = True
+    ) -> bool:
         """LazyFrame을 DataFrame으로 수집한다."""
         if self._lazy_df is None:
             logger.warning("No LazyFrame to collect")
@@ -397,27 +474,36 @@ class FileLoader:
         self._window_start = 0
         self._windowed = False
         gc.collect()
+
     @staticmethod
     def is_binary_etl(path: str) -> bool:
         """ETL 파일이 바이너리인지 확인한다."""
         from .etl_helpers import is_binary_etl
+
         return is_binary_etl(path)
+
     @staticmethod
     def parse_etl_binary(path: str) -> pl.DataFrame:
         """etl-parser로 바이너리 ETL 파일을 파싱한다."""
         from .etl_helpers import parse_etl_binary
+
         return parse_etl_binary(path)
+
     @staticmethod
     def _normalize_encoding(encoding: str) -> str:
         """인코딩 이름을 Polars 호환 형식으로 정규화한다.
-            encoding: 원본 인코딩 이름."""
+        encoding: 원본 인코딩 이름."""
         if not encoding:
             return "utf8"
         enc = encoding.strip().lower().replace("_", "-")
         mapping = {
-            "utf-8": "utf8", "utf8": "utf8", "utf-8-sig": "utf8",
-            "utf-16": "utf16", "utf16": "utf16",
-            "latin-1": "iso-8859-1", "latin1": "iso-8859-1",
+            "utf-8": "utf8",
+            "utf8": "utf8",
+            "utf-8-sig": "utf8",
+            "utf-16": "utf16",
+            "utf16": "utf16",
+            "latin-1": "iso-8859-1",
+            "latin1": "iso-8859-1",
             "ascii": "utf8",
         }
         return mapping.get(enc, encoding)
@@ -453,8 +539,13 @@ class FileLoader:
         return file_size >= 300 * 1024 * 1024
 
     def _prepare_parquet_from_csv(
-        self, path: str, encoding: str, delimiter: str,
-        has_header: bool, skip_rows: int, comment_char: Optional[str],
+        self,
+        path: str,
+        encoding: str,
+        delimiter: str,
+        has_header: bool,
+        skip_rows: int,
+        comment_char: Optional[str],
     ) -> Optional[str]:
         """CSV를 Parquet으로 변환한다."""
         parquet_path = f"{path}.parquet"
@@ -467,9 +558,13 @@ class FileLoader:
 
             self._update_progress(status="converting_to_parquet")
             lf = pl.scan_csv(
-                path, encoding=encoding, separator=delimiter,
-                has_header=has_header, skip_rows=skip_rows,
-                comment_prefix=comment_char, infer_schema_length=10000,
+                path,
+                encoding=encoding,
+                separator=delimiter,
+                has_header=has_header,
+                skip_rows=skip_rows,
+                comment_prefix=comment_char,
+                infer_schema_length=10000,
                 ignore_errors=True,
             )
             lf.sink_parquet(parquet_path, compression="zstd")
@@ -479,7 +574,10 @@ class FileLoader:
             return None
 
     def _load_window_from_lazy(
-        self, lazy_df: pl.LazyFrame, window_start: int, window_size: int,
+        self,
+        lazy_df: pl.LazyFrame,
+        window_start: int,
+        window_size: int,
     ) -> pl.DataFrame:
         """LazyFrame에서 window 구간만 로드한다."""
         return self._collect_streaming(lazy_df.slice(window_start, window_size))
@@ -492,11 +590,19 @@ class FileLoader:
             return lazy_df.collect()
 
     def _load_file_internal(
-        self, path: str, file_type: FileType, encoding: str,
-        delimiter: str, delimiter_type: DelimiterType,
-        regex_pattern: Optional[str], has_header: bool, skip_rows: int,
-        comment_char: Optional[str], sheet_name: Optional[str],
-        chunk_size: Optional[int], optimize_memory: bool,
+        self,
+        path: str,
+        file_type: FileType,
+        encoding: str,
+        delimiter: str,
+        delimiter_type: DelimiterType,
+        regex_pattern: Optional[str],
+        has_header: bool,
+        skip_rows: int,
+        comment_char: Optional[str],
+        sheet_name: Optional[str],
+        chunk_size: Optional[int],
+        optimize_memory: bool,
         excluded_columns: Optional[List[str]] = None,
         process_filter: Optional[List[str]] = None,
         sample_n: Optional[int] = None,
@@ -512,13 +618,21 @@ class FileLoader:
             self._window_start = 0
             self._lazy_df = None
 
-            if file_type in (FileType.CSV, FileType.TSV, FileType.PARQUET) and self._should_use_windowed_loading(file_size):
+            if file_type in (
+                FileType.CSV,
+                FileType.TSV,
+                FileType.PARQUET,
+            ) and self._should_use_windowed_loading(file_size):
                 if file_type in (FileType.CSV, FileType.TSV):
                     sep = delimiter if file_type == FileType.CSV else "\t"
                     lazy_df = pl.scan_csv(
-                        path, encoding=encoding, separator=sep,
-                        has_header=has_header, skip_rows=skip_rows,
-                        comment_prefix=comment_char, infer_schema_length=10000,
+                        path,
+                        encoding=encoding,
+                        separator=sep,
+                        has_header=has_header,
+                        skip_rows=skip_rows,
+                        comment_prefix=comment_char,
+                        infer_schema_length=10000,
                         ignore_errors=True,
                     )
                 else:
@@ -529,24 +643,54 @@ class FileLoader:
 
                 self._lazy_df = lazy_df
                 try:
-                    self._total_rows = int(self._lazy_df.select(pl.len()).collect()[0, 0])
+                    self._total_rows = int(
+                        self._lazy_df.select(pl.len()).collect()[0, 0]
+                    )
                 except Exception:
                     self._total_rows = 0
 
-                window_size = min(self._window_size, self._total_rows) if self._total_rows > 0 else self._window_size
-                self._df = self._load_window_from_lazy(self._lazy_df, self._window_start, window_size)
-                self._windowed = self._total_rows > window_size if self._total_rows else True
+                window_size = (
+                    min(self._window_size, self._total_rows)
+                    if self._total_rows > 0
+                    else self._window_size
+                )
+                self._df = self._load_window_from_lazy(
+                    self._lazy_df, self._window_start, window_size
+                )
+                self._windowed = (
+                    self._total_rows > window_size if self._total_rows else True
+                )
             else:
                 if file_type == FileType.CSV:
-                    self._df = self._load_csv(path, encoding, delimiter, has_header, skip_rows, comment_char)
+                    self._df = self._load_csv(
+                        path, encoding, delimiter, has_header, skip_rows, comment_char
+                    )
                 elif file_type == FileType.TSV:
-                    self._df = self._load_csv(path, encoding, "\t", has_header, skip_rows, comment_char)
+                    self._df = self._load_csv(
+                        path, encoding, "\t", has_header, skip_rows, comment_char
+                    )
                 elif file_type in [FileType.TXT, FileType.CUSTOM]:
-                    self._df = self._load_text(path, encoding, delimiter, delimiter_type,
-                                               regex_pattern, has_header, skip_rows, comment_char)
+                    self._df = self._load_text(
+                        path,
+                        encoding,
+                        delimiter,
+                        delimiter_type,
+                        regex_pattern,
+                        has_header,
+                        skip_rows,
+                        comment_char,
+                    )
                 elif file_type == FileType.ETL:
-                    self._df = self._load_etl(path, encoding, delimiter, delimiter_type,
-                                              regex_pattern, has_header, skip_rows, comment_char)
+                    self._df = self._load_etl(
+                        path,
+                        encoding,
+                        delimiter,
+                        delimiter_type,
+                        regex_pattern,
+                        has_header,
+                        skip_rows,
+                        comment_char,
+                    )
                 elif file_type == FileType.EXCEL:
                     self._df = self._load_excel(path, sheet_name)
                 elif file_type == FileType.PARQUET:
@@ -574,7 +718,11 @@ class FileLoader:
             if process_filter and self._df is not None:
                 self._df = self._apply_process_filter(self._df, process_filter)
 
-            if sample_n is not None and self._df is not None and len(self._df) > sample_n:
+            if (
+                sample_n is not None
+                and self._df is not None
+                and len(self._df) > sample_n
+            ):
                 self._update_progress(status="sampling")
                 original_rows = len(self._df)
                 self._df = self._df.sample(n=sample_n, seed=42)
@@ -588,7 +736,11 @@ class FileLoader:
                 self._update_progress(status="profiling")
                 self._profile = self._create_profile(self._df, time.time() - start_time)
 
-            total_rows = self._total_rows if self._windowed and self._total_rows else (len(self._df) if self._df is not None else 0)
+            total_rows = (
+                self._total_rows
+                if self._windowed and self._total_rows
+                else (len(self._df) if self._df is not None else 0)
+            )
             loaded_rows = len(self._df) if self._df is not None else 0
 
             self._update_progress(
@@ -601,7 +753,9 @@ class FileLoader:
 
             gc.collect()
             if self._df is not None:
-                logger.info(f"File loaded successfully: {loaded_rows:,} rows, {len(self._df.columns)} columns")
+                logger.info(
+                    f"File loaded successfully: {loaded_rows:,} rows, {len(self._df.columns)} columns"
+                )
             return True
         except Exception as e:
             logger.error(f"Failed to load file: {e}", exc_info=True)
@@ -609,25 +763,42 @@ class FileLoader:
             gc.collect()
             return False
 
-    def _load_csv(self, path: str, encoding: str, delimiter: str,
-                  has_header: bool, skip_rows: int = 0,
-                  comment_char: Optional[str] = None) -> pl.DataFrame:
+    def _load_csv(
+        self,
+        path: str,
+        encoding: str,
+        delimiter: str,
+        has_header: bool,
+        skip_rows: int = 0,
+        comment_char: Optional[str] = None,
+    ) -> pl.DataFrame:
         """CSV를 로드한다."""
         return pl.read_csv(
-            path, encoding=encoding, separator=delimiter,
-            has_header=has_header, skip_rows=skip_rows,
-            comment_prefix=comment_char, infer_schema_length=10000,
+            path,
+            encoding=encoding,
+            separator=delimiter,
+            has_header=has_header,
+            skip_rows=skip_rows,
+            comment_prefix=comment_char,
+            infer_schema_length=10000,
             ignore_errors=True,
         )
 
-    def _load_text(self, path: str, encoding: str, delimiter: str,
-                   delimiter_type: DelimiterType, regex_pattern: Optional[str],
-                   has_header: bool, skip_rows: int = 0,
-                   comment_char: Optional[str] = None) -> pl.DataFrame:
+    def _load_text(
+        self,
+        path: str,
+        encoding: str,
+        delimiter: str,
+        delimiter_type: DelimiterType,
+        regex_pattern: Optional[str],
+        has_header: bool,
+        skip_rows: int = 0,
+        comment_char: Optional[str] = None,
+    ) -> pl.DataFrame:
         """텍스트 파일을 로드한다."""
         MAX_TEXT_LINES = 1_000_000
         lines = []
-        with open(path, 'r', encoding=encoding, errors='replace') as f:
+        with open(path, "r", encoding=encoding, errors="replace") as f:
             for i, line in enumerate(f):
                 if self._cancel_loading:
                     return None
@@ -648,7 +819,7 @@ class FileLoader:
         for line in lines:
             if delimiter_type == DelimiterType.REGEX and regex_pattern:
                 fields = re.split(regex_pattern, line)
-            elif delimiter_type == DelimiterType.SPACE or delimiter == ' ':
+            elif delimiter_type == DelimiterType.SPACE or delimiter == " ":
                 fields = line.split()
             else:
                 fields = line.split(delimiter)
@@ -669,7 +840,7 @@ class FileLoader:
         normalized_data = []
         for row in data:
             if len(row) < max_cols:
-                row = row + [''] * (max_cols - len(row))
+                row = row + [""] * (max_cols - len(row))
             elif len(row) > max_cols:
                 row = row[:max_cols]
             normalized_data.append(row)
@@ -677,12 +848,14 @@ class FileLoader:
         if not normalized_data:
             return pl.DataFrame({h: [] for h in headers})
 
-        df_dict = {headers[i]: [row[i] for row in normalized_data] for i in range(max_cols)}
+        df_dict = {
+            headers[i]: [row[i] for row in normalized_data] for i in range(max_cols)
+        }
         df = pl.DataFrame(df_dict)
 
         # Type inference via sampling instead of exception-based casting
-        int_pattern = re.compile(r'^-?\d+$')
-        float_pattern = re.compile(r'^-?\d+\.?\d*(?:[eE][+-]?\d+)?$')
+        int_pattern = re.compile(r"^-?\d+$")
+        float_pattern = re.compile(r"^-?\d+\.?\d*(?:[eE][+-]?\d+)?$")
 
         cast_exprs = []
         for col in df.columns:
@@ -699,18 +872,33 @@ class FileLoader:
             df = df.with_columns(cast_exprs)
         return df
 
-    def _load_etl(self, path: str, encoding: str, delimiter: str,
-                  delimiter_type: DelimiterType, regex_pattern: Optional[str],
-                  has_header: bool, skip_rows: int = 0,
-                  comment_char: Optional[str] = None) -> pl.DataFrame:
+    def _load_etl(
+        self,
+        path: str,
+        encoding: str,
+        delimiter: str,
+        delimiter_type: DelimiterType,
+        regex_pattern: Optional[str],
+        has_header: bool,
+        skip_rows: int = 0,
+        comment_char: Optional[str] = None,
+    ) -> pl.DataFrame:
         """ETL 파일을 로드한다."""
         import platform
 
         is_binary = self.is_binary_etl(path)
 
         if not is_binary:
-            return self._load_text(path, encoding, delimiter, delimiter_type,
-                                   regex_pattern, has_header, skip_rows, comment_char)
+            return self._load_text(
+                path,
+                encoding,
+                delimiter,
+                delimiter_type,
+                regex_pattern,
+                has_header,
+                skip_rows,
+                comment_char,
+            )
 
         if HAS_ETL_PARSER:
             try:
@@ -719,21 +907,27 @@ class FileLoader:
                 logger.warning(f"etl-parser failed: {e}")
 
         system = platform.system()
-        if system == 'Windows':
+        if system == "Windows":
             try:
-                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
                     tmp_path = tmp.name
                 result = subprocess.run(
-                    ['tracerpt', path, '-o', tmp_path, '-of', 'CSV', '-y'],
-                    capture_output=True, text=True, timeout=120,
+                    ["tracerpt", path, "-o", tmp_path, "-of", "CSV", "-y"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
                 )
-                if result.returncode == 0 and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-                    df = self._load_csv(tmp_path, encoding, ',', True, 0, None)
+                if (
+                    result.returncode == 0
+                    and os.path.exists(tmp_path)
+                    and os.path.getsize(tmp_path) > 0
+                ):
+                    df = self._load_csv(tmp_path, encoding, ",", True, 0, None)
                     os.unlink(tmp_path)
                     return df
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-                raise ValueError(f"ETL 파일 변환 실패")
+                raise ValueError("ETL 파일 변환 실패")
             except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 raise ValueError(f"ETL 변환 오류: {e}")
 
@@ -751,12 +945,20 @@ class FileLoader:
         """JSON을 로드한다."""
         return pl.read_json(path)
 
-    def _apply_process_filter(self, df: pl.DataFrame, process_filter: List[str]) -> pl.DataFrame:
+    def _apply_process_filter(
+        self, df: pl.DataFrame, process_filter: List[str]
+    ) -> pl.DataFrame:
         """프로세스 필터를 적용한다."""
         if not process_filter or df is None:
             return df
 
-        process_col_names = ['Process Name', 'ProcessName', 'Process', 'Image', 'Image Name']
+        process_col_names = [
+            "Process Name",
+            "ProcessName",
+            "Process",
+            "Image",
+            "Image Name",
+        ]
         process_col = None
         for col_name in process_col_names:
             if col_name in df.columns:
@@ -764,7 +966,7 @@ class FileLoader:
                 break
         if process_col is None:
             for col in df.columns:
-                if 'process' in col.lower():
+                if "process" in col.lower():
                     process_col = col
                     break
         if process_col is None:
@@ -784,7 +986,7 @@ class FileLoader:
 
     def _optimize_memory(self, df: pl.DataFrame) -> pl.DataFrame:
         """메모리를 최적화한다 (with_columns 패턴으로 피크 메모리 절감).
-            df: 최적화할 DataFrame."""
+        df: 최적화할 DataFrame."""
         cast_exprs = []
 
         for col in df.columns:
@@ -799,7 +1001,11 @@ class FileLoader:
                         cast_exprs.append(pl.col(col).cast(pl.Int8))
                     elif min_val >= -32768 and max_val <= 32767:
                         cast_exprs.append(pl.col(col).cast(pl.Int16))
-                    elif dtype == pl.Int64 and min_val >= -2147483648 and max_val <= 2147483647:
+                    elif (
+                        dtype == pl.Int64
+                        and min_val >= -2147483648
+                        and max_val <= 2147483647
+                    ):
                         cast_exprs.append(pl.col(col).cast(pl.Int32))
 
             elif dtype == pl.Float64:
@@ -823,7 +1029,7 @@ class FileLoader:
 
     def _create_profile(self, df: pl.DataFrame, load_time: float) -> DataProfile:
         """데이터 프로파일을 생성한다.
-            df: 프로파일 대상 DataFrame."""
+        df: 프로파일 대상 DataFrame."""
         columns = []
         for col in df.columns:
             series = df[col]
@@ -834,9 +1040,11 @@ class FileLoader:
                 dtype=str(dtype),
                 null_count=series.null_count(),
                 unique_count=series.n_unique(),
-                is_numeric=dtype in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64],
+                is_numeric=dtype
+                in [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64],
                 is_temporal=dtype in [pl.Date, pl.Datetime, pl.Time],
-                is_categorical=dtype == pl.Categorical or (dtype == pl.Utf8 and series.n_unique() < 100),
+                is_categorical=dtype == pl.Categorical
+                or (dtype == pl.Utf8 and series.n_unique() < 100),
             )
 
             if col_info.is_numeric:

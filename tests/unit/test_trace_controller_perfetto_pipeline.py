@@ -25,7 +25,9 @@ class TestPerfettoNormalization:
             }
         )
 
-        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(
+            perfetto_df
+        )
 
         assert raw_df.columns == [
             "timestamp",
@@ -60,7 +62,9 @@ class TestPerfettoToBlocklayerPipeline:
             }
         )
 
-        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(perfetto_df)
+        raw_df = TraceController._normalize_perfetto_csv_for_ftrace_converter(
+            perfetto_df
+        )
 
         parser = FtraceParser()
         settings = parser.default_settings()

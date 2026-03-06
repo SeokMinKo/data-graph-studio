@@ -2,12 +2,23 @@
 Profile Manager Dialog - 프로파일 관리 다이얼로그
 """
 
-from typing import Optional, List
+from typing import Optional
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QPushButton, QListWidget, QListWidgetItem, QSplitter,
-    QMessageBox, QInputDialog, QFileDialog, QWidget,
-    QToolButton, QScrollArea
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QPushButton,
+    QListWidget,
+    QListWidgetItem,
+    QSplitter,
+    QMessageBox,
+    QInputDialog,
+    QFileDialog,
+    QWidget,
+    QToolButton,
+    QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -273,7 +284,9 @@ class ProfileManagerDialog(QDialog):
 
         self._selected_profile = current.data(Qt.UserRole)
         if self._selected_profile:
-            self._settings_header.setText(f"Settings in \"{self._selected_profile.name}\"")
+            self._settings_header.setText(
+                f'Settings in "{self._selected_profile.name}"'
+            )
             self._refresh_settings()
 
     def _refresh_settings(self):
@@ -288,7 +301,9 @@ class ProfileManagerDialog(QDialog):
             item = SettingItem(setting, is_default)
             item.edit_requested.connect(lambda s=setting: self._on_edit_setting(s))
             item.delete_requested.connect(lambda s=setting: self._on_delete_setting(s))
-            item.set_default_requested.connect(lambda s=setting: self._on_set_default(s))
+            item.set_default_requested.connect(
+                lambda s=setting: self._on_set_default(s)
+            )
 
             # stretch 앞에 삽입
             self._settings_layout.insertWidget(self._settings_layout.count() - 1, item)
@@ -302,11 +317,7 @@ class ProfileManagerDialog(QDialog):
 
     def _on_new_profile(self):
         """새 프로파일"""
-        name, ok = QInputDialog.getText(
-            self,
-            "New Profile",
-            "Enter profile name:"
-        )
+        name, ok = QInputDialog.getText(self, "New Profile", "Enter profile name:")
         if ok and name.strip():
             profile = Profile.create_new(name.strip())
             self._profile_manager._current = profile
@@ -322,10 +333,7 @@ class ProfileManagerDialog(QDialog):
     def _on_import_profile(self):
         """프로파일 가져오기"""
         path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Import Profile",
-            "",
-            "Data Graph Profile (*.dgp)"
+            self, "Import Profile", "", "Data Graph Profile (*.dgp)"
         )
         if path:
             try:
@@ -337,13 +345,11 @@ class ProfileManagerDialog(QDialog):
                 QMessageBox.information(
                     self,
                     "Import Successful",
-                    f"Profile '{profile.name}' imported successfully."
+                    f"Profile '{profile.name}' imported successfully.",
                 )
             except Exception as e:
                 QMessageBox.critical(
-                    self,
-                    "Import Error",
-                    f"Failed to import profile: {e}"
+                    self, "Import Error", f"Failed to import profile: {e}"
                 )
 
     def _on_export_profile(self):
@@ -355,21 +361,17 @@ class ProfileManagerDialog(QDialog):
             self,
             "Export Profile",
             f"{self._selected_profile.name}.dgp",
-            "Data Graph Profile (*.dgp)"
+            "Data Graph Profile (*.dgp)",
         )
         if path:
             try:
                 self._selected_profile.save(path)
                 QMessageBox.information(
-                    self,
-                    "Export Successful",
-                    f"Profile exported successfully."
+                    self, "Export Successful", "Profile exported successfully."
                 )
             except Exception as e:
                 QMessageBox.critical(
-                    self,
-                    "Export Error",
-                    f"Failed to export profile: {e}"
+                    self, "Export Error", f"Failed to export profile: {e}"
                 )
 
     def _on_delete_profile(self):
@@ -386,7 +388,7 @@ class ProfileManagerDialog(QDialog):
             "Delete Profile",
             f"Are you sure you want to delete '{self._selected_profile.name}'?",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
 
         if reply == QMessageBox.Yes:
@@ -395,8 +397,11 @@ class ProfileManagerDialog(QDialog):
                 self._profile_manager.delete_profile(path)
 
             # 현재 프로파일이면 클리어
-            if self._profile_manager.current_profile and \
-               self._profile_manager.current_profile.id == self._selected_profile.id:
+            if (
+                self._profile_manager.current_profile
+                and self._profile_manager.current_profile.id
+                == self._selected_profile.id
+            ):
                 self._profile_manager._current = None
 
             self._refresh_profiles()
@@ -417,7 +422,7 @@ class ProfileManagerDialog(QDialog):
             "Delete Setting",
             f"Are you sure you want to delete '{setting.name}'?",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
 
         if reply == QMessageBox.Yes:

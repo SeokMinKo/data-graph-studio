@@ -4,8 +4,8 @@ Statistical Analysis - Spotfire 스타일 통계 분석 도구
 상관 분석, 클러스터링, 시계열 분석, 가설 검정 등을 제공합니다.
 """
 
-from typing import List, Dict, Any, Optional, Tuple, Union
-from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 import polars as pl
@@ -16,14 +16,16 @@ from scipy.signal import find_peaks
 
 class CorrelationMethod(Enum):
     """상관 계수 방법"""
-    PEARSON = "pearson"      # 피어슨 (선형 관계)
-    SPEARMAN = "spearman"    # 스피어만 (순위 기반)
-    KENDALL = "kendall"      # 켄달 타우 (순위 기반)
+
+    PEARSON = "pearson"  # 피어슨 (선형 관계)
+    SPEARMAN = "spearman"  # 스피어만 (순위 기반)
+    KENDALL = "kendall"  # 켄달 타우 (순위 기반)
 
 
 @dataclass
 class CorrelationResult:
     """상관 분석 결과"""
+
     matrix: np.ndarray
     columns: List[str]
     method: CorrelationMethod
@@ -56,7 +58,7 @@ class CorrelationAnalyzer:
         self,
         data: pl.DataFrame,
         columns: List[str],
-        method: CorrelationMethod = CorrelationMethod.PEARSON
+        method: CorrelationMethod = CorrelationMethod.PEARSON,
     ) -> CorrelationResult:
         """
         상관 행렬 계산
@@ -90,17 +92,14 @@ class CorrelationAnalyzer:
                     p_matrix[i, j] = p_value
 
         return CorrelationResult(
-            matrix=matrix,
-            columns=valid_columns,
-            method=method,
-            p_value_matrix=p_matrix
+            matrix=matrix, columns=valid_columns, method=method, p_value_matrix=p_matrix
         )
 
     def pairwise_correlation(
         self,
         x: np.ndarray,
         y: np.ndarray,
-        method: CorrelationMethod = CorrelationMethod.PEARSON
+        method: CorrelationMethod = CorrelationMethod.PEARSON,
     ) -> Tuple[float, float]:
         """
         두 변수 간 상관계수 계산
@@ -140,7 +139,7 @@ class CorrelationAnalyzer:
         self,
         result: CorrelationResult,
         alpha: float = 0.05,
-        min_correlation: float = 0.0
+        min_correlation: float = 0.0,
     ) -> List[Dict[str, Any]]:
         """
         유의한 상관 쌍 찾기
@@ -162,18 +161,21 @@ class CorrelationAnalyzer:
                 p_value = result.p_value_matrix[i, j]
 
                 if p_value < alpha and abs(corr) >= min_correlation:
-                    pairs.append({
-                        "col1": result.columns[i],
-                        "col2": result.columns[j],
-                        "correlation": corr,
-                        "p_value": p_value
-                    })
+                    pairs.append(
+                        {
+                            "col1": result.columns[i],
+                            "col2": result.columns[j],
+                            "correlation": corr,
+                            "p_value": p_value,
+                        }
+                    )
 
         return sorted(pairs, key=lambda x: abs(x["correlation"]), reverse=True)
 
 
 class ClusterMethod(Enum):
     """클러스터링 방법"""
+
     KMEANS = "kmeans"
     HIERARCHICAL = "hierarchical"
     DBSCAN = "dbscan"
@@ -182,6 +184,7 @@ class ClusterMethod(Enum):
 @dataclass
 class ClusterResult:
     """클러스터링 결과"""
+
     labels: np.ndarray
     n_clusters: int
     method: ClusterMethod
@@ -204,7 +207,7 @@ class ClusterAnalyzer:
         columns: List[str],
         method: ClusterMethod = ClusterMethod.KMEANS,
         n_clusters: int = 3,
-        **kwargs
+        **kwargs,
     ) -> ClusterResult:
         """
         클러스터링 수행
@@ -241,17 +244,10 @@ class ClusterAnalyzer:
             min_samples = kwargs.get("min_samples", 5)
             return self._dbscan_cluster(X_normalized, eps, min_samples)
 
-        return ClusterResult(
-            labels=np.zeros(len(X)),
-            n_clusters=1,
-            method=method
-        )
+        return ClusterResult(labels=np.zeros(len(X)), n_clusters=1, method=method)
 
     def _kmeans_cluster(
-        self,
-        X: np.ndarray,
-        n_clusters: int,
-        max_iter: int = 100
+        self, X: np.ndarray, n_clusters: int, max_iter: int = 100
     ) -> ClusterResult:
         """K-Means 클러스터링"""
         n_samples = len(X)
@@ -265,10 +261,14 @@ class ClusterAnalyzer:
             labels = np.argmin(distances, axis=1)
 
             # 중심 업데이트
-            new_centers = np.array([
-                X[labels == k].mean(axis=0) if np.sum(labels == k) > 0 else centers[k]
-                for k in range(n_clusters)
-            ])
+            new_centers = np.array(
+                [
+                    X[labels == k].mean(axis=0)
+                    if np.sum(labels == k) > 0
+                    else centers[k]
+                    for k in range(n_clusters)
+                ]
+            )
 
             # 수렴 확인
             if np.allclose(centers, new_centers):
@@ -278,8 +278,7 @@ class ClusterAnalyzer:
 
         # Inertia 계산
         inertia = sum(
-            ((X[labels == k] - centers[k]) ** 2).sum()
-            for k in range(n_clusters)
+            ((X[labels == k] - centers[k]) ** 2).sum() for k in range(n_clusters)
         )
 
         return ClusterResult(
@@ -287,33 +286,28 @@ class ClusterAnalyzer:
             n_clusters=n_clusters,
             method=ClusterMethod.KMEANS,
             centers=centers,
-            inertia=inertia
+            inertia=inertia,
         )
 
-    def _hierarchical_cluster(
-        self,
-        X: np.ndarray,
-        n_clusters: int
-    ) -> ClusterResult:
+    def _hierarchical_cluster(self, X: np.ndarray, n_clusters: int) -> ClusterResult:
         """계층적 클러스터링"""
         # 연결 행렬 계산
-        linkage_matrix = hierarchy.linkage(X, method='ward')
+        linkage_matrix = hierarchy.linkage(X, method="ward")
 
         # 클러스터 할당
-        labels = hierarchy.fcluster(linkage_matrix, n_clusters, criterion='maxclust') - 1
+        labels = (
+            hierarchy.fcluster(linkage_matrix, n_clusters, criterion="maxclust") - 1
+        )
 
         return ClusterResult(
             labels=labels,
             n_clusters=n_clusters,
             method=ClusterMethod.HIERARCHICAL,
-            dendrogram_data={"linkage": linkage_matrix}
+            dendrogram_data={"linkage": linkage_matrix},
         )
 
     def _dbscan_cluster(
-        self,
-        X: np.ndarray,
-        eps: float,
-        min_samples: int
+        self, X: np.ndarray, eps: float, min_samples: int
     ) -> ClusterResult:
         """DBSCAN 클러스터링"""
         n_samples = len(X)
@@ -361,16 +355,11 @@ class ClusterAnalyzer:
         n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
 
         return ClusterResult(
-            labels=labels,
-            n_clusters=n_clusters,
-            method=ClusterMethod.DBSCAN
+            labels=labels, n_clusters=n_clusters, method=ClusterMethod.DBSCAN
         )
 
     def get_cluster_statistics(
-        self,
-        result: ClusterResult,
-        data: pl.DataFrame,
-        columns: List[str]
+        self, result: ClusterResult, data: pl.DataFrame, columns: List[str]
     ) -> List[Dict[str, Any]]:
         """
         클러스터별 통계
@@ -388,18 +377,19 @@ class ClusterAnalyzer:
             stat = {
                 "cluster_id": k,
                 "size": int(np.sum(mask)),
-                "center": cluster_data.mean(axis=0).tolist() if len(cluster_data) > 0 else [],
-                "std": cluster_data.std(axis=0).tolist() if len(cluster_data) > 0 else []
+                "center": cluster_data.mean(axis=0).tolist()
+                if len(cluster_data) > 0
+                else [],
+                "std": cluster_data.std(axis=0).tolist()
+                if len(cluster_data) > 0
+                else [],
             }
             statistics.append(stat)
 
         return statistics
 
     def silhouette_score(
-        self,
-        result: ClusterResult,
-        data: pl.DataFrame,
-        columns: List[str]
+        self, result: ClusterResult, data: pl.DataFrame, columns: List[str]
     ) -> float:
         """
         실루엣 점수 계산
@@ -431,7 +421,9 @@ class ClusterAnalyzer:
                     continue
                 other_cluster = X[labels == k]
                 if len(other_cluster) > 0:
-                    avg_dist = np.mean(np.sqrt(((other_cluster - X[i]) ** 2).sum(axis=1)))
+                    avg_dist = np.mean(
+                        np.sqrt(((other_cluster - X[i]) ** 2).sum(axis=1))
+                    )
                     b = min(b, avg_dist)
 
             if b == np.inf:
@@ -444,10 +436,7 @@ class ClusterAnalyzer:
         return np.mean(scores)
 
     def find_optimal_k(
-        self,
-        data: pl.DataFrame,
-        columns: List[str],
-        k_range: Tuple[int, int] = (2, 10)
+        self, data: pl.DataFrame, columns: List[str], k_range: Tuple[int, int] = (2, 10)
     ) -> Tuple[List[int], List[float]]:
         """
         엘보우 방법으로 최적 k 찾기
@@ -472,11 +461,7 @@ class TimeSeriesAnalyzer:
     이동 평균, 분해, 자기상관 분석 등을 제공합니다.
     """
 
-    def moving_average(
-        self,
-        values: np.ndarray,
-        window: int = 5
-    ) -> np.ndarray:
+    def moving_average(self, values: np.ndarray, window: int = 5) -> np.ndarray:
         """
         이동 평균
 
@@ -490,14 +475,12 @@ class TimeSeriesAnalyzer:
         result = np.full_like(values, np.nan, dtype=float)
 
         for i in range(window - 1, len(values)):
-            result[i] = np.mean(values[i - window + 1:i + 1])
+            result[i] = np.mean(values[i - window + 1 : i + 1])
 
         return result
 
     def exponential_smoothing(
-        self,
-        values: np.ndarray,
-        alpha: float = 0.3
+        self, values: np.ndarray, alpha: float = 0.3
     ) -> np.ndarray:
         """
         지수 평활
@@ -518,10 +501,7 @@ class TimeSeriesAnalyzer:
         return result
 
     def decompose(
-        self,
-        values: np.ndarray,
-        period: int = 12,
-        model: str = "additive"
+        self, values: np.ndarray, period: int = 12, model: str = "additive"
     ) -> Dict[str, np.ndarray]:
         """
         시계열 분해 (트렌드 + 계절성 + 잔차)
@@ -560,17 +540,9 @@ class TimeSeriesAnalyzer:
         else:
             residual = values / (trend * seasonal + 1e-10)
 
-        return {
-            "trend": trend,
-            "seasonal": seasonal,
-            "residual": residual
-        }
+        return {"trend": trend, "seasonal": seasonal, "residual": residual}
 
-    def autocorrelation(
-        self,
-        values: np.ndarray,
-        max_lag: int = 20
-    ) -> np.ndarray:
+    def autocorrelation(self, values: np.ndarray, max_lag: int = 20) -> np.ndarray:
         """
         자기상관 함수 (ACF)
 
@@ -600,9 +572,7 @@ class TimeSeriesAnalyzer:
         return acf
 
     def partial_autocorrelation(
-        self,
-        values: np.ndarray,
-        max_lag: int = 10
+        self, values: np.ndarray, max_lag: int = 10
     ) -> np.ndarray:
         """
         편자기상관 함수 (PACF)
@@ -626,8 +596,8 @@ class TimeSeriesAnalyzer:
         phi[1, 1] = acf[1]
 
         for k in range(2, max_lag + 1):
-            numerator = acf[k] - sum(phi[k-1, j] * acf[k-j] for j in range(1, k))
-            denominator = 1 - sum(phi[k-1, j] * acf[j] for j in range(1, k))
+            numerator = acf[k] - sum(phi[k - 1, j] * acf[k - j] for j in range(1, k))
+            denominator = 1 - sum(phi[k - 1, j] * acf[j] for j in range(1, k))
 
             if denominator == 0:
                 phi[k, k] = 0
@@ -635,16 +605,13 @@ class TimeSeriesAnalyzer:
                 phi[k, k] = numerator / denominator
 
             for j in range(1, k):
-                phi[k, j] = phi[k-1, j] - phi[k, k] * phi[k-1, k-j]
+                phi[k, j] = phi[k - 1, j] - phi[k, k] * phi[k - 1, k - j]
 
             pacf[k] = phi[k, k]
 
         return pacf
 
-    def stationarity_test(
-        self,
-        values: np.ndarray
-    ) -> Dict[str, Any]:
+    def stationarity_test(self, values: np.ndarray) -> Dict[str, Any]:
         """
         정상성 검정 (Augmented Dickey-Fuller Test 단순화)
 
@@ -687,20 +654,14 @@ class TimeSeriesAnalyzer:
                 "statistic": t_stat,
                 "p_value": p_value,
                 "is_stationary": p_value < 0.05,
-                "critical_values": critical_values
+                "critical_values": critical_values,
             }
 
         except Exception:
-            return {
-                "statistic": 0,
-                "p_value": 1.0,
-                "is_stationary": False
-            }
+            return {"statistic": 0, "p_value": 1.0, "is_stationary": False}
 
     def detect_seasonality(
-        self,
-        values: np.ndarray,
-        max_period: int = 50
+        self, values: np.ndarray, max_period: int = 50
     ) -> Optional[int]:
         """
         계절성 주기 탐지
@@ -721,6 +682,7 @@ class TimeSeriesAnalyzer:
 
 class HypothesisTest(Enum):
     """가설 검정 유형"""
+
     T_TEST_ONE_SAMPLE = "t_test_one_sample"
     T_TEST_TWO_SAMPLE = "t_test_two_sample"
     PAIRED_T_TEST = "paired_t_test"
@@ -734,6 +696,7 @@ class HypothesisTest(Enum):
 @dataclass
 class HypothesisTestResult:
     """가설 검정 결과"""
+
     test_type: HypothesisTest
     statistic: float
     p_value: float
@@ -764,9 +727,7 @@ class HypothesisTester:
     """
 
     def t_test_one_sample(
-        self,
-        sample: np.ndarray,
-        population_mean: float
+        self, sample: np.ndarray, population_mean: float
     ) -> HypothesisTestResult:
         """
         단일 표본 t-검정
@@ -779,14 +740,11 @@ class HypothesisTester:
             test_type=HypothesisTest.T_TEST_ONE_SAMPLE,
             statistic=statistic,
             p_value=p_value,
-            degrees_of_freedom=len(sample) - 1
+            degrees_of_freedom=len(sample) - 1,
         )
 
     def t_test_two_sample(
-        self,
-        sample1: np.ndarray,
-        sample2: np.ndarray,
-        equal_var: bool = True
+        self, sample1: np.ndarray, sample2: np.ndarray, equal_var: bool = True
     ) -> HypothesisTestResult:
         """
         독립 표본 t-검정
@@ -797,23 +755,26 @@ class HypothesisTester:
 
         # Cohen's d 효과 크기
         pooled_std = np.sqrt(
-            ((len(sample1) - 1) * np.var(sample1) + (len(sample2) - 1) * np.var(sample2))
+            (
+                (len(sample1) - 1) * np.var(sample1)
+                + (len(sample2) - 1) * np.var(sample2)
+            )
             / (len(sample1) + len(sample2) - 2)
         )
-        effect_size = (np.mean(sample1) - np.mean(sample2)) / pooled_std if pooled_std != 0 else 0
+        effect_size = (
+            (np.mean(sample1) - np.mean(sample2)) / pooled_std if pooled_std != 0 else 0
+        )
 
         return HypothesisTestResult(
             test_type=HypothesisTest.T_TEST_TWO_SAMPLE,
             statistic=statistic,
             p_value=p_value,
             degrees_of_freedom=len(sample1) + len(sample2) - 2,
-            effect_size=effect_size
+            effect_size=effect_size,
         )
 
     def paired_t_test(
-        self,
-        before: np.ndarray,
-        after: np.ndarray
+        self, before: np.ndarray, after: np.ndarray
     ) -> HypothesisTestResult:
         """
         대응 표본 t-검정
@@ -831,13 +792,10 @@ class HypothesisTester:
             statistic=statistic,
             p_value=p_value,
             degrees_of_freedom=len(before) - 1,
-            effect_size=effect_size
+            effect_size=effect_size,
         )
 
-    def anova_one_way(
-        self,
-        groups: List[np.ndarray]
-    ) -> HypothesisTestResult:
+    def anova_one_way(self, groups: List[np.ndarray]) -> HypothesisTestResult:
         """
         일원 분산분석
 
@@ -849,12 +807,12 @@ class HypothesisTester:
         k = len(groups)
         n = sum(len(g) for g in groups)
         df_between = k - 1
-        df_within = n - k
+        n - k
 
         # Eta squared 효과 크기
         grand_mean = np.mean([np.mean(g) for g in groups])
-        ss_between = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in groups)
-        ss_total = sum(np.sum((g - grand_mean)**2) for g in groups)
+        ss_between = sum(len(g) * (np.mean(g) - grand_mean) ** 2 for g in groups)
+        ss_total = sum(np.sum((g - grand_mean) ** 2) for g in groups)
         eta_squared = ss_between / ss_total if ss_total != 0 else 0
 
         return HypothesisTestResult(
@@ -862,13 +820,10 @@ class HypothesisTester:
             statistic=statistic,
             p_value=p_value,
             degrees_of_freedom=df_between,
-            effect_size=eta_squared
+            effect_size=eta_squared,
         )
 
-    def chi_square_test(
-        self,
-        observed: np.ndarray
-    ) -> HypothesisTestResult:
+    def chi_square_test(self, observed: np.ndarray) -> HypothesisTestResult:
         """
         카이제곱 독립성 검정
 
@@ -886,13 +841,10 @@ class HypothesisTester:
             statistic=chi2,
             p_value=p_value,
             degrees_of_freedom=dof,
-            effect_size=cramers_v
+            effect_size=cramers_v,
         )
 
-    def normality_test(
-        self,
-        sample: np.ndarray
-    ) -> HypothesisTestResult:
+    def normality_test(self, sample: np.ndarray) -> HypothesisTestResult:
         """
         정규성 검정 (Shapiro-Wilk)
 
@@ -905,22 +857,20 @@ class HypothesisTester:
         statistic, p_value = stats.shapiro(sample)
 
         return HypothesisTestResult(
-            test_type=HypothesisTest.NORMALITY,
-            statistic=statistic,
-            p_value=p_value
+            test_type=HypothesisTest.NORMALITY, statistic=statistic, p_value=p_value
         )
 
     def mann_whitney_u(
-        self,
-        sample1: np.ndarray,
-        sample2: np.ndarray
+        self, sample1: np.ndarray, sample2: np.ndarray
     ) -> HypothesisTestResult:
         """
         만-휘트니 U 검정 (비모수)
 
         H0: 두 그룹의 분포가 같다
         """
-        statistic, p_value = stats.mannwhitneyu(sample1, sample2, alternative='two-sided')
+        statistic, p_value = stats.mannwhitneyu(
+            sample1, sample2, alternative="two-sided"
+        )
 
         # 효과 크기 (rank-biserial correlation)
         n1, n2 = len(sample1), len(sample2)
@@ -930,13 +880,10 @@ class HypothesisTester:
             test_type=HypothesisTest.MANN_WHITNEY_U,
             statistic=statistic,
             p_value=p_value,
-            effect_size=effect_size
+            effect_size=effect_size,
         )
 
-    def kruskal_wallis(
-        self,
-        groups: List[np.ndarray]
-    ) -> HypothesisTestResult:
+    def kruskal_wallis(self, groups: List[np.ndarray]) -> HypothesisTestResult:
         """
         크루스칼-왈리스 검정 (비모수 ANOVA)
 
@@ -948,13 +895,14 @@ class HypothesisTester:
             test_type=HypothesisTest.KRUSKAL_WALLIS,
             statistic=statistic,
             p_value=p_value,
-            degrees_of_freedom=len(groups) - 1
+            degrees_of_freedom=len(groups) - 1,
         )
 
 
 @dataclass
 class StatisticalSummary:
     """통계 요약"""
+
     mean: float
     median: float
     std: float
@@ -976,10 +924,7 @@ class DescriptiveStatistics:
     기본적인 통계량을 계산합니다.
     """
 
-    def calculate(
-        self,
-        values: np.ndarray
-    ) -> Dict[str, float]:
+    def calculate(self, values: np.ndarray) -> Dict[str, float]:
         """
         기술 통계량 계산
 
@@ -1009,13 +954,11 @@ class DescriptiveStatistics:
             "skewness": float(stats.skew(values)),
             "kurtosis": float(stats.kurtosis(values)),
             "n": len(values),
-            "se": float(np.std(values) / np.sqrt(len(values)))  # 표준 오차
+            "se": float(np.std(values) / np.sqrt(len(values))),  # 표준 오차
         }
 
     def confidence_interval(
-        self,
-        values: np.ndarray,
-        confidence: float = 0.95
+        self, values: np.ndarray, confidence: float = 0.95
     ) -> Tuple[float, float]:
         """
         평균의 신뢰 구간
@@ -1040,9 +983,7 @@ class DescriptiveStatistics:
         return (mean - h, mean + h)
 
     def percentile(
-        self,
-        values: np.ndarray,
-        percentiles: List[float]
+        self, values: np.ndarray, percentiles: List[float]
     ) -> Dict[float, float]:
         """
         백분위수 계산

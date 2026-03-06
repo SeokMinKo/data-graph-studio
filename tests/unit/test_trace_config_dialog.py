@@ -6,13 +6,12 @@ All external dependencies (ADB, subprocess, QFileDialog) are mocked (NFR-8).
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PySide6.QtCore import QProcess, Qt
-from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 app = QApplication.instance()
 if not app:
@@ -27,9 +26,7 @@ from data_graph_studio.ui.dialogs.trace_config_dialog import (
     load_logger_config,
     save_logger_config,
     migrate_config,
-    CONFIG_PATH,
     CAT_CONNECTION,
-    CAT_CAPTURE_MODE,
     CAT_EVENTS,
     CAT_OUTPUT,
 )
@@ -49,12 +46,15 @@ def _mock_adb():
 def _no_config(tmp_path: Path):
     """Redirect CONFIG_PATH to a non-existent file."""
     fake = tmp_path / "logger_config.json"
-    with patch(
-        "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_PATH",
-        fake,
-    ), patch(
-        "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_DIR",
-        tmp_path,
+    with (
+        patch(
+            "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_PATH",
+            fake,
+        ),
+        patch(
+            "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_DIR",
+            tmp_path,
+        ),
     ):
         yield fake
 
@@ -74,6 +74,7 @@ def dialog(_mock_adb, _no_config):
 
 
 # ── UT-1: Structure ──────────────────────────────────────────
+
 
 class TestDialogStructure:
     def test_has_four_categories(self, dialog: TraceConfigDialog) -> None:
@@ -97,6 +98,7 @@ class TestDialogStructure:
 
 # ── UT-2: Category switching ─────────────────────────────────
 
+
 class TestCategorySwitching:
     def test_click_category_switches_panel(self, dialog: TraceConfigDialog) -> None:
         dialog._category_list.setCurrentRow(CAT_EVENTS)
@@ -107,6 +109,7 @@ class TestCategorySwitching:
 
 
 # ── UT-3: Config round-trip ──────────────────────────────────
+
 
 class TestConfigRoundTrip:
     def test_save_load_roundtrip(self, tmp_path: Path) -> None:
@@ -120,12 +123,15 @@ class TestConfigRoundTrip:
             "save_path": "/tmp/trace.txt",
         }
         config_path = tmp_path / "logger_config.json"
-        with patch(
-            "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_PATH",
-            config_path,
-        ), patch(
-            "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_DIR",
-            tmp_path,
+        with (
+            patch(
+                "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_PATH",
+                config_path,
+            ),
+            patch(
+                "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_DIR",
+                tmp_path,
+            ),
         ):
             save_logger_config(cfg)
             loaded = load_logger_config()
@@ -136,6 +142,7 @@ class TestConfigRoundTrip:
 
 
 # ── UT-4: ADB not installed ──────────────────────────────────
+
 
 class TestAdbNotInstalled:
     def test_connection_panel_shows_warning(self) -> None:
@@ -151,10 +158,13 @@ class TestAdbNotInstalled:
 
 # ── UT-5: Start without device → Connection ──────────────────
 
+
 class TestStartWithoutDevice:
     def test_navigates_to_connection(self, dialog: TraceConfigDialog) -> None:
         # No device selected (empty list)
-        with patch.object(QMessageBox, "warning", return_value=QMessageBox.StandardButton.Ok):
+        with patch.object(
+            QMessageBox, "warning", return_value=QMessageBox.StandardButton.Ok
+        ):
             dialog._on_start()
             # Should stay at connection since no device
             # (adb found but no device)
@@ -162,6 +172,7 @@ class TestStartWithoutDevice:
 
 
 # ── UT-6: Mode change triggers check ─────────────────────────
+
 
 class TestModeChangeTriggersCheck:
     def test_mode_change_emits_and_runs_check(self, dialog: TraceConfigDialog) -> None:
@@ -172,6 +183,7 @@ class TestModeChangeTriggersCheck:
 
 # ── UT-7: Config migration v0→v1 ─────────────────────────────
 
+
 class TestConfigMigration:
     def test_v0_to_v1(self) -> None:
         v0 = {"buffer_size_mb": 64, "events": []}
@@ -181,12 +193,17 @@ class TestConfigMigration:
         assert v1["sysfs_path"] == "/sys/kernel/tracing"
 
     def test_v1_unchanged(self) -> None:
-        v1 = {"version": 1, "capture_mode": "raw_ftrace", "sysfs_path": "/sys/kernel/tracing"}
+        v1 = {
+            "version": 1,
+            "capture_mode": "raw_ftrace",
+            "sysfs_path": "/sys/kernel/tracing",
+        }
         result = migrate_config(dict(v1))
         assert result["capture_mode"] == "raw_ftrace"
 
 
 # ── UT-8: Perfetto not found → warning ───────────────────────
+
 
 class TestPerfettoNotFound:
     def test_check_fails_sets_warning(self) -> None:
@@ -205,6 +222,7 @@ class TestPerfettoNotFound:
 
 # ── UT-9: Root not available → warning ────────────────────────
 
+
 class TestRootNotAvailable:
     def test_raw_ftrace_root_fail(self) -> None:
         panel = CaptureModePanel()
@@ -216,8 +234,11 @@ class TestRootNotAvailable:
         panel._check_process.readAllStandardOutput.return_value = b"uid=1000"
         panel._root_fallback_tried = False
 
-        with patch.object(QProcess, "start"), patch.object(QProcess, "setProgram"), \
-             patch.object(QProcess, "setArguments"):
+        with (
+            patch.object(QProcess, "start"),
+            patch.object(QProcess, "setProgram"),
+            patch.object(QProcess, "setArguments"),
+        ):
             panel._on_check_finished(1, None)
 
         # Fallback attempt was started; simulate it also failing
@@ -231,6 +252,7 @@ class TestRootNotAvailable:
 
 
 # ── UT-10: Empty save path → file dialog ─────────────────────
+
 
 class TestEmptySavePath:
     def test_file_dialog_called(self, dialog: TraceConfigDialog) -> None:
@@ -256,6 +278,7 @@ class TestEmptySavePath:
 
 # ── UT-11: Corrupt config → defaults ─────────────────────────
 
+
 class TestCorruptConfig:
     def test_invalid_json_returns_defaults(self, tmp_path: Path) -> None:
         cfg_path = tmp_path / "logger_config.json"
@@ -270,6 +293,7 @@ class TestCorruptConfig:
 
 
 # ── UT-12: ADB scan timeout ──────────────────────────────────
+
 
 class TestAdbScanTimeout:
     def test_timeout_shows_message(self) -> None:
@@ -286,14 +310,17 @@ class TestAdbScanTimeout:
 
 # ── UT-13: Events 0 → warning + navigate ─────────────────────
 
+
 class TestEventsZero:
     def test_zero_events_blocks_start(self, dialog: TraceConfigDialog) -> None:
         # Uncheck all events
         for _, cb in dialog.events_panel._event_checks:
             cb.setChecked(False)
 
-        with patch.object(QMessageBox, "warning", return_value=QMessageBox.StandardButton.Ok):
-            result = dialog._validate()
+        with patch.object(
+            QMessageBox, "warning", return_value=QMessageBox.StandardButton.Ok
+        ):
+            dialog._validate()
             # Should fail due to no device first, but let's set up device
             # Actually, adb_found + no device → connection check fails first
             # So let's test events panel directly
@@ -303,6 +330,7 @@ class TestEventsZero:
         # Make connection/adb pass
         dialog.connection_panel._adb_found = True
         from PySide6.QtWidgets import QListWidgetItem
+
         item = QListWidgetItem("SERIAL  device")
         item.setData(Qt.ItemDataRole.UserRole, "SERIAL")
         dialog.connection_panel._device_list.clear()
@@ -313,18 +341,22 @@ class TestEventsZero:
         for _, cb in dialog.events_panel._event_checks:
             cb.setChecked(False)
 
-        with patch.object(QMessageBox, "warning", return_value=QMessageBox.StandardButton.Ok):
+        with patch.object(
+            QMessageBox, "warning", return_value=QMessageBox.StandardButton.Ok
+        ):
             dialog._validate()
             assert dialog._category_list.currentRow() == CAT_EVENTS
 
 
 # ── UT-14: Double-click prevention ───────────────────────────
 
+
 class TestDoubleClickPrevention:
     def test_start_disables_button(self, dialog: TraceConfigDialog) -> None:
         # Set up valid state
         dialog.connection_panel._adb_found = True
         from PySide6.QtWidgets import QListWidgetItem
+
         item = QListWidgetItem("SERIAL")
         item.setData(Qt.ItemDataRole.UserRole, "SERIAL")
         dialog.connection_panel._device_list.clear()
@@ -346,11 +378,13 @@ class TestDoubleClickPrevention:
 
 # ── UT-15: Unsaved changes warning ───────────────────────────
 
+
 class TestUnsavedChanges:
     def test_close_with_dirty_shows_dialog(self, dialog: TraceConfigDialog) -> None:
         dialog._dirty = True
         with patch.object(
-            QMessageBox, "question",
+            QMessageBox,
+            "question",
             return_value=QMessageBox.StandardButton.Discard,
         ) as mock_q:
             dialog.close()
@@ -363,6 +397,7 @@ class TestUnsavedChanges:
 
 
 # ── UT-16: Keyboard accessibility ────────────────────────────
+
 
 class TestKeyboardAccessibility:
     def test_category_list_accepts_focus(self, dialog: TraceConfigDialog) -> None:
@@ -377,15 +412,19 @@ class TestKeyboardAccessibility:
 
 # ── E2E-1: Start Trace with no config → Configure opens ──────
 
+
 class TestE2E1:
     def test_start_trace_no_config_opens_configure(self) -> None:
         """When no config exists, _on_start_trace opens configure dialog."""
-        with patch(
-            "data_graph_studio.ui.dialogs.trace_config_dialog.shutil.which",
-            return_value=None,
-        ), patch(
-            "data_graph_studio.ui.dialogs.trace_config_dialog.load_logger_config",
-            return_value={"version": 1, "device_serial": "", "events": []},
+        with (
+            patch(
+                "data_graph_studio.ui.dialogs.trace_config_dialog.shutil.which",
+                return_value=None,
+            ),
+            patch(
+                "data_graph_studio.ui.dialogs.trace_config_dialog.load_logger_config",
+                return_value={"version": 1, "device_serial": "", "events": []},
+            ),
         ):
             # Just verify load_logger_config returns empty device → would trigger configure
             cfg = load_logger_config()
@@ -394,15 +433,19 @@ class TestE2E1:
 
 # ── E2E-2: Configure → Save → Reopen → values persist ────────
 
+
 class TestE2E2:
     def test_save_and_reload(self, tmp_path: Path) -> None:
         cfg_path = tmp_path / "logger_config.json"
-        with patch(
-            "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_PATH",
-            cfg_path,
-        ), patch(
-            "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_DIR",
-            tmp_path,
+        with (
+            patch(
+                "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_PATH",
+                cfg_path,
+            ),
+            patch(
+                "data_graph_studio.ui.dialogs.trace_config_dialog.CONFIG_DIR",
+                tmp_path,
+            ),
         ):
             config = {
                 "version": 1,
@@ -422,11 +465,13 @@ class TestE2E2:
 
 # ── E2E-3: Configure → Start Recording → accepted ────────────
 
+
 class TestE2E3:
     def test_start_recording_accepts(self, dialog: TraceConfigDialog) -> None:
         # Set up valid state
         dialog.connection_panel._adb_found = True
         from PySide6.QtWidgets import QListWidgetItem
+
         item = QListWidgetItem("DEV")
         item.setData(Qt.ItemDataRole.UserRole, "DEV")
         dialog.connection_panel._device_list.clear()
@@ -434,9 +479,12 @@ class TestE2E3:
         dialog.connection_panel._device_list.setCurrentRow(0)
         dialog.output_panel.set_save_path("/tmp/out.csv")
 
-        with patch(
-            "data_graph_studio.ui.dialogs.trace_config_dialog.save_logger_config"
-        ), patch.object(dialog, "accept") as mock_accept:
+        with (
+            patch(
+                "data_graph_studio.ui.dialogs.trace_config_dialog.save_logger_config"
+            ),
+            patch.object(dialog, "accept") as mock_accept,
+        ):
             dialog._on_start()
             mock_accept.assert_called_once()
             assert dialog.start_requested

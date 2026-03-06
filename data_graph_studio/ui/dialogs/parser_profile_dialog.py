@@ -187,8 +187,10 @@ class ParserProfileDialog(QDialog):
             return
         name = item.data(Qt.UserRole)
         reply = QMessageBox.question(
-            self, "Delete Profile", f"Delete '{name}'?",
-            QMessageBox.Yes | QMessageBox.No
+            self,
+            "Delete Profile",
+            f"Delete '{name}'?",
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             self._store.delete_profile(self._parser.key, name)
@@ -207,7 +209,7 @@ class ParserProfileDialog(QDialog):
 
         profile = ParserProfile(name, settings)
         self._store.save_profile(self._parser.key, profile)
-        self.statusBar() if hasattr(self, 'statusBar') else None
+        self.statusBar() if hasattr(self, "statusBar") else None
         QMessageBox.information(self, "Saved", f"Profile '{name}' saved.")
 
     def _on_accept(self) -> None:

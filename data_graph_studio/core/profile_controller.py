@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import replace
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
@@ -22,7 +21,12 @@ class ProfileController(QObject):
     profile_renamed = Signal(str, str)
     error_occurred = Signal(str)
 
-    def __init__(self, store: ProfileStore, state: AppState, undo_stack: Optional[UndoStack] = None):
+    def __init__(
+        self,
+        store: ProfileStore,
+        state: AppState,
+        undo_stack: Optional[UndoStack] = None,
+    ):
         super().__init__()
         self._store = store
         self._state = state
@@ -36,6 +40,7 @@ class ProfileController(QObject):
                 self.save_active_profile()
 
             import uuid
+
             setting = GraphSetting(
                 id=str(uuid.uuid4()),
                 name=name,
@@ -59,10 +64,13 @@ class ProfileController(QObject):
         if setting is None:
             return False
         updated = GraphSettingMapper.from_app_state(
-            self._state, name=setting.name, dataset_id=setting.dataset_id,
+            self._state,
+            name=setting.name,
+            dataset_id=setting.dataset_id,
         )
         # 기존 id, created_at 유지, modified_at 갱신
         import time as _time
+
         updated = replace(
             updated,
             id=setting.id,
@@ -103,22 +111,27 @@ class ProfileController(QObject):
         # Record undo via main stack
         if self._main_undo_stack:
             pid, old_n, new_n = profile_id, previous_name, new_name
+
             def _do_rename():
                 s = self._store.get(pid)
                 if s:
                     self._store.update(s.with_name(new_n))
                     self.profile_renamed.emit(pid, new_n)
+
             def _undo_rename():
                 s = self._store.get(pid)
                 if s:
                     self._store.update(s.with_name(old_n))
                     self.profile_renamed.emit(pid, old_n)
-            self._main_undo_stack.record(UndoCommand(
-                action_type=UndoActionType.PROFILE_RENAME,
-                description=f"Rename profile '{previous_name}' → '{new_name}'",
-                do=_do_rename,
-                undo=_undo_rename,
-            ))
+
+            self._main_undo_stack.record(
+                UndoCommand(
+                    action_type=UndoActionType.PROFILE_RENAME,
+                    description=f"Rename profile '{previous_name}' → '{new_name}'",
+                    do=_do_rename,
+                    undo=_undo_rename,
+                )
+            )
 
         self.profile_renamed.emit(profile_id, new_name)
         return True
@@ -136,18 +149,23 @@ class ProfileController(QObject):
         # Record undo via main stack
         if self._main_undo_stack:
             deleted_setting = setting
+
             def _do_delete():
                 self._store.remove(deleted_setting.id)
                 self.profile_deleted.emit(deleted_setting.id)
+
             def _undo_delete():
                 self._store.add(deleted_setting)
                 self.profile_created.emit(deleted_setting.id)
-            self._main_undo_stack.record(UndoCommand(
-                action_type=UndoActionType.PROFILE_DELETE,
-                description=f"Delete profile '{setting.name}'",
-                do=_do_delete,
-                undo=_undo_delete,
-            ))
+
+            self._main_undo_stack.record(
+                UndoCommand(
+                    action_type=UndoActionType.PROFILE_DELETE,
+                    description=f"Delete profile '{setting.name}'",
+                    do=_do_delete,
+                    undo=_undo_delete,
+                )
+            )
 
         if self._active_profile_id == profile_id:
             self._active_profile_id = None

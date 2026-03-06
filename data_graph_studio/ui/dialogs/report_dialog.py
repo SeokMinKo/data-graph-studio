@@ -11,11 +11,25 @@ import tempfile
 
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QLineEdit, QTextEdit, QComboBox, QCheckBox,
-    QPushButton, QGroupBox, QTabWidget, QWidget,
-    QFileDialog, QProgressDialog, QMessageBox,
-    QSpinBox, QButtonGroup, QRadioButton
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QLabel,
+    QLineEdit,
+    QTextEdit,
+    QComboBox,
+    QCheckBox,
+    QPushButton,
+    QGroupBox,
+    QTabWidget,
+    QWidget,
+    QFileDialog,
+    QProgressDialog,
+    QMessageBox,
+    QSpinBox,
+    QButtonGroup,
+    QRadioButton,
 )
 from PySide6.QtCore import Qt, Signal, QThread, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -34,15 +48,16 @@ logger = logging.getLogger(__name__)
 
 class ReportGeneratorThread(QThread):
     """레포트 생성 작업 스레드"""
+
     finished = Signal(bool, str)  # success, message/path
-    progress = Signal(int, str)   # percentage, status
+    progress = Signal(int, str)  # percentage, status
 
     def __init__(
         self,
         report_data: ReportData,
         options: ReportOptions,
         output_path: str,
-        parent=None
+        parent=None,
     ):
         super().__init__(parent)
         self.report_data = report_data
@@ -55,17 +70,18 @@ class ReportGeneratorThread(QThread):
 
             # 생성기 임포트 및 초기화
             from data_graph_studio.report import create_report_manager
+
             manager = create_report_manager()
 
             self.progress.emit(30, "Preparing report data...")
 
-            self.progress.emit(50, f"Generating {self.options.format.value.upper()} report...")
+            self.progress.emit(
+                50, f"Generating {self.options.format.value.upper()} report..."
+            )
 
             # 레포트 생성
             output_path = manager.generate_report(
-                self.report_data,
-                self.options,
-                self.output_path
+                self.report_data, self.options, self.output_path
             )
 
             self.progress.emit(100, "Report generated successfully!")
@@ -89,11 +105,7 @@ class ReportDialog(QDialog):
         ReportFormat.MARKDOWN: ".md",
     }
 
-    def __init__(
-        self,
-        report_data: ReportData,
-        parent=None
-    ):
+    def __init__(self, report_data: ReportData, parent=None):
         super().__init__(parent)
         self.report_data = report_data
         self.selected_format = ReportFormat.HTML
@@ -298,13 +310,12 @@ class ReportDialog(QDialog):
 
         self.findings_edit = QTextEdit()
         self.findings_edit.setPlaceholderText(
-            "Enter key findings, one per line...\n"
-            "e.g., Sales increased by 15% in Q3"
+            "Enter key findings, one per line...\ne.g., Sales increased by 15% in Q3"
         )
         self.findings_edit.setMaximumHeight(100)
 
         if self.report_data.key_findings:
-            self.findings_edit.setText('\n'.join(self.report_data.key_findings))
+            self.findings_edit.setText("\n".join(self.report_data.key_findings))
 
         findings_layout.addWidget(self.findings_edit)
         layout.addWidget(findings_group)
@@ -321,7 +332,9 @@ class ReportDialog(QDialog):
         self.recommendations_edit.setMaximumHeight(100)
 
         if self.report_data.recommendations:
-            self.recommendations_edit.setText('\n'.join(self.report_data.recommendations))
+            self.recommendations_edit.setText(
+                "\n".join(self.report_data.recommendations)
+            )
 
         recommendations_layout.addWidget(self.recommendations_edit)
         layout.addWidget(recommendations_group)
@@ -358,7 +371,9 @@ class ReportDialog(QDialog):
         chart_layout = QGridLayout(chart_group)
 
         self.interactive_charts_check = QCheckBox("Interactive Charts (HTML only)")
-        self.interactive_charts_check.setToolTip("Enable hover/zoom interactions in HTML reports")
+        self.interactive_charts_check.setToolTip(
+            "Enable hover/zoom interactions in HTML reports"
+        )
         chart_layout.addWidget(self.interactive_charts_check, 0, 0, 1, 2)
 
         chart_layout.addWidget(QLabel("Chart DPI:"), 1, 0)
@@ -393,7 +408,9 @@ class ReportDialog(QDialog):
         slide_layout.addWidget(self.slide_size_combo, 0, 1)
 
         self.one_chart_per_slide_check = QCheckBox("One Chart per Slide")
-        self.one_chart_per_slide_check.setToolTip("Place each chart on a separate slide")
+        self.one_chart_per_slide_check.setToolTip(
+            "Place each chart on a separate slide"
+        )
         self.one_chart_per_slide_check.setChecked(True)
         slide_layout.addWidget(self.one_chart_per_slide_check, 1, 0, 1, 2)
 
@@ -421,7 +438,9 @@ class ReportDialog(QDialog):
     def _connect_signals(self):
         """시그널 연결"""
         for fmt, btn in self.format_buttons.items():
-            btn.toggled.connect(lambda checked, f=fmt: self._on_format_changed(f, checked))
+            btn.toggled.connect(
+                lambda checked, f=fmt: self._on_format_changed(f, checked)
+            )
 
         self.title_edit.textChanged.connect(self._update_output_filename)
 
@@ -455,7 +474,7 @@ class ReportDialog(QDialog):
         """파일명에 사용할 수 없는 문자 제거"""
         invalid_chars = '<>:"/\\|?*'
         for char in invalid_chars:
-            name = name.replace(char, '_')
+            name = name.replace(char, "_")
         return name[:100]  # 최대 100자
 
     def _browse_output(self):
@@ -474,10 +493,7 @@ class ReportDialog(QDialog):
         default_name = self._sanitize_filename(self.title_edit.text() or "report")
 
         path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Report",
-            f"{default_name}{ext}",
-            file_filter
+            self, "Save Report", f"{default_name}{ext}", file_filter
         )
 
         if path:
@@ -493,10 +509,14 @@ class ReportDialog(QDialog):
         options.language = self.language_combo.currentData()
 
         # 섹션
-        options.include_executive_summary = self.section_checks["executive_summary"].isChecked()
+        options.include_executive_summary = self.section_checks[
+            "executive_summary"
+        ].isChecked()
         options.include_data_overview = self.section_checks["data_overview"].isChecked()
         options.include_statistics = self.section_checks["statistics"].isChecked()
-        options.include_visualizations = self.section_checks["visualizations"].isChecked()
+        options.include_visualizations = self.section_checks[
+            "visualizations"
+        ].isChecked()
         options.include_comparison = self.section_checks["comparison"].isChecked()
         options.include_tables = self.section_checks["tables"].isChecked()
         options.include_appendix = self.section_checks["appendix"].isChecked()
@@ -531,15 +551,15 @@ class ReportDialog(QDialog):
         findings_text = self.findings_edit.toPlainText().strip()
         if findings_text:
             self.report_data.key_findings = [
-                line.strip() for line in findings_text.split('\n')
-                if line.strip()
+                line.strip() for line in findings_text.split("\n") if line.strip()
             ]
 
         # Recommendations
         recommendations_text = self.recommendations_edit.toPlainText().strip()
         if recommendations_text:
             self.report_data.recommendations = [
-                line.strip() for line in recommendations_text.split('\n')
+                line.strip()
+                for line in recommendations_text.split("\n")
                 if line.strip()
             ]
 
@@ -551,18 +571,25 @@ class ReportDialog(QDialog):
             options = self._get_options()
 
             from data_graph_studio.report import create_report_manager
+
             manager = create_report_manager()
 
             # 미리보기는 빠른 확인을 위해 HTML 우선
             preview_format = options.format
-            if preview_format in {ReportFormat.PDF, ReportFormat.DOCX, ReportFormat.PPTX}:
+            if preview_format in {
+                ReportFormat.PDF,
+                ReportFormat.DOCX,
+                ReportFormat.PPTX,
+            }:
                 preview_format = ReportFormat.HTML
 
             preview_options = ReportOptions(**vars(options))
             preview_options.format = preview_format
 
             ext = self.FORMAT_EXTENSIONS.get(preview_format, ".html")
-            with tempfile.NamedTemporaryFile(prefix="dgs_report_preview_", suffix=ext, delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                prefix="dgs_report_preview_", suffix=ext, delete=False
+            ) as f:
                 preview_path = f.name
 
             manager.generate_report(self.report_data, preview_options, preview_path)
@@ -572,7 +599,7 @@ class ReportDialog(QDialog):
                 QMessageBox.warning(
                     self,
                     "Preview",
-                    f"Preview created but could not be opened automatically:\n{preview_path}"
+                    f"Preview created but could not be opened automatically:\n{preview_path}",
                 )
 
         except Exception as e:
@@ -584,9 +611,7 @@ class ReportDialog(QDialog):
         output_path = self.output_path_edit.text().strip()
         if not output_path:
             QMessageBox.warning(
-                self,
-                "Missing Output Path",
-                "Please specify an output file path."
+                self, "Missing Output Path", "Please specify an output file path."
             )
             return
 
@@ -597,22 +622,14 @@ class ReportDialog(QDialog):
         options = self._get_options()
 
         # 진행률 다이얼로그
-        progress = QProgressDialog(
-            "Generating report...",
-            "Cancel",
-            0, 100,
-            self
-        )
+        progress = QProgressDialog("Generating report...", "Cancel", 0, 100, self)
         progress.setWindowModality(Qt.WindowModal)
         progress.setAutoClose(True)
         progress.show()
 
         # 생성 스레드 시작
         self.generator_thread = ReportGeneratorThread(
-            self.report_data,
-            options,
-            output_path,
-            self
+            self.report_data, options, output_path, self
         )
 
         self.generator_thread.progress.connect(
@@ -638,26 +655,26 @@ class ReportDialog(QDialog):
                 self,
                 "Report Generated",
                 f"Report has been saved to:\n{message}\n\nWould you like to open it?",
-                QMessageBox.Yes | QMessageBox.No
+                QMessageBox.Yes | QMessageBox.No,
             )
 
             if reply == QMessageBox.Yes:
                 import subprocess
                 import sys
 
-                if sys.platform == 'darwin':
-                    subprocess.run(['open', message])
-                elif sys.platform == 'win32':
-                    subprocess.run(['start', '', message], shell=True)
+                if sys.platform == "darwin":
+                    subprocess.run(["open", message])
+                elif sys.platform == "win32":
+                    subprocess.run(["start", "", message], shell=True)
                 else:
-                    subprocess.run(['xdg-open', message])
+                    subprocess.run(["xdg-open", message])
 
             self.accept()
         else:
             QMessageBox.critical(
                 self,
                 "Report Generation Failed",
-                f"Failed to generate report:\n{message}"
+                f"Failed to generate report:\n{message}",
             )
 
 

@@ -57,7 +57,9 @@ def test_validate_downloaded_update_assets_rejects_checksum_mismatch(tmp_path) -
         validate_downloaded_update_assets(str(installer), str(sha))
 
 
-def test_validate_downloaded_update_assets_rejects_html_checksum_payload(tmp_path) -> None:
+def test_validate_downloaded_update_assets_rejects_html_checksum_payload(
+    tmp_path,
+) -> None:
     installer = tmp_path / "DataGraphStudio-Setup-1.2.3.exe"
     payload = b"MZ" + b"\x22" * 32
     _write_bytes(installer, payload)
@@ -69,7 +71,9 @@ def test_validate_downloaded_update_assets_rejects_html_checksum_payload(tmp_pat
         validate_downloaded_update_assets(str(installer), str(sha))
 
 
-def test_validate_downloaded_update_assets_rejects_checksum_for_other_installer(tmp_path) -> None:
+def test_validate_downloaded_update_assets_rejects_checksum_for_other_installer(
+    tmp_path,
+) -> None:
     installer = tmp_path / "DataGraphStudio-Setup-1.2.3.exe"
     payload = b"MZ" + b"\x33" * 48
     _write_bytes(installer, payload)
@@ -112,7 +116,9 @@ def test_run_windows_installer_rejects_missing_mz_header(tmp_path, monkeypatch) 
         run_windows_installer(str(installer))
 
 
-def test_run_windows_installer_launches_with_silent_flags(tmp_path, monkeypatch) -> None:
+def test_run_windows_installer_launches_with_silent_flags(
+    tmp_path, monkeypatch
+) -> None:
     monkeypatch.setattr("data_graph_studio.core.updater.sys.platform", "win32")
 
     installer = tmp_path / "DataGraphStudio-Setup-1.2.3.exe"

@@ -1,8 +1,5 @@
 """Tests for GraphSetting version migration."""
 
-import time
-import uuid
-
 from data_graph_studio.core.profile import GraphSetting
 
 
@@ -52,7 +49,9 @@ def test_normalized_chart_settings_defaults():
 
 def test_normalized_chart_settings_overrides():
     gs = GraphSetting(
-        id="x", name="Y", dataset_id="ds",
+        id="x",
+        name="Y",
+        dataset_id="ds",
         chart_settings={"show_legend": False, "custom_key": 42},
     )
     norm = gs.normalized_chart_settings()
@@ -78,7 +77,9 @@ def test_frozen_chart_settings_is_mapping_proxy():
 
 def test_frozen_tuples():
     gs = GraphSetting(
-        id="x", name="Y", dataset_id="ds",
+        id="x",
+        name="Y",
+        dataset_id="ds",
         group_columns=[1, 2],
         value_columns=[3],
         filters=[4],

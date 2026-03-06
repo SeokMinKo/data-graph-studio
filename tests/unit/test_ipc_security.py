@@ -25,6 +25,7 @@ from data_graph_studio.core.ipc_server import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def clean_port_file():
     """Ensure no stale port file interferes."""
@@ -37,10 +38,13 @@ def clean_port_file():
 # Token Authentication
 # ---------------------------------------------------------------------------
 
+
 class TestTokenAuthentication:
     def test_write_port_file_includes_token(self, tmp_path):
         """write_port_file stores pid:port:token format."""
-        with patch("data_graph_studio.core.ipc_server._PORT_FILE", tmp_path / "ipc_port"):
+        with patch(
+            "data_graph_studio.core.ipc_server._PORT_FILE", tmp_path / "ipc_port"
+        ):
             write_port_file(12345, "secret-token")
             content = (tmp_path / "ipc_port").read_text()
             parts = content.split(":")
@@ -73,6 +77,7 @@ class TestTokenAuthentication:
         assert server.token == ""
         # Simulate what start() does
         import secrets
+
         server._token = secrets.token_hex(16)
         assert len(server._token) == 32
 
@@ -137,6 +142,7 @@ class TestTokenAuthentication:
 # Buffer Limit
 # ---------------------------------------------------------------------------
 
+
 class TestBufferLimit:
     def test_buffer_limit_constant(self):
         """Buffer limit is 1MB."""
@@ -165,6 +171,7 @@ class TestBufferLimit:
 # Execute Handler Disabled by Default
 # ---------------------------------------------------------------------------
 
+
 class TestExecuteDisabled:
     def test_execute_not_registered_by_default(self):
         """execute handler is NOT registered when debug=False."""
@@ -180,7 +187,9 @@ class TestExecuteDisabled:
         mock_server.start = MagicMock(return_value=True)
         mock_window._ipc_server = mock_server
 
-        with patch("data_graph_studio.core.ipc_server.IPCServer", return_value=mock_server):
+        with patch(
+            "data_graph_studio.core.ipc_server.IPCServer", return_value=mock_server
+        ):
             controller.setup()
 
         assert "execute" not in registered
@@ -199,7 +208,9 @@ class TestExecuteDisabled:
         mock_server.start = MagicMock(return_value=True)
         mock_window._ipc_server = mock_server
 
-        with patch("data_graph_studio.core.ipc_server.IPCServer", return_value=mock_server):
+        with patch(
+            "data_graph_studio.core.ipc_server.IPCServer", return_value=mock_server
+        ):
             controller.setup()
 
         assert "execute" not in registered
@@ -209,10 +220,13 @@ class TestExecuteDisabled:
 # Single Instance
 # ---------------------------------------------------------------------------
 
+
 class TestSingleInstance:
     def test_is_another_instance_running_false_when_no_file(self, tmp_path):
         """No port file → no other instance."""
-        with patch("data_graph_studio.core.ipc_server._PORT_FILE", tmp_path / "nonexistent"):
+        with patch(
+            "data_graph_studio.core.ipc_server._PORT_FILE", tmp_path / "nonexistent"
+        ):
             assert is_another_instance_running() is False
 
     def test_is_another_instance_running_true_when_alive(self, tmp_path):
@@ -228,13 +242,16 @@ class TestSingleInstance:
         port_file = tmp_path / "ipc_port"
         port_file.write_text("999999999:9999:tok")  # unlikely to be alive
         with patch("data_graph_studio.core.ipc_server._PORT_FILE", port_file):
-            with patch("data_graph_studio.core.ipc_server._pid_is_alive", return_value=False):
+            with patch(
+                "data_graph_studio.core.ipc_server._pid_is_alive", return_value=False
+            ):
                 assert is_another_instance_running() is False
 
 
 # ---------------------------------------------------------------------------
 # Atomic Port File Write
 # ---------------------------------------------------------------------------
+
 
 class TestAtomicWrite:
     def test_write_port_file_atomic(self, tmp_path):
@@ -262,6 +279,7 @@ class TestAtomicWrite:
 # Socket deleteLater on disconnect
 # ---------------------------------------------------------------------------
 
+
 class TestDeleteLater:
     def test_on_disconnected_calls_delete_later(self):
         """_on_disconnected calls deleteLater on the client socket."""
@@ -280,6 +298,7 @@ class TestDeleteLater:
 # ---------------------------------------------------------------------------
 # IPCClient max attempts
 # ---------------------------------------------------------------------------
+
 
 class TestClientMaxAttempts:
     def test_send_command_includes_token(self):

@@ -10,6 +10,7 @@ Responsibilities:
   - View menu integration (toggle actions)
   - Group visibility and reordering
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,9 +37,10 @@ class IconSize(Enum):
 @dataclass
 class ToolbarGroup:
     """Metadata for a logical group within a toolbar."""
-    id: str                          # e.g. "main.file", "main.nav"
-    label: str                       # e.g. "FILE", "NAV"
-    toolbar_id: str                  # parent toolbar ID
+
+    id: str  # e.g. "main.file", "main.nav"
+    label: str  # e.g. "FILE", "NAV"
+    toolbar_id: str  # parent toolbar ID
     actions: List[QAction] = field(default_factory=list)
     widgets: List[QWidget] = field(default_factory=list)
     separator_action: Optional[QAction] = None  # trailing separator
@@ -50,7 +52,8 @@ class ToolbarGroup:
 @dataclass
 class ToolbarInfo:
     """Metadata for a registered toolbar."""
-    id: str                          # "main", "secondary", "compare"
+
+    id: str  # "main", "secondary", "compare"
     toolbar: QToolBar
     display_name: str
     groups: List[ToolbarGroup] = field(default_factory=list)
@@ -161,9 +164,7 @@ class ToolbarManager(QObject):
             a = QAction(f"{size.name.title()} ({size.value}px)", size_menu)
             a.setCheckable(True)
             a.setChecked(size == self._global_icon_size)
-            a.triggered.connect(
-                lambda checked, s=size: self._set_icon_size(s)
-            )
+            a.triggered.connect(lambda checked, s=size: self._set_icon_size(s))
             size_group.addAction(a)
             size_menu.addAction(a)
 
@@ -330,9 +331,7 @@ class ToolbarManager(QObject):
         lock_action = QAction("Lock Toolbar Positions", toolbar_menu)
         lock_action.setCheckable(True)
         lock_action.setChecked(self._locked)
-        lock_action.triggered.connect(
-            lambda checked: self._toggle_lock(not checked)
-        )
+        lock_action.triggered.connect(lambda checked: self._toggle_lock(not checked))
         toolbar_menu.addAction(lock_action)
         self._lock_menu_action = lock_action
 

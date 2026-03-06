@@ -6,17 +6,25 @@ Search + ListBox UI pattern for Y-Axis, Group By, Hover, and Filter sections.
 
 from __future__ import annotations
 
-import functools
-from typing import Optional, List, Dict, Set, Any, TYPE_CHECKING
+from typing import List, Dict, Set, TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QComboBox, QCheckBox, QLineEdit, QPushButton,
-    QScrollArea, QSizePolicy, QToolButton, QCompleter,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QComboBox,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QToolButton,
+    QCompleter,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QStringListModel, QSortFilterProxyModel
+from PySide6.QtCore import Qt, Signal, Slot, QStringListModel
 
-from ...core.state import AppState, AggregationType, ValueColumn, GroupColumn
+from ...core.state import AppState, AggregationType
 
 if TYPE_CHECKING:
     from ...core.data_engine import DataEngine
@@ -49,6 +57,7 @@ _FILTER_MAX_HEIGHT = 150
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_separator() -> QFrame:
     """Create a horizontal line separator."""
@@ -91,10 +100,20 @@ def _is_numeric_dtype(dtype_str: str) -> bool:
     """Return *True* if *dtype_str* (Polars string repr) is numeric."""
     dtype_lower = dtype_str.lower()
     numeric_keywords = (
-        "int", "float", "decimal", "uint",
-        "i8", "i16", "i32", "i64",
-        "u8", "u16", "u32", "u64",
-        "f32", "f64",
+        "int",
+        "float",
+        "decimal",
+        "uint",
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "u8",
+        "u16",
+        "u32",
+        "u64",
+        "f32",
+        "f64",
     )
     return any(kw in dtype_lower for kw in numeric_keywords)
 
@@ -102,6 +121,7 @@ def _is_numeric_dtype(dtype_str: str) -> bool:
 # ---------------------------------------------------------------------------
 # Reusable widgets: _SearchableColumnPicker and _ColumnListBox
 # ---------------------------------------------------------------------------
+
 
 class _SearchableColumnPicker(QWidget):
     """Searchable combo: type to filter (contains match), click arrow for full dropdown.
@@ -112,7 +132,9 @@ class _SearchableColumnPicker(QWidget):
 
     column_selected = Signal(str)
 
-    def __init__(self, placeholder: str = "🔍 Search columns...", parent: QWidget | None = None):
+    def __init__(
+        self, placeholder: str = "🔍 Search columns...", parent: QWidget | None = None
+    ):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -208,7 +230,9 @@ class _ListBoxItem(QWidget):
         self._remove_btn.setObjectName("smallButton")
         self._remove_btn.setFixedSize(20, 20)
         self._remove_btn.setToolTip("Remove this item")
-        self._remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.item_text))
+        self._remove_btn.clicked.connect(
+            lambda: self.remove_clicked.emit(self.item_text)
+        )
         layout.addWidget(self._remove_btn)
 
     def label_text(self) -> str:
@@ -291,6 +315,7 @@ class _ColumnListBox(QWidget):
 # Per-item widgets used inside the Y-Axis section (ListBox version)
 # ---------------------------------------------------------------------------
 
+
 class _YAxisListItem(QWidget):
     """Single Y-Axis column entry in the list with formula toggle and [×] button."""
 
@@ -328,7 +353,9 @@ class _YAxisListItem(QWidget):
         self._remove_btn.setObjectName("smallButton")
         self._remove_btn.setFixedSize(20, 20)
         self._remove_btn.setToolTip("Remove this column")
-        self._remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.column_name))
+        self._remove_btn.clicked.connect(
+            lambda: self.remove_clicked.emit(self.column_name)
+        )
         row1.addWidget(self._remove_btn)
 
         layout.addLayout(row1)
@@ -376,6 +403,7 @@ _YAxisItemWidget = _YAxisListItem  # alias
 # ---------------------------------------------------------------------------
 # DataTab
 # ---------------------------------------------------------------------------
+
 
 class DataTab(QWidget):
     """Chart Options → Data tab.
@@ -465,15 +493,21 @@ class DataTab(QWidget):
         self._filter_col_model = QStringListModel()
         self._filter_col_completer.setModel(self._filter_col_model)
         self._filter_col_combo.setCompleter(self._filter_col_completer)
-        self._filter_col_combo.currentIndexChanged.connect(self._on_filter_column_changed)
-        self._filter_col_completer.activated.connect(self._on_filter_col_completer_activated)
+        self._filter_col_combo.currentIndexChanged.connect(
+            self._on_filter_column_changed
+        )
+        self._filter_col_completer.activated.connect(
+            self._on_filter_col_completer_activated
+        )
         self._main_layout.addWidget(self._filter_col_combo)
 
         # Value selector (searchable combo)
         self._filter_val_combo = QComboBox()
         self._filter_val_combo.setEditable(True)
         self._filter_val_combo.setInsertPolicy(QComboBox.NoInsert)
-        self._filter_val_combo.setToolTip("Select value to add as filter (type to search)")
+        self._filter_val_combo.setToolTip(
+            "Select value to add as filter (type to search)"
+        )
         self._filter_val_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._filter_val_combo.setMinimumHeight(28)
         if self._filter_val_combo.lineEdit():
@@ -487,7 +521,9 @@ class DataTab(QWidget):
         self._filter_val_completer.setModel(self._filter_val_model)
         self._filter_val_combo.setCompleter(self._filter_val_completer)
         self._filter_val_combo.activated.connect(self._on_filter_value_selected)
-        self._filter_val_completer.activated.connect(self._on_filter_val_completer_activated)
+        self._filter_val_completer.activated.connect(
+            self._on_filter_val_completer_activated
+        )
         self._main_layout.addWidget(self._filter_val_combo)
 
         # [All] [None] buttons
@@ -1142,7 +1178,9 @@ class DataTab(QWidget):
             df = self._filter_engine.df
             if df is None or col not in df.columns:
                 return
-            unique_vals = [str(v) for v in df[col].drop_nulls().unique().sort().to_list()[:500]]
+            unique_vals = [
+                str(v) for v in df[col].drop_nulls().unique().sort().to_list()[:500]
+            ]
         except Exception:
             unique_vals = []
 
@@ -1276,7 +1314,11 @@ class DataTab(QWidget):
             return
 
         # Remove items for this column from listbox
-        to_remove = [item for item in self._filter_listbox.items() if item.startswith(f"{col} = ")]
+        to_remove = [
+            item
+            for item in self._filter_listbox.items()
+            if item.startswith(f"{col} = ")
+        ]
         for item in to_remove:
             self._filter_listbox.remove_item(item)
 

@@ -10,10 +10,13 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QFileDialog, QMessageBox, QInputDialog, QDialog,
+    QFileDialog,
+    QMessageBox,
+    QInputDialog,
+    QDialog,
 )
 
 from ...core.profile import Profile, GraphSetting
@@ -35,7 +38,7 @@ class ProfileUIController:
 
     def __init__(
         self,
-        window: 'MainWindow',
+        window: "MainWindow",
         *,
         profile_store=None,
         profile_model=None,
@@ -55,23 +58,23 @@ class ProfileUIController:
 
     @property
     def _ps(self):
-        return self._profile_store or getattr(self._w, 'profile_store', None)
+        return self._profile_store or getattr(self._w, "profile_store", None)
 
     @property
     def _pm(self):
-        return self._profile_model or getattr(self._w, 'profile_model', None)
+        return self._profile_model or getattr(self._w, "profile_model", None)
 
     @property
     def _pc(self):
-        return self._profile_controller or getattr(self._w, 'profile_controller', None)
+        return self._profile_controller or getattr(self._w, "profile_controller", None)
 
     @property
     def _st(self):
-        return self._state or getattr(self._w, 'state', None)
+        return self._state or getattr(self._w, "state", None)
 
     @property
     def _sb(self):
-        return self._statusbar or getattr(self._w, 'statusbar', None)
+        return self._statusbar or getattr(self._w, "statusbar", None)
 
     # ==================== Profile Menu Actions ====================
 
@@ -91,9 +94,10 @@ class ProfileUIController:
         w = self._w
         default_dir = str(Path.home())
         path, _ = QFileDialog.getOpenFileName(
-            w, "Load Profile",
+            w,
+            "Load Profile",
             default_dir,
-            "Data Graph Profile (*.dgp);;DGS Profile (*.dgs-profile);;JSON (*.json)"
+            "Data Graph Profile (*.dgp);;DGS Profile (*.dgs-profile);;JSON (*.json)",
         )
         if path:
             dataset_id = w.state.active_dataset_id or ""
@@ -103,7 +107,7 @@ class ProfileUIController:
                 setting = w.profile_store.get(profile_id)
                 if setting:
                     w.statusbar.showMessage(f"Loaded profile: {setting.name}", 3000)
-                if hasattr(w, 'profile_model'):
+                if hasattr(w, "profile_model"):
                     w.profile_model.refresh()
 
     def _on_save_profile_menu(self):
@@ -144,9 +148,10 @@ class ProfileUIController:
         w = self._w
         if not w.state.current_profile:
             name, ok = QInputDialog.getText(
-                w, "New Profile",
+                w,
+                "New Profile",
                 "No profile loaded. Create a new profile first.\n\nEnter profile name:",
-                text="New Profile"
+                text="New Profile",
             )
             if not ok or not name.strip():
                 return
@@ -154,11 +159,13 @@ class ProfileUIController:
             w.state.set_profile(profile)
 
         from ..dialogs.save_setting_dialog import SaveSettingDialog
+
         dialog = SaveSettingDialog(w)
         if dialog.exec() == QDialog.Accepted:
             setting = dialog.get_setting()
             if setting:
                 from dataclasses import replace
+
                 graph_state = w.state.get_current_graph_state()
 
                 include_filters = dialog.get_include_filters()
@@ -166,14 +173,18 @@ class ProfileUIController:
 
                 setting = replace(
                     setting,
-                    chart_type=graph_state['chart_type'],
-                    x_column=graph_state['x_column'],
-                    group_columns=tuple(graph_state['group_columns']),
-                    value_columns=tuple(graph_state['value_columns']),
-                    hover_columns=tuple(graph_state['hover_columns']),
-                    chart_settings=graph_state['chart_settings'],
-                    filters=tuple(graph_state['filters']) if include_filters else setting.filters,
-                    sorts=tuple(graph_state['sorts']) if include_sorts else setting.sorts,
+                    chart_type=graph_state["chart_type"],
+                    x_column=graph_state["x_column"],
+                    group_columns=tuple(graph_state["group_columns"]),
+                    value_columns=tuple(graph_state["value_columns"]),
+                    hover_columns=tuple(graph_state["hover_columns"]),
+                    chart_settings=graph_state["chart_settings"],
+                    filters=tuple(graph_state["filters"])
+                    if include_filters
+                    else setting.filters,
+                    sorts=tuple(graph_state["sorts"])
+                    if include_sorts
+                    else setting.sorts,
                     include_filters=include_filters,
                     include_sorts=include_sorts,
                 )
@@ -191,7 +202,8 @@ class ProfileUIController:
 
         if len(profiles) < 2:
             QMessageBox.information(
-                w, "Compare Profiles",
+                w,
+                "Compare Profiles",
                 "Create at least 2 profiles for the current dataset to compare.",
             )
             return
@@ -206,9 +218,11 @@ class ProfileUIController:
     def _show_profile_manager(self):
         """프로파일 관리자 다이얼로그 표시"""
         from ..dialogs.profile_manager_dialog import ProfileManagerDialog
+
         w = self._w
         dialog = ProfileManagerDialog(
-            profile_controller=w.profile_controller, parent=w,
+            profile_controller=w.profile_controller,
+            parent=w,
         )
         dialog.exec()
 
@@ -270,9 +284,10 @@ class ProfileUIController:
             return
         dataset_id = setting.dataset_id
         reply = QMessageBox.question(
-            w, "Delete Profile",
+            w,
+            "Delete Profile",
             f"Delete profile '{setting.name}'?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             if w.profile_controller.delete_profile(profile_id):
@@ -286,7 +301,9 @@ class ProfileUIController:
         if new_id:
             new_setting = w.profile_store.get(new_id)
             if new_setting:
-                w.profile_model.add_profile_incremental(new_setting.dataset_id, new_setting)
+                w.profile_model.add_profile_incremental(
+                    new_setting.dataset_id, new_setting
+                )
             else:
                 w.profile_model.refresh()
             w.statusbar.showMessage("Profile duplicated", 2000)
@@ -315,7 +332,9 @@ class ProfileUIController:
             if profile_id:
                 imported_setting = w.profile_store.get(profile_id)
                 if imported_setting:
-                    w.profile_model.add_profile_incremental(dataset_id, imported_setting)
+                    w.profile_model.add_profile_incremental(
+                        dataset_id, imported_setting
+                    )
                 else:
                     w.profile_model.refresh()
                 w.statusbar.showMessage("Profile imported", 2000)
@@ -342,7 +361,9 @@ class ProfileUIController:
             "overlay": ComparisonMode.OVERLAY,
             "difference": ComparisonMode.DIFFERENCE,
         }
-        mode = mode_map.get(options.get("mode", "side_by_side"), ComparisonMode.SIDE_BY_SIDE)
+        mode = mode_map.get(
+            options.get("mode", "side_by_side"), ComparisonMode.SIDE_BY_SIDE
+        )
 
         w.profile_comparison_controller.start_comparison(dataset_id, profile_ids, mode)
 
@@ -369,9 +390,12 @@ class ProfileUIController:
             names.append(meta.name if meta else ds_id)
 
         name, ok = QInputDialog.getItem(
-            w, "Copy Profile",
+            w,
+            "Copy Profile",
             f"Copy '{setting.name}' to which dataset?",
-            names, 0, False,
+            names,
+            0,
+            False,
         )
         if ok and name:
             import uuid
@@ -406,7 +430,9 @@ class ProfileUIController:
 
     def _on_profile_comparison_started(self, mode_value: str, profile_ids: list):
         """Handle profile comparison started — delegate to dataset controller."""
-        self._w._dataset_controller._on_profile_comparison_started(mode_value, profile_ids)
+        self._w._dataset_controller._on_profile_comparison_started(
+            mode_value, profile_ids
+        )
 
     def _on_profile_comparison_ended(self):
         """Handle profile comparison ended — delegate to dataset controller."""
@@ -421,11 +447,11 @@ class ProfileUIController:
     def _autosave_active_profile(self):
         """Auto-save current AppState to active profile"""
         w = self._w
-        if hasattr(w, 'profile_controller'):
+        if hasattr(w, "profile_controller"):
             w.profile_controller.save_active_profile()
             # Show auto-saved feedback
-            active_id = getattr(w.state, 'active_setting_id', None)
-            if active_id and hasattr(w, 'profile_store'):
+            active_id = getattr(w.state, "active_setting_id", None)
+            if active_id and hasattr(w, "profile_store"):
                 setting = w.profile_store.get(active_id)
                 if setting:
                     w.statusbar.showMessage(f"Auto-saved to '{setting.name}'", 2000)
@@ -436,23 +462,25 @@ class ProfileUIController:
         """Open Profile – 단일 프로파일 JSON 파일 로드"""
         w = self._w
         file_path, _ = QFileDialog.getOpenFileName(
-            w, "Open Profile",
+            w,
+            "Open Profile",
             str(Path.home()),
-            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)"
+            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)",
         )
         if not file_path:
             return
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             gs = GraphSetting.from_dict(data)
             dataset_id = w.state.active_dataset_id or ""
             if gs.dataset_id != dataset_id:
                 from dataclasses import replace as _replace
+
                 gs = _replace(gs, dataset_id=dataset_id)
             w.profile_store.add(gs)
             w._last_profile_path = file_path
-            if hasattr(w, 'profile_model'):
+            if hasattr(w, "profile_model"):
                 w.profile_model.refresh()
             w.statusbar.showMessage(f"Profile loaded: {gs.name}", 3000)
         except Exception as e:
@@ -468,11 +496,11 @@ class ProfileUIController:
             return
 
         gs = settings[0]
-        path = getattr(w, '_last_profile_path', None)
+        path = getattr(w, "_last_profile_path", None)
         if not path:
             return self._on_save_profile_file_as()
         try:
-            with open(path, 'w', encoding='utf-8') as f:
+            with open(path, "w", encoding="utf-8") as f:
                 json.dump(gs.to_dict(), f, indent=2, ensure_ascii=False)
             w.statusbar.showMessage(f"Profile saved: {path}", 3000)
         except Exception as e:
@@ -488,16 +516,17 @@ class ProfileUIController:
             return
 
         gs = settings[0]
-        default_name = gs.name.replace(' ', '_') if gs.name else "profile"
+        default_name = gs.name.replace(" ", "_") if gs.name else "profile"
         file_path, _ = QFileDialog.getSaveFileName(
-            w, "Save Profile As",
+            w,
+            "Save Profile As",
             str(Path.home() / f"{default_name}.dgs-profile"),
-            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)"
+            "DGS Profile (*.dgs-profile);;JSON Files (*.json);;All Files (*.*)",
         )
         if not file_path:
             return
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(gs.to_dict(), f, indent=2, ensure_ascii=False)
             w._last_profile_path = file_path
             w.statusbar.showMessage(f"Profile saved: {file_path}", 3000)
@@ -512,7 +541,9 @@ class ProfileUIController:
         """
         w = self._w
         all_profiles: list = []
-        dataset_ids = w.engine.get_dataset_ids() if hasattr(w.engine, 'get_dataset_ids') else [""]
+        dataset_ids = (
+            w.engine.get_dataset_ids() if hasattr(w.engine, "get_dataset_ids") else [""]
+        )
         for did in dataset_ids:
             for gs in w.profile_store.get_by_dataset(did):
                 all_profiles.append(gs.to_dict())
@@ -532,9 +563,10 @@ class ProfileUIController:
         """Save Profile Bundle As – 모든 프로파일을 .dgs-bundle JSON으로 저장"""
         w = self._w
         file_path, _ = QFileDialog.getSaveFileName(
-            w, "Save Profile Bundle As",
+            w,
+            "Save Profile Bundle As",
             str(Path.home() / "profiles.dgs-bundle"),
-            "DGS Profile Bundle (*.dgs-bundle);;All Files (*.*)"
+            "DGS Profile Bundle (*.dgs-bundle);;All Files (*.*)",
         )
         if not file_path:
             return
@@ -546,11 +578,15 @@ class ProfileUIController:
                 "version": "1.0",
                 "profiles": unique,
             }
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(bundle, f, indent=2, ensure_ascii=False)
-            w.statusbar.showMessage(f"Profile bundle saved: {file_path} ({len(unique)} profiles)", 3000)
+            w.statusbar.showMessage(
+                f"Profile bundle saved: {file_path} ({len(unique)} profiles)", 3000
+            )
         except Exception as e:
-            QMessageBox.warning(w, "Save Profile Bundle", f"Failed to save bundle:\n{e}")
+            QMessageBox.warning(
+                w, "Save Profile Bundle", f"Failed to save bundle:\n{e}"
+            )
 
     # ==================== Project I/O ====================
 
@@ -558,9 +594,7 @@ class ProfileUIController:
         """Open Project – .dgs 프로젝트 파일 로드 (데이터소스 + 프로파일)"""
         w = self._w
         file_path, _ = QFileDialog.getOpenFileName(
-            w, "Open Project",
-            str(Path.home()),
-            "DGS Project (*.dgs);;All Files (*.*)"
+            w, "Open Project", str(Path.home()), "DGS Project (*.dgs);;All Files (*.*)"
         )
         if not file_path:
             return
@@ -570,7 +604,7 @@ class ProfileUIController:
     def _on_save_project_file(self):
         """Save Project – 프로젝트+프로파일 저장 (마지막 경로)"""
         w = self._w
-        path = getattr(w, '_last_project_path', None)
+        path = getattr(w, "_last_project_path", None)
         if not path:
             return self._on_save_project_file_as()
         self._save_project_to(path)
@@ -579,9 +613,10 @@ class ProfileUIController:
         """Save Project As – 프로젝트+프로파일을 새 경로에 .dgs로 저장"""
         w = self._w
         file_path, _ = QFileDialog.getSaveFileName(
-            w, "Save Project As",
+            w,
+            "Save Project As",
             str(Path.home() / "project.dgs"),
-            "DGS Project (*.dgs);;All Files (*.*)"
+            "DGS Project (*.dgs);;All Files (*.*)",
         )
         if not file_path:
             return
@@ -590,15 +625,22 @@ class ProfileUIController:
     def _save_project_to(self, path: str):
         """프로젝트를 지정 경로에 저장"""
         from ...core.project import Project, DataSourceRef
+
         w = self._w
         try:
             project = Project(name=Path(path).stem)
             project_dir = Path(path).parent
 
-            for dataset_id in w.engine.get_dataset_ids() if hasattr(w.engine, 'get_dataset_ids') else []:
+            for dataset_id in (
+                w.engine.get_dataset_ids()
+                if hasattr(w.engine, "get_dataset_ids")
+                else []
+            ):
                 dataset = w.engine.get_dataset(dataset_id)
                 if dataset:
-                    source_path = getattr(dataset, 'source_path', None) or getattr(dataset, 'file_path', None)
+                    source_path = getattr(dataset, "source_path", None) or getattr(
+                        dataset, "file_path", None
+                    )
                     if source_path and os.path.exists(source_path):
                         try:
                             rel_path = os.path.relpath(source_path, project_dir)
@@ -606,9 +648,9 @@ class ProfileUIController:
                             rel_path = source_path
                         ds_ref = DataSourceRef(
                             path=rel_path,
-                            file_type=Path(source_path).suffix.lstrip('.'),
+                            file_type=Path(source_path).suffix.lstrip("."),
                             dataset_id=dataset_id,
-                            name=getattr(dataset, 'name', None),
+                            name=getattr(dataset, "name", None),
                             is_active=(dataset_id == w.state.active_dataset_id),
                         )
                         project.add_data_source(ds_ref)
@@ -619,7 +661,10 @@ class ProfileUIController:
             project.save(path)
             w._last_project_path = path
             ds_count = len(project.data_sources)
-            w.statusbar.showMessage(f"Project saved: {path} ({ds_count} datasets, {len(unique)} profiles)", 3000)
+            w.statusbar.showMessage(
+                f"Project saved: {path} ({ds_count} datasets, {len(unique)} profiles)",
+                3000,
+            )
         except Exception as e:
             QMessageBox.warning(w, "Save Project", f"Failed to save project:\n{e}")
 
@@ -642,12 +687,16 @@ class ProfileUIController:
 
         if summary is None and profile is not None:
             numeric_cols = sum(1 for c in profile.columns if c.is_numeric)
-            text_cols = sum(1 for c in profile.columns if not c.is_numeric and not c.is_temporal)
+            text_cols = sum(
+                1 for c in profile.columns if not c.is_numeric and not c.is_temporal
+            )
             temporal_cols = sum(1 for c in profile.columns if c.is_temporal)
 
             total_cells = profile.total_rows * profile.total_columns
             total_nulls = sum(c.null_count for c in profile.columns)
-            missing_percent = (total_nulls / total_cells * 100) if total_cells > 0 else 0
+            missing_percent = (
+                (total_nulls / total_cells * 100) if total_cells > 0 else 0
+            )
 
             total_rows = profile.total_rows
             total_columns = profile.total_columns
@@ -656,36 +705,36 @@ class ProfileUIController:
             memory_mb = profile.memory_bytes / (1024 * 1024)
             load_time = profile.load_time_seconds
         else:
-            total_rows = summary.get('total_rows', 0)
-            total_columns = summary.get('total_columns', 0)
-            numeric_columns = summary.get('numeric_columns', 0)
-            text_columns = summary.get('text_columns', 0)
-            missing_percent = summary.get('missing_percent', 0)
-            memory_mb = summary.get('memory_bytes', 0) / (1024 * 1024) if summary else 0
-            load_time = summary.get('load_time_seconds', 0) if summary else 0
+            total_rows = summary.get("total_rows", 0)
+            total_columns = summary.get("total_columns", 0)
+            numeric_columns = summary.get("numeric_columns", 0)
+            text_columns = summary.get("text_columns", 0)
+            missing_percent = summary.get("missing_percent", 0)
+            memory_mb = summary.get("memory_bytes", 0) / (1024 * 1024) if summary else 0
+            load_time = summary.get("load_time_seconds", 0) if summary else 0
 
         MAX_GRAPH_POINTS = 10000
         sampled_rows = min(total_rows, MAX_GRAPH_POINTS)
 
         stats = {
-            'file_name': file_name,
-            'total_rows': total_rows,
-            'sampled_rows': sampled_rows,
-            'total_columns': total_columns,
-            'numeric_columns': numeric_columns,
-            'text_columns': text_columns,
-            'missing_percent': missing_percent,
-            'memory_mb': memory_mb,
-            'load_time': load_time,
+            "file_name": file_name,
+            "total_rows": total_rows,
+            "sampled_rows": sampled_rows,
+            "total_columns": total_columns,
+            "numeric_columns": numeric_columns,
+            "text_columns": text_columns,
+            "missing_percent": missing_percent,
+            "memory_mb": memory_mb,
+            "load_time": load_time,
         }
 
         if profile is not None:
             for col_info in profile.columns:
                 if col_info.is_numeric:
                     stats[col_info.name] = {
-                        'min': col_info.min_value,
-                        'max': col_info.max_value,
-                        'null_count': col_info.null_count,
+                        "min": col_info.min_value,
+                        "max": col_info.max_value,
+                        "null_count": col_info.null_count,
                     }
 
         try:
@@ -695,15 +744,20 @@ class ProfileUIController:
                 try:
                     x_min = float(x_series.min())
                     x_max = float(x_series.max())
-                    stats['x_range'] = {'min': x_min, 'max': x_max, 'range': x_max - x_min, 'column': x_col}
+                    stats["x_range"] = {
+                        "min": x_min,
+                        "max": x_max,
+                        "range": x_max - x_min,
+                        "column": x_col,
+                    }
                 except (TypeError, ValueError):
                     pass
 
             if w.state.value_columns and w.engine.df is not None:
-                y_min_all, y_max_all = float('inf'), float('-inf')
+                y_min_all, y_max_all = float("inf"), float("-inf")
                 y_col_names = []
                 for vc in w.state.value_columns:
-                    name = vc.name if hasattr(vc, 'name') else str(vc)
+                    name = vc.name if hasattr(vc, "name") else str(vc)
                     if name in w.engine.df.columns:
                         y_col_names.append(name)
                         try:
@@ -713,11 +767,12 @@ class ProfileUIController:
                             y_max_all = max(y_max_all, col_max)
                         except (TypeError, ValueError):
                             pass
-                if y_min_all < float('inf') and y_max_all > float('-inf'):
-                    stats['y_range'] = {
-                        'min': y_min_all, 'max': y_max_all,
-                        'range': y_max_all - y_min_all,
-                        'columns': y_col_names,
+                if y_min_all < float("inf") and y_max_all > float("-inf"):
+                    stats["y_range"] = {
+                        "min": y_min_all,
+                        "max": y_max_all,
+                        "range": y_max_all - y_min_all,
+                        "columns": y_col_names,
                     }
         except Exception as e:
             logger.debug("Summary range calculation failed: %s", e)

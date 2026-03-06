@@ -49,12 +49,18 @@ class _ConvertWorker(QThread):
                 text=True,
             )
             if result.returncode != 0:
-                msg = result.stderr.strip() or result.stdout.strip() or "conversion failed"
+                msg = (
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or "conversion failed"
+                )
                 self.finished_signal.emit(False, msg)
                 return
             self.finished_signal.emit(True, "")
         except FileNotFoundError as e:  # pragma: no cover - platform/env dependent
-            self.finished_signal.emit(False, f"WPAExporter 실행 파일을 찾지 못했습니다: {e}")
+            self.finished_signal.emit(
+                False, f"WPAExporter 실행 파일을 찾지 못했습니다: {e}"
+            )
         except Exception as e:  # pragma: no cover - subprocess failure
             self.finished_signal.emit(False, str(e))
 
@@ -149,14 +155,20 @@ class WprConvertStep(QWizardPage):
     def _on_convert(self) -> None:
         wpa = self._detect_wpaexporter()
         if not wpa:
-            QMessageBox.warning(self, "WPAExporter 없음", f"WPAExporter를 찾을 수 없습니다.\n\n{self._recovery_guide()}")
+            QMessageBox.warning(
+                self,
+                "WPAExporter 없음",
+                f"WPAExporter를 찾을 수 없습니다.\n\n{self._recovery_guide()}",
+            )
             return
 
         self.output_path = build_wpr_output_path(self.file_path)
         self._output_label.setText(f"출력 파일: {self.output_path}")
 
         cmd = self._command.text().strip() or self._default_command()
-        cmd = cmd.replace("{input}", self.file_path).replace("{output}", self.output_path)
+        cmd = cmd.replace("{input}", self.file_path).replace(
+            "{output}", self.output_path
+        )
 
         self._progress.setVisible(True)
         self._status.setText("변환 중...")
@@ -177,6 +189,8 @@ class WprConvertStep(QWizardPage):
             self.completeChanged.emit()
         else:
             self._status.setText(f"변환 실패: {message}")
-            QMessageBox.warning(self, "변환 실패", f"{message}\n\n{self._recovery_guide()}")
+            QMessageBox.warning(
+                self, "변환 실패", f"{message}\n\n{self._recovery_guide()}"
+            )
             self._converted = False
             self.completeChanged.emit()

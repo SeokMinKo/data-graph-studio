@@ -4,9 +4,17 @@ Save Setting Dialog - 그래프 설정 저장 다이얼로그
 
 from typing import Optional
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QTextEdit, QComboBox, QCheckBox,
-    QPushButton, QDialogButtonBox, QFrame, QGridLayout
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QTextEdit,
+    QComboBox,
+    QCheckBox,
+    QPushButton,
+    QFrame,
+    QGridLayout,
 )
 from PySide6.QtCore import Qt
 
@@ -15,10 +23,26 @@ from ...core.profile import GraphSetting
 
 # 사용 가능한 아이콘 목록
 SETTING_ICONS = [
-    "📊", "📈", "📉", "📋", "🥧",
-    "📐", "📏", "🔍", "💹", "📌",
-    "🎯", "💡", "⚡", "🔥", "✨",
-    "🌟", "💎", "🔷", "🔶", "⭐"
+    "📊",
+    "📈",
+    "📉",
+    "📋",
+    "🥧",
+    "📐",
+    "📏",
+    "🔍",
+    "💹",
+    "📌",
+    "🎯",
+    "💡",
+    "⚡",
+    "🔥",
+    "✨",
+    "🌟",
+    "💎",
+    "🔷",
+    "🔶",
+    "⭐",
 ]
 
 
@@ -30,7 +54,9 @@ class SaveSettingDialog(QDialog):
         self._existing = existing_setting
         self._result_setting: Optional[GraphSetting] = None
 
-        self.setWindowTitle("Save Graph Setting" if not existing_setting else "Edit Graph Setting")
+        self.setWindowTitle(
+            "Save Graph Setting" if not existing_setting else "Edit Graph Setting"
+        )
         self.setMinimumWidth(400)
         self.setModal(True)
 
@@ -151,12 +177,16 @@ class SaveSettingDialog(QDialog):
         options_layout.addWidget(options_header)
 
         self._include_filters_cb = QCheckBox("Include current filters")
-        self._include_filters_cb.setToolTip("Save active filter settings with this profile")
+        self._include_filters_cb.setToolTip(
+            "Save active filter settings with this profile"
+        )
         self._include_filters_cb.setStyleSheet("color: #C2C8D1;")
         options_layout.addWidget(self._include_filters_cb)
 
         self._include_sorts_cb = QCheckBox("Include current sort order")
-        self._include_sorts_cb.setToolTip("Save current table sort order with this profile")
+        self._include_sorts_cb.setToolTip(
+            "Save current table sort order with this profile"
+        )
         self._include_sorts_cb.setStyleSheet("color: #C2C8D1;")
         options_layout.addWidget(self._include_sorts_cb)
 
@@ -223,6 +253,7 @@ class SaveSettingDialog(QDialog):
     def _on_save(self):
         """저장"""
         import dataclasses
+
         name = self._name_edit.text().strip()
         if not name:
             self._name_edit.setFocus()
