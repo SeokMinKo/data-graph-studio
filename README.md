@@ -187,6 +187,23 @@ pytest
 pytest --cov=data_graph_studio
 ```
 
+## 🛠 Development
+
+### Knowledge Graph
+
+Analyze codebase dependencies and assess change impact using the Knowledge Graph CLI:
+
+```bash
+# Scan the project AST and build a dependency graph
+python scripts/knowledge_graph.py scan-ast .
+
+# Check which modules are affected by changes to a specific file
+python scripts/knowledge_graph.py impact . data_graph_studio/state.py
+
+# Print a summary of the dependency graph (JSON output)
+python scripts/knowledge_graph.py summary . --json
+```
+
 ## 📄 License
 
 MIT License
