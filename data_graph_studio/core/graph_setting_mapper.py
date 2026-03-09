@@ -47,7 +47,11 @@ class GraphSettingMapper:
                         "name": g.name,
                         "selected_values": list(g.selected_values),
                         "order": g.order,
-                        "encoding": g.encoding.value if hasattr(g.encoding, "value") else "both",
+                        "encoding": (
+                            g.encoding.value
+                            if hasattr(g.encoding, "value")
+                            else "both"
+                        ),
                     }
                 )
             else:
