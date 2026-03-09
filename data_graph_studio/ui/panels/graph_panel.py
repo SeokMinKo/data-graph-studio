@@ -644,6 +644,16 @@ class GraphPanel(QWidget):
             return
 
         # Single graph mode - hide grid container, show main graph
+        if self._grid_container.isVisible():
+            # Clear grid cells to free resources
+            for cell in self._grid_cells:
+                cell.setParent(None)
+                cell.deleteLater()
+            self._grid_cells.clear()
+            for lbl in self._grid_cell_labels:
+                lbl.setParent(None)
+                lbl.deleteLater()
+            self._grid_cell_labels.clear()
         self._grid_container.setVisible(False)
         self.main_graph.setVisible(True)
 
@@ -827,52 +837,55 @@ class GraphPanel(QWidget):
         if groups is None and self.state.group_columns:
             groups = self._build_group_masks(working_df)
 
-        # Independent style encoding maps for grouped series
-        color_by_col = options.get("color_by_column")
-        mark_by_col = options.get("mark_by_column")
+        # Build color/marker maps based on per-GroupColumn encoding settings.
+        # Each GroupColumn can be "color", "marker", or "both".
+        # We split the composite group name back into per-column values
+        # and build independent mapping keys for color and marker.
         if groups:
+            from ...core.state import GroupEncoding
+
             palette = [
-                "#1f77b4",
-                "#ff7f0e",
-                "#2ca02c",
-                "#d62728",
-                "#9467bd",
-                "#8c564b",
-                "#e377c2",
-                "#7f7f7f",
-                "#bcbd22",
-                "#17becf",
-                "#aec7e8",
-                "#ffbb78",
-                "#98df8a",
-                "#ff9896",
-                "#c5b0d5",
+                "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+                "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+                "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
             ]
-            symbols = ["o", "s", "t", "d", "+", "x", "star", "p", "h", "t1", "t2", "t3"]
-            color_map = {}
-            marker_map = {}
-            group_color_map = {}
-            group_marker_map = {}
-            for g_name, g_mask in groups.items():
-                c_key = g_name
-                m_key = g_name
-                try:
-                    if color_by_col and color_by_col in working_df.columns:
-                        cvals = working_df[color_by_col].to_numpy()[g_mask]
-                        if len(cvals) > 0:
-                            c_key = str(cvals[0])
-                    if mark_by_col and mark_by_col in working_df.columns:
-                        mvals = working_df[mark_by_col].to_numpy()[g_mask]
-                        if len(mvals) > 0:
-                            m_key = str(mvals[0])
-                except Exception as e:
-                    logger.debug("Color/marker by column lookup failed: %s", e)
-                if c_key not in color_map:
-                    color_map[c_key] = palette[len(color_map) % len(palette)]
-                if m_key not in marker_map:
-                    marker_map[m_key] = symbols[len(marker_map) % len(symbols)]
-                group_color_map[g_name] = color_map[c_key]
-                group_marker_map[g_name] = marker_map[m_key]
+            symbols = [
+                "o", "s", "t", "d", "+", "x", "star", "p", "h", "t1", "t2", "t3",
+            ]
+            gc_list = self.state.group_columns
+            n_gc = len(gc_list)
+
+            color_key_map: dict[str, str] = {}  # unique color key → color
+            marker_key_map: dict[str, str] = {}  # unique marker key → symbol
+            group_color_map: dict[str, str] = {}
+            group_marker_map: dict[str, str] = {}
+
+            for g_name in groups:
+                # Split composite "A / B / C" back to per-column values
+                parts = g_name.split(" / ") if n_gc > 1 else [g_name]
+
+                # Build separate keys for color and marker based on encoding
+                color_parts = []
+                marker_parts = []
+                for i, gc in enumerate(gc_list):
+                    val = parts[i] if i < len(parts) else ""
+                    enc = gc.encoding if hasattr(gc, "encoding") else GroupEncoding.BOTH
+                    if enc in (GroupEncoding.COLOR, GroupEncoding.BOTH):
+                        color_parts.append(val)
+                    if enc in (GroupEncoding.MARKER, GroupEncoding.BOTH):
+                        marker_parts.append(val)
+
+                c_key = " / ".join(color_parts) if color_parts else g_name
+                m_key = " / ".join(marker_parts) if marker_parts else g_name
+
+                if c_key not in color_key_map:
+                    color_key_map[c_key] = palette[len(color_key_map) % len(palette)]
+                if m_key not in marker_key_map:
+                    marker_key_map[m_key] = symbols[len(marker_key_map) % len(symbols)]
+
+                group_color_map[g_name] = color_key_map[c_key]
+                group_marker_map[g_name] = marker_key_map[m_key]
+
             options["group_color_map"] = group_color_map
             options["group_marker_map"] = group_marker_map
 
@@ -1581,10 +1594,12 @@ class GraphPanel(QWidget):
             "#c5b0d5",
         ]
         marker_symbols = ["o", "s", "t", "d", "+", "x", "star", "t1", "t2", "t3"]
-        color_by_col = options.get("color_by_column")
-        mark_by_col = options.get("mark_by_column")
+        from ...core.state import GroupEncoding
+
         color_map = {}
         symbol_map = {}
+        gc_list = self.state.group_columns
+        n_gc = len(gc_list)
 
         for idx, vc in enumerate(value_cols):
             y_col_name = vc.name
@@ -1607,20 +1622,18 @@ class GraphPanel(QWidget):
                     if len(x_group) == 0:
                         continue
 
-                    # Color/Mark: independently encodable by selected columns
-                    color_key = group_name
-                    mark_key = group_name
-                    try:
-                        if color_by_col and color_by_col in working_df.columns:
-                            vals = working_df[color_by_col].to_numpy()[mask]
-                            if len(vals) > 0:
-                                color_key = str(vals[0])
-                        if mark_by_col and mark_by_col in working_df.columns:
-                            vals_m = working_df[mark_by_col].to_numpy()[mask]
-                            if len(vals_m) > 0:
-                                mark_key = str(vals_m[0])
-                    except Exception as e:
-                        logger.debug("Combo color/marker lookup failed: %s", e)
+                    # Build color/marker keys from per-column encoding
+                    parts = group_name.split(" / ") if n_gc > 1 else [group_name]
+                    color_parts, marker_parts = [], []
+                    for i, gc in enumerate(gc_list):
+                        val = parts[i] if i < len(parts) else ""
+                        enc = gc.encoding if hasattr(gc, "encoding") else GroupEncoding.BOTH
+                        if enc in (GroupEncoding.COLOR, GroupEncoding.BOTH):
+                            color_parts.append(val)
+                        if enc in (GroupEncoding.MARKER, GroupEncoding.BOTH):
+                            marker_parts.append(val)
+                    color_key = " / ".join(color_parts) if color_parts else group_name
+                    mark_key = " / ".join(marker_parts) if marker_parts else group_name
 
                     if color_key not in color_map:
                         color_map[color_key] = group_colors[

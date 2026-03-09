@@ -47,6 +47,7 @@ class GraphSettingMapper:
                         "name": g.name,
                         "selected_values": list(g.selected_values),
                         "order": g.order,
+                        "encoding": g.encoding.value if hasattr(g.encoding, "value") else "both",
                     }
                 )
             else:
@@ -122,11 +123,18 @@ class GraphSettingMapper:
                     if isinstance(g, GroupColumn):
                         normalized_groups.append(g)
                     elif isinstance(g, dict):
+                        from .state import GroupEncoding
+
+                        try:
+                            enc = GroupEncoding(g.get("encoding", "both"))
+                        except ValueError:
+                            enc = GroupEncoding.BOTH
                         normalized_groups.append(
                             GroupColumn(
                                 name=g.get("name", ""),
                                 selected_values=set(g.get("selected_values", [])),
                                 order=g.get("order", 0),
+                                encoding=enc,
                             )
                         )
                     else:
@@ -139,6 +147,7 @@ class GraphSettingMapper:
                         if current.name == gc.name:
                             current.selected_values = set(gc.selected_values)
                             current.order = gc.order
+                            current.encoding = gc.encoding
                             break
             else:
                 logger.debug("Group lock ON — skipping group_columns from profile")

@@ -150,6 +150,14 @@ class ToolMode(Enum):
     TEXT_DRAW = "text_draw"
 
 
+class GroupEncoding(str, Enum):
+    """How a group column affects visual encoding."""
+
+    BOTH = "both"  # affects both color and marker (default)
+    COLOR = "color"  # affects color only
+    MARKER = "marker"  # affects marker only
+
+
 @dataclass
 class GroupColumn:
     """그룹 존의 컬럼"""
@@ -157,6 +165,7 @@ class GroupColumn:
     name: str
     selected_values: Set[str] = field(default_factory=set)  # 선택된 값들 (빈셋=전체)
     order: int = 0
+    encoding: GroupEncoding = GroupEncoding.BOTH  # visual encoding mode
 
 
 @dataclass
@@ -1030,6 +1039,19 @@ class AppState(QObject):
         after = copy.deepcopy(self._group_columns)
         self._record_zone_undo("group", "Reorder group columns", before, after)
 
+    def set_group_encoding(self, name: str, encoding: "GroupEncoding"):
+        """Set visual encoding mode for a group column."""
+        before = copy.deepcopy(self._group_columns)
+        for g in self._group_columns:
+            if g.name == name:
+                g.encoding = encoding
+                break
+        self.group_zone_changed.emit()
+        after = copy.deepcopy(self._group_columns)
+        self._record_zone_undo(
+            "group", f"Set encoding '{encoding.value}' for '{name}'", before, after
+        )
+
     def _reorder_groups(self):
         for i, g in enumerate(self._group_columns):
             g.order = i
@@ -1817,6 +1839,7 @@ class AppState(QObject):
                     "name": gc.name,
                     "selected_values": list(gc.selected_values),
                     "order": gc.order,
+                    "encoding": gc.encoding.value if hasattr(gc.encoding, "value") else "both",
                 }
                 for gc in self._group_columns
             ],

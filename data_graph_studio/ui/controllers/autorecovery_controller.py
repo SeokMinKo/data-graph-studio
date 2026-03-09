@@ -304,10 +304,16 @@ class AutorecoveryController:
                 name = g.get("name")
                 if name:
                     self.w.state.add_group_column(name)
-                    # Set selected values
+                    # Set selected values and encoding
                     for gc in self.w.state.group_columns:
                         if gc.name == name:
                             gc.selected_values = set(g.get("selected_values", []))
+                            enc_str = g.get("encoding", "both")
+                            try:
+                                from ...core.state import GroupEncoding
+                                gc.encoding = GroupEncoding(enc_str)
+                            except (ValueError, ImportError):
+                                pass
 
             # Value columns
             self.w.state.clear_value_zone()

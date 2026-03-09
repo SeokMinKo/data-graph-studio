@@ -211,13 +211,30 @@ class _SearchableColumnPicker(QWidget):
 
 
 class _ListBoxItem(QWidget):
-    """Single item in a _ColumnListBox with a label and [×] remove button."""
+    """Single item in a _ColumnListBox with a label and [×] remove button.
+
+    When *show_encoding* is True, a 🎨/◆/⬡ cycle button is shown to let
+    the user pick how this group column affects visual encoding.
+    """
 
     remove_clicked = Signal(str)
+    encoding_changed = Signal(str, str)  # (item_text, encoding_value)
 
-    def __init__(self, text: str, parent: QWidget | None = None):
+    _ENCODING_CYCLE = [
+        ("both", "⬡", "Color + Marker"),
+        ("color", "🎨", "Color only"),
+        ("marker", "◆", "Marker only"),
+    ]
+
+    def __init__(
+        self,
+        text: str,
+        parent: QWidget | None = None,
+        show_encoding: bool = False,
+    ):
         super().__init__(parent)
         self.item_text = text
+        self._encoding_index = 0  # default: both
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 1, 4, 1)
         layout.setSpacing(4)
@@ -225,6 +242,19 @@ class _ListBoxItem(QWidget):
         self._label = QLabel(text)
         self._label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout.addWidget(self._label, 1)
+
+        # Encoding cycle button (group items only)
+        self._encoding_btn: QToolButton | None = None
+        if show_encoding:
+            self._encoding_btn = QToolButton()
+            self._encoding_btn.setFixedSize(22, 22)
+            self._encoding_btn.setToolTip("Color + Marker")
+            self._encoding_btn.setText("⬡")
+            self._encoding_btn.setStyleSheet(
+                "QToolButton { border: none; font-size: 12px; padding: 0; }"
+            )
+            self._encoding_btn.clicked.connect(self._cycle_encoding)
+            layout.addWidget(self._encoding_btn)
 
         self._remove_btn = QPushButton("×")
         self._remove_btn.setObjectName("smallButton")
@@ -238,6 +268,28 @@ class _ListBoxItem(QWidget):
     def label_text(self) -> str:
         return self.item_text
 
+    @property
+    def encoding_value(self) -> str:
+        return self._ENCODING_CYCLE[self._encoding_index][0]
+
+    def set_encoding(self, value: str) -> None:
+        """Set encoding without emitting signal (for state sync)."""
+        for i, (val, icon, tip) in enumerate(self._ENCODING_CYCLE):
+            if val == value:
+                self._encoding_index = i
+                if self._encoding_btn:
+                    self._encoding_btn.setText(icon)
+                    self._encoding_btn.setToolTip(tip)
+                return
+
+    def _cycle_encoding(self) -> None:
+        self._encoding_index = (self._encoding_index + 1) % len(self._ENCODING_CYCLE)
+        val, icon, tip = self._ENCODING_CYCLE[self._encoding_index]
+        if self._encoding_btn:
+            self._encoding_btn.setText(icon)
+            self._encoding_btn.setToolTip(tip)
+        self.encoding_changed.emit(self.item_text, val)
+
 
 class _ColumnListBox(QWidget):
     """Scrollable list of items with [×] remove buttons.
@@ -250,9 +302,16 @@ class _ColumnListBox(QWidget):
 
     item_added = Signal(str)
     item_removed = Signal(str)
+    encoding_changed = Signal(str, str)  # forwarded from items
 
-    def __init__(self, max_height: int = 100, parent: QWidget | None = None):
+    def __init__(
+        self,
+        max_height: int = 100,
+        parent: QWidget | None = None,
+        show_encoding: bool = False,
+    ):
         super().__init__(parent)
+        self._show_encoding = show_encoding
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -278,8 +337,10 @@ class _ColumnListBox(QWidget):
         """Add an item to the list. No-op if already present."""
         if text in self._items:
             return
-        item_w = _ListBoxItem(text)
+        item_w = _ListBoxItem(text, show_encoding=self._show_encoding)
         item_w.remove_clicked.connect(self._on_remove)
+        if self._show_encoding:
+            item_w.encoding_changed.connect(self.encoding_changed.emit)
         self._items[text] = item_w
         self._layout.insertWidget(self._layout.count() - 1, item_w)
         self.item_added.emit(text)
@@ -306,6 +367,12 @@ class _ColumnListBox(QWidget):
 
     def contains(self, text: str) -> bool:
         return text in self._items
+
+    def set_item_encoding(self, text: str, encoding: str) -> None:
+        """Update encoding display for a specific item (no signal)."""
+        item_w = self._items.get(text)
+        if item_w:
+            item_w.set_encoding(encoding)
 
     def _on_remove(self, text: str) -> None:
         self.remove_item(text)
@@ -584,8 +651,11 @@ class DataTab(QWidget):
         self._group_picker.column_selected.connect(self._on_group_column_selected)
         self._main_layout.addWidget(self._group_picker)
 
-        self._group_listbox = _ColumnListBox(max_height=_GROUP_MAX_HEIGHT)
+        self._group_listbox = _ColumnListBox(
+            max_height=_GROUP_MAX_HEIGHT, show_encoding=True
+        )
         self._group_listbox.item_removed.connect(self._on_group_item_removed)
+        self._group_listbox.encoding_changed.connect(self._on_group_encoding_changed)
         self._main_layout.addWidget(self._group_listbox)
 
         self._main_layout.addWidget(_make_separator())
@@ -991,6 +1061,11 @@ class DataTab(QWidget):
                     self._group_listbox.add_item(col)
             self._group_listbox.blockSignals(False)
 
+            # Sync encoding display
+            for gc in self._state.group_columns:
+                enc_val = gc.encoding.value if hasattr(gc.encoding, "value") else "both"
+                self._group_listbox.set_item_encoding(gc.name, enc_val)
+
             self._update_group_picker_excluded()
             self._update_badges()
         finally:
@@ -1119,6 +1194,16 @@ class DataTab(QWidget):
             self._syncing = False
         self._update_group_picker_excluded()
         self._update_badges()
+
+    def _on_group_encoding_changed(self, col: str, encoding_value: str) -> None:
+        """User clicked the encoding cycle button on a Group By item."""
+        from ...core.state import GroupEncoding
+
+        try:
+            enc = GroupEncoding(encoding_value)
+        except ValueError:
+            enc = GroupEncoding.BOTH
+        self._state.set_group_encoding(col, enc)
 
     # -- Hover ---------------------------------------------------------------
 

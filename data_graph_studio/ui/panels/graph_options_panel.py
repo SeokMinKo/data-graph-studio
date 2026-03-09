@@ -476,22 +476,8 @@ class GraphOptionsPanel(QFrame):
         self.smooth_check.stateChanged.connect(self._on_option_changed)
         data_layout.addWidget(self.smooth_check)
 
-        # Style encoding by column (separate from GroupBy)
-        color_by_row = QHBoxLayout()
-        color_by_row.addWidget(QLabel("Color by:"))
-        self.color_by_combo = NoWheelComboBox()
-        self.color_by_combo.addItem("(None)", None)
-        self.color_by_combo.currentIndexChanged.connect(self._on_option_changed)
-        color_by_row.addWidget(self.color_by_combo)
-        data_layout.addLayout(color_by_row)
-
-        mark_by_row = QHBoxLayout()
-        mark_by_row.addWidget(QLabel("Mark by:"))
-        self.mark_by_combo = NoWheelComboBox()
-        self.mark_by_combo.addItem("(None)", None)
-        self.mark_by_combo.currentIndexChanged.connect(self._on_option_changed)
-        mark_by_row.addWidget(self.mark_by_combo)
-        data_layout.addLayout(mark_by_row)
+        # Note: Color by / Marker by encoding is now configured per-GroupColumn
+        # in the Data tab's Group By section (⬡/🎨/◆ toggle).
 
         layout.addWidget(data_group)
 
@@ -1121,33 +1107,8 @@ class GraphOptionsPanel(QFrame):
         self._all_columns = list(columns)
         self._data_tab.set_columns(columns, engine)
 
-        # Update style encoding combos
-        current_color = (
-            self.color_by_combo.currentData()
-            if hasattr(self, "color_by_combo")
-            else None
-        )
-        current_mark = (
-            self.mark_by_combo.currentData() if hasattr(self, "mark_by_combo") else None
-        )
-        if hasattr(self, "color_by_combo"):
-            self.color_by_combo.blockSignals(True)
-            self.color_by_combo.clear()
-            self.color_by_combo.addItem("(None)", None)
-            for c in self._all_columns:
-                self.color_by_combo.addItem(c, c)
-            idx = self.color_by_combo.findData(current_color)
-            self.color_by_combo.setCurrentIndex(idx if idx >= 0 else 0)
-            self.color_by_combo.blockSignals(False)
-        if hasattr(self, "mark_by_combo"):
-            self.mark_by_combo.blockSignals(True)
-            self.mark_by_combo.clear()
-            self.mark_by_combo.addItem("(None)", None)
-            for c in self._all_columns:
-                self.mark_by_combo.addItem(c, c)
-            idx = self.mark_by_combo.findData(current_mark)
-            self.mark_by_combo.setCurrentIndex(idx if idx >= 0 else 0)
-            self.mark_by_combo.blockSignals(False)
+        # Note: Color by / Marker by combos removed — encoding is now
+        # per-GroupColumn in DataTab.
 
     def get_chart_options(self) -> Dict[str, Any]:
         """현재 차트 옵션 반환 (스타일링/포맷팅만)"""
@@ -1198,12 +1159,7 @@ class GraphOptionsPanel(QFrame):
             "sampling_algorithm": sampling_algorithms[
                 self.sampling_algo_combo.currentIndex()
             ],
-            "color_by_column": self.color_by_combo.currentData()
-            if hasattr(self, "color_by_combo")
-            else None,
-            "mark_by_column": self.mark_by_combo.currentData()
-            if hasattr(self, "mark_by_combo")
-            else None,
+
             # Sliding window options
             "sliding_window_enabled": self.sliding_window_check.isChecked(),
             "x_sliding_window": self.x_sliding_window_check.isChecked(),
