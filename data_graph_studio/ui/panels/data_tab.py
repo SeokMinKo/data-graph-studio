@@ -559,6 +559,23 @@ class DataTab(QWidget):
             "Group By",
             on_none=self._select_none_group,
         )
+
+        # Lock button — share GroupBy across profiles
+        self._group_lock_btn = QToolButton()
+        self._group_lock_btn.setText("🔓")
+        self._group_lock_btn.setToolTip(
+            "Lock: share this GroupBy across all profiles in the dataset"
+        )
+        self._group_lock_btn.setCheckable(True)
+        self._group_lock_btn.setFixedSize(22, 22)
+        self._group_lock_btn.setStyleSheet(
+            "QToolButton { border: none; font-size: 13px; padding: 0; }"
+            "QToolButton:checked { background: rgba(255,180,0,40); border-radius: 4px; }"
+        )
+        self._group_lock_btn.toggled.connect(self._on_group_lock_toggled)
+        # Insert lock button before the stretch in g_row
+        g_row.insertWidget(g_row.count() - 1, self._group_lock_btn)
+
         self._main_layout.addLayout(g_row)
 
         self._group_picker = _SearchableColumnPicker("🔍 Search columns...")
@@ -653,6 +670,7 @@ class DataTab(QWidget):
         self._state.chart_settings_changed.connect(self._on_state_x_changed)
         self._state.value_zone_changed.connect(self._on_state_value_changed)
         self._state.group_zone_changed.connect(self._on_state_group_changed)
+        self._state.group_lock_changed.connect(self._on_state_group_lock_changed)
         self._state.hover_zone_changed.connect(self._on_state_hover_changed)
         self._state.data_cleared.connect(self.clear)
 
@@ -661,6 +679,7 @@ class DataTab(QWidget):
             (self._state.chart_settings_changed, self._on_state_x_changed),
             (self._state.value_zone_changed, self._on_state_value_changed),
             (self._state.group_zone_changed, self._on_state_group_changed),
+            (self._state.group_lock_changed, self._on_state_group_lock_changed),
             (self._state.hover_zone_changed, self._on_state_hover_changed),
             (self._state.data_cleared, self.clear),
         ]:
@@ -974,6 +993,19 @@ class DataTab(QWidget):
             self._update_badges()
         finally:
             self._syncing = False
+
+    @Slot(bool)
+    def _on_state_group_lock_changed(self, locked: bool) -> None:
+        """Sync lock button state when AppState changes externally."""
+        self._group_lock_btn.blockSignals(True)
+        self._group_lock_btn.setChecked(locked)
+        self._group_lock_btn.setText("🔒" if locked else "🔓")
+        self._group_lock_btn.blockSignals(False)
+
+    def _on_group_lock_toggled(self, checked: bool) -> None:
+        """User clicked the lock button."""
+        self._state.group_locked = checked
+        self._group_lock_btn.setText("🔒" if checked else "🔓")
 
     @Slot()
     def _on_state_hover_changed(self) -> None:

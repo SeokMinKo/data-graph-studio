@@ -375,6 +375,7 @@ class AppState(QObject):
     chart_settings_changed = Signal()
     tool_mode_changed = Signal()
     grid_view_changed = Signal()  # Grid View 설정 변경
+    group_lock_changed = Signal(bool)  # GroupBy lock across profiles
 
     # Summary 업데이트
     summary_updated = Signal(dict)  # 통계 데이터
@@ -415,6 +416,7 @@ class AppState(QObject):
 
         # Group Zone
         self._group_columns: List[GroupColumn] = []
+        self._group_locked: bool = False  # Lock GroupBy across profiles
 
         # Value Zone
         self._value_columns: List[ValueColumn] = []
@@ -976,6 +978,17 @@ class AppState(QObject):
         self._visible_rows = count
 
     # ==================== Group Zone ====================
+
+    @property
+    def group_locked(self) -> bool:
+        """When True, GroupBy columns are shared across all profiles."""
+        return self._group_locked
+
+    @group_locked.setter
+    def group_locked(self, value: bool) -> None:
+        if self._group_locked != value:
+            self._group_locked = value
+            self.group_lock_changed.emit(value)
 
     @property
     def group_columns(self) -> List[GroupColumn]:

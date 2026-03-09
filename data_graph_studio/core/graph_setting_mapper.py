@@ -112,31 +112,36 @@ class GraphSettingMapper:
             logger.warning("Failed to apply x_column: %s", e)
 
         # --- group_columns ---
+        # When group is locked, skip applying profile's group_columns
+        # so the current (shared) grouping is preserved across profile switches.
         try:
-            state.clear_group_zone()
-            normalized_groups: list[GroupColumn] = []
-            for g in setting.group_columns:
-                if isinstance(g, GroupColumn):
-                    normalized_groups.append(g)
-                elif isinstance(g, dict):
-                    normalized_groups.append(
-                        GroupColumn(
-                            name=g.get("name", ""),
-                            selected_values=set(g.get("selected_values", [])),
-                            order=g.get("order", 0),
+            if not state.group_locked:
+                state.clear_group_zone()
+                normalized_groups: list[GroupColumn] = []
+                for g in setting.group_columns:
+                    if isinstance(g, GroupColumn):
+                        normalized_groups.append(g)
+                    elif isinstance(g, dict):
+                        normalized_groups.append(
+                            GroupColumn(
+                                name=g.get("name", ""),
+                                selected_values=set(g.get("selected_values", [])),
+                                order=g.get("order", 0),
+                            )
                         )
-                    )
-                else:
-                    normalized_groups.append(GroupColumn(name=str(g)))
+                    else:
+                        normalized_groups.append(GroupColumn(name=str(g)))
 
-            normalized_groups.sort(key=lambda col: col.order)
-            for gc in normalized_groups:
-                state.add_group_column(gc.name)
-                for current in state.group_columns:
-                    if current.name == gc.name:
-                        current.selected_values = set(gc.selected_values)
-                        current.order = gc.order
-                        break
+                normalized_groups.sort(key=lambda col: col.order)
+                for gc in normalized_groups:
+                    state.add_group_column(gc.name)
+                    for current in state.group_columns:
+                        if current.name == gc.name:
+                            current.selected_values = set(gc.selected_values)
+                            current.order = gc.order
+                            break
+            else:
+                logger.debug("Group lock ON — skipping group_columns from profile")
         except Exception as e:
             logger.warning("Failed to apply group_columns: %s", e)
 
