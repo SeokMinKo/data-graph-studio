@@ -832,7 +832,8 @@ class GraphPanel(QWidget):
         else:
             options["y_title"] = options.get("y_title") or y_col_name
 
-        # Groups (already built above for combo chart, but might be None if no group columns)
+        # Groups (already built above for combo chart,
+        # but might be None if no group columns)
         # Re-build here if we didn't return early from combo chart path
         if groups is None and self.state.group_columns:
             groups = self._build_group_masks(working_df)
@@ -938,7 +939,8 @@ class GraphPanel(QWidget):
                 if len(x_valid) > max_points:
                     is_sampled = True
 
-                    # Group-aware sampling: sample each group separately to preserve group structure
+                    # Group-aware sampling: sample each group
+                    # separately to preserve group structure
                     if groups is not None and len(groups) > 0:
                         # Calculate points per group (proportional to group size)
                         group_sizes = {
@@ -947,7 +949,8 @@ class GraphPanel(QWidget):
                         }
                         total_valid = sum(group_sizes.values())
 
-                        # Ensure minimum points per group (at least 10 or 1% of max_points)
+                        # Ensure minimum points per group
+                        # (at least 10 or 1% of max_points)
                         min_points_per_group = max(10, max_points // 100)
 
                         x_sampled_list = []
@@ -1301,7 +1304,8 @@ class GraphPanel(QWidget):
         )
 
         if sliding_window_enabled:
-            # Use plotted data (sampled) to keep distribution aligned with visible points
+            # Use plotted data (sampled) to keep distribution
+            # aligned with visible points
             if x_window_enabled and not x_is_categorical:
                 try:
                     self.x_sliding_window.set_data(
@@ -1518,7 +1522,8 @@ class GraphPanel(QWidget):
     ):
         """Render combo chart with dual Y axes for multiple value columns.
 
-        When groups is provided, renders each group as a separate series with distinct colors.
+        When groups is provided, renders each group as a
+        separate series with distinct colors.
         """
         self.main_graph.clear_plot()
 
@@ -1627,7 +1632,11 @@ class GraphPanel(QWidget):
                     color_parts, marker_parts = [], []
                     for i, gc in enumerate(gc_list):
                         val = parts[i] if i < len(parts) else ""
-                        enc = gc.encoding if hasattr(gc, "encoding") else GroupEncoding.BOTH
+                        enc = (
+                            gc.encoding
+                            if hasattr(gc, "encoding")
+                            else GroupEncoding.BOTH
+                        )
                         if enc in (GroupEncoding.COLOR, GroupEncoding.BOTH):
                             color_parts.append(val)
                         if enc in (GroupEncoding.MARKER, GroupEncoding.BOTH):
