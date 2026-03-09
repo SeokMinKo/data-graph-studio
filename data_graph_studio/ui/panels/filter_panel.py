@@ -10,7 +10,7 @@ from enum import Enum
 import polars as pl
 
 try:
-    from PySide6.QtCore import Qt, Signal, QObject
+    from PySide6.QtCore import Signal, QObject
     from PySide6.QtWidgets import (
         QWidget,
         QVBoxLayout,
@@ -19,17 +19,7 @@ try:
         QScrollArea,
         QFrame,
         QPushButton,
-        QLineEdit,
-        QCheckBox,
-        QSlider,
-        QListWidget,
-        QListWidgetItem,
-        QComboBox,
         QGroupBox,
-        QToolButton,
-        QSizePolicy,
-        QSpinBox,
-        QDoubleSpinBox,
     )
 
     HAS_QT = True

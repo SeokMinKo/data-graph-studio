@@ -15,21 +15,15 @@ try:
         QVBoxLayout,
         QHBoxLayout,
         QLabel,
-        QScrollArea,
         QFrame,
         QPushButton,
-        QLineEdit,
-        QCheckBox,
         QSpinBox,
         QDoubleSpinBox,
         QComboBox,
         QColorDialog,
         QFontDialog,
-        QGroupBox,
-        QToolButton,
         QTreeWidget,
         QTreeWidgetItem,
-        QSizePolicy,
     )
     from PySide6.QtGui import QColor, QFont
 
