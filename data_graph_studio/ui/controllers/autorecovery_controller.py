@@ -323,6 +323,10 @@ class AutorecoveryController:
                     formula=v.get("formula"),
                 )
 
+            # Group lock
+            if 'group_locked' in gs:
+                self.w.state.group_locked = gs['group_locked']
+
             # Hover columns
             self.w.state.clear_hover_columns()
             for h in gs.get("hover_columns", []):

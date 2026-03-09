@@ -1832,6 +1832,7 @@ class AppState(QObject):
                 for vc in self._value_columns
             ],
             "hover_columns": self._hover_columns.copy(),
+            "group_locked": self._group_locked,
             "chart_settings": {
                 "line_width": self._chart_settings.line_width,
                 "marker_size": self._chart_settings.marker_size,
