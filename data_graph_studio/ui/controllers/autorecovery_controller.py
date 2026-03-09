@@ -85,7 +85,8 @@ class AutorecoveryController:
             msg.setIcon(QMessageBox.Question)
             msg.setWindowTitle("Recovery")
             msg.setText(
-                "A previous session was not closed properly.\nRecover the last autosave?"
+                "A previous session was not closed properly.\n"
+                "Recover the last autosave?"
             )
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
 
@@ -115,7 +116,8 @@ class AutorecoveryController:
                         pass
                     if hasattr(self.w, "statusBar"):
                         self.w.statusBar().showMessage(
-                            f"Recovery failed: {exc}. Backup saved to autosave.json.bak",
+                            f"Recovery failed: {exc}. "
+                            "Backup saved to autosave.json.bak",
                             8000,
                         )
             else:

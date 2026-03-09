@@ -569,8 +569,10 @@ class DataTab(QWidget):
         self._group_lock_btn.setCheckable(True)
         self._group_lock_btn.setFixedSize(22, 22)
         self._group_lock_btn.setStyleSheet(
-            "QToolButton { border: none; font-size: 13px; padding: 0; }"
-            "QToolButton:checked { background: rgba(255,180,0,40); border-radius: 4px; }"
+            "QToolButton { border: none; font-size: 13px;"
+            " padding: 0; }"
+            "QToolButton:checked { background:"
+            " rgba(255,180,0,40); border-radius: 4px; }"
         )
         self._group_lock_btn.toggled.connect(self._on_group_lock_toggled)
         # Insert lock button before the stretch in g_row

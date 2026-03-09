@@ -938,7 +938,7 @@ class AppState(QObject):
         # hover_columns is List[str]: shallow copy sufficient
         state.hover_columns = list(self._hover_columns)
         state.filters = copy.deepcopy(self._filters)
-        # sorts is List[SortCondition] with simple fields: shallow copy of list + new objects
+        # sorts: shallow copy of list + new objects
         state.sorts = [SortCondition(s.column, s.descending) for s in self._sorts]
         # Selection은 참조 유지 (양방향 동기화 필요)
         state.selection = self._selection
