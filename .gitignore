@@ -132,3 +132,8 @@ autosave.json
 
 # Keep test data samples
 !test_data/
+
+# Local worktrees
+.worktrees/
+.mcp.json
+work/
