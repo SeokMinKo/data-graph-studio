@@ -44,9 +44,10 @@ def _create_wizard_with_step(graph_step: GraphSetupStep, df):
 
 def test_initialize_page_populates_columns(sample_df):
     step = GraphSetupStep()
-    _create_wizard_with_step(step, sample_df)
+    wizard = _create_wizard_with_step(step, sample_df)
 
     step.initializePage()
+    assert wizard is not None  # prevent GC
 
     assert step.x_column_combo.count() == len(sample_df.columns) + 1
     assert step.y_columns_list.count() == len(sample_df.columns)
@@ -56,7 +57,7 @@ def test_initialize_page_populates_columns(sample_df):
 
 def test_validate_page_requires_x_and_y(sample_df):
     step = GraphSetupStep()
-    _create_wizard_with_step(step, sample_df)
+    wizard = _create_wizard_with_step(step, sample_df)  # noqa: F841
 
     step.initializePage()
     assert step.validatePage() is False
@@ -70,7 +71,7 @@ def test_validate_page_requires_x_and_y(sample_df):
 
 def test_get_graph_setting(sample_df):
     step = GraphSetupStep()
-    _create_wizard_with_step(step, sample_df)
+    wizard = _create_wizard_with_step(step, sample_df)  # noqa: F841
 
     step.initializePage()
     step.chart_type_combo.setCurrentText("Line")
