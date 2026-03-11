@@ -20,7 +20,8 @@ if sys.platform == "win32":
 
 # macOS: Qt 접근성 서브시스템 비활성화
 # QAccessibleTree::indexFromLogical 에서 ProjectTreeView 빈 모델 접근 시 segfault 방지
-# Ref: https://bugreports.qt.io/browse/QTBUG-104white (PySide6 + QTreeView accessibility crash)
+# Ref: https://bugreports.qt.io/browse/QTBUG-104white
+#      (PySide6 + QTreeView accessibility crash)
 if sys.platform == "darwin":
     os.environ.setdefault("QT_MAC_WANTS_LAYER", "1")
     os.environ.setdefault("QT_ACCESSIBILITY", "0")
@@ -97,7 +98,9 @@ def _startup_recovery_guide(
 
     if platform_name == "win32" and is_frozen:
         steps.append(
-            "오프라인 설치 문제 진단: 설치본과 같은 폴더에 setup-log.txt를 생성해 재설치하세요 (`Setup.exe /LOG=setup-log.txt`)."
+            "오프라인 설치 문제 진단: 설치본과 같은 폴더에 "
+            "setup-log.txt를 생성해 재설치하세요 "
+            "(`Setup.exe /LOG=setup-log.txt`)."
         )
 
     lowered = msg.lower()
@@ -105,7 +108,8 @@ def _startup_recovery_guide(
         steps.append("설치 파일(Setup.exe)을 다시 실행해 'Repair/재설치'를 시도하세요.")
         if "dll load failed" in lowered or "vcruntime" in lowered or "msvcp" in lowered:
             steps.append(
-                "Microsoft Visual C++ 2015-2022 재배포 패키지(x64)를 설치한 뒤 재실행하세요."
+                "Microsoft Visual C++ 2015-2022 재배포 패키지(x64)를 "
+                "설치한 뒤 재실행하세요."
             )
 
     if isinstance(exc, ModuleNotFoundError):
@@ -124,19 +128,23 @@ def _startup_recovery_guide(
         if msg:
             steps.append(f"누락 경로: {msg}")
         steps.append(
-            "필수 리소스 파일 누락 가능성: 설치 폴더의 resources 디렉터리가 존재하는지 확인하세요."
+            "필수 리소스 파일 누락 가능성: 설치 폴더의 resources "
+            "디렉터리가 존재하는지 확인하세요."
         )
         if is_frozen:
             steps.append(
-                "Windows 오프라인 설치본 손상 가능성: Setup.exe로 Repair 실행 후 재시도하세요."
+                "Windows 오프라인 설치본 손상 가능성: Setup.exe로 Repair "
+                "실행 후 재시도하세요."
             )
 
     if isinstance(exc, NameError):
         steps.append(
-            "런타임 NameError 감지: 최신 버전으로 업데이트 후 같은 입력으로 재시도하세요."
+            "런타임 NameError 감지: 최신 버전으로 업데이트 후 같은 입력으로 "
+            "재시도하세요."
         )
         steps.append(
-            "재현 가능하면 logs/app_*.log + ~/.dgs/crash.log를 첨부해 이슈를 등록하세요."
+            "재현 가능하면 logs/app_*.log + ~/.dgs/crash.log를 첨부해 "
+            "이슈를 등록하세요."
         )
 
     return steps
