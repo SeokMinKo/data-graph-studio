@@ -40,6 +40,16 @@ def test_format_startup_failure_contains_recovery_header():
     assert "Recovery Guide:" in msg
 
 
+def test_module_not_found_without_name_extracts_clean_module_name():
+    steps = main._startup_recovery_guide(
+        ModuleNotFoundError("No module named 'pandas.core'"),
+        is_frozen=False,
+        platform_name="linux",
+    )
+
+    assert any(step == "누락 모듈: pandas.core" for step in steps)
+
+
 def test_file_not_found_recovery_guide_windows_frozen():
     steps = main._startup_recovery_guide(
         FileNotFoundError("resources/icons/dgs.ico"),
@@ -48,5 +58,6 @@ def test_file_not_found_recovery_guide_windows_frozen():
     )
 
     assert any("setup-log.txt" in step for step in steps)
+    assert any(step == "누락 경로: resources/icons/dgs.ico" for step in steps)
     assert any("resources" in step for step in steps)
     assert any("Repair" in step for step in steps)

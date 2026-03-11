@@ -8,6 +8,7 @@ Usage:
 
 import sys
 import os
+import re
 import traceback
 import logging
 from datetime import datetime
@@ -72,6 +73,18 @@ logger = logging.getLogger("DataGraphStudio")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
+def _extract_missing_module(exc: ModuleNotFoundError) -> str:
+    name = getattr(exc, "name", None)
+    if name:
+        return name
+
+    match = re.search(r"No module named ['\"]([^'\"]+)['\"]", str(exc))
+    if match:
+        return match.group(1)
+
+    return str(exc)
+
+
 def _startup_recovery_guide(
     exc: Exception, *, is_frozen: bool, platform_name: str
 ) -> list[str]:
@@ -96,7 +109,7 @@ def _startup_recovery_guide(
             )
 
     if isinstance(exc, ModuleNotFoundError):
-        missing = getattr(exc, "name", None) or msg
+        missing = _extract_missing_module(exc)
         steps.append(f"누락 모듈: {missing}")
         if is_frozen:
             steps.append(
@@ -108,6 +121,8 @@ def _startup_recovery_guide(
             )
 
     if isinstance(exc, FileNotFoundError):
+        if msg:
+            steps.append(f"누락 경로: {msg}")
         steps.append(
             "필수 리소스 파일 누락 가능성: 설치 폴더의 resources 디렉터리가 존재하는지 확인하세요."
         )
