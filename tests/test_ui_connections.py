@@ -147,6 +147,57 @@ class TestProfileBarClosures:
             assert btn.setting.name == settings[i].name
 
 
+class TestProfileBarDeleteAction:
+    """ProfileBar 삭제 확인 UX 테스트"""
+
+    def test_delete_uses_setting_name_in_confirmation(self, qtbot, monkeypatch):
+        from data_graph_studio.core.profile import GraphSetting
+        from data_graph_studio.core.state import AppState
+        from data_graph_studio.ui.panels.profile_bar import ProfileBar
+        from PySide6.QtWidgets import QMessageBox
+
+        class _Store:
+            def __init__(self, setting):
+                self._setting = setting
+
+            def get(self, setting_id):
+                return self._setting if setting_id == self._setting.id else None
+
+            def get_by_dataset(self, dataset_id):
+                return []
+
+        class _Controller:
+            def __init__(self, setting):
+                self._store = _Store(setting)
+                self.deleted = []
+
+            def delete_profile(self, setting_id):
+                self.deleted.append(setting_id)
+                return True
+
+        setting = GraphSetting.create_new("Night Profile", "🌙")
+        controller = _Controller(setting)
+        bar = ProfileBar(AppState(), profile_controller=controller)
+        qtbot.addWidget(bar)
+
+        captured = {}
+
+        def _fake_question(parent, title, text, buttons, default_button):
+            captured["title"] = title
+            captured["text"] = text
+            return QMessageBox.Yes
+
+        monkeypatch.setattr(QMessageBox, "question", _fake_question)
+
+        bar._on_delete_setting(setting.id)
+
+        assert captured == {
+            "title": "Delete Setting",
+            "text": "Delete setting 'Night Profile'?",
+        }
+        assert controller.deleted == [setting.id]
+
+
 class TestSignalConnectionsExist:
     """시그널-슬롯 연결이 올바르게 되어있는지 테스트"""
 

@@ -535,16 +535,22 @@ class ProfileBar(QFrame):
 
     def _on_delete_setting(self, setting_id: str):
         """설정 삭제 — ProfileController 사용."""
+        if not self._profile_controller:
+            return
+
+        setting = self._profile_controller._store.get(setting_id)
+        if not setting:
+            return
+
         reply = QMessageBox.question(
             self,
             "Delete Setting",
-            "Are you sure you want to delete this setting?",
+            f"Delete setting '{setting.name}'?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
-            if self._profile_controller:
-                self._profile_controller.delete_profile(setting_id)
+            self._profile_controller.delete_profile(setting_id)
 
     def _on_rename_setting(self, setting_id: str):
         """설정 이름 변경 — ProfileController 사용."""
