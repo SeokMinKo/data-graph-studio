@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import glob
+import locale
 import shutil
 import subprocess
 import sys
@@ -84,11 +85,50 @@ def load_query(query_file: Path | None) -> str:
     return DEFAULT_QUERY if query_file is None else query_file.expanduser().read_text(encoding="utf-8").strip()
 
 
+def _decode_output(raw: bytes) -> str:
+    for encoding in ("utf-8", locale.getpreferredencoding(False), "cp949"):
+        try:
+            return raw.decode(encoding)
+        except Exception:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def convert_trace(trace_processor: str, query: str, trace_path: Path) -> str:
-    proc = subprocess.run([trace_processor, "-Q", query, str(trace_path)], capture_output=True, text=True, timeout=300)
+    proc = subprocess.run(
+        [trace_processor, "-Q", query, str(trace_path)],
+        capture_output=True,
+        timeout=300,
+    )
+    stdout = _decode_output(proc.stdout)
+    stderr = _decode_output(proc.stderr)
     if proc.returncode != 0:
-        raise RuntimeError(f"trace_processor failed for {trace_path.name}: {proc.stderr.strip() or proc.stdout.strip()}")
-    return proc.stdout
+        raise RuntimeError(
+            f"trace_processor failed for {trace_path.name}: {stderr.strip() or stdout.strip()}"
+        )
+    return stdout
+
+
+def _parse_ts_sort_value(value: str | None) -> float:
+    try:
+        return float(value or 0)
+    except Exception:
+        return 0.0
+
+
+def _normalize_row(fieldnames: list[str], row: dict[str, str | list[str] | None]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for field in fieldnames:
+        value = row.get(field, "")
+        normalized[field] = "" if value is None else str(value)
+
+    extras = row.get(None)
+    if extras:
+        extra_text = ",".join(str(part) for part in extras if part is not None)
+        if extra_text:
+            details = normalized.get("details", "")
+            normalized["details"] = f"{details},{extra_text}" if details else extra_text
+    return normalized
 
 
 def merge_csv_rows(csv_texts: Iterable[tuple[Path, str]], output_path: Path) -> tuple[int, int]:
@@ -96,27 +136,49 @@ def merge_csv_rows(csv_texts: Iterable[tuple[Path, str]], output_path: Path) -> 
     header: list[str] | None = None
     row_count = 0
     trace_count = 0
+    merged_rows: list[dict[str, str]] = []
+
+    for trace_path, csv_text in csv_texts:
+        reader = csv.DictReader(csv_text.splitlines())
+        if reader.fieldnames is None:
+            continue
+
+        base_fields = list(reader.fieldnames)
+        fieldnames = ["source_trace", "source_basename", *base_fields]
+        if header is None:
+            header = fieldnames
+        elif fieldnames != header:
+            raise ValueError(
+                f"CSV schema mismatch for {trace_path.name}: expected {header[2:]}, got {reader.fieldnames}"
+            )
+
+        wrote_any = False
+        for row in reader:
+            clean_row = _normalize_row(base_fields, row)
+            merged_rows.append(
+                {
+                    "source_trace": str(trace_path),
+                    "source_basename": trace_path.name,
+                    **clean_row,
+                }
+            )
+            row_count += 1
+            wrote_any = True
+        if wrote_any:
+            trace_count += 1
+
+    if header is None:
+        return 0, 0
+
+    sort_key = "ts" if "ts" in header else ("timestamp" if "timestamp" in header else None)
+    if sort_key is not None:
+        merged_rows.sort(key=lambda row: _parse_ts_sort_value(row.get(sort_key)))
+
     with output_path.open("w", newline="", encoding="utf-8") as handle:
-        writer: csv.DictWriter[str] | None = None
-        for trace_path, csv_text in csv_texts:
-            reader = csv.DictReader(csv_text.splitlines())
-            if reader.fieldnames is None:
-                continue
-            fieldnames = ["source_trace", "source_basename", *reader.fieldnames]
-            if header is None:
-                header = fieldnames
-                writer = csv.DictWriter(handle, fieldnames=header)
-                writer.writeheader()
-            elif fieldnames != header:
-                raise ValueError(f"CSV schema mismatch for {trace_path.name}: expected {header[2:]}, got {reader.fieldnames}")
-            assert writer is not None
-            wrote_any = False
-            for row in reader:
-                writer.writerow({"source_trace": str(trace_path), "source_basename": trace_path.name, **row})
-                row_count += 1
-                wrote_any = True
-            if wrote_any:
-                trace_count += 1
+        writer = csv.DictWriter(handle, fieldnames=header, extrasaction="ignore")
+        writer.writeheader()
+        for row in merged_rows:
+            writer.writerow(row)
     return trace_count, row_count
 
 
