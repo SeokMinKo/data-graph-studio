@@ -207,11 +207,21 @@ class TraceController:
             return raw / 1e9
         return raw
 
+    @staticmethod
+    def _coerce_systrace_int(value: Any, default: int = 0) -> int:
+        try:
+            text = str(value).strip()
+            if text == "" or text.upper() == "NULL":
+                return default
+            return int(float(text))
+        except Exception:
+            return default
+
     @classmethod
     def _format_systrace_line_from_csv_row(cls, row: Dict[str, Any]) -> str:
         task = str(row.get("task") or "<unknown>").strip() or "<unknown>"
         pid = row.get("pid") or "-1"
-        cpu = row.get("cpu") or "0"
+        cpu = cls._coerce_systrace_int(row.get("cpu"), default=0)
         flags = str(row.get("flags") or "....").strip() or "...."
         event_raw = row.get("event") or row.get("name") or ""
         event = cls._normalize_event_name(event_raw)
@@ -221,7 +231,7 @@ class TraceController:
         timestamp_value = row.get("timestamp") or row.get("ts") or "0"
         timestamp = cls._coerce_systrace_timestamp(timestamp_value)
         return (
-            f"{task}-{pid} [{int(cpu):03d}] {flags} {timestamp:.6f}: {event}: {details}"
+            f"{task}-{pid} [{cpu:03d}] {flags} {timestamp:.6f}: {event}: {details}"
         ).rstrip()
 
     @staticmethod
