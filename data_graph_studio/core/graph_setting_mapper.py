@@ -48,9 +48,7 @@ class GraphSettingMapper:
                         "selected_values": list(g.selected_values),
                         "order": g.order,
                         "encoding": (
-                            g.encoding.value
-                            if hasattr(g.encoding, "value")
-                            else "both"
+                            g.encoding.value if hasattr(g.encoding, "value") else "both"
                         ),
                     }
                 )
@@ -220,15 +218,15 @@ class GraphSettingMapper:
             # Reset key fields first so one profile's title/subtitle does not leak
             # into another profile that leaves them unset.
             defaults = {
-                'show_legend': True,
-                'show_grid': True,
-                'show_markers': False,
-                'line_width': 2,
-                'marker_size': 6,
-                'opacity': 1.0,
-                'color_palette': 'default',
-                'title': None,
-                'subtitle': None,
+                "show_legend": True,
+                "show_grid": True,
+                "show_markers": False,
+                "line_width": 2,
+                "marker_size": 6,
+                "opacity": 1.0,
+                "color_palette": "default",
+                "title": None,
+                "subtitle": None,
             }
             for key, value in defaults.items():
                 if hasattr(cs, key):

@@ -96,28 +96,42 @@ def format_systrace_line(row: dict[str, str]) -> str:
 
 
 def systrace_header(title: str = "merged Perfetto trace") -> str:
-    return "\n".join([
-        "# tracer: nop",
-        "#",
-        f"# {title}",
-        "# converted from Perfetto CSV",
-        "#",
-        "#           TASK-PID     CPU#  ||||    TIMESTAMP  FUNCTION",
-        "#              | |         |   ||||       |         |",
-    ])
+    return "\n".join(
+        [
+            "# tracer: nop",
+            "#",
+            f"# {title}",
+            "# converted from Perfetto CSV",
+            "#",
+            "#           TASK-PID     CPU#  ||||    TIMESTAMP  FUNCTION",
+            "#              | |         |   ||||       |         |",
+        ]
+    )
 
 
-def convert_csv_to_systrace(input_csv: Path, output_txt: Path, include_source_comments: bool, include_header: bool) -> int:
+def convert_csv_to_systrace(
+    input_csv: Path,
+    output_txt: Path,
+    include_source_comments: bool,
+    include_header: bool,
+) -> int:
     output_txt.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     current_source = None
-    with input_csv.open("r", newline="", encoding="utf-8") as src, output_txt.open("w", encoding="utf-8") as dst:
+    with (
+        input_csv.open("r", newline="", encoding="utf-8") as src,
+        output_txt.open("w", encoding="utf-8") as dst,
+    ):
         if include_header:
             dst.write(systrace_header(input_csv.name) + "\n")
         reader = csv.DictReader(src)
         for row in reader:
             source_trace = row.get("source_trace")
-            if include_source_comments and source_trace and source_trace != current_source:
+            if (
+                include_source_comments
+                and source_trace
+                and source_trace != current_source
+            ):
                 if count:
                     dst.write("\n")
                 dst.write(f"# source: {source_trace}\n")
@@ -128,17 +142,32 @@ def convert_csv_to_systrace(input_csv: Path, output_txt: Path, include_source_co
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert merged Perfetto CSV to systrace/ftrace-style text.")
+    parser = argparse.ArgumentParser(
+        description="Convert merged Perfetto CSV to systrace/ftrace-style text."
+    )
     parser.add_argument("input_csv", type=Path, help="Merged Perfetto CSV path.")
     parser.add_argument("--output", type=Path, required=True, help="Output txt path.")
-    parser.add_argument("--include-source-comments", action="store_true", help="Insert '# source: ...' lines when source_trace changes.")
-    parser.add_argument("--no-header", action="store_true", help="Do not write systrace-style header comments.")
+    parser.add_argument(
+        "--include-source-comments",
+        action="store_true",
+        help="Insert '# source: ...' lines when source_trace changes.",
+    )
+    parser.add_argument(
+        "--no-header",
+        action="store_true",
+        help="Do not write systrace-style header comments.",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
-    row_count = convert_csv_to_systrace(args.input_csv.expanduser(), args.output.expanduser(), args.include_source_comments, not args.no_header)
+    row_count = convert_csv_to_systrace(
+        args.input_csv.expanduser(),
+        args.output.expanduser(),
+        args.include_source_comments,
+        not args.no_header,
+    )
     print(f"Wrote {row_count} systrace line(s) to {args.output}")
     return 0
 

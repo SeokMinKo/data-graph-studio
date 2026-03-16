@@ -1840,9 +1840,7 @@ class AppState(QObject):
                     "selected_values": list(gc.selected_values),
                     "order": gc.order,
                     "encoding": (
-                        gc.encoding.value
-                        if hasattr(gc.encoding, "value")
-                        else "both"
+                        gc.encoding.value if hasattr(gc.encoding, "value") else "both"
                     ),
                 }
                 for gc in self._group_columns

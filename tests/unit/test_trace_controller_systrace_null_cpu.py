@@ -14,4 +14,6 @@ def test_trace_controller_systrace_line_handles_null_cpu() -> None:
             "details": "dev=8:0 rwbs=R bytes=4096 sector=123 nr_sector=8",
         }
     )
-    assert line == "kworker-77 NULL .... 1.000000: block_rq_issue: 8:0 R 4096 () 123 + 8"
+    assert (
+        line == "kworker-77 NULL .... 1.000000: block_rq_issue: 8:0 R 4096 () 123 + 8"
+    )
