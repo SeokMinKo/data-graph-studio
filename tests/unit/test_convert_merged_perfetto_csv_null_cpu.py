@@ -30,5 +30,5 @@ def test_convert_merged_perfetto_csv_handles_null_cpu(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     text = output_txt.read_text(encoding="utf-8")
-    assert "[000]" in text
+    assert "kworker-10 NULL .... 1.000000: block_rq_issue:" in text
     assert "block_rq_issue" in text

@@ -73,26 +73,26 @@ def coerce_timestamp(value: Any) -> float:
     return raw / 1e9 if raw > 1_000_000 else raw
 
 
-def coerce_int(value: Any, default: int = 0) -> int:
+def format_cpu_field(value: Any) -> str:
+    text = str(value).strip() if value is not None else ""
+    if text == "" or text.upper() == "NULL":
+        return "NULL"
     try:
-        text = str(value).strip()
-        if text == "" or text.upper() == "NULL":
-            return default
-        return int(float(text))
+        return f"[{int(float(text)):03d}]"
     except Exception:
-        return default
+        return "NULL"
 
 
 def format_systrace_line(row: dict[str, str]) -> str:
     task = str(row.get("task") or "<unknown>").strip() or "<unknown>"
     pid = row.get("pid") or "-1"
-    cpu = coerce_int(row.get("cpu"), default=0)
+    cpu = format_cpu_field(row.get("cpu"))
     flags = str(row.get("flags") or "....").strip() or "...."
     event_raw = row.get("event") or row.get("name") or ""
     event = normalize_event_name(event_raw)
     details = coerce_perfetto_details(str(event_raw), row.get("details") or "")
     timestamp = coerce_timestamp(row.get("timestamp") or row.get("ts") or "0")
-    return f"{task}-{pid} [{cpu:03d}] {flags} {timestamp:.6f}: {event}: {details}".rstrip()
+    return f"{task}-{pid} {cpu} {flags} {timestamp:.6f}: {event}: {details}".rstrip()
 
 
 def systrace_header(title: str = "merged Perfetto trace") -> str:
