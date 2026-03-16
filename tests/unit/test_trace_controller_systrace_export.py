@@ -38,5 +38,6 @@ def test_trace_controller_converts_csv_to_systrace_txt(tmp_path: Path) -> None:
     text = output_txt.read_text(encoding="utf-8")
     assert count == 1
     assert "# tracer: nop" in text
+    assert "#           TASK-PID     CPU#  ||||    TIMESTAMP  FUNCTION" in text
     assert "# source: /tmp/a.ptftrace" in text
     assert "kworker-10 [000] .... 1.000000: block_rq_issue: 8:0 W 4096 () 100 + 8" in text

@@ -233,6 +233,8 @@ class TraceController:
                 f"# {title}",
                 "# converted from Perfetto CSV by Data Graph Studio",
                 "#",
+                "#           TASK-PID     CPU#  ||||    TIMESTAMP  FUNCTION",
+                "#              | |         |   ||||       |         |",
             ]
         )
 
