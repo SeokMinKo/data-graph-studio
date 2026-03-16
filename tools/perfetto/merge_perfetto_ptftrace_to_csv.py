@@ -44,11 +44,25 @@ def resolve_trace_processor(explicit: str | None) -> str:
         if not path.exists():
             raise FileNotFoundError(f"trace processor not found: {path}")
         return str(path)
-    for name in ("trace_processor_shell", "trace_processor"):
+
+    local_dir = Path(__file__).resolve().parent
+    local_candidates = [
+        local_dir / "trace_processor_shell.exe",
+        local_dir / "trace_processor_shell",
+        local_dir / "trace_processor.exe",
+        local_dir / "trace_processor",
+    ]
+    for candidate in local_candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    for name in ("trace_processor_shell.exe", "trace_processor_shell", "trace_processor.exe", "trace_processor"):
         found = shutil.which(name)
         if found:
             return found
-    raise FileNotFoundError("trace_processor_shell not found in PATH. Pass --trace-processor explicitly.")
+    raise FileNotFoundError(
+        "trace_processor_shell not found. Put trace_processor_shell.exe next to this script or pass --trace-processor explicitly."
+    )
 
 
 def expand_inputs(raw_inputs: Sequence[str], input_dirs: Sequence[Path], extra_patterns: Sequence[str]) -> list[Path]:

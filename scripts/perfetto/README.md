@@ -16,3 +16,5 @@ python scripts/perfetto/merge_perfetto_ptftrace_to_systrace_txt.py "traces/*.ptf
 - `tools/perfetto/merge_perfetto_ptftrace_to_csv.py`
 - `tools/perfetto/convert_merged_perfetto_csv_to_systrace_txt.py`
 - `tools/perfetto/merge_perfetto_ptftrace_to_systrace_txt.py`
+
+Windows에서는 `trace_processor_shell.exe`를 `tools/perfetto/` 폴더에 같이 두면 자동 인식한다.
