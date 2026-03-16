@@ -37,6 +37,8 @@ def test_convert_merged_perfetto_csv_to_systrace_txt(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     text = output_txt.read_text(encoding="utf-8")
+    assert "# tracer: nop" in text
+    assert "# converted from Perfetto CSV by Data Graph Studio" in text
     assert "# source: /tmp/a.ptftrace" in text
     assert "kworker-10 [000] .... 1.000000: block_rq_issue: 8:0 W 4096 () 100 + 8" in text
     assert "kworker-10 [000] .... 1.000200: block_rq_complete: 8:0 W () 100 + 8" in text

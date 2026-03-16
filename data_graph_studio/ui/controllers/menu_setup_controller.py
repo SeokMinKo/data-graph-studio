@@ -653,6 +653,15 @@ class MenuSetupController:
         compare_traces_action.triggered.connect(self.w._on_compare_traces)
         logger_menu.addAction(compare_traces_action)
 
+        export_systrace_action = QAction("Export Perfetto CSV → &Systrace...", self.w)
+        export_systrace_action.setStatusTip(
+            "Convert merged Perfetto CSV into systrace/ftrace-style text"
+        )
+        export_systrace_action.triggered.connect(
+            self.w._on_export_perfetto_csv_to_systrace
+        )
+        logger_menu.addAction(export_systrace_action)
+
         logger_menu.addSeparator()
 
         configure_action = QAction("&Configure...", self.w)

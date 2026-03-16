@@ -1141,6 +1141,9 @@ class MainWindow(QMainWindow):
     def _on_compare_traces(self, *a, **kw):
         return self._trace_ctrl._on_compare_traces(*a, **kw)
 
+    def _on_export_perfetto_csv_to_systrace(self, *a, **kw):
+        return self._trace_ctrl._on_export_perfetto_csv_to_systrace(*a, **kw)
+
     def _verify_capture_mode(self, *a, **kw):
         return self._trace_ctrl._verify_capture_mode(*a, **kw)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
@@ -195,6 +196,76 @@ class TraceController:
                 pl.col("details_norm").cast(pl.Utf8).fill_null("").alias("details"),
             ]
         )
+
+    @staticmethod
+    def _coerce_systrace_timestamp(value: Any) -> float:
+        try:
+            raw = float(value)
+        except Exception:
+            return 0.0
+        if raw > 1_000_000:
+            return raw / 1e9
+        return raw
+
+    @classmethod
+    def _format_systrace_line_from_csv_row(cls, row: Dict[str, Any]) -> str:
+        task = str(row.get("task") or "<unknown>").strip() or "<unknown>"
+        pid = row.get("pid") or "-1"
+        cpu = row.get("cpu") or "0"
+        flags = str(row.get("flags") or "....").strip() or "...."
+        event_raw = row.get("event") or row.get("name") or ""
+        event = cls._normalize_event_name(event_raw)
+        details = cls._coerce_perfetto_details_for_blocklayer(
+            str(event_raw), row.get("details") or ""
+        )
+        timestamp_value = row.get("timestamp") or row.get("ts") or "0"
+        timestamp = cls._coerce_systrace_timestamp(timestamp_value)
+        return (
+            f"{task}-{pid} [{int(cpu):03d}] {flags} {timestamp:.6f}: {event}: {details}"
+        ).rstrip()
+
+    @staticmethod
+    def _systrace_header(title: str = "DGS merged Perfetto trace") -> str:
+        return "\n".join(
+            [
+                "# tracer: nop",
+                "#",
+                f"# {title}",
+                "# converted from Perfetto CSV by Data Graph Studio",
+                "#",
+            ]
+        )
+
+    @classmethod
+    def convert_perfetto_csv_to_systrace_txt(
+        cls,
+        input_csv: str | Path,
+        output_txt: str | Path,
+        include_source_comments: bool = False,
+        include_header: bool = True,
+    ) -> int:
+        input_path = Path(input_csv)
+        output_path = Path(output_txt)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        count = 0
+        current_source = None
+        with input_path.open("r", newline="", encoding="utf-8") as src, output_path.open(
+            "w", encoding="utf-8"
+        ) as dst:
+            if include_header:
+                dst.write(cls._systrace_header(input_path.name) + "\n")
+            reader = csv.DictReader(src)
+            for row in reader:
+                source_trace = row.get("source_trace")
+                if include_source_comments and source_trace and source_trace != current_source:
+                    if count:
+                        dst.write("\n")
+                    dst.write(f"# source: {source_trace}\n")
+                    current_source = source_trace
+                dst.write(cls._format_systrace_line_from_csv_row(row) + "\n")
+                count += 1
+        return count
 
     def _register_loaded_dataset(
         self, dataset_id: str, name: str, source_path: str, df: "pl.DataFrame"
@@ -625,6 +696,56 @@ class TraceController:
         # prevent GC
         self.w._parse_worker = worker
         worker.start()
+
+    def _on_export_perfetto_csv_to_systrace(self) -> None:
+        """Convert a Perfetto-export CSV into systrace/ftrace-style text."""
+        csv_path, _ = QFileDialog.getOpenFileName(
+            self.w,
+            "Open Perfetto CSV",
+            "",
+            "CSV Files (*.csv);;All Files (*)",
+        )
+        if not csv_path:
+            return
+
+        default_name = f"{Path(csv_path).stem}_systrace.txt"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self.w,
+            "Save systrace text",
+            str(Path(csv_path).with_name(default_name)),
+            "Ftrace Text (*.txt);;All Files (*)",
+        )
+        if not output_path:
+            return
+
+        try:
+            row_count = self.convert_perfetto_csv_to_systrace_txt(
+                csv_path,
+                output_path,
+                include_source_comments=True,
+                include_header=True,
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self.w,
+                "Perfetto CSV → systrace",
+                f"Conversion failed:\n{e}",
+            )
+            return
+
+        self.w.statusBar().showMessage(
+            f"Systrace text saved: {Path(output_path).name} ({row_count} lines)",
+            5000,
+        )
+        answer = QMessageBox.question(
+            self.w,
+            "Perfetto CSV → systrace",
+            f"Systrace text saved to:\n{output_path}\n\nOpen with Ftrace Parser now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._parse_ftrace_async(output_path)
 
     def _on_compare_traces(self) -> None:
         """Open the Compare Traces dialog and run comparison."""
