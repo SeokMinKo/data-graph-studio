@@ -27,14 +27,30 @@ DEFAULT_PATTERNS = ("*.ptftrace", "*.pftrace", "*.perfetto-trace")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert multiple Perfetto trace files and merge them into one CSV.")
+    parser = argparse.ArgumentParser(
+        description="Convert multiple Perfetto trace files and merge them into one CSV."
+    )
     parser.add_argument("inputs", nargs="*", help="Trace files or glob patterns.")
-    parser.add_argument("--input-dir", type=Path, action="append", default=[], help="Directory to scan.")
-    parser.add_argument("--pattern", action="append", default=[], help="Additional glob pattern(s).")
-    parser.add_argument("--output", type=Path, required=True, help="Merged CSV output path.")
-    parser.add_argument("--trace-processor", default=None, help="Path to trace_processor_shell (or trace_processor).")
+    parser.add_argument(
+        "--input-dir", type=Path, action="append", default=[], help="Directory to scan."
+    )
+    parser.add_argument(
+        "--pattern", action="append", default=[], help="Additional glob pattern(s)."
+    )
+    parser.add_argument(
+        "--output", type=Path, required=True, help="Merged CSV output path."
+    )
+    parser.add_argument(
+        "--trace-processor",
+        default=None,
+        help="Path to trace_processor_shell (or trace_processor).",
+    )
     parser.add_argument("--query-file", type=Path, help="Optional SQL file.")
-    parser.add_argument("--strict", action="store_true", help="Stop immediately if any trace conversion fails.")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Stop immediately if any trace conversion fails.",
+    )
     return parser.parse_args(argv)
 
 
@@ -56,16 +72,24 @@ def resolve_trace_processor(explicit: str | None) -> str:
         if candidate.exists():
             return str(candidate)
 
-    for name in ("trace_processor_shell.exe", "trace_processor_shell", "trace_processor.exe", "trace_processor"):
+    for name in (
+        "trace_processor_shell.exe",
+        "trace_processor_shell",
+        "trace_processor.exe",
+        "trace_processor",
+    ):
         found = shutil.which(name)
         if found:
             return found
     raise FileNotFoundError(
-        "trace_processor_shell not found. Put trace_processor_shell.exe next to this script or pass --trace-processor explicitly."
+        "trace_processor_shell not found. Put trace_processor_shell.exe next "
+        "to this script or pass --trace-processor explicitly."
     )
 
 
-def expand_inputs(raw_inputs: Sequence[str], input_dirs: Sequence[Path], extra_patterns: Sequence[str]) -> list[Path]:
+def expand_inputs(
+    raw_inputs: Sequence[str], input_dirs: Sequence[Path], extra_patterns: Sequence[str]
+) -> list[Path]:
     resolved: list[Path] = []
     seen: set[Path] = set()
 
@@ -96,7 +120,11 @@ def expand_inputs(raw_inputs: Sequence[str], input_dirs: Sequence[Path], extra_p
 
 
 def load_query(query_file: Path | None) -> str:
-    return DEFAULT_QUERY if query_file is None else query_file.expanduser().read_text(encoding="utf-8").strip()
+    return (
+        DEFAULT_QUERY
+        if query_file is None
+        else query_file.expanduser().read_text(encoding="utf-8").strip()
+    )
 
 
 def _decode_output(raw: bytes) -> str:
@@ -118,7 +146,8 @@ def convert_trace(trace_processor: str, query: str, trace_path: Path) -> str:
     stderr = _decode_output(proc.stderr)
     if proc.returncode != 0:
         raise RuntimeError(
-            f"trace_processor failed for {trace_path.name}: {stderr.strip() or stdout.strip()}"
+            "trace_processor failed for "
+            f"{trace_path.name}: {stderr.strip() or stdout.strip()}"
         )
     return stdout
 
@@ -130,7 +159,9 @@ def _parse_ts_sort_value(value: str | None) -> float:
         return 0.0
 
 
-def _normalize_row(fieldnames: list[str], row: dict[str, str | list[str] | None]) -> dict[str, str]:
+def _normalize_row(
+    fieldnames: list[str], row: dict[str, str | list[str] | None]
+) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for field in fieldnames:
         value = row.get(field, "")
@@ -145,7 +176,9 @@ def _normalize_row(fieldnames: list[str], row: dict[str, str | list[str] | None]
     return normalized
 
 
-def merge_csv_rows(csv_texts: Iterable[tuple[Path, str]], output_path: Path) -> tuple[int, int]:
+def merge_csv_rows(
+    csv_texts: Iterable[tuple[Path, str]], output_path: Path
+) -> tuple[int, int]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     header: list[str] | None = None
     row_count = 0
@@ -163,7 +196,8 @@ def merge_csv_rows(csv_texts: Iterable[tuple[Path, str]], output_path: Path) -> 
             header = fieldnames
         elif fieldnames != header:
             raise ValueError(
-                f"CSV schema mismatch for {trace_path.name}: expected {header[2:]}, got {reader.fieldnames}"
+                "CSV schema mismatch for "
+                f"{trace_path.name}: expected {header[2:]}, got {reader.fieldnames}"
             )
 
         wrote_any = False
@@ -184,7 +218,9 @@ def merge_csv_rows(csv_texts: Iterable[tuple[Path, str]], output_path: Path) -> 
     if header is None:
         return 0, 0
 
-    sort_key = "ts" if "ts" in header else ("timestamp" if "timestamp" in header else None)
+    sort_key = (
+        "ts" if "ts" in header else ("timestamp" if "timestamp" in header else None)
+    )
     if sort_key is not None:
         merged_rows.sort(key=lambda row: _parse_ts_sort_value(row.get(sort_key)))
 
@@ -221,7 +257,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("No traces were converted successfully.", file=sys.stderr)
         return 1
     trace_count, row_count = merge_csv_rows(converted, args.output)
-    print(f"Merged {trace_count} trace(s) into {args.output} ({row_count} row(s)).", file=sys.stderr)
+    print(
+        f"Merged {trace_count} trace(s) into {args.output} ({row_count} row(s)).",
+        file=sys.stderr,
+    )
     if failures:
         print(f"Completed with {len(failures)} failure(s).", file=sys.stderr)
         return 1

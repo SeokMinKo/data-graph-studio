@@ -12,7 +12,9 @@ from typing import Sequence
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Merge multiple Perfetto traces into CSV, then convert to systrace txt."
+        description=(
+            "Merge multiple Perfetto traces into CSV, then convert to systrace txt."
+        )
     )
     parser.add_argument("inputs", nargs="*", help="Trace files or glob patterns.")
     parser.add_argument(
@@ -27,15 +29,21 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=[],
         help="Additional glob patterns for --input-dir.",
     )
-    parser.add_argument("--csv-output", type=Path, required=True, help="Merged CSV path.")
-    parser.add_argument("--txt-output", type=Path, required=True, help="Systrace txt path.")
+    parser.add_argument(
+        "--csv-output", type=Path, required=True, help="Merged CSV path."
+    )
+    parser.add_argument(
+        "--txt-output", type=Path, required=True, help="Systrace txt path."
+    )
     parser.add_argument(
         "--trace-processor",
         default=None,
         help="Path to trace_processor_shell (or trace_processor).",
     )
     parser.add_argument("--query-file", type=Path, help="Optional SQL file.")
-    parser.add_argument("--strict", action="store_true", help="Stop on first failed trace.")
+    parser.add_argument(
+        "--strict", action="store_true", help="Stop on first failed trace."
+    )
     parser.add_argument(
         "--no-header",
         action="store_true",
@@ -50,7 +58,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     merge_script = script_dir / "merge_perfetto_ptftrace_to_csv.py"
     convert_script = script_dir / "convert_merged_perfetto_csv_to_systrace_txt.py"
 
-    merge_cmd = [sys.executable, str(merge_script), *args.inputs, "--output", str(args.csv_output)]
+    merge_cmd = [
+        sys.executable,
+        str(merge_script),
+        *args.inputs,
+        "--output",
+        str(args.csv_output),
+    ]
     for input_dir in args.input_dir:
         merge_cmd.extend(["--input-dir", input_dir])
     for pattern in args.pattern:

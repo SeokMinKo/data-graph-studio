@@ -15,8 +15,15 @@ SCRIPT = (
 def test_convert_merged_perfetto_csv_handles_null_cpu(tmp_path: Path) -> None:
     merged_csv = tmp_path / "merged.csv"
     merged_csv.write_text(
-        "source_trace,source_basename,ts,cpu,name,task,pid,details\n"
-        "/tmp/a.ptftrace,a.ptftrace,1000000000,NULL,block/block_rq_issue,kworker,10,dev=8:0 rwbs=W bytes=4096 sector=100 nr_sector=8\n",
+        "\n".join(
+            [
+                "source_trace,source_basename,ts,cpu,name,task,pid,details",
+                "/tmp/a.ptftrace,a.ptftrace,1000000000,NULL,"
+                "block/block_rq_issue,kworker,10,"
+                "dev=8:0 rwbs=W bytes=4096 sector=100 nr_sector=8",
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 

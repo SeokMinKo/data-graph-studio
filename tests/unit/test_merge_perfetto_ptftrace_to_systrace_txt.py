@@ -23,7 +23,11 @@ def test_oneshot_merge_to_systrace_pipeline(tmp_path: Path) -> None:
             "from pathlib import Path\n\n"
             "trace_path = Path(sys.argv[-1])\n"
             "if trace_path.name == 'a.ptftrace':\n"
-            "    sys.stdout.write('ts,cpu,name,task,pid,details\\n1,0,block_rq_issue,kworker,10,dev=8:0 rwbs=R bytes=4096 sector=100 nr_sector=8\\n')\n"
+            "    sys.stdout.write(\n"
+            "        'ts,cpu,name,task,pid,details\\n'\n"
+            "        '1,0,block_rq_issue,kworker,10,'\n"
+            "        'dev=8:0 rwbs=R bytes=4096 sector=100 nr_sector=8\\n'\n"
+            "    )\n"
             "else:\n"
             "    sys.stdout.write('ts,cpu,name,task,pid,details\\n')\n"
         ),

@@ -4,7 +4,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "merge_perfetto_ptftrace_to_csv.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "scripts"
+    / "merge_perfetto_ptftrace_to_csv.py"
+)
 
 
 def test_merge_perfetto_traces_into_single_csv(tmp_path: Path) -> None:
@@ -21,9 +25,15 @@ def test_merge_perfetto_traces_into_single_csv(tmp_path: Path) -> None:
             "from pathlib import Path\n\n"
             "trace_path = Path(sys.argv[-1])\n"
             "if trace_path.name == 'a.ptftrace':\n"
-            "    sys.stdout.write('ts,cpu,name,task,pid,details\\n1,0,block_rq_issue,kworker,10,dev=8:0\\n')\n"
+            "    sys.stdout.write(\n"
+            "        'ts,cpu,name,task,pid,details\\n'\n"
+            "        '1,0,block_rq_issue,kworker,10,dev=8:0\\n'\n"
+            "    )\n"
             "else:\n"
-            "    sys.stdout.write('ts,cpu,name,task,pid,details\\n2,1,block_rq_complete,kworker,11,dev=8:0\\n')\n"
+            "    sys.stdout.write(\n"
+            "        'ts,cpu,name,task,pid,details\\n'\n"
+            "        '2,1,block_rq_complete,kworker,11,dev=8:0\\n'\n"
+            "    )\n"
         ),
         encoding="utf-8",
     )

@@ -233,7 +233,8 @@ class MainWindow(QMainWindow):
         # Setup UI
         self._setup_window()
         self._setup_menubar()
-        self._setup_main_layout()  # Must be before toolbar (toolbar references dataset_manager)
+        # Must be before toolbar (toolbar references dataset_manager)
+        self._setup_main_layout()
         self._setup_toolbar()
         self._setup_streaming_toolbar()
         self._setup_compare_toolbar()
@@ -294,7 +295,10 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _format_tooltip(action_name: str, shortcut: str) -> str:
         """툴팁에 단축키를 보기 좋게 포맷팅"""
-        return f"<b>{action_name}</b><br><span style='color: #C2C8D1;'>Shortcut: {shortcut}</span>"
+        return (
+            f"<b>{action_name}</b><br>"
+            f"<span style='color: #C2C8D1;'>Shortcut: {shortcut}</span>"
+        )
 
     def _setup_menubar(self, *a, **kw):
         return self._menu_setup_ctrl._setup_menubar(*a, **kw)
@@ -1063,7 +1067,9 @@ class MainWindow(QMainWindow):
 
     # ==================== Actions ====================
 
-    # ==================== File Loading Delegates (-> FileLoadingController) ====================
+    # ==================== File Loading Delegates
+    # (-> FileLoadingController)
+    # ====================
 
     def _on_manage_parser_profiles(self):
         """Open parser profile manager dialog."""
@@ -1217,7 +1223,8 @@ class MainWindow(QMainWindow):
 
         active_id = self.engine.active_dataset_id
         if active_id and project_name:
-            # Ensure this dataset exists in AppState metadata, then rename as project name.
+            # Ensure this dataset exists in AppState metadata,
+            # then rename as project name.
             dataset = self.engine.get_dataset(active_id)
             if (
                 self.state.get_dataset_metadata(active_id) is None
@@ -2204,7 +2211,8 @@ class MainWindow(QMainWindow):
             self,
             "Save Data As",
             "data",
-            "CSV Files (*.csv);;Excel Files (*.xlsx);;Parquet Files (*.parquet);;All Files (*.*)",
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;"
+            "Parquet Files (*.parquet);;All Files (*.*)",
         )
         if file_path:
             try:

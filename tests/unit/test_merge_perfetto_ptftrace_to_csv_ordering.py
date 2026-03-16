@@ -4,10 +4,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "perfetto" / "merge_perfetto_ptftrace_to_csv.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "tools"
+    / "perfetto"
+    / "merge_perfetto_ptftrace_to_csv.py"
+)
 
 
-def test_merge_perfetto_traces_sorts_by_ts_and_absorbs_extra_csv_fields(tmp_path: Path) -> None:
+def test_merge_perfetto_traces_sorts_by_ts_and_absorbs_extra_csv_fields(
+    tmp_path: Path,
+) -> None:
     trace_a = tmp_path / "a.ptftrace"
     trace_b = tmp_path / "b.ptftrace"
     trace_a.write_text("trace-a", encoding="utf-8")
@@ -21,9 +28,19 @@ def test_merge_perfetto_traces_sorts_by_ts_and_absorbs_extra_csv_fields(tmp_path
             "from pathlib import Path\n\n"
             "trace_path = Path(sys.argv[-1])\n"
             "if trace_path.name == 'a.ptftrace':\n"
-            "    sys.stdout.buffer.write(b'ts,cpu,name,task,pid,details\\n200,0,block_rq_issue,kworker,10,dev=8,0 rwbs=R bytes=4096 sector=200 nr_sector=8\\n')\n"
+            "    sys.stdout.buffer.write(\n"
+            "        b'ts,cpu,name,task,pid,details\\n'\n"
+            "        b'200,0,block_rq_issue,kworker,10,'\n"
+            "        b'dev=8,0 rwbs=R bytes=4096 sector=200 nr_sector=8\\n'\n"
+            "    )\n"
             "else:\n"
-            "    sys.stdout.buffer.write('ts,cpu,name,task,pid,details\\n100,0,block_rq_issue,kworker,11,dev=8:0 rwbs=W bytes=4096 sector=100 nr_sector=8\\n'.encode('utf-8'))\n"
+            "    sys.stdout.buffer.write(\n"
+            "        (\n"
+            "            'ts,cpu,name,task,pid,details\\n'\n"
+            "            '100,0,block_rq_issue,kworker,11,'\n"
+            "            'dev=8:0 rwbs=W bytes=4096 sector=100 nr_sector=8\\n'\n"
+            "        ).encode('utf-8')\n"
+            "    )\n"
         ),
         encoding="utf-8",
     )

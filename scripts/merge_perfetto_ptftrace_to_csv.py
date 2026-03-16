@@ -69,7 +69,10 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "--trace-processor",
         dest="trace_processor",
         default=None,
-        help="Path to trace_processor_shell (or trace_processor). Auto-detected from PATH if omitted.",
+        help=(
+            "Path to trace_processor_shell (or trace_processor). "
+            "Auto-detected from PATH if omitted."
+        ),
     )
     parser.add_argument(
         "--query-file",
@@ -100,7 +103,9 @@ def resolve_trace_processor(explicit: str | None) -> str:
     )
 
 
-def expand_inputs(raw_inputs: Sequence[str], input_dirs: Sequence[Path], extra_patterns: Sequence[str]) -> list[Path]:
+def expand_inputs(
+    raw_inputs: Sequence[str], input_dirs: Sequence[Path], extra_patterns: Sequence[str]
+) -> list[Path]:
     resolved: list[Path] = []
     seen: set[Path] = set()
 
@@ -146,12 +151,15 @@ def convert_trace(trace_processor: str, query: str, trace_path: Path) -> str:
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"trace_processor failed for {trace_path.name}: {proc.stderr.strip() or proc.stdout.strip()}"
+            "trace_processor failed for "
+            f"{trace_path.name}: {proc.stderr.strip() or proc.stdout.strip()}"
         )
     return proc.stdout
 
 
-def merge_csv_rows(csv_texts: Iterable[tuple[Path, str]], output_path: Path) -> tuple[int, int]:
+def merge_csv_rows(
+    csv_texts: Iterable[tuple[Path, str]], output_path: Path
+) -> tuple[int, int]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     header: list[str] | None = None

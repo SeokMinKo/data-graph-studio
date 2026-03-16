@@ -262,15 +262,20 @@ class TraceController:
 
         count = 0
         current_source = None
-        with input_path.open("r", newline="", encoding="utf-8") as src, output_path.open(
-            "w", encoding="utf-8"
-        ) as dst:
+        with (
+            input_path.open("r", newline="", encoding="utf-8") as src,
+            output_path.open("w", encoding="utf-8") as dst,
+        ):
             if include_header:
                 dst.write(cls._systrace_header(input_path.name) + "\n")
             reader = csv.DictReader(src)
             for row in reader:
                 source_trace = row.get("source_trace")
-                if include_source_comments and source_trace and source_trace != current_source:
+                if (
+                    include_source_comments
+                    and source_trace
+                    and source_trace != current_source
+                ):
                     if count:
                         dst.write("\n")
                     dst.write(f"# source: {source_trace}\n")
@@ -549,7 +554,10 @@ class TraceController:
 
         def on_finished(raw_df, df, settings):
             logger.info(
-                "[Logger] Perfetto converted: raw=%d rows, converted=%d rows, columns=%s",
+                (
+                    "[Logger] Perfetto converted: raw=%d rows, "
+                    "converted=%d rows, columns=%s"
+                ),
                 len(raw_df),
                 len(df),
                 list(df.columns)[:10],
