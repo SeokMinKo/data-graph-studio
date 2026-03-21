@@ -73,7 +73,7 @@ class CacheEntry:
         # 기본: sys.getsizeof 사용
         try:
             return sys.getsizeof(obj)
-        except:
+        except Exception:
             return 64  # 기본값
 
 

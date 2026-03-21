@@ -29,7 +29,8 @@ class ColumnDependencyGraph:
         graph = ColumnDependencyGraph()
         graph.add_column('power', {'voltage', 'current'})
         graph.add_column('power_norm', {'power'})
-        order = graph.get_evaluation_order()  # ['voltage', 'current', 'power', 'power_norm'] (approx)
+        # ['voltage', 'current', 'power', 'power_norm'] (approx)
+        order = graph.get_evaluation_order()
     """
 
     def __init__(self) -> None:
