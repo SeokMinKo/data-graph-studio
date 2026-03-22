@@ -22,11 +22,10 @@ logger = logging.getLogger(__name__)
 PPTX_AVAILABLE = False
 try:
     from pptx import Presentation
-    from pptx.util import Inches, Pt, Emu
+    from pptx.util import Inches, Pt
     from pptx.dml.color import RGBColor
-    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    from pptx.enum.text import PP_ALIGN
     from pptx.enum.shapes import MSO_SHAPE
-    from pptx.enum.dml import MSO_THEME_COLOR
 
     PPTX_AVAILABLE = True
 except ImportError:
