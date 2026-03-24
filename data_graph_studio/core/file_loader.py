@@ -538,6 +538,16 @@ class FileLoader:
         """windowed loading 적용 여부를 결정한다."""
         return file_size >= 300 * 1024 * 1024
 
+    def _adaptive_window_size(self, file_size: int) -> int:
+        """파일 크기에 따라 적절한 윈도우 크기를 반환한다."""
+        if file_size >= 2 * 1024 * 1024 * 1024:  # >= 2GB
+            return 50_000
+        elif file_size >= 1024 * 1024 * 1024:  # >= 1GB
+            return 100_000
+        elif file_size >= 500 * 1024 * 1024:  # >= 500MB
+            return 150_000
+        return self._window_size  # default 200_000
+
     def _prepare_parquet_from_csv(
         self,
         path: str,
@@ -649,10 +659,11 @@ class FileLoader:
                 except Exception:
                     self._total_rows = 0
 
+                adaptive_size = self._adaptive_window_size(file_size)
                 window_size = (
-                    min(self._window_size, self._total_rows)
+                    min(adaptive_size, self._total_rows)
                     if self._total_rows > 0
-                    else self._window_size
+                    else adaptive_size
                 )
                 self._df = self._load_window_from_lazy(
                     self._lazy_df, self._window_start, window_size

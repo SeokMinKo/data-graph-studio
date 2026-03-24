@@ -1348,8 +1348,9 @@ class MainWindow(QMainWindow):
                 self.engine.columns, self.engine
             )
 
+        # 초기 로딩 시 그래프에 데이터를 자동으로 표시하지 않음
+        # 사용자가 X/Y 컬럼을 선택하면 그때 그래프가 그려짐
         self.graph_panel.refresh()
-        self.graph_panel.autofit()
 
         self.summary_panel.refresh()
 
