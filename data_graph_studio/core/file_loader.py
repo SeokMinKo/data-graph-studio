@@ -745,7 +745,12 @@ class FileLoader:
 
             if self._df is not None:
                 self._update_progress(status="profiling")
-                self._profile = self._create_profile(self._df, time.time() - start_time)
+                if self._windowed and self._lazy_df is not None:
+                    self._profile = self._create_profile_from_lazy(
+                        self._lazy_df, self._total_rows, time.time() - start_time
+                    )
+                else:
+                    self._profile = self._create_profile(self._df, time.time() - start_time)
 
             total_rows = (
                 self._total_rows
@@ -1037,6 +1042,76 @@ class FileLoader:
             df = df.with_columns(cast_exprs)
 
         return df
+
+    def _create_profile_from_lazy(
+        self, lazy_df: pl.LazyFrame, total_rows: int, load_time: float
+    ) -> DataProfile:
+        """LazyFrame 전체 데이터를 기반으로 프로파일을 생성한다 (windowed 모드용)."""
+        # 전체 데이터에 대해 컬럼별 통계를 한 번의 collect로 계산
+        schema = lazy_df.collect_schema()
+        col_names = schema.names()
+        col_dtypes = schema.dtypes()
+
+        stat_exprs: list = []
+        for col in col_names:
+            stat_exprs.extend([
+                pl.col(col).null_count().alias(f"{col}__null_count"),
+                pl.col(col).n_unique().alias(f"{col}__n_unique"),
+            ])
+            dtype = schema[col]
+            if dtype in (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64):
+                stat_exprs.extend([
+                    pl.col(col).min().alias(f"{col}__min"),
+                    pl.col(col).max().alias(f"{col}__max"),
+                ])
+
+        try:
+            stats_row = lazy_df.select(stat_exprs).collect().row(0, named=True)
+        except Exception:
+            # fallback: windowed df로 프로파일
+            df = self._load_window_from_lazy(lazy_df, 0, min(total_rows, 200_000))
+            return self._create_profile(df, load_time)
+
+        # sample_values: 처음 5행에서 추출
+        try:
+            sample_df = lazy_df.head(5).collect()
+        except Exception:
+            sample_df = None
+
+        columns = []
+        for col, dtype in zip(col_names, col_dtypes):
+            is_numeric = dtype in (
+                pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64
+            )
+            col_info = ColumnInfo(
+                name=col,
+                dtype=str(dtype),
+                null_count=stats_row.get(f"{col}__null_count", 0),
+                unique_count=stats_row.get(f"{col}__n_unique", 0),
+                is_numeric=is_numeric,
+                is_temporal=dtype in (pl.Date, pl.Datetime, pl.Time),
+                is_categorical=dtype == pl.Categorical
+                or (dtype == pl.Utf8 and stats_row.get(f"{col}__n_unique", 100) < 100),
+            )
+
+            if is_numeric:
+                col_info.min_value = stats_row.get(f"{col}__min")
+                col_info.max_value = stats_row.get(f"{col}__max")
+
+            if sample_df is not None:
+                non_null = sample_df[col].drop_nulls()
+                if len(non_null) > 0:
+                    col_info.sample_values = non_null.to_list()
+
+            columns.append(col_info)
+
+        return DataProfile(
+            total_rows=total_rows,
+            total_columns=len(col_names),
+            memory_bytes=0,  # LazyFrame에서는 실제 메모리 추정 불가
+            columns=columns,
+            load_time_seconds=load_time,
+        )
 
     def _create_profile(self, df: pl.DataFrame, load_time: float) -> DataProfile:
         """데이터 프로파일을 생성한다.
