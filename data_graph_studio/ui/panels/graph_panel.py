@@ -743,25 +743,37 @@ class GraphPanel(QWidget):
                     "O",
                 ):
                     s = pl.Series("x", x_data)
-                    parsed = s.str.strptime(pl.Datetime, strict=False)
-                    if parsed.null_count() < len(parsed):
-                        x_data = parsed.dt.timestamp("ms").to_numpy()
-                        options["x_format"] = options.get("x_format") or "time"
+
+                    # Try numeric cast first (handles "Time(ns)" and similar
+                    # columns stored as strings but containing numeric values)
+                    numeric_cast = s.cast(pl.Float64, strict=False)
+                    if numeric_cast.null_count() < len(numeric_cast) * 0.5:
+                        x_data = numeric_cast.to_numpy()
                     else:
-                        # Fallback: treat as categorical
-                        x_categorical_labels = (
-                            self.engine.get_unique_values(x_col, limit=500)
-                            if x_col
-                            else list(dict.fromkeys(x_data))[:500]
-                        )
-                        value_to_idx = {
-                            v: i for i, v in enumerate(x_categorical_labels)
-                        }
-                        x_data = np.array(
-                            [value_to_idx.get(v, 0) for v in x_data], dtype=np.float64
-                        )
-                        x_is_categorical = True
-                        self._x_axis.set_categorical(x_categorical_labels)
+                        # Try date parsing
+                        try:
+                            parsed = s.str.strptime(pl.Datetime, strict=False)
+                            if parsed.null_count() < len(parsed):
+                                x_data = parsed.dt.timestamp("ms").to_numpy()
+                                options["x_format"] = options.get("x_format") or "time"
+                            else:
+                                raise ValueError("Date parsing yielded all nulls")
+                        except Exception:
+                            # Fallback: treat as categorical
+                            x_categorical_labels = (
+                                self.engine.get_unique_values(x_col, limit=500)
+                                if x_col
+                                else list(dict.fromkeys(x_data))[:500]
+                            )
+                            value_to_idx = {
+                                v: i for i, v in enumerate(x_categorical_labels)
+                            }
+                            x_data = np.array(
+                                [value_to_idx.get(v, 0) for v in x_data],
+                                dtype=np.float64,
+                            )
+                            x_is_categorical = True
+                            self._x_axis.set_categorical(x_categorical_labels)
             except Exception as e:
                 logger.debug("X-data coercion failed: %s", e)
 
@@ -794,19 +806,9 @@ class GraphPanel(QWidget):
             y_col_name = value_col.name
             y_formula = value_col.formula or ""
         else:
-            numeric_cols = [
-                col
-                for col in self.engine.columns
-                if self.engine.dtypes.get(col, "").startswith(("Int", "Float"))
-            ]
-            if numeric_cols:
-                y_col_name = numeric_cols[0]
-            else:
-                # If no numeric columns, try any column (might be categorical)
-                if self.engine.columns:
-                    y_col_name = self.engine.columns[0]
-                else:
-                    return
+            # 사용자가 값(Y축) 컬럼을 선택하지 않은 경우 빈 그래프 표시
+            self.main_graph.clear_plot()
+            return
 
         # Check if Y column is categorical
         y_is_categorical = self.engine.is_column_categorical(y_col_name)
@@ -2677,15 +2679,13 @@ class GraphPanel(QWidget):
         self.stat_panel.update_stats(None)
 
     def set_columns(self, columns: List[str]):
-        """컬럼 목록 설정 (범례 초기화용)"""
-        # Initialize legend with first numeric column
-        numeric_cols = [
-            col
-            for col in columns
-            if self.engine.dtypes.get(col, "").startswith(("Int", "Float"))
-        ]
-        if numeric_cols:
-            self.options_panel.set_series([numeric_cols[0]])
+        """컬럼 목록 설정 (범례 초기화용)
+
+        처음 파일 로딩 시에는 어떤 데이터도 그래프에 자동으로 로딩하지 않는다.
+        사용자가 직접 X축/Y축 컬럼을 선택해야 그래프가 그려진다.
+        """
+        # Don't auto-select any column — wait for user to drag columns
+        pass
 
     def get_chart_options(self) -> Dict[str, Any]:
         """Get current chart options from the options panel"""

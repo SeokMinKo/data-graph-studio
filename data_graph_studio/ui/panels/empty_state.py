@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFrame,
     QGraphicsDropShadowEffect,
+    QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QPointF, Property
 from PySide6.QtGui import (
@@ -176,8 +177,24 @@ class EmptyStateWidget(QWidget):
     def _setup_ui(self):
         self.setObjectName("emptyStateWidget")
 
+        # 외부 레이아웃 — QScrollArea로 감싸서 공간 부족 시 스크롤
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setObjectName("emptyStateScroll")
+        scroll.setStyleSheet("QScrollArea#emptyStateScroll { background: transparent; border: none; }"
+                             " QScrollArea#emptyStateScroll > QWidget > QWidget { background: transparent; }")
+        outer_layout.addWidget(scroll)
+
+        scroll_content = QWidget()
+        scroll_content.setObjectName("emptyStateScrollContent")
+        scroll.setWidget(scroll_content)
+
         # 메인 레이아웃
-        main_layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(scroll_content)
         main_layout.setContentsMargins(40, 40, 40, 40)
         main_layout.setAlignment(Qt.AlignCenter)
 
