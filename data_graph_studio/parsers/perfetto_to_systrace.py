@@ -9,8 +9,9 @@ Pipeline:
     3. Multiple traces merged & sorted by global timestamp
 
 Usage (CLI):
-    python -m data_graph_studio.parsers.perfetto_to_systrace \\
-        trace1.pftrace trace2.pftrace -o merged.systrace
+    python perfetto_to_systrace.py trace1.pftrace trace2.pftrace -o merged.systrace
+    python perfetto_to_systrace.py *.pftrace -o merged.systrace
+    python perfetto_to_systrace.py "logs/*.pftrace" -o merged.systrace
 
 Usage (API):
     from data_graph_studio.parsers.perfetto_to_systrace import (
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import glob
 import io
 import logging
 import subprocess
@@ -66,13 +68,25 @@ def find_trace_processor() -> str:
     """Find trace_processor_shell binary.
 
     Search order:
-        1. Bundled binaries in assets/bin/<platform>/
-        2. PATH lookup
+        1. Same directory as this script
+        2. Bundled binaries in assets/bin/<platform>/
+        3. PATH lookup
     """
     import platform as _platform
     import shutil
 
-    # 1. Bundled binary
+    _NAMES = ["trace_processor_shell", "trace_processor"]
+    if sys.platform == "win32":
+        _NAMES.extend(["trace_processor_shell.exe", "trace_processor.exe"])
+
+    # 1. Same directory as this script
+    script_dir = Path(__file__).resolve().parent
+    for name in _NAMES:
+        candidate = script_dir / name
+        if candidate.exists():
+            return str(candidate)
+
+    # 2. Bundled binary (for DGS project layout)
     s = sys.platform
     m = _platform.machine().lower()
     if s == "darwin":
@@ -86,21 +100,48 @@ def find_trace_processor() -> str:
 
     if plat:
         assets_dir = Path(__file__).parent.parent / "assets" / "bin" / plat
-        for name in ["trace_processor_shell", "trace_processor"]:
+        for name in _NAMES:
             candidate = assets_dir / name
             if candidate.exists():
                 return str(candidate)
 
-    # 2. PATH lookup
-    for name in ["trace_processor_shell", "trace_processor"]:
+    # 3. PATH lookup
+    for name in _NAMES:
         found = shutil.which(name)
         if found:
             return found
 
     raise FileNotFoundError(
-        "trace_processor_shell not found. "
-        "Place it in PATH or in assets/bin/<platform>/."
+        "trace_processor_shell not found.\n"
+        "Place it in the same folder as this script, or add it to PATH."
     )
+
+
+def _expand_paths(patterns: List[str]) -> List[str]:
+    """Expand glob patterns and return sorted unique file paths.
+
+    Supports:
+        - Direct file paths: trace1.pftrace
+        - Shell glob patterns: *.pftrace, logs/*.pftrace
+    """
+    result = []
+    seen = set()
+    for pattern in patterns:
+        # Try glob expansion first
+        matched = sorted(glob.glob(pattern))
+        if matched:
+            for p in matched:
+                rp = str(Path(p).resolve())
+                if rp not in seen:
+                    seen.add(rp)
+                    result.append(p)
+        else:
+            # No glob match — treat as literal path (will error later if missing)
+            rp = str(Path(pattern).resolve())
+            if rp not in seen:
+                seen.add(rp)
+                result.append(pattern)
+    return result
 
 
 def _perfetto_to_csv_text(pftrace_path: str, tp_shell: str) -> str:
@@ -258,16 +299,25 @@ def convert_perfetto_to_systrace(
     if tp_shell is None:
         tp_shell = find_trace_processor()
     logger.info("Using trace_processor_shell: %s", tp_shell)
+    print(f"Using: {tp_shell}")
+
+    # Expand glob patterns (e.g. *.pftrace)
+    resolved_paths = _expand_paths(pftrace_paths)
+    if not resolved_paths:
+        raise FileNotFoundError(
+            f"No files matched: {pftrace_paths}"
+        )
+    print(f"Found {len(resolved_paths)} trace file(s)")
 
     all_events: List[dict] = []
 
-    for i, pf_path in enumerate(pftrace_paths):
+    for i, pf_path in enumerate(resolved_paths):
         pf_path = str(Path(pf_path).resolve())
         if not Path(pf_path).exists():
             raise FileNotFoundError(f"Trace file not found: {pf_path}")
 
-        logger.info("[%d/%d] Converting: %s", i + 1, len(pftrace_paths), pf_path)
-        print(f"[{i + 1}/{len(pftrace_paths)}] Converting: {Path(pf_path).name}")
+        logger.info("[%d/%d] Converting: %s", i + 1, len(resolved_paths), pf_path)
+        print(f"[{i + 1}/{len(resolved_paths)}] Converting: {Path(pf_path).name}")
 
         csv_text = _perfetto_to_csv_text(pf_path, tp_shell)
 
@@ -316,14 +366,23 @@ Examples:
   # Multiple traces merged by time
   %(prog)s trace1.pftrace trace2.pftrace trace3.pftrace -o merged.systrace
 
+  # Glob pattern (all .pftrace in current dir)
+  %(prog)s *.pftrace -o merged.systrace
+  %(prog)s "logs/*.pftrace" -o merged.systrace
+
   # Also save intermediate CSVs
-  %(prog)s trace1.pftrace trace2.pftrace -o merged.systrace --save-csv
+  %(prog)s *.pftrace -o merged.systrace --save-csv
+
+Note: trace_processor_shell is auto-detected in this order:
+  1. Same folder as this script
+  2. Bundled in assets/bin/<platform>/
+  3. PATH
 """,
     )
     parser.add_argument(
         "traces",
         nargs="+",
-        help="Perfetto trace files (.pftrace)",
+        help="Perfetto trace files (.pftrace) or glob patterns (e.g. *.pftrace)",
     )
     parser.add_argument(
         "-o",
